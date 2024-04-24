@@ -1,0 +1,165 @@
+* [dunfell] hidden files/folders in WORKDIR
+@ 2021-12-15 19:22 Joel Winarske
+  2021-12-19  2:43 ` [yocto] " Randy MacLeod
+  0 siblings, 1 reply; 2+ messages in thread
+From: Joel Winarske @ 2021-12-15 19:22 UTC (permalink / raw)
+  To: Yocto-mailing-list
+
+[-- Attachment #1: Type: text/plain, Size: 157 bytes --]
+
+I'm finding that if I create files/folders (prefixed with '.') in WORKDIR,
+they don't get cleaned up with INHERIT += "rm_work".
+
+Is this a feature or a bug?
+
+[-- Attachment #2: Type: text/html, Size: 230 bytes --]
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+* Re: [yocto] [dunfell] hidden files/folders in WORKDIR
+  2021-12-15 19:22 [dunfell] hidden files/folders in WORKDIR Joel Winarske
+@ 2021-12-19  2:43 ` Randy MacLeod
+  0 siblings, 0 replies; 2+ messages in thread
+From: Randy MacLeod @ 2021-12-19  2:43 UTC (permalink / raw)
+  To: Joel Winarske, Yocto-mailing-list
+
+On 2021-12-15 2:22 p.m., Joel Winarske wrote:
+> I'm finding that if I create files/folders (prefixed with '.') in 
+> WORKDIR, they don't get cleaned up with INHERIT += "rm_work".
+> 
+> Is this a feature or a bug?
+
+I think it's an oversight that doesn't affect many people.
+
+The rm_work code for WORKDIR is:
+
+http://cgit.openembedded.org/openembedded-core/tree/meta/classes/rm_work.bbclass#n97
+
+     cd ${WORKDIR}
+
+     for dir in *
+
+     do
+
+         # Retain only logs and other files in temp, safely ignore
+
+         # failures of removing pseudo folers on NFS2/3 server.
+
+         if [ $dir = 'pseudo' ]; then
+
+             rm -rf -- $dir 2> /dev/null || true
+
+         elif ! echo "$excludes" | grep -q -w "$dir"; then
+
+             rm -rf -- $dir
+
+         fi
+
+     done
+
+
+so you can see that if you want to submit a patch to remove .FOO files,
+you'd have to change the glob and exclude . and ..
+The comment seems to justify doing that.
+
+
+I guess one question is how common is it for 'dot' files to be there
+and have people come to rely on the fact that rm_work doesn't remove them.
+
+See some analysis below if you're interested but I think it's sensible
+to also remove 'dot' files. Wait a day or so to see if anyone has a
+use case that would be a problem and if not, could you send a patch?
+
+Btw:
+WORKDIR docs:
+http://docs.yoctoproject.org/ref-manual/variables.html?highlight=workdir#term-WORKDIR
+say that:
+  "This directory is located within the TMPDIR directory structure and 
+is specific to the recipe being built and the system for which it is 
+being built. "
+so that seems to give you carte blanche!
+
+and there's no restriction given in the rm_work docs either:
+    http://docs.yoctoproject.org/ref-manual/classes.html#ref-classes-rm-work
+
+
+../Randy
+
+
+In a build that I have on hand:
+
+# how many files could be cleaned up?
+$ ls -d tmp-glibc/work/core2-64-wrs-linux/*/*/[a-Z]* | wc -l
+
+2887
+
+
+# how many of them are 'dot' files?
+$ ls -d tmp-glibc/work/core2-64-wrs-linux/*/*/.[a-Z]* | wc -l
+
+1
+
+
+# What's the file:
+$ ls -d tmp-glibc/work/core2-64-wrs-linux/*/*/.[a-Z]*
+
+tmp-glibc/work/core2-64-wrs-linux/usleep/1.0-r0/.pc
+
+
+# .pc files are usually stored in a subdirectory like:
+#    tmp-glibc/work/core2-64-wrs-linux/m4/1.4.19-r0/m4-1.4.19/.pc
+# how many 'proper' .pc files are there just out of curiousity?
+$ ls -d tmp-glibc/work/core2-64-wrs-linux/*/*/*/.pc | wc -l
+
+79
+
+
+# Let's look at usleep:
+$ ls tmp-glibc/work/core2-64-wrs-linux/usleep/1.0-r0
+
+configure.sstate   deploy-rpms               image 
+packages-split  pkgdata-pdata-input  recipe-sysroot 
+sstate-install-deploy_source_date_epoch  usleep    usleep.spec
+
+COPYING            deploy-source-date-epoch  license-destdir  patches 
+       pkgdata-sysroot      recipe-sysroot-native 
+sstate-install-populate_lic              usleep.1
+
+debugsources.list  GPLv2.patch               package          pkgdata 
+       pseudo               source-date-epoch      temp 
+                     usleep.c
+
+
+Ah it has the source in WORKDIR, that seem odd but it's a simple recipe 
+with the source
+provided in the recipe:
+http://cgit.openembedded.org/meta-openembedded/tree/meta-oe/recipes-core/usleep/usleep_1.0.bb?h=master
+
+# Let's clean it:
+
+$ bitbake -c rm_work usleep
+
+
+$ ls -a tmp-glibc/work/core2-64-wrs-linux/usleep/1.0-r0
+
+.  ..  .pc  temp
+
+
+$ bitbake -c patch usleep
+$ echo $?
+0
+
+so that works and it seems there's no harm done.
+-- 
+# Randy MacLeod
+# Wind River Linux
+
+
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2021-12-19  2:43 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-12-15 19:22 [dunfell] hidden files/folders in WORKDIR Joel Winarske
+2021-12-19  2:43 ` [yocto] " Randy MacLeod
+

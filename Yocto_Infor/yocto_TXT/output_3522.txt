@@ -1,0 +1,153 @@
+* [meta-mingw] [PATCH] mingw-w64: Check for __builtin_ia32_rdtsc
+@ 2021-04-14  2:00 Khem Raj
+  2021-04-28 16:10 ` Khem Raj
+  0 siblings, 1 reply; 2+ messages in thread
+From: Khem Raj @ 2021-04-14  2:00 UTC (permalink / raw)
+  To: yocto; +Cc: jpewhacker, Khem Raj
+
+Signed-off-by: Khem Raj <raj.khem@gmail.com>
+---
+ ...rincs-Check-for-__builtin_ia32_rdtsc.patch | 33 +++++++++++++++++++
+ .../nativesdk-mingw-w64-runtime_7.0.0.bb      |  2 ++
+ 2 files changed, 35 insertions(+)
+ create mode 100644 recipes-devtools/mingw-w64/files/0001-intrincs-Check-for-__builtin_ia32_rdtsc.patch
+
+diff --git a/recipes-devtools/mingw-w64/files/0001-intrincs-Check-for-__builtin_ia32_rdtsc.patch b/recipes-devtools/mingw-w64/files/0001-intrincs-Check-for-__builtin_ia32_rdtsc.patch
+new file mode 100644
+index 0000000..ce4ba81
+--- /dev/null
++++ b/recipes-devtools/mingw-w64/files/0001-intrincs-Check-for-__builtin_ia32_rdtsc.patch
+@@ -0,0 +1,33 @@
++From 346de7591f58015d111f4d4f3b001382c04d5557 Mon Sep 17 00:00:00 2001
++From: Khem Raj <raj.khem@gmail.com>
++Date: Tue, 13 Apr 2021 18:44:25 -0700
++Subject: [PATCH] intrincs: Check for __builtin_ia32_rdtsc
++
++on modern gcc ( >=4.6 ) __rdtsc function is implemented using
++special builtin function called __builtin_ia32_rdtsc, its actually
++a define in gcc, so __has_builtin check fails for __rdtsc even
++though it is defined to imply __builtin_ia32_rdtsc(), therefore
++check for existence of __builtin_ia32_rdtsc as well
++
++Upstream-Status: Pending
++Signed-off-by: Khem Raj <raj.khem@gmail.com>
++---
++ mingw-w64-crt/intrincs/rdtsc.c | 2 +-
++ 1 file changed, 1 insertion(+), 1 deletion(-)
++
++diff --git a/mingw-w64-crt/intrincs/rdtsc.c b/mingw-w64-crt/intrincs/rdtsc.c
++index bf9c03b..df04711 100644
++--- a/mingw-w64-crt/intrincs/rdtsc.c
+++++ b/mingw-w64-crt/intrincs/rdtsc.c
++@@ -11,7 +11,7 @@
++   #define __has_builtin(x) 0
++ #endif
++ 
++-#if !__has_builtin(__rdtsc)
+++#if !__has_builtin(__rdtsc) && !__has_builtin(__builtin_ia32_rdtsc)
++ unsigned __int64 __rdtsc(void)
++ {
++ #ifdef _WIN64
++-- 
++2.31.1
++
+diff --git a/recipes-devtools/mingw-w64/nativesdk-mingw-w64-runtime_7.0.0.bb b/recipes-devtools/mingw-w64/nativesdk-mingw-w64-runtime_7.0.0.bb
+index 9f79ffe..0368841 100644
+--- a/recipes-devtools/mingw-w64/nativesdk-mingw-w64-runtime_7.0.0.bb
++++ b/recipes-devtools/mingw-w64/nativesdk-mingw-w64-runtime_7.0.0.bb
+@@ -2,6 +2,8 @@ DESCRIPTION = "Runtime libraries from MinGW-w64 project"
+ 
+ require mingw-w64.inc
+ 
++SRC_URI += "file://0001-intrincs-Check-for-__builtin_ia32_rdtsc.patch;striplevel=2"
++
+ S = "${WORKDIR}/mingw-w64-v${PV}/mingw-w64-crt"
+ B = "${WORKDIR}/build-${TARGET_SYS}"
+ 
+-- 
+2.31.1
+
+
+^ permalink raw reply related	[flat|nested] 2+ messages in thread
+* Re: [meta-mingw] [PATCH] mingw-w64: Check for __builtin_ia32_rdtsc
+  2021-04-14  2:00 [meta-mingw] [PATCH] mingw-w64: Check for __builtin_ia32_rdtsc Khem Raj
+@ 2021-04-28 16:10 ` Khem Raj
+  0 siblings, 0 replies; 2+ messages in thread
+From: Khem Raj @ 2021-04-28 16:10 UTC (permalink / raw)
+  To: Yocto-mailing-list; +Cc: Joshua Watt
+
+ping^1
+
+On Tue, Apr 13, 2021 at 7:01 PM Khem Raj <raj.khem@gmail.com> wrote:
+>
+> Signed-off-by: Khem Raj <raj.khem@gmail.com>
+> ---
+>  ...rincs-Check-for-__builtin_ia32_rdtsc.patch | 33 +++++++++++++++++++
+>  .../nativesdk-mingw-w64-runtime_7.0.0.bb      |  2 ++
+>  2 files changed, 35 insertions(+)
+>  create mode 100644 recipes-devtools/mingw-w64/files/0001-intrincs-Check-for-__builtin_ia32_rdtsc.patch
+>
+> diff --git a/recipes-devtools/mingw-w64/files/0001-intrincs-Check-for-__builtin_ia32_rdtsc.patch b/recipes-devtools/mingw-w64/files/0001-intrincs-Check-for-__builtin_ia32_rdtsc.patch
+> new file mode 100644
+> index 0000000..ce4ba81
+> --- /dev/null
+> +++ b/recipes-devtools/mingw-w64/files/0001-intrincs-Check-for-__builtin_ia32_rdtsc.patch
+> @@ -0,0 +1,33 @@
+> +From 346de7591f58015d111f4d4f3b001382c04d5557 Mon Sep 17 00:00:00 2001
+> +From: Khem Raj <raj.khem@gmail.com>
+> +Date: Tue, 13 Apr 2021 18:44:25 -0700
+> +Subject: [PATCH] intrincs: Check for __builtin_ia32_rdtsc
+> +
+> +on modern gcc ( >=4.6 ) __rdtsc function is implemented using
+> +special builtin function called __builtin_ia32_rdtsc, its actually
+> +a define in gcc, so __has_builtin check fails for __rdtsc even
+> +though it is defined to imply __builtin_ia32_rdtsc(), therefore
+> +check for existence of __builtin_ia32_rdtsc as well
+> +
+> +Upstream-Status: Pending
+> +Signed-off-by: Khem Raj <raj.khem@gmail.com>
+> +---
+> + mingw-w64-crt/intrincs/rdtsc.c | 2 +-
+> + 1 file changed, 1 insertion(+), 1 deletion(-)
+> +
+> +diff --git a/mingw-w64-crt/intrincs/rdtsc.c b/mingw-w64-crt/intrincs/rdtsc.c
+> +index bf9c03b..df04711 100644
+> +--- a/mingw-w64-crt/intrincs/rdtsc.c
+> ++++ b/mingw-w64-crt/intrincs/rdtsc.c
+> +@@ -11,7 +11,7 @@
+> +   #define __has_builtin(x) 0
+> + #endif
+> +
+> +-#if !__has_builtin(__rdtsc)
+> ++#if !__has_builtin(__rdtsc) && !__has_builtin(__builtin_ia32_rdtsc)
+> + unsigned __int64 __rdtsc(void)
+> + {
+> + #ifdef _WIN64
+> +--
+> +2.31.1
+> +
+> diff --git a/recipes-devtools/mingw-w64/nativesdk-mingw-w64-runtime_7.0.0.bb b/recipes-devtools/mingw-w64/nativesdk-mingw-w64-runtime_7.0.0.bb
+> index 9f79ffe..0368841 100644
+> --- a/recipes-devtools/mingw-w64/nativesdk-mingw-w64-runtime_7.0.0.bb
+> +++ b/recipes-devtools/mingw-w64/nativesdk-mingw-w64-runtime_7.0.0.bb
+> @@ -2,6 +2,8 @@ DESCRIPTION = "Runtime libraries from MinGW-w64 project"
+>
+>  require mingw-w64.inc
+>
+> +SRC_URI += "file://0001-intrincs-Check-for-__builtin_ia32_rdtsc.patch;striplevel=2"
+> +
+>  S = "${WORKDIR}/mingw-w64-v${PV}/mingw-w64-crt"
+>  B = "${WORKDIR}/build-${TARGET_SYS}"
+>
+> --
+> 2.31.1
+>
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2021-04-28 16:10 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-04-14  2:00 [meta-mingw] [PATCH] mingw-w64: Check for __builtin_ia32_rdtsc Khem Raj
+2021-04-28 16:10 ` Khem Raj
+

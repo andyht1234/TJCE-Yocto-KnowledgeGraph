@@ -1,0 +1,115 @@
+* Wrong file installed when building a machine
+@ 2022-04-05 14:38 Rombola Davide
+  2022-04-06  7:00 ` Marco Cavallini
+  0 siblings, 1 reply; 2+ messages in thread
+From: Rombola Davide @ 2022-04-05 14:38 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2002 bytes --]
+
+I have 3 layers:
+meta-a:
+
+meta-a
+└── recipes-my
+    └── mypgk
+        ├── mypgk_1.0.bb
+        └── mypkg_rel
+            ├── config.conf
+            └── mypkg.service
+
+
+  *   mypgk_1.0.bb:
+
+FILESEXTRAPATHS_prepend_$(MACHINE) := "${THISDIR}/${PN}_rel:"
+
+SRC_URI = "file://config.conf "
+
+SYSTEMD_PACKAGES = "${PN}"
+SYSTEMD_SERVICE_${PN} = " mypkg.service"
+
+do_install() {
+         install -m 755 -d ${D}${bindir}
+         install -m 755 -d ${D}${sysconfdir}
+         install -m 644 ${WORKDIR}/config.conf ${D}${sysconfdir}/config.conf
+
+         install -d ${D}${systemd_system_unitdir}
+         install -m 644 ${WORKDIR}/mypkg.service ${D}${systemd_system_unitdir}/mypkg.service
+}
+
+meta-b:
+
+meta-b
+└── recipes-my
+    └── mypgk
+        ├── mypgk_1.0.bbappend
+        └── mypkg
+            └── config.conf
+
+
+  *   mypgk_1.0.bbappend:
+
+FILESEXTRAPATHS_prepend_${MACHINE} := "${YOCTOROOT}/meta-a/recipes-my/${PN}/${PN}_rel:"
+FILESEXTRAPATHS_prepend := "${THISDIR}/${PN}:"
+SRC_URI += "file://config.conf "
+
+
+I also have a meta-c layer. meta-c/recipes-my doesn't exists, i want to use the meta-b one.
+
+  *   meta-c depends on meta-b,
+  *   meta-b depends on meta-a.
+
+In meta-c layer.conf i have this:
+
+LAYERDEPENDS_c = "b"
+
+Layers priority:
+
+  *   meta-a = 14
+  *   meta-b = 15
+  *   meta-c = 16
+
+Every layer defines a machine (machinea, machineb, machinec)
+When I build machinea, the config.conf file from meta-a is installed.
+When I build machineb, the config.conf file from meta-b is installed.
+When I build machinec, the config.conf file from meta-a is installed instead the one in meta-b which have a higher priority.
+When I build machinec I want mypkg from meta-b as-is, why bitbake use the other config.conf file?
+Also copying recipes-my/* from meta-b to meta-c/ doesn't work and config.conf from meta-a is installed.
+If I rename config.conf to config_b.conf (changing .bbappend accordingly) in meta-b everything works as axpected.
+
+
+[-- Attachment #2: Type: text/html, Size: 7050 bytes --]
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+* Re: Wrong file installed when building a machine
+  2022-04-05 14:38 Wrong file installed when building a machine Rombola Davide
+@ 2022-04-06  7:00 ` Marco Cavallini
+  0 siblings, 0 replies; 2+ messages in thread
+From: Marco Cavallini @ 2022-04-06  7:00 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 487 bytes --]
+
+On Tue, Apr 5, 2022 at 04:38 PM, Rombola Davide wrote:
+
+> 
+> FILESEXTRAPATHS_prepend_${MACHINE} :=
+> "${YOCTOROOT}/meta-a/recipes-my/${PN}/${PN}_rel:"
+
+The following line is sayng that you want to select meta-a when you have a MACHINE = every machine you have therefore machinec
+
+FILESEXTRAPATHS_prepend_${MACHINE} := "${YOCTOROOT}/meta-a/recipes-my/${PN}/${PN}_rel:" 
+You can read it as
+
+FILESEXTRAPATHS_prepend_machinec := "${YOCTOROOT}/meta-a/recipes-my/${PN}/${PN}_rel:"
+
+[-- Attachment #2: Type: text/html, Size: 921 bytes --]
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2022-04-06 16:33 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-04-05 14:38 Wrong file installed when building a machine Rombola Davide
+2022-04-06  7:00 ` Marco Cavallini
+

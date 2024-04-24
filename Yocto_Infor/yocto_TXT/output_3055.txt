@@ -1,0 +1,171 @@
+* [meta-selinux][dunfell][PATCH] libselinux: Backport class cache flushing patch from 3.1
+@ 2021-08-09 14:40 Daniel Danner
+  0 siblings, 0 replies; only message in thread
+From: Daniel Danner @ 2021-08-09 14:40 UTC (permalink / raw)
+  To: yocto; +Cc: Daniel Danner
+
+This fixes a bug in libselinux that gets triggered by loading another
+policy at runtime. Before this patch, the userspace class cache was not
+flushed when a new policy was loaded. This led to SELinux-aware
+processes performing invalid lookups if their lifecycle overlapped with
+a policy load. Specifically, lookups performed by dbus-daemon would
+yield invalid results due to using outdated class IDs in their query.
+---
+ ...t-flush_class_cache-call-it-on-polic.patch | 126 ++++++++++++++++++
+ recipes-security/selinux/libselinux_3.0.bb    |   1 +
+ 2 files changed, 127 insertions(+)
+ create mode 100644 recipes-security/selinux/libselinux/0001-libselinux-export-flush_class_cache-call-it-on-polic.patch
+
+diff --git recipes-security/selinux/libselinux/0001-libselinux-export-flush_class_cache-call-it-on-polic.patch recipes-security/selinux/libselinux/0001-libselinux-export-flush_class_cache-call-it-on-polic.patch
+new file mode 100644
+index 0000000..dd79f64
+--- /dev/null
++++ recipes-security/selinux/libselinux/0001-libselinux-export-flush_class_cache-call-it-on-polic.patch
+@@ -0,0 +1,126 @@
++From 7bece3768b8ce63d79ef59bab83517b4e950f8fb Mon Sep 17 00:00:00 2001
++From: Stephen Smalley <sds@tycho.nsa.gov>
++Date: Tue, 21 Jan 2020 11:18:22 -0500
++Subject: [PATCH] libselinux: export flush_class_cache(), call it on policyload
++
++Rename flush_class_cache() to selinux_flush_class_cache(), export it
++for direct use by userspace policy enforcers, and call it on all policy
++load notifications rather than only when using selinux_check_access().
++This ensures that policy reloads that change a userspace class or
++permission value will be reflected by subsequent string_to_security_class()
++or string_to_av_perm() calls.
++
++Signed-off-by: Stephen Smalley <sds@tycho.nsa.gov>
++---
++ libselinux/include/selinux/selinux.h |  3 +++
++ libselinux/src/avc_internal.c        |  2 ++
++ libselinux/src/checkAccess.c         | 13 -------------
++ libselinux/src/selinux_internal.h    |  3 +--
++ libselinux/src/stringrep.c           |  4 +++-
++ 5 files changed, 9 insertions(+), 16 deletions(-)
++
++Upstream-Status: Backport [https://github.com/SELinuxProject/selinux/commit/7bece3768b8ce63d79ef59bab83517b4e950f8fb]
++
++diff --git libselinux/include/selinux/selinux.h libselinux/include/selinux/selinux.h
++index fe46e681..7922d96b 100644
++--- libselinux/include/selinux/selinux.h
+++++ libselinux/include/selinux/selinux.h
++@@ -418,6 +418,9 @@ extern int security_av_string(security_class_t tclass,
++ /* Display an access vector in a string representation. */
++ extern void print_access_vector(security_class_t tclass, access_vector_t av);
++ 
+++/* Flush the SELinux class cache, e.g. upon a policy reload. */
+++extern void selinux_flush_class_cache(void);
+++
++ /* Set the function used by matchpathcon_init when displaying
++    errors about the file_contexts configuration.  If not set,
++    then this defaults to fprintf(stderr, fmt, ...). */
++diff --git libselinux/src/avc_internal.c libselinux/src/avc_internal.c
++index 49cecc96..568a3d92 100644
++--- libselinux/src/avc_internal.c
+++++ libselinux/src/avc_internal.c
++@@ -23,6 +23,7 @@
++ #include "callbacks.h"
++ #include "selinux_netlink.h"
++ #include "avc_internal.h"
+++#include "selinux_internal.h"
++ 
++ #ifndef NETLINK_SELINUX
++ #define NETLINK_SELINUX 7
++@@ -207,6 +208,7 @@ static int avc_netlink_process(void *buf)
++ 				avc_prefix, rc, errno);
++ 			return rc;
++ 		}
+++		selinux_flush_class_cache();
++ 		rc = selinux_netlink_policyload(msg->seqno);
++ 		if (rc < 0)
++ 			return rc;
++diff --git libselinux/src/checkAccess.c libselinux/src/checkAccess.c
++index 16bfcfb6..7227ffe5 100644
++--- libselinux/src/checkAccess.c
+++++ libselinux/src/checkAccess.c
++@@ -10,25 +10,12 @@
++ static pthread_once_t once = PTHREAD_ONCE_INIT;
++ static int selinux_enabled;
++ 
++-static int avc_reset_callback(uint32_t event __attribute__((unused)),
++-		      security_id_t ssid __attribute__((unused)),
++-		      security_id_t tsid __attribute__((unused)),
++-		      security_class_t tclass __attribute__((unused)),
++-		      access_vector_t perms __attribute__((unused)),
++-		      access_vector_t *out_retained __attribute__((unused)))
++-{
++-	flush_class_cache();
++-	return 0;
++-}
++-
++ static void avc_init_once(void)
++ {
++ 	selinux_enabled = is_selinux_enabled();
++ 	if (selinux_enabled == 1) {
++ 		if (avc_open(NULL, 0))
++ 			return;
++-		avc_add_callback(avc_reset_callback, AVC_CALLBACK_RESET,
++-				 0, 0, 0, 0);
++ 	}
++ }
++ 
++diff --git libselinux/src/selinux_internal.h libselinux/src/selinux_internal.h
++index 8b4bed2f..61b78aaa 100644
++--- libselinux/src/selinux_internal.h
+++++ libselinux/src/selinux_internal.h
++@@ -107,8 +107,7 @@ hidden_proto(selinux_trans_to_raw_context);
++ hidden_proto(security_get_initial_context);
++ hidden_proto(security_get_initial_context_raw);
++ hidden_proto(selinux_reset_config);
++-
++-hidden void flush_class_cache(void);
+++hidden_proto(selinux_flush_class_cache);
++ 
++ extern int require_seusers hidden;
++ extern int selinux_page_size hidden;
++diff --git libselinux/src/stringrep.c libselinux/src/stringrep.c
++index 4db95398..29757b75 100644
++--- libselinux/src/stringrep.c
+++++ libselinux/src/stringrep.c
++@@ -158,7 +158,7 @@ err1:
++ 	return NULL;
++ }
++ 
++-hidden void flush_class_cache(void)
+++void selinux_flush_class_cache(void)
++ {
++ 	struct discover_class_node *cur = discover_class_cache, *prev = NULL;
++ 	size_t i;
++@@ -180,6 +180,8 @@ hidden void flush_class_cache(void)
++ 	discover_class_cache = NULL;
++ }
++ 
+++hidden_def(selinux_flush_class_cache)
+++
++ security_class_t string_to_security_class(const char *s)
++ {
++ 	struct discover_class_node *node;
++-- 
++2.25.1
++
+diff --git recipes-security/selinux/libselinux_3.0.bb recipes-security/selinux/libselinux_3.0.bb
+index 05d2346..17a25a9 100644
+--- recipes-security/selinux/libselinux_3.0.bb
++++ recipes-security/selinux/libselinux_3.0.bb
+@@ -12,4 +12,5 @@ SRC_URI += "\
+         file://libselinux-make-SOCK_CLOEXEC-optional.patch \
+         file://libselinux-define-FD_CLOEXEC-as-necessary.patch \
+         file://0001-Fix-building-against-musl-and-uClibc-libc-libraries.patch \
++        file://0001-libselinux-export-flush_class_cache-call-it-on-polic.patch \
+         "
+-- 
+2.25.1
+
+
+^ permalink raw reply related	[flat|nested] only message in thread
+only message in thread, other threads:[~2021-08-09 14:40 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-08-09 14:40 [meta-selinux][dunfell][PATCH] libselinux: Backport class cache flushing patch from 3.1 Daniel Danner
+

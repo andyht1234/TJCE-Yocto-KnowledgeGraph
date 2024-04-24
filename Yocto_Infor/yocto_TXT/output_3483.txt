@@ -1,0 +1,104 @@
+* Re: [yocto] [meta-raspberrypi] Booting a Raspberry Pi 4 using PXE
+       [not found] <167B3E1B63645EE6.24705@lists.yoctoproject.org>
+@ 2021-05-05 12:01 ` Manuel Wagesreither
+  2021-05-05 13:34   ` Anton Antonov
+  0 siblings, 1 reply; 3+ messages in thread
+From: Manuel Wagesreither @ 2021-05-05 12:01 UTC (permalink / raw)
+  To: yocto
+
+Hello all,
+
+to be able to diagnose my problem, I worked on enabling uart console access to my Raspberry Pi 4B.
+
+It seems the Raspberry Pi puts `8250.nr_uarts=0` in the linux kernel cmdline whenever the Raspi is booting over the network. This is preventing me from getting console access. When I provide the exact same set of files on a USB drive, 8250.nr_uarts is `1`.
+
+Here's my `cmdline.txt`:
+`dwc_otg.lpm_enable=0 console=tty1 console=serial0,115200 root=/dev/sda2 rootfstype=ext4 rootwait 8250.nr_uarts=1`
+
+When I boot over network, `/proc/cmdline` is:
+```
+coherent_pool=1M 8250.nr_uarts=0 snd_bcm2835.enable_compat_alsa=0 snd_bcm2835.enable_hdmi=1 snd_bcm2835.enable_headphones=1  smsc95xx.macaddr=DC:A6:32:B8:04:5C vc_mem.mem_base=0x3eb00000 vc_mem.mem_size=0x3ff00000  dwc_otg.lpm_enable=0 console=tty1 console=ttyS0,115200 root=/dev/sda2 rootfstype=ext4 rootwait 8250.nr_uarts=0
+```
+Note that both occurences of 8250.nr_uarts got set to 0. Even the one which I deliberatedly set to 1.
+
+When I boot using usb disk:
+```
+coherent_pool=1M 8250.nr_uarts=1 snd_bcm2835.enable_compat_alsa=0 snd_bcm2835.enable_hdmi=1 snd_bcm2835.enable_headphones=1  smsc95xx.macaddr=DC:A6:32:B8:04:5C vc_mem.mem_base=0x3eb00000 vc_mem.mem_size=0x3ff00000  dwc_otg.lpm_enable=0 console=tty1 console=ttyS0,115200 root=/dev/sda2 rootfstype=ext4 rootwait 8250.nr_uarts=1
+```
+
+Has anyone any background info on that? I provide the exact same set of device tree overlays in both cases.
+
+Thank you,
+Regards,
+Manuel
+
+
+Am So, 2. Mai 2021, um 13:59, schrieb Manuel Wagesreither:
+> Hello all!
+> 
+> Since a certain eeprom version, the Raspberry Pi 4 can directly boot from network. Has anyone experience on this?
+> 
+> I already managed to to have the Raspi to load the kernel and all the device tree stuff over network. I then exported `build/tmp/work/raspberrypi4_64-poky-linux/bora-image/1.0-r0/rootfs/` as via nfs and changed the linux kernel commandline so it would use this share as nfsroot. At boot many failing services get reported and and the boot progress stops somewhere along the way. It tells me the system is in emergency mode and asks me for the root password for maintenance. I have an empty root password. When I press Control-D to continue, the same prompt reappears. Same when I simply press enter.
+> 
+> Has onyone any input for me? I guess I'll need to monitor what gets written to the serial port.
+> 
+> Regards,
+> Manuel
+> 
+> 
+> 
+> 
+> 
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [meta-raspberrypi] Booting a Raspberry Pi 4 using PXE
+  2021-05-05 12:01 ` [yocto] [meta-raspberrypi] Booting a Raspberry Pi 4 using PXE Manuel Wagesreither
+@ 2021-05-05 13:34   ` Anton Antonov
+  2021-05-05 15:10     ` [yocto] " Manuel Wagesreither
+  0 siblings, 1 reply; 3+ messages in thread
+From: Anton Antonov @ 2021-05-05 13:34 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 375 bytes --]
+
+I don't know what exactly you mean by "whenever the Raspi is booting over the network".
+When a machine boots from network (i,e. using DHCP/BOOTP) then usually DHCP server points to, for example, a TFTP server where the kernel and initramfs should be obtained from and kernel parameters. So, you need to check your DHCP/TFTP/etc servers configuration for kernel parameters.
+
+[-- Attachment #2: Type: text/html, Size: 380 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] [meta-raspberrypi] Booting a Raspberry Pi 4 using PXE
+  2021-05-05 13:34   ` Anton Antonov
+@ 2021-05-05 15:10     ` Manuel Wagesreither
+  0 siblings, 0 replies; 3+ messages in thread
+From: Manuel Wagesreither @ 2021-05-05 15:10 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 856 bytes --]
+
+Hello Anton,
+
+Am Mi, 5. Mai 2021, um 15:34, schrieb Anton Antonov:
+> I don't know what exactly you mean by "whenever the Raspi is booting over the network". 
+> When a machine boots from network (i,e. using DHCP/BOOTP) then usually DHCP server points to, for example, a TFTP server where the kernel and initramfs should be obtained from and kernel parameters. So, you need to check your DHCP/TFTP/etc servers configuration for kernel parameters. 
+
+The boot files (kernel, kernel parameters, device tree overlays, ...) served by TFTP are bit-identical to the ones present at `/boot` of the usb stick.
+
+When I boot over PXE/BOOTP/DHCP/TFTP/etc, something seems to replace all occurences of `8250.nr_uarts=1` with `8250.nr_uarts=0`. When I boot using usb drive using the exact same files, this doesn't happen and uart is active.
+
+
+Regards,
+Manuel
+
+[-- Attachment #2: Type: text/html, Size: 1209 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2021-05-05 15:11 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+     [not found] <167B3E1B63645EE6.24705@lists.yoctoproject.org>
+2021-05-05 12:01 ` [yocto] [meta-raspberrypi] Booting a Raspberry Pi 4 using PXE Manuel Wagesreither
+2021-05-05 13:34   ` Anton Antonov
+2021-05-05 15:10     ` [yocto] " Manuel Wagesreither
+

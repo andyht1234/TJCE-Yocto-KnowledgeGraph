@@ -1,0 +1,60 @@
+* Recommended boot method for system using rauc, intel and efi.
+@ 2022-07-06  6:50 Anders Gnistrup
+  0 siblings, 0 replies; only message in thread
+From: Anders Gnistrup @ 2022-07-06  6:50 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2678 bytes --]
+
+Hi all
+
+I am building a yocto BSP for an Intel system. The system is using rauc for updating and contains three sections, rescue, A and B, where A/B is the actual SW running. Since the system is Intel based a decision how to organise the partitions layout is needed. Currently I am making a skeleton for the BSP.
+
+This is the current layout
+
+  *   boot
+  *   rescue
+  *   A
+  *   B
+
+In arm systems boot selection is handling via scripting/rauc/uboot in boot section. But in intel there are at least three options.
+1) Legacy boot
+This will create the layout above, but it will depend on legacy bios boot. This will require writing the MBR and pointing to the boot where grub scripting handles the rauc stuff. It seems like a bad solution to add MBR is the loop.
+
+2) EFI entry always points to boot partition.
+grub + scripting in the boot partition will do a similar operation like in the arm system. This solution gives quite a lot of flexibility, but will depend on SW.
+
+3) pure EFI+efibootmgr. This will eliminate the boot partition and grub scripting but since EFI file format must be VFAT (EFI standard) the rescue, A and B partition needs a split. That is:
+
+  *   Boot rescue
+  *   rescue
+  *   Boot A
+  *   A
+  *   Boot B
+  *   B
+
+rescue/factury default needs to write the boot entries to EFI-nvram. During runtime efibootmgr+rauc selects the next boot, rescue, A or B.
+The grub scripting is replaced by efibootmgr and EFI entries in NVRAM.
+
+And now my questions
+Q1
+My yocto builder is using the wks plugin to define the partition layout, https://docs.yoctoproject.org/singleindex.html#command-bootloader.
+When setting the bootloader command it seems that the --configfile argument shall be used since there is no info in the EFI-nvram. WKS seems to work OK without the --configfile argument when building an installer image. Building a fixed disk containing an installer rescue image seems to be a bit too much for the logic.
+
+Q2
+I can't decide between 2 or 3 and I need some guidelines/idea.
+2 is SW based while 3 is using the EFI system. Basically, the grub scripting is partly replacing the EFI system but will introduce a more complex partitions layout, a more complex rauc bundle and a more complex installation/rescue. The rescue partition shall be able to reset the system to factory default i.e. either reset entries in EFI-nvram or reset grub environment. Currently I am most up for grub scripting, solution 2, since all info is on the sata disk and not a combination of EFI-nvram and sata disk. Further it seems that the yocto support for efibootmgr, EFI-nvram and rauc is a bit bleeding edge.
+
+Regards
+Anders Gnistrup
+
+
+[-- Attachment #2: Type: text/html, Size: 4598 bytes --]
+
+^ permalink raw reply	[flat|nested] only message in thread
+only message in thread, other threads:[~2022-07-06  6:50 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-07-06  6:50 Recommended boot method for system using rauc, intel and efi Anders Gnistrup
+

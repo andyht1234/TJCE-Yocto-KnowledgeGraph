@@ -1,0 +1,333 @@
+* Fedora 36 / uninative GLIBCXX 3.4.30
+@ 2022-04-03  7:12 Federico Pellegrin
+  2022-04-03 10:44 ` [yocto] " Richard Purdie
+  0 siblings, 1 reply; 4+ messages in thread
+From: Federico Pellegrin @ 2022-04-03  7:12 UTC (permalink / raw)
+  To: Yocto-mailing-list
+
+[-- Attachment #1: Type: text/plain, Size: 1306 bytes --]
+
+Hello,
+I've been playing around building a Yocto imagine based on kirkstone/master
+on the just released Fedora 36 beta test image. (just to give a few bits
+more details: builds a MX8X image, works perfectly fine with Fedora 34 and
+35 since quite some time)
+
+The first and most obvious thing I've found out is that it is based on a
+newer version of glibcxx (3.4.30) when the very latest uninative available
+(as far as I could see, apologies if I'm wrong) is on 3.4.29, so at some
+point this will break the build (when pzstd is called).
+
+Of course for the time being I just disabled uninative and the build is
+going on (will report of course should I find something else). I'm not sure
+(still checking this) if that should have happened automatically, but there
+was actually no warning in that sense (maybe because is GLIBCXX and not
+GLIBC itself?)
+But the question is: should I try to contribute that tarball (I will search
+for details, but if there is any good reference more than welcome!) or is
+it something that is likely done by the core team?
+
+Of course FC36 is still a test distro so there is no surprise it broke, but
+as we are close to Kirkstone release and possibly other distros will get
+the same upgrade, I guess it could be great if we may fix this before that
+deadline.
+
+Many thanks!
+Federico
+
+[-- Attachment #2: Type: text/html, Size: 1549 bytes --]
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] Fedora 36 / uninative GLIBCXX 3.4.30
+  2022-04-03  7:12 Fedora 36 / uninative GLIBCXX 3.4.30 Federico Pellegrin
+@ 2022-04-03 10:44 ` Richard Purdie
+  2022-04-03 14:51   ` Martin Jansa
+  0 siblings, 1 reply; 4+ messages in thread
+From: Richard Purdie @ 2022-04-03 10:44 UTC (permalink / raw)
+  To: Federico Pellegrin, Yocto-mailing-list
+
+On Sun, 2022-04-03 at 09:12 +0200, Federico Pellegrin wrote:
+> I've been playing around building a Yocto imagine based on kirkstone/master on
+> the just released Fedora 36 beta test image. (just to give a few bits more
+> details: builds a MX8X image, works perfectly fine with Fedora 34 and 35 since
+> quite some time)
+> 
+> The first and most obvious thing I've found out is that it is based on a newer
+> version of glibcxx (3.4.30) when the very latest uninative available (as far
+> as I could see, apologies if I'm wrong) is on 3.4.29, so at some point this
+> will break the build (when pzstd is called).
+> 
+> Of course for the time being I just disabled uninative and the build is going
+> on (will report of course should I find something else). I'm not sure (still
+> checking this) if that should have happened automatically, but there was
+> actually no warning in that sense (maybe because is GLIBCXX and not GLIBC
+> itself?)
+> But the question is: should I try to contribute that tarball (I will search
+> for details, but if there is any good reference more than welcome!) or is it
+> something that is likely done by the core team?
+> 
+> Of course FC36 is still a test distro so there is no surprise it broke, but as
+> we are close to Kirkstone release and possibly other distros will get the same
+> upgrade, I guess it could be great if we may fix this before that deadline.
+
+Thanks for reporting it. I think to generate the newer version we need gcc 12
+which is still in pre-release. We generate the uninative tarball using our own
+builds on the autobuilder so until we have gcc 12 recipes there, we can't
+generate that.
+
+Once gcc 12 is out, we will release a new uninative (assuming we can update our
+recipes).
+
+I'd like to think the checks in uninative would have noticed the mismatch, we do
+have some code there to detect libc version but perhaps not the CXX pieces so
+I'd welcome help in adding something for that.
+
+Cheers,
+
+Richard
+
+
+
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] Fedora 36 / uninative GLIBCXX 3.4.30
+  2022-04-03 10:44 ` [yocto] " Richard Purdie
+@ 2022-04-03 14:51   ` Martin Jansa
+  2022-04-04  2:58     ` Federico Pellegrin
+  0 siblings, 1 reply; 4+ messages in thread
+From: Martin Jansa @ 2022-04-03 14:51 UTC (permalink / raw)
+  To: Richard Purdie; +Cc: Federico Pellegrin, Yocto-mailing-list
+
+[-- Attachment #1: Type: text/plain, Size: 2912 bytes --]
+
+FWIW: the same is happening now with ubuntu-22.04 where libstdc++6 package
+is now built from gcc-12 sources (even when gcc itself still defaults to
+gcc-11).
+
+I was trying to add the check in uninative.bbclass, but haven't found easy
+portable way to detect the version from libstdc++.so.6 (other than parsing
+objdump -x /full/path/to/libstdc++.so.6 output).
+
+On Sun, Apr 3, 2022 at 12:44 PM Richard Purdie <
+richard.purdie@linuxfoundation.org> wrote:
+
+> On Sun, 2022-04-03 at 09:12 +0200, Federico Pellegrin wrote:
+> > I've been playing around building a Yocto imagine based on
+> kirkstone/master on
+> > the just released Fedora 36 beta test image. (just to give a few bits
+> more
+> > details: builds a MX8X image, works perfectly fine with Fedora 34 and 35
+> since
+> > quite some time)
+> >
+> > The first and most obvious thing I've found out is that it is based on a
+> newer
+> > version of glibcxx (3.4.30) when the very latest uninative available (as
+> far
+> > as I could see, apologies if I'm wrong) is on 3.4.29, so at some point
+> this
+> > will break the build (when pzstd is called).
+> >
+> > Of course for the time being I just disabled uninative and the build is
+> going
+> > on (will report of course should I find something else). I'm not sure
+> (still
+> > checking this) if that should have happened automatically, but there was
+> > actually no warning in that sense (maybe because is GLIBCXX and not GLIBC
+> > itself?)
+> > But the question is: should I try to contribute that tarball (I will
+> search
+> > for details, but if there is any good reference more than welcome!) or
+> is it
+> > something that is likely done by the core team?
+> >
+> > Of course FC36 is still a test distro so there is no surprise it broke,
+> but as
+> > we are close to Kirkstone release and possibly other distros will get
+> the same
+> > upgrade, I guess it could be great if we may fix this before that
+> deadline.
+>
+> Thanks for reporting it. I think to generate the newer version we need gcc
+> 12
+> which is still in pre-release. We generate the uninative tarball using our
+> own
+> builds on the autobuilder so until we have gcc 12 recipes there, we can't
+> generate that.
+>
+> Once gcc 12 is out, we will release a new uninative (assuming we can
+> update our
+> recipes).
+>
+> I'd like to think the checks in uninative would have noticed the mismatch,
+> we do
+> have some code there to detect libc version but perhaps not the CXX pieces
+> so
+> I'd welcome help in adding something for that.
+>
+> Cheers,
+>
+> Richard
+>
+>
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#56648):
+> https://lists.yoctoproject.org/g/yocto/message/56648
+> Mute This Topic: https://lists.yoctoproject.org/mt/90215476/3617156
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> Martin.Jansa@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 3874 bytes --]
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] Fedora 36 / uninative GLIBCXX 3.4.30
+  2022-04-03 14:51   ` Martin Jansa
+@ 2022-04-04  2:58     ` Federico Pellegrin
+  0 siblings, 0 replies; 4+ messages in thread
+From: Federico Pellegrin @ 2022-04-04  2:58 UTC (permalink / raw)
+  To: Martin Jansa; +Cc: Richard Purdie, Yocto-mailing-list
+
+[-- Attachment #1: Type: text/plain, Size: 4644 bytes --]
+
+Hello,
+Thanks for the feedback!
+
+Indeed the check is only on the "ldd --version" output which doesn't
+account for the libstdc++ and that explains it. As compared to Ubuntu
+22.04, Fedora 36 actually has also GCC 12.0.1 as default compiler.
+
+As Martin mentions not sure if there is an easy portable way. He mentions
+objdump which is for sure effective but maybe complicated and I feel like
+relies on the filename being guessed (well should be known, the main link
+at least) and feels a bit overcomplicated (if we need to go that low level
+in case I'd suggest just to just use "strings" and grep there instead).
+
+Would relying just on the filename be too shaky? I can see here
+https://gcc.gnu.org/onlinedocs/libstdc++/manual/abi.html in point 3 of
+"History" that it would seem quite well defined. Actually I guess if we
+would just compare the system libstdc++.so.X.Y.Z (which we may be easily
+able to get it from the libstdc++.so link) to uninative one  maybe would be
+enough to determine it is newer? Hardcoding the path to libstdc++.so (as
+ie. /usr/lib64/libstdc++.so) is probably not nice (ie. for custom
+toolchains), so maybe we can ask g++ (-print-search-dirs, libraries
+section) and look in those?
+Then not sure if there are some distros/installs that do the insane-isy
+thing of just installing directly the .so stripping the versions from the
+name, hopefully not.
+
+I'm not sure using anything from g++ -dumpspecs would be viable if as
+Martin mentions you may have (ie. ubuntu-2204) a version with new stdc++
+but older g++.
+
+Cheers,
+Federico
+
+
+Il giorno dom 3 apr 2022 alle ore 16:52 Martin Jansa <martin.jansa@gmail.com>
+ha scritto:
+
+> FWIW: the same is happening now with ubuntu-22.04 where libstdc++6 package
+> is now built from gcc-12 sources (even when gcc itself still defaults to
+> gcc-11).
+>
+> I was trying to add the check in uninative.bbclass, but haven't found easy
+> portable way to detect the version from libstdc++.so.6 (other than parsing
+> objdump -x /full/path/to/libstdc++.so.6 output).
+>
+> On Sun, Apr 3, 2022 at 12:44 PM Richard Purdie <
+> richard.purdie@linuxfoundation.org> wrote:
+>
+>> On Sun, 2022-04-03 at 09:12 +0200, Federico Pellegrin wrote:
+>> > I've been playing around building a Yocto imagine based on
+>> kirkstone/master on
+>> > the just released Fedora 36 beta test image. (just to give a few bits
+>> more
+>> > details: builds a MX8X image, works perfectly fine with Fedora 34 and
+>> 35 since
+>> > quite some time)
+>> >
+>> > The first and most obvious thing I've found out is that it is based on
+>> a newer
+>> > version of glibcxx (3.4.30) when the very latest uninative available
+>> (as far
+>> > as I could see, apologies if I'm wrong) is on 3.4.29, so at some point
+>> this
+>> > will break the build (when pzstd is called).
+>> >
+>> > Of course for the time being I just disabled uninative and the build is
+>> going
+>> > on (will report of course should I find something else). I'm not sure
+>> (still
+>> > checking this) if that should have happened automatically, but there was
+>> > actually no warning in that sense (maybe because is GLIBCXX and not
+>> GLIBC
+>> > itself?)
+>> > But the question is: should I try to contribute that tarball (I will
+>> search
+>> > for details, but if there is any good reference more than welcome!) or
+>> is it
+>> > something that is likely done by the core team?
+>> >
+>> > Of course FC36 is still a test distro so there is no surprise it broke,
+>> but as
+>> > we are close to Kirkstone release and possibly other distros will get
+>> the same
+>> > upgrade, I guess it could be great if we may fix this before that
+>> deadline.
+>>
+>> Thanks for reporting it. I think to generate the newer version we need
+>> gcc 12
+>> which is still in pre-release. We generate the uninative tarball using
+>> our own
+>> builds on the autobuilder so until we have gcc 12 recipes there, we can't
+>> generate that.
+>>
+>> Once gcc 12 is out, we will release a new uninative (assuming we can
+>> update our
+>> recipes).
+>>
+>> I'd like to think the checks in uninative would have noticed the
+>> mismatch, we do
+>> have some code there to detect libc version but perhaps not the CXX
+>> pieces so
+>> I'd welcome help in adding something for that.
+>>
+>> Cheers,
+>>
+>> Richard
+>>
+>>
+>>
+>>
+>> -=-=-=-=-=-=-=-=-=-=-=-
+>> Links: You receive all messages sent to this group.
+>> View/Reply Online (#56648):
+>> https://lists.yoctoproject.org/g/yocto/message/56648
+>> Mute This Topic: https://lists.yoctoproject.org/mt/90215476/3617156
+>> Group Owner: yocto+owner@lists.yoctoproject.org
+>> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+>> Martin.Jansa@gmail.com]
+>> -=-=-=-=-=-=-=-=-=-=-=-
+>>
+>>
+
+[-- Attachment #2: Type: text/html, Size: 6147 bytes --]
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+end of thread, other threads:[~2022-04-04 18:46 UTC | newest]
+
+Thread overview: 4+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-04-03  7:12 Fedora 36 / uninative GLIBCXX 3.4.30 Federico Pellegrin
+2022-04-03 10:44 ` [yocto] " Richard Purdie
+2022-04-03 14:51   ` Martin Jansa
+2022-04-04  2:58     ` Federico Pellegrin
+

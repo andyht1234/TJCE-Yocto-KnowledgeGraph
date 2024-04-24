@@ -1,0 +1,110 @@
+* Yocto Autobuilder: Latency Monitor and AB-INT - Meeting notes: June 10, 2021
+@ 2021-06-13 20:15 Randy MacLeod
+  0 siblings, 0 replies; only message in thread
+From: Randy MacLeod @ 2021-06-13 20:15 UTC (permalink / raw)
+  To: Sakib Sajal, alexandre.belloni, richard.purdie, Wold, Saul
+  Cc: Yocto discussion list, Tascioglu, Tony, Trevor Gamblin
+
+(Buried on my desktop, better late than never)
+
+
+Attendees:  Alex, Richard, Saul, Randy, Tony, Trevor
+
+
+1.
+valgrind:
+  - taskset work-around really helps.
+  - working on stack_changes bug for qemuarm43
+     - reproduced on master, hardknott but not gatesgarth
+     - Let's drop it for now to reduce the AB noise.
+
+
+2.
+task summary script:
+  - procpath compared to top -bn1
+    - about the same number of syscalls (strace)
+    - about 5x more cpu and 2x more ram.
+  - could be a problem in that we'd need to boostrap since
+    procpath-native would need to be built at the beginning of each
+    bitbake run or be added to buildtools or hacked into y-ab-helper.
+  - it might be simpler to screen-scrape top output...
+
+
+3.
+make: job server
+  - working and able to build images now.
+  - testing to confirm that it actually limits the load
+  - we'll submit for master-next once that's confirmed.
+
+
+4.
+There's a problem in qemu/kernel corruption apparently from
+an ltp test. Richard has done lots of work to go back to the
+near pristine 5.10 kernel and the problem still happens so
+that seems to eliminate the possibility that it's a linux-yocto
+specific issue.
+
+Richard has a patch in here:
+http://git.yoctoproject.org/cgit.cgi/poky-contrib/commit/?h=rpurdie/t222&id=d7d65aae104caa03afc28837b0abe0b486d5a8b8 
+
+
+and to reproduce the problem you should be able to just run:
+
+IMAGE_INSTALL_append = ' ltp'
+TEST_SUITES = 'ping ssh ltp' then bitbake core-image-sato; bitbake 
+core-image-sato -c testimage
+( qemux86-64, with kvm)
+
+
+then look for BUG: in log in core-image-sato WORKDIR/testimage/qemu*
+  i.e.: tmp/work/qemux86_64-poky-linux/core-image-sato/1.0-r0/testimage/
+
+
+Reproducible about 70% of the time.
+RP: revert qemu-6.0 to 5.x: The problem persists.
+     using ubu-20.04
+
+
+
+5.
+Remaining more frequent issues:
+
+valgrind:
+   https://autobuilder.yoctoproject.org/typhoon/#/builders/81/builds/2168
+
+
+6.
+There are 3 patches in master-next that we need to decide on:
+  - library preload: read qemu libs into memory.
+    - helpful but maybe treat as a bandaid until we are able to
+      reduce the IO and cpu spikes.
+
+  - qemu-runner? timeout increase 120 -> 240
+  - ptest timeouts 300 -> 450?
+
+
+7.
+  The additional (top and qemu log) output when qemu hangs is merged.
+  Thanks Sakib.
+
+8.
+   Plans for the week:
+
+   Richard: build M1, debug ltp issue.
+   Alex: full day on ltp tomorrow?
+   Sakib: task summary
+   Trevor: make job server
+   Tony: more valgrind bugs/work-arounds.
+   Saul: have QMP deal with sigusr1 to close the QMP socket
+   Randy: test ltp failure
+
+
+
+
+^ permalink raw reply	[flat|nested] only message in thread
+only message in thread, other threads:[~2021-06-13 20:15 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-06-13 20:15 Yocto Autobuilder: Latency Monitor and AB-INT - Meeting notes: June 10, 2021 Randy MacLeod
+

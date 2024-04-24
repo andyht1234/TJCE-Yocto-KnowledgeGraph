@@ -1,0 +1,194 @@
+* host file contamination with recipes using cmake and find_package
+@ 2022-05-27 15:07 Daniel Squires
+  2022-05-27 15:23 ` [yocto] " Mikko.Rapeli
+  0 siblings, 1 reply; 5+ messages in thread
+From: Daniel Squires @ 2022-05-27 15:07 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 876 bytes --]
+
+Hi,
+We have an internal source tree, I'll call it libA for brevity here, which uses cmake and find_package to build against openssl as follows:
+
+find_package(OpenSSL REQUIRED)
+
+The recipe for this source runs fine but some subsequent ones that depend on it (libB, libC etc) fail on some systems saying that a library file (libcrypto.so.1.1) required by libA cannot be found. Now it seems that the build for libA is managing to find and link against libcrypto.so.1.1 from the host libraries found under /usr. I have seen issues like this many years ago but not experienced any such issues since then until recently.
+
+Do we need to do something special in the recipe to prevent this happening? At first I thought I was going to find some hardcoded  absolute paths in the CMakeLists.txt file of libA as I have in the past but there is nothing like that.
+
+Many Thanks
+
+[-- Attachment #2: Type: text/html, Size: 954 bytes --]
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] host file contamination with recipes using cmake and find_package
+  2022-05-27 15:07 host file contamination with recipes using cmake and find_package Daniel Squires
+@ 2022-05-27 15:23 ` Mikko.Rapeli
+  2022-05-27 15:37   ` Daniel Squires
+  0 siblings, 1 reply; 5+ messages in thread
+From: Mikko.Rapeli @ 2022-05-27 15:23 UTC (permalink / raw)
+  To: dan; +Cc: yocto
+
+Hi,
+
+On Fri, May 27, 2022 at 08:07:57AM -0700, Daniel Squires wrote:
+> Hi,
+> We have an internal source tree, I'll call it libA for brevity here, which uses cmake and find_package to build against openssl as follows:
+> 
+> find_package(OpenSSL REQUIRED)
+> 
+> The recipe for this source runs fine but some subsequent ones that depend on it (libB, libC etc) fail on some systems saying that a library file (libcrypto.so.1.1) required by libA cannot be found. Now it seems that the build for libA is managing to find and link against libcrypto.so.1.1 from the host libraries found under /usr. I have seen issues like this many years ago but not experienced any such issues since then until recently.
+> 
+> Do we need to do something special in the recipe to prevent this happening? At first I thought I was going to find some hardcoded  absolute paths in the CMakeLists.txt file of libA as I have in the past but there is nothing like that.
+
+Usually the problem is that the application CMakeLists.txt or other custom CMake
+snippet code is not obeying the bitbake generated toolchain.cmake file and the
+variables set there. I presume your application recipe is doing "inherit cmake".
+The application side can for example overwrite the various variables which set
+the cross compiler sysroot.
+
+Cheers,
+
+-Mikko
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] host file contamination with recipes using cmake and find_package
+  2022-05-27 15:23 ` [yocto] " Mikko.Rapeli
+@ 2022-05-27 15:37   ` Daniel Squires
+  2022-05-27 15:44     ` Mikko.Rapeli
+  0 siblings, 1 reply; 5+ messages in thread
+From: Daniel Squires @ 2022-05-27 15:37 UTC (permalink / raw)
+  To: Mikko.Rapeli; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2518 bytes --]
+
+We are indeed using
+
+
+inherit cmake
+
+
+The CMakeLists.txt adds a few bits to CMAKE_CXX_FLAGS but does not 
+outright clobber it. I have noticed in other recipes some things like:
+
+
+EXTRA_OECONF = " --with-openssl=${STAGING_DIR_HOST}${prefix} \
+                "
+
+And from the docs it seems like this maybe intended to help with this, 
+but I am not entirely sure. Does that look right?  I don't currently 
+have access to one of the systems where the build is failing but I'll 
+try it out next week.
+
+Many thanks
+
+
+On 27/05/2022 16:23, Mikko.Rapeli@bmw.de wrote:
+> Hi,
+>
+> On Fri, May 27, 2022 at 08:07:57AM -0700, Daniel Squires wrote:
+>> Hi,
+>> We have an internal source tree, I'll call it libA for brevity here, which uses cmake and find_package to build against openssl as follows:
+>>
+>> find_package(OpenSSL REQUIRED)
+>>
+>> The recipe for this source runs fine but some subsequent ones that depend on it (libB, libC etc) fail on some systems saying that a library file (libcrypto.so.1.1) required by libA cannot be found. Now it seems that the build for libA is managing to find and link against libcrypto.so.1.1 from the host libraries found under /usr. I have seen issues like this many years ago but not experienced any such issues since then until recently.
+>>
+>> Do we need to do something special in the recipe to prevent this happening? At first I thought I was going to find some hardcoded  absolute paths in the CMakeLists.txt file of libA as I have in the past but there is nothing like that.
+> Usually the problem is that the application CMakeLists.txt or other custom CMake
+> snippet code is not obeying the bitbake generated toolchain.cmake file and the
+> variables set there. I presume your application recipe is doing "inherit cmake".
+> The application side can for example overwrite the various variables which set
+> the cross compiler sysroot.
+>
+> Cheers,
+>
+> -Mikko
+-- 
+
+*Dan Squires*
+Senior Roboticist
+
+www.engineeredarts.co.uk <https://www.engineeredarts.co.uk/>
+
+EA Phone Number+44 (0)1326 378129
+
+RoboThespian FB <https://www.facebook.com/RobotThespian> RoboThespian 
+Twitter <https://twitter.com/robothespian> EA YouTube 
+<http://youtube.com/EngineeredArts>
+Engineered Arts Logo <https://www.engineeredarts.co.uk/>
+*
+
+Engineered Arts Ltd *
+E1-E3 Church View Business Park,
+Bickland Water Road,
+Falmouth Cornwall,
+TR11 4FZ
+United Kingdom
+
+Subscribe to Mailing List <https://www.engineeredarts.co.uk/mailing-list/>
+
+[-- Attachment #2: Type: text/html, Size: 5129 bytes --]
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] host file contamination with recipes using cmake and find_package
+  2022-05-27 15:37   ` Daniel Squires
+@ 2022-05-27 15:44     ` Mikko.Rapeli
+  2022-05-31 15:15       ` Daniel Squires
+  0 siblings, 1 reply; 5+ messages in thread
+From: Mikko.Rapeli @ 2022-05-27 15:44 UTC (permalink / raw)
+  To: dan; +Cc: yocto
+
+Hi,
+
+On Fri, May 27, 2022 at 04:37:40PM +0100, Daniel Squires wrote:
+> We are indeed using
+> 
+> inherit cmake
+> 
+> The CMakeLists.txt adds a few bits to CMAKE_CXX_FLAGS but does not outright
+> clobber it. I have noticed in other recipes some things like:
+> 
+> EXTRA_OECONF = " --with-openssl=${STAGING_DIR_HOST}${prefix} \
+>                "
+>
+> And from the docs it seems like this maybe intended to help with this, but I
+> am not entirely sure. Does that look right?  I don't currently have access
+> to one of the systems where the build is failing but I'll try it out next
+> week.
+
+To me this looks wrong. If CMake is used and toolchain.cmake variables not overwritten,
+the sysroot path is set and openssl will be found from default system include
+directories inside sysroot and nothing like this needs to be added as long as
+DEPENDS has openssl. I'd debug this under bitbake -c devshell.
+
+Cheers,
+
+-Mikko
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: host file contamination with recipes using cmake and find_package
+  2022-05-27 15:44     ` Mikko.Rapeli
+@ 2022-05-31 15:15       ` Daniel Squires
+  0 siblings, 0 replies; 5+ messages in thread
+From: Daniel Squires @ 2022-05-31 15:15 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 153 bytes --]
+
+Thanks,
+This did turn out be a a simple case of CMAKE_FIND_ROOT_PATH being clobbered in our CMakeLists.txt files which I had missed on the first look.
+
+[-- Attachment #2: Type: text/html, Size: 157 bytes --]
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+end of thread, other threads:[~2022-05-31 15:15 UTC | newest]
+
+Thread overview: 5+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-05-27 15:07 host file contamination with recipes using cmake and find_package Daniel Squires
+2022-05-27 15:23 ` [yocto] " Mikko.Rapeli
+2022-05-27 15:37   ` Daniel Squires
+2022-05-27 15:44     ` Mikko.Rapeli
+2022-05-31 15:15       ` Daniel Squires
+

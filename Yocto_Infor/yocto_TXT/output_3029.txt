@@ -1,0 +1,131 @@
+* Re: [yocto] [meta-mingw] [PATCH] binutils: Package static libdep linker plugins
+       [not found] <16642F2E6B14B52A.594@lists.yoctoproject.org>
+@ 2021-08-13  7:05 ` Samuli Piippo
+  2021-08-13 13:48   ` Joshua Watt
+  0 siblings, 1 reply; 2+ messages in thread
+From: Samuli Piippo @ 2021-08-13  7:05 UTC (permalink / raw)
+  To: Samuli Piippo; +Cc: yocto, Joshua Watt
+
+[-- Attachment #1: Type: text/plain, Size: 1762 bytes --]
+
+ping.
+
+I'm still seeing problem with this on hardknott, at least when building for
+qemux86 target:
+
+agent:2021/08/13 06:00:50 build.go:391: ERROR:
+binutils-cross-canadian-i686-2.36.1-r0 do_package_qa: QA Issue: non
+-staticdev package contains static .a library:
+binutils-cross-canadian-i686 path
+'/opt/poky/3.3.2/sysroots/x86_64-w64-mingw32/usr/lib/i686-poky-linux/bfd-plugins/libdep.dll.a'
+agent:2021/08/13 06:00:50 build.go:391: non -staticdev package
+contains static .a library: binutils-cross-canadian-i686 path
+'/opt/poky/3.3.2/sysroots/x86_64-w64-mingw32/usr/lib/i686-poky-linux/bfd-plugins/libdep.dll.a'
+[staticdev]
+agent:2021/08/13 06:00:50 build.go:391: ERROR:
+binutils-cross-canadian-i686-2.36.1-r0 do_package_qa: QA run found
+fatal errors. Please consider fixing them.
+
+
+On Tue, 16 Feb 2021 at 11:07, Samuli Piippo via lists.yoctoproject.org
+<samuli.piippo=gmail.com@lists.yoctoproject.org> wrote:
+
+> this is new plugin added in binutils 2.36
+>
+> Signed-off-by: Samuli Piippo <samuli.piippo@qt.io>
+> ---
+>  recipes-devtools/binutils/binutils-cross-canadian_2.%.bbappend | 2 ++
+>  1 file changed, 2 insertions(+)
+>
+> diff --git
+> a/recipes-devtools/binutils/binutils-cross-canadian_2.%.bbappend
+> b/recipes-devtools/binutils/binutils-cross-canadian_2.%.bbappend
+> index 5845fe0..0d376bb 100644
+> --- a/recipes-devtools/binutils/binutils-cross-canadian_2.%.bbappend
+> +++ b/recipes-devtools/binutils/binutils-cross-canadian_2.%.bbappend
+> @@ -3,3 +3,5 @@ LDFLAGS_append_sdkmingw32 = " -Wl,-static"
+>
+>  DEPENDS_remove_sdkmingw32 = "nativesdk-gettext"
+>  DEPENDS_remove_sdkmingw32 = "nativesdk-flex"
+> +
+> +FILES_${PN}-staticdev_append_sdkmingw32 = " ${libdir}/bfd-plugins/lib*.a"
+> --
+> 2.17.1
+>
+>
+> 
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 2316 bytes --]
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+* Re: [yocto] [meta-mingw] [PATCH] binutils: Package static libdep linker plugins
+  2021-08-13  7:05 ` [yocto] [meta-mingw] [PATCH] binutils: Package static libdep linker plugins Samuli Piippo
+@ 2021-08-13 13:48   ` Joshua Watt
+  0 siblings, 0 replies; 2+ messages in thread
+From: Joshua Watt @ 2021-08-13 13:48 UTC (permalink / raw)
+  To: Samuli Piippo; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2253 bytes --]
+
+
+On 8/13/21 2:05 AM, Samuli Piippo wrote:
+> ping.
+>
+> I'm still seeing problem with this on hardknott, at least when 
+> building for qemux86 target:
+> agent:2021/08/13 06:00:50 build.go:391: ERROR: binutils-cross-canadian-i686-2.36.1-r0 do_package_qa: QA Issue: non -staticdev package contains static .a library: binutils-cross-canadian-i686 path '/opt/poky/3.3.2/sysroots/x86_64-w64-mingw32/usr/lib/i686-poky-linux/bfd-plugins/libdep.dll.a'
+> agent:2021/08/13 06:00:50 build.go:391: non -staticdev package contains static .a library: binutils-cross-canadian-i686 path '/opt/poky/3.3.2/sysroots/x86_64-w64-mingw32/usr/lib/i686-poky-linux/bfd-plugins/libdep.dll.a' [staticdev]
+> agent:2021/08/13 06:00:50 build.go:391: ERROR: binutils-cross-canadian-i686-2.36.1-r0 do_package_qa: QA run found fatal errors. Please consider fixing them.
+
+Hmm, I'm not sure why I missed this. However, why is the MinGW build 
+producing the .a files and not all the builds? It seems like this could 
+go in the oe-core version of the recipe (w/o the override) instead of 
+the bbappend?
+
+>
+> On Tue, 16 Feb 2021 at 11:07, Samuli Piippo via lists.yoctoproject.org 
+> <http://lists.yoctoproject.org> 
+> <samuli.piippo=gmail.com@lists.yoctoproject.org 
+> <mailto:gmail.com@lists.yoctoproject.org>> wrote:
+>
+>     this is new plugin added in binutils 2.36
+>
+>     Signed-off-by: Samuli Piippo <samuli.piippo@qt.io
+>     <mailto:samuli.piippo@qt.io>>
+>     ---
+>      recipes-devtools/binutils/binutils-cross-canadian_2.%.bbappend | 2 ++
+>      1 file changed, 2 insertions(+)
+>
+>     diff --git
+>     a/recipes-devtools/binutils/binutils-cross-canadian_2.%.bbappend
+>     b/recipes-devtools/binutils/binutils-cross-canadian_2.%.bbappend
+>     index 5845fe0..0d376bb 100644
+>     --- a/recipes-devtools/binutils/binutils-cross-canadian_2.%.bbappend
+>     +++ b/recipes-devtools/binutils/binutils-cross-canadian_2.%.bbappend
+>     @@ -3,3 +3,5 @@ LDFLAGS_append_sdkmingw32 = " -Wl,-static"
+>
+>      DEPENDS_remove_sdkmingw32 = "nativesdk-gettext"
+>      DEPENDS_remove_sdkmingw32 = "nativesdk-flex"
+>     +
+>     +FILES_${PN}-staticdev_append_sdkmingw32 = "
+>     ${libdir}/bfd-plugins/lib*.a"
+>     -- 
+>     2.17.1
+>
+>
+>     
+>
+
+[-- Attachment #2: Type: text/html, Size: 3791 bytes --]
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2021-08-13 13:48 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+     [not found] <16642F2E6B14B52A.594@lists.yoctoproject.org>
+2021-08-13  7:05 ` [yocto] [meta-mingw] [PATCH] binutils: Package static libdep linker plugins Samuli Piippo
+2021-08-13 13:48   ` Joshua Watt
+

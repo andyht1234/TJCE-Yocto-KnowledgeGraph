@@ -1,0 +1,403 @@
+* [PATCH yocto-autobuilder-helper v13] Add a banner on the old documentation docs. Script to add banners to the old docs and outdated dunfell docs
+@ 2022-05-04 11:08 Abongwa Bonalais Amahnui
+  2022-05-05 20:03 ` [yocto] " Richard Purdie
+  0 siblings, 1 reply; 5+ messages in thread
+From: Abongwa Bonalais Amahnui @ 2022-05-04 11:08 UTC (permalink / raw)
+  To: yocto; +Cc: Abongwa Bonalais Amahnui
+
+Signed-off-by: Abongwa Bonalais Amahnui <abongwabonalais@gmail.com>
+---
+ scripts/docs_add_banner.py | 104 +++++++++++++++++++++++++++++++++++++
+ scripts/run-docs-build     |   2 +
+ 2 files changed, 106 insertions(+)
+ create mode 100644 scripts/docs_add_banner.py
+
+diff --git a/scripts/docs_add_banner.py b/scripts/docs_add_banner.py
+new file mode 100644
+index 0000000..4b65664
+--- /dev/null
++++ b/scripts/docs_add_banner.py
+@@ -0,0 +1,104 @@
++#!/usr/bin/env python3
++#
++# SPDX-License-Identifier: GPL-2.0-only
++#
++#Signed-off-by: Abongwa Bonalais Amahnui <abongwabonalais@gmail.com>
++#
++#
++# Script to add banners to the old docs and outdated dunfell docs
++#
++#
++
++
++import os
++
++
++
++html_content_dunfell = '''
++<div id="outdated-warning">This document is outdated, you should select the <a href="https://docs.yoctoproject.org/dunfell">latest release version</a> in this series.</div>
++<div xml:lang="en" class="body" lang="en">
++'''
++html_content = '''
++<div id="outdated-warning">This version of the project is now considered obsolete, please select and use a <a href="https://docs.yoctoproject.org">more recent version</a>.</div>
++<div xml:lang="en" class="body" lang="en">
++'''
++
++# the class body and the last_div are used to make sure any .body property existing in any css file is not overwritten
++last_div = '''
++</div>
++
++'''
++
++css_replacement_content = '''
++ 
++  font-family: Verdana, Sans, sans-serif;
++
++  width: 100%;
++  margin:  0;
++  padding: 0;
++  color: #333;
++  overflow-x: hidden;
++  }
++ 
++.body{
++margin:  0 auto;
++min-width: 640px;
++padding: 0 5em 5em 5em;
++}
++#outdated-warning{
++text-align: center;
++background-color: rgb(255, 186, 186); 
++color: rgb(106, 14, 14); 
++padding: 0.5em 0; 
++width: 100%;
++position: fixed;
++top: 0;
++
++
++'''
++
++def add_banner_old_docs(dir):
++    exclude = []
++    for root, dirs, filenames in os.walk(dir):
++         # exclude banner for 3.1.x upward as it is an LTS release and is still supported
++        exclude = [ name for name in os.listdir(dir) if name.startswith('3.1') ]
++        for d in dirs:
++            if d in exclude:
++                dirs.remove(d)
++        for filename in filenames:
++            if filename.endswith('.html'):
++                with open(os.path.join(root, filename), 'r', encoding="ISO-8859-1") as f:
++                    current_content = f.read()
++                with open(os.path.join(root, filename), 'w') as f:
++                    f.write(current_content.replace('<body>', '<body>' + html_content))
++                    f.write(current_content.replace('</body>', last_div + '</body>'))
++            if filename.endswith('.css'):
++                with open(os.path.join(root, filename), 'r', encoding="ISO-8859-1") as f:
++                    css_content = f.read()
++                with open(os.path.join(root, filename), 'w') as f:
++                    f.write(css_content.replace(css_content[css_content.find('body {'):css_content.find('}'[0])], 'body {' + css_replacement_content ))
++add_banner_old_docs('.')
++
++
++
++
++def dunfell_docs(dir):
++    dunfell_banners = []
++    for root, dirs, filenames in os.walk(dir):
++        dunfell_banners = [ name for name in os.listdir(dir) if not name.startswith('3.1') ]
++        for d in dirs:
++            if d in dunfell_banners:
++                dirs.remove(d)
++        for filename in filenames:
++            if filename.endswith('.html'):
++                with open(os.path.join(root, filename), 'r', encoding="ISO-8859-1") as f:
++                    current_content = f.read()
++                with open(os.path.join(root, filename), 'w') as f:
++                    f.write(current_content.replace('<body>', '<body>' + html_content_dunfell))
++                    f.write(current_content.replace('</body>', last_div + '</body>'))
++            if filename.endswith('.css'):
++                with open(os.path.join(root, filename), 'r', encoding="ISO-8859-1") as f:
++                    css_content = f.read()
++                with open(os.path.join(root, filename), 'w') as f:
++                    f.write(css_content.replace(css_content[css_content.find('body {'):css_content.find('}'[0])], 'body {' + css_replacement_content ))
++dunfell_docs('.')
+\ No newline at end of file
+diff --git a/scripts/run-docs-build b/scripts/run-docs-build
+index ecc5332..307ac19 100755
+--- a/scripts/run-docs-build
++++ b/scripts/run-docs-build
+@@ -37,6 +37,8 @@ cd $outputdir
+ echo Extracing old content from archive
+ tar -xJf $docbookarchive
+ 
++$scriptdir/docs_fix_all_html_css.py
++
+ cd $bbdocs
+ mkdir $outputdir/bitbake
+ 
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 5+ messages in thread
+* Re: [yocto] [PATCH yocto-autobuilder-helper v13] Add a banner on the old documentation docs. Script to add banners to the old docs and outdated dunfell docs
+  2022-05-04 11:08 [PATCH yocto-autobuilder-helper v13] Add a banner on the old documentation docs. Script to add banners to the old docs and outdated dunfell docs Abongwa Bonalais Amahnui
+@ 2022-05-05 20:03 ` Richard Purdie
+  2022-05-10 16:46   ` Abongwa Amahnui Bonalais
+  2022-05-11 16:18   ` Abongwa Amahnui Bonalais
+  0 siblings, 2 replies; 5+ messages in thread
+From: Richard Purdie @ 2022-05-05 20:03 UTC (permalink / raw)
+  To: Abongwa Amahnui Bonalais, yocto
+
+On Wed, 2022-05-04 at 12:08 +0100, Abongwa Amahnui Bonalais wrote:
+> 
+> +
+> +def add_banner_old_docs(dir):
+> +    exclude = []
+> +    for root, dirs, filenames in os.walk(dir):
+> +         # exclude banner for 3.1.x upward as it is an LTS release and is still supported
+> +        exclude = [ name for name in os.listdir(dir) if name.startswith('3.1') ]
+> +        for d in dirs:
+> +            if d in exclude:
+> +                dirs.remove(d)
+> +        for filename in filenames:
+> +            if filename.endswith('.html'):
+> +                with open(os.path.join(root, filename), 'r', encoding="ISO-8859-1") as f:
+> +                    current_content = f.read()
+> +                with open(os.path.join(root, filename), 'w') as f:
+
+This is definitely getting there, thanks!
+
+One small thing, shouldn't we write the files with the same encoding as we read
+them?
+
+> +                    f.write(current_content.replace('<body>', '<body>' + html_content))
+> +                    f.write(current_content.replace('</body>', last_div + '</body>'))
+> +            if filename.endswith('.css'):
+> +                with open(os.path.join(root, filename), 'r', encoding="ISO-8859-1") as f:
+> +                    css_content = f.read()
+> +                with open(os.path.join(root, filename), 'w') as f:
+> +                    f.write(css_content.replace(css_content[css_content.find('body {'):css_content.find('}'[0])], 'body {' + css_replacement_content ))
+> +add_banner_old_docs('.')
+> +
+> +
+> +
+> +
+> +def dunfell_docs(dir):
+> +    dunfell_banners = []
+> +    for root, dirs, filenames in os.walk(dir):
+> +        dunfell_banners = [ name for name in os.listdir(dir) if not name.startswith('3.1') ]
+> +        for d in dirs:
+> +            if d in dunfell_banners:
+> +                dirs.remove(d)
+> +        for filename in filenames:
+> +            if filename.endswith('.html'):
+> +                with open(os.path.join(root, filename), 'r', encoding="ISO-8859-1") as f:
+> +                    current_content = f.read()
+> +                with open(os.path.join(root, filename), 'w') as f:
+> +                    f.write(current_content.replace('<body>', '<body>' + html_content_dunfell))
+> +                    f.write(current_content.replace('</body>', last_div + '</body>'))
+> +            if filename.endswith('.css'):
+> +                with open(os.path.join(root, filename), 'r', encoding="ISO-8859-1") as f:
+> +                    css_content = f.read()
+> +                with open(os.path.join(root, filename), 'w') as f:
+> +                    f.write(css_content.replace(css_content[css_content.find('body {'):css_content.find('}'[0])], 'body {' + css_replacement_content ))
+
+I think Quentin also mentioned that these two loop functions can be merged
+together to form simpler code with a condition in the centre section?
+
+> +dunfell_docs('.')
+> \ No newline at end of file
+
+We can add a newline at the end to avoid that.
+
+Cheers,
+
+Richard
+
+
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [PATCH yocto-autobuilder-helper v13] Add a banner on the old documentation docs. Script to add banners to the old docs and outdated dunfell docs
+  2022-05-05 20:03 ` [yocto] " Richard Purdie
+@ 2022-05-10 16:46   ` Abongwa Amahnui Bonalais
+  2022-05-11  9:09     ` [yocto] " Quentin Schulz
+  2022-05-11 16:18   ` Abongwa Amahnui Bonalais
+  1 sibling, 1 reply; 5+ messages in thread
+From: Abongwa Amahnui Bonalais @ 2022-05-10 16:46 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 560 bytes --]
+
+Hello Richard,
+
+Thanks for the review
+
+> 
+> I think Quentin also mentioned that these two loop functions can be merged
+> together to form simpler code with a condition in the centre section?
+
+I'm sorry I don't understand how to implement this as I tried using a function in the code but then the dirs was modified constantly when it was not supposed and I did not succeed to prevent it from doing so.
+I will continue doing more research on how to go about it, but if you have a method you would like me to use, I would gladly try it out.
+Thank you.
+
+[-- Attachment #2: Type: text/html, Size: 700 bytes --]
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] [PATCH yocto-autobuilder-helper v13] Add a banner on the old documentation docs. Script to add banners to the old docs and outdated dunfell docs
+  2022-05-10 16:46   ` Abongwa Amahnui Bonalais
+@ 2022-05-11  9:09     ` Quentin Schulz
+  0 siblings, 0 replies; 5+ messages in thread
+From: Quentin Schulz @ 2022-05-11  9:09 UTC (permalink / raw)
+  To: Abongwa Amahnui Bonalais, yocto
+
+Hi Amahnui,
+
+On 5/10/22 18:46, Abongwa Amahnui Bonalais wrote:
+> Hello Richard,
+> 
+> Thanks for the review
+> 
+>>
+>> I think Quentin also mentioned that these two loop functions can be merged
+>> together to form simpler code with a condition in the centre section?
+> 
+> I'm sorry I don't understand how to implement this as I tried using a function in the code but then the dirs was modified constantly when it was not supposed and I did not succeed to prevent it from doing so.
+> I will continue doing more research on how to go about it, but if you have a method you would like me to use, I would gladly try it out.
+> Thank you.
+> 
+
+In pseudo-code:
+
+html_banner_dunfell = "this"
+html_banner_not_dunfell = "that"
+css_banner = "something"
+
+for directory, files in recursive_traversal(path):
+     if matches(directory, '3.1*'):
+         html_banner = html_banner_dunfell
+     else
+         html_banner = html_banner_not_dunfell
+     for file in files:
+         if matches(file, '*.html'):
+             replace(content(file), html_banner)
+         else if matches(file, '*.css'):
+             replace(content(file), css_banner)
+
+In v12 I commented the following code if you need something closer to 
+proper Python code:
+
+def add_banner_old_docs(dir):
+     for root, dirs, filenames in os.walk(dir):
+         if root.startswith('./3.1'):
+             html_replacement = html_content_dunfell
+         else:
+             html_replacement = html_content
+
+         for filename in filenames:
+             if filename.endswith('.html'):
+                 with open(os.path.join(root, filename), 'r', 
+encoding="ISO-8859-1") as f:
+                     current_content = f.read()
+                 with open(os.path.join(root, filename), 'w') as f:
+                     f.write(current_content.replace('<body>', '<body>' 
++ html_replacement))
+                     f.write(current_content.replace('</body>', last_div 
+  '</body>'))
+             if filename.endswith('.css'):
+                 with open(os.path.join(root, filename), 'r', 
+encoding="ISO-8859-1") as f:
+                     css_content = f.read()
+                 with open(os.path.join(root, filename), 'w') as f:
+ 
+f.write(css_content.replace(css_content[css_content.find('body 
+{'):css_content.find('}'[0])], 'body {' + css_replacement_content ))
+
+add_banner_old_docs('.')
+
+Not tested of course, but hopefully that helps you understand what I 
+meant with factoring out the code into one function only.
+
+Cheers,
+Quentin
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [PATCH yocto-autobuilder-helper v13] Add a banner on the old documentation docs. Script to add banners to the old docs and outdated dunfell docs
+  2022-05-05 20:03 ` [yocto] " Richard Purdie
+  2022-05-10 16:46   ` Abongwa Amahnui Bonalais
+@ 2022-05-11 16:18   ` Abongwa Amahnui Bonalais
+  1 sibling, 0 replies; 5+ messages in thread
+From: Abongwa Amahnui Bonalais @ 2022-05-11 16:18 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2484 bytes --]
+
+On Thu, May 5, 2022 at 09:03 PM, Richard Purdie wrote:
+
+> 
+> One small thing, shouldn't we write the files with the same encoding as we
+> read
+> them?
+
+thank you for this, I adjusted it the most recent patch
+
+> 
+> On 5/10/22 18:46, Abongwa Amahnui Bonalais wrote:
+
+> 
+> Hello Richard,
+> Thanks for the review
+> 
+> 
+>> I think Quentin also mentioned that these two loop functions can be merged
+>> 
+>> together to form simpler code with a condition in the centre section?
+> 
+> I'm sorry I don't understand how to implement this as I tried using a
+> function in the code but then the dirs was modified constantly when it was
+> not supposed and I did not succeed to prevent it from doing so.
+> I will continue doing more research on how to go about it, but if you have
+> a method you would like me to use, I would gladly try it out.
+> Thank you.
+
+> 
+> In pseudo-code: html_banner_dunfell = "this" html_banner_not_dunfell =
+> "that" css_banner = "something" for directory, files in
+> recursive_traversal(path): if matches(directory, '3.1*'): html_banner =
+> html_banner_dunfell else html_banner = html_banner_not_dunfell for file in
+> files: if matches(file, '*.html'): replace(content(file), html_banner) else
+> if matches(file, '*.css'): replace(content(file), css_banner) In v12 I
+> commented the following code if you need something closer to proper Python
+> code: def add_banner_old_docs(dir): for root, dirs, filenames in
+> os.walk(dir): if root.startswith('./3.1'): html_replacement =
+> html_content_dunfell else: html_replacement = html_content for filename in
+> filenames: if filename.endswith('.html'): with open(os.path.join(root,
+> filename), 'r', encoding="ISO-8859-1") as f: current_content = f.read() with
+> open(os.path.join(root, filename), 'w') as f: f.write(current_content.replace('<body>',
+> '<body>' + html_replacement)) f.write(current_content.replace('</body>',
+> last_div '</body>')) if filename.endswith('.css'): with
+> open(os.path.join(root, filename), 'r', encoding="ISO-8859-1") as f: css_content
+> = f.read() with open(os.path.join(root, filename), 'w') as f: f.write(css_content.replace(css_content[css_content.find('body
+> {'):css_content.find('}'[0])], 'body {' + css_replacement_content )) add_banner_old_docs('.')
+> Not tested of course, but hopefully that helps you understand what I meant
+> with factoring out the code into one function only.
+
+Thank you very much, I implemented this and  I worked.
+
+[-- Attachment #2: Type: text/html, Size: 4205 bytes --]
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+end of thread, other threads:[~2022-05-11 16:18 UTC | newest]
+
+Thread overview: 5+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-05-04 11:08 [PATCH yocto-autobuilder-helper v13] Add a banner on the old documentation docs. Script to add banners to the old docs and outdated dunfell docs Abongwa Bonalais Amahnui
+2022-05-05 20:03 ` [yocto] " Richard Purdie
+2022-05-10 16:46   ` Abongwa Amahnui Bonalais
+2022-05-11  9:09     ` [yocto] " Quentin Schulz
+2022-05-11 16:18   ` Abongwa Amahnui Bonalais
+

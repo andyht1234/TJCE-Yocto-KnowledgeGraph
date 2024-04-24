@@ -1,0 +1,162 @@
+* Making a recipe that enables a systemd service it doesn't provide
+@ 2021-05-27 14:17 François GOUDAL
+  2021-05-27 14:27 ` [yocto] " Quentin Schulz
+  2021-05-27 14:30 ` Joshua Watt
+  0 siblings, 2 replies; 3+ messages in thread
+From: François GOUDAL @ 2021-05-27 14:17 UTC (permalink / raw)
+  To: yocto
+
+Hello,
+
+I am struggling with something I couldn’t find any solution for so far.
+
+I am trying to make a very simple recipe that does this:
+- Drop an openvpn configuration file in /etc/openvpn/test.conf
+- Make the systemd service openvpn@test.service enabled by default
+
+The recipe itself depends on openvpn, and so, it doesn’t, by itself, provide the openvpn@.service , which comes with openvpn.
+
+Dropping the openvpn configuration file in the rootfs is easy, but I can’t manage to make the recipe to enable the service.
+I’ve tried adding this to my recipe:
+
+inherit systemd
+SYSTEMD_AUTO_ENABLE = "enable"
+SYSTEMD_SERVICE_${PN} = "openvpn@test.service"
+
+But bitbake fails on this recipe with the message below:
+
+ERROR: test-openvpn-config-1.0-r0 do_package: SYSTEMD_SERVICE_test-openvpn-config value openvpn@test.service does not exist
+
+I believe this is caused by the fact that the service file is not part of the files installed by the recipe itself, but it is not meant to be anyway.
+
+Is there a (clean) way to achieve this ?
+
+Thanks in advance
+
+
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] Making a recipe that enables a systemd service it doesn't provide
+  2021-05-27 14:17 Making a recipe that enables a systemd service it doesn't provide François GOUDAL
+@ 2021-05-27 14:27 ` Quentin Schulz
+  2021-05-27 14:30 ` Joshua Watt
+  1 sibling, 0 replies; 3+ messages in thread
+From: Quentin Schulz @ 2021-05-27 14:27 UTC (permalink / raw)
+  To: François GOUDAL; +Cc: yocto
+
+Hi François,
+
+On Thu, May 27, 2021 at 02:17:03PM +0000, François GOUDAL wrote:
+> Hello,
+> 
+> I am struggling with something I couldn’t find any solution for so far.
+> 
+> I am trying to make a very simple recipe that does this:
+> - Drop an openvpn configuration file in /etc/openvpn/test.conf
+> - Make the systemd service openvpn@test.service enabled by default
+> 
+> The recipe itself depends on openvpn, and so, it doesn’t, by itself, provide the openvpn@.service , which comes with openvpn.
+> 
+> Dropping the openvpn configuration file in the rootfs is easy, but I can’t manage to make the recipe to enable the service.
+> I’ve tried adding this to my recipe:
+> 
+> inherit systemd
+> SYSTEMD_AUTO_ENABLE = "enable"
+> SYSTEMD_SERVICE_${PN} = "openvpn@test.service"
+> 
+> But bitbake fails on this recipe with the message below:
+> 
+> ERROR: test-openvpn-config-1.0-r0 do_package: SYSTEMD_SERVICE_test-openvpn-config value openvpn@test.service does not exist
+> 
+> I believe this is caused by the fact that the service file is not part of the files installed by the recipe itself, but it is not meant to be anyway.
+> 
+
+Yes that seems like the origin of the error.
+
+Recipe data is local to the recipe. You therefore also cannot modify the
+openvpn recipe from another recipe (this includes enabling a service for
+example).
+
+The proper way to do it is to create a bbappend for the openvpn recipe
+and enable the service from there. SYSTEMD_AUTO_ENABLE = "enable" should
+be enough, though it'll start the loopback client and server unit too.
+
+It is not possible to have different image recipes enable or not the
+service, if this is something you want, you need to modify
+SYSTEMD_AUTO_ENABLE of the openvpn recipe in a configuration file (and
+the proper way is in a distro configuration file).
+
+Cheers,
+Quentin
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] Making a recipe that enables a systemd service it doesn't provide
+  2021-05-27 14:17 Making a recipe that enables a systemd service it doesn't provide François GOUDAL
+  2021-05-27 14:27 ` [yocto] " Quentin Schulz
+@ 2021-05-27 14:30 ` Joshua Watt
+  1 sibling, 0 replies; 3+ messages in thread
+From: Joshua Watt @ 2021-05-27 14:30 UTC (permalink / raw)
+  To: François GOUDAL, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1590 bytes --]
+
+It might be easier to manually enable the service with a symbolic link 
+instead of using systemd.bbclass with something like:
+
+do_install() {
+
+   install -Dm 755 ${D}${systemd_unitdir}/system/multi-user.target.wants/
+
+   ln -s ${systemd_unitdir}/system/openvpn@.service 
+${D}${systemd_unitdir}/system/multi-user.target.wants/openvpn@test.service
+
+}
+
+NOTE: I didn't explicitly test this
+
+On 5/27/21 9:17 AM, François GOUDAL wrote:
+> Hello,
+>
+> I am struggling with something I couldn’t find any solution for so far.
+>
+> I am trying to make a very simple recipe that does this:
+> - Drop an openvpn configuration file in /etc/openvpn/test.conf
+> - Make the systemd service openvpn@test.service enabled by default
+>
+> The recipe itself depends on openvpn, and so, it doesn’t, by itself, provide the openvpn@.service , which comes with openvpn.
+>
+> Dropping the openvpn configuration file in the rootfs is easy, but I can’t manage to make the recipe to enable the service.
+> I’ve tried adding this to my recipe:
+>
+> inherit systemd
+> SYSTEMD_AUTO_ENABLE = "enable"
+> SYSTEMD_SERVICE_${PN} = "openvpn@test.service"
+>
+> But bitbake fails on this recipe with the message below:
+>
+> ERROR: test-openvpn-config-1.0-r0 do_package: SYSTEMD_SERVICE_test-openvpn-config value openvpn@test.service does not exist
+>
+> I believe this is caused by the fact that the service file is not part of the files installed by the recipe itself, but it is not meant to be anyway.
+>
+> Is there a (clean) way to achieve this ?
+>
+> Thanks in advance
+>
+>
+>
+>
+> 
+>
+
+[-- Attachment #2: Type: text/html, Size: 2702 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2021-05-27 14:30 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-05-27 14:17 Making a recipe that enables a systemd service it doesn't provide François GOUDAL
+2021-05-27 14:27 ` [yocto] " Quentin Schulz
+2021-05-27 14:30 ` Joshua Watt
+

@@ -1,0 +1,101 @@
+* Weird bitbake generation behavior
+       [not found] <560218609.1701935.1629267807962.ref@mail.yahoo.com>
+@ 2021-08-18  6:23 ` Frans Meulenbroeks
+  2021-08-18  9:44   ` [yocto] " Richard Purdie
+  0 siblings, 1 reply; 2+ messages in thread
+From: Frans Meulenbroeks @ 2021-08-18  6:23 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1480 bytes --]
+
+Hi,
+I share an sstate-cache with my fellow developers and I was assessing why sometimes things got rebuild even though I did not expect this.One of the things I discovered was that we had two versions of of glog/0.3.5-r0 in sstate. 
+The difference was caused run.do_configure where one user had this in run.do_configure
+do_configure() {
+    cmake_do_configure
+    # remove WORKDIR info to improve reproducibility
+    if [ -f  "/workdir/build-nano/tmp/work/aarch64-sorama-linux/glog/0.3.5-r0/build/config.h" ] ; then
+        sed -i 's/'$(echo /workdir/build-nano/tmp/work/aarch64-sorama-linux/glog/0.3.5-r0 | sed 's_/_\\/_g')'/../g' /workdir/build-nano/tmp/work/aarch64-sorama-linux/glog/0.3.5-r0/build/config.h
+    fi
+}
+
+whereas the other just had:
+do_configure() {
+    cmake_do_configure
+}
+
+
+The weird thing is that these two builds were about a day apart, they were build on the same system with as far as I know the same metadata, the same distro, the same image etc etcUser settings should also be the same (we build under docker and I checked, we used the same version of ubuntu in the container (18.04). (Actually the containers were generated from the same Docker file and docker inspect tells me the images are identical).
+Anyone an idea how this happens and where that extra snippet comes from? (I grepped for the string "reproducibility" in the bitbake folder, but that did not help)BTW we're using dunfell
+Thanks a lot, Frans
+
+[-- Attachment #2: Type: text/html, Size: 2619 bytes --]
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+* Re: [yocto] Weird bitbake generation behavior
+  2021-08-18  6:23 ` Weird bitbake generation behavior Frans Meulenbroeks
+@ 2021-08-18  9:44   ` Richard Purdie
+  0 siblings, 0 replies; 2+ messages in thread
+From: Richard Purdie @ 2021-08-18  9:44 UTC (permalink / raw)
+  To: fransmeulenbroeks, yocto
+
+On Wed, 2021-08-18 at 06:23 +0000, Frans Meulenbroeks via lists.yoctoproject.org wrote:
+> Hi,
+> 
+> I share an sstate-cache with my fellow developers and I was assessing why sometimes things got rebuild even
+> though I did not expect this.
+> One of the things I discovered was that we had two versions of of glog/0.3.5-r0 in sstate. 
+> The difference was caused run.do_configure where one user had this in run.do_configure
+> 
+> do_configure() {
+>     cmake_do_configure
+>     # remove WORKDIR info to improve reproducibility
+>     if [ -f  "/workdir/build-nano/tmp/work/aarch64-sorama-linux/glog/0.3.5-r0/build/config.h" ] ; then
+>         sed -i 's/'$(echo /workdir/build-nano/tmp/work/aarch64-sorama-linux/glog/0.3.5-r0 | sed
+> 's_/_\\/_g')'/../g' /workdir/build-nano/tmp/work/aarch64-sorama-linux/glog/0.3.5-r0/build/config.h
+>     fi
+> }
+> 
+> whereas the other just had:
+> 
+> do_configure() {
+>     cmake_do_configure
+> }
+> 
+> 
+> The weird thing is that these two builds were about a day apart, they were build on the same system with as
+> far as I know the same metadata, the same distro, the same image etc etc
+> User settings should also be the same (we build under docker and I checked, we used the same version of ubuntu
+> in the container (18.04). (Actually the containers were generated from the same Docker file and docker inspect
+> tells me the images are identical).
+> 
+> Anyone an idea how this happens and where that extra snippet comes from? (I grepped for the string
+> "reproducibility" in the bitbake folder, but that did not help)
+> BTW we're using dunfell
+
+Google shows:
+
+https://patchwork.openembedded.org/patch/176924/
+
+so I'd check the glog recipe.
+
+https://git.openembedded.org/meta-openembedded/commit/?id=be95549f2ea5c59c6da6ace852b918cdba3c7822
+
+https://git.openembedded.org/meta-openembedded/commit/?h=dunfell&id=a51c0d9b3a0d7dc5986ce46e7de65ef26cd06373
+
+Cheers,
+
+Richard
+
+
+
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2021-08-18  9:44 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+     [not found] <560218609.1701935.1629267807962.ref@mail.yahoo.com>
+2021-08-18  6:23 ` Weird bitbake generation behavior Frans Meulenbroeks
+2021-08-18  9:44   ` [yocto] " Richard Purdie
+

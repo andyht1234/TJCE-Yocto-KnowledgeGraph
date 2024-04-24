@@ -1,0 +1,156 @@
+* Getting absolute paths in yocto generated native binary #bitbake #native #toolchain #sdk
+@ 2021-10-05 20:59 Jean-Pierre Doyon
+  2021-10-05 21:44 ` [yocto] " Khem Raj
+  2021-10-06  3:47 ` Chuck Wolber
+  0 siblings, 2 replies; 3+ messages in thread
+From: Jean-Pierre Doyon @ 2021-10-05 20:59 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1528 bytes --]
+
+I'm attempting to create a USB first boot tarball for our custom iMX6 board that would contain the imx-usb-loader executable, config files and u-boot/SPL files. The goal being to deploy that to the production machine to program the empty boards right after being assembled.
+
+While I had plenty of hurdles figuring out how to do this (I'm still pretty newbie with Yocyo), I managed to get everything just the way I wanted it. But when I get the tarball to the production machine, which runs the exact same Ubuntu 18.04 LTS Linux as the build machine, the imx_usb tool won't run. The reason being that it's missing some library. Running LDD on the executable turns up this:
+
+└─$> ldd usr/bin/imx_usb
+   linux-vdso.so.1 =>  (0x00007ffd7031d000)
+   libusb-1.0.so.0 => /lib/x86_64-linux-gnu/libusb-1.0.so.0 (0x00007f986a47e000)
+   libc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x00007f986a0b4000)
+   libudev.so.1 => /lib/x86_64-linux-gnu/libudev.so.1 (0x00007f986a86c000)
+   libpthread.so.0 => /lib/x86_64-linux-gnu/libpthread.so.0 (0x00007f9869e97000)
+   /home/jpdoyon/newtrax-layersetup-dunfell/build/tmp/sysroots-uninative/x86_64-linux/lib/ld-linux-x86-64.so.2 => /lib64/ld-linux-x86-64.so.2 (0x00007f986a696000)
+   librt.so.1 => /lib/x86_64-linux-gnu/librt.so.1 (0x00007f9869c8f000)
+
+Why is the ld-linux-x86-64.so.2 using an absolute path while all the other libraries aren't?
+
+If I install the library in the location above, then the executable starts working... So how do I make sure Yocto doesn't do this?
+
+[-- Attachment #2: Type: text/html, Size: 3754 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] Getting absolute paths in yocto generated native binary #bitbake #native #toolchain #sdk
+  2021-10-05 20:59 Getting absolute paths in yocto generated native binary #bitbake #native #toolchain #sdk Jean-Pierre Doyon
+@ 2021-10-05 21:44 ` Khem Raj
+  2021-10-06  3:47 ` Chuck Wolber
+  1 sibling, 0 replies; 3+ messages in thread
+From: Khem Raj @ 2021-10-05 21:44 UTC (permalink / raw)
+  To: Jean-Pierre Doyon; +Cc: Yocto-mailing-list
+
+On Tue, Oct 5, 2021 at 1:59 PM Jean-Pierre Doyon <jpdoyon@newtrax.com> wrote:
+>
+> I'm attempting to create a USB first boot tarball for our custom iMX6 board that would contain the imx-usb-loader executable, config files and u-boot/SPL files. The goal being to deploy that to the production machine to program the empty boards right after being assembled.
+>
+> While I had plenty of hurdles figuring out how to do this (I'm still pretty newbie with Yocyo), I managed to get everything just the way I wanted it. But when I get the tarball to the production machine, which runs the exact same Ubuntu 18.04 LTS Linux as the build machine, the imx_usb tool won't run. The reason being that it's missing some library. Running LDD on the executable turns up this:
+>
+> └─$> ldd usr/bin/imx_usb
+>     linux-vdso.so.1 =>  (0x00007ffd7031d000)
+>     libusb-1.0.so.0 => /lib/x86_64-linux-gnu/libusb-1.0.so.0 (0x00007f986a47e000)
+>     libc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x00007f986a0b4000)
+>     libudev.so.1 => /lib/x86_64-linux-gnu/libudev.so.1 (0x00007f986a86c000)
+>     libpthread.so.0 => /lib/x86_64-linux-gnu/libpthread.so.0 (0x00007f9869e97000)
+>     /home/jpdoyon/newtrax-layersetup-dunfell/build/tmp/sysroots-uninative/x86_64-linux/lib/ld-linux-x86-64.so.2 => /lib64/ld-linux-x86-64.so.2 (0x00007f986a696000)
+>     librt.so.1 => /lib/x86_64-linux-gnu/librt.so.1 (0x00007f9869c8f000)
+>
+> Why is the ld-linux-x86-64.so.2 using an absolute path while all the other libraries aren't?
+>
+> If I install the library in the location above, then the executable starts working... So how do I make sure Yocto doesn't do this?
+>
+
+yocto provides a layer to abstract native binaries on top of build
+host and thats what you are seeing. Its as designed.
+
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> You automatically follow any topics you start or reply to.
+> View/Reply Online (#54970): https://lists.yoctoproject.org/g/yocto/message/54970
+> Mute This Topic: https://lists.yoctoproject.org/mt/86104726/1997914
+> Mute #toolchain:https://lists.yoctoproject.org/g/yocto/mutehashtag/toolchain
+> Mute #sdk:https://lists.yoctoproject.org/g/yocto/mutehashtag/sdk
+> Mute #bitbake:https://lists.yoctoproject.org/g/yocto/mutehashtag/bitbake
+> Mute #native:https://lists.yoctoproject.org/g/yocto/mutehashtag/native
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [raj.khem@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] Getting absolute paths in yocto generated native binary #bitbake #native #toolchain #sdk
+  2021-10-05 20:59 Getting absolute paths in yocto generated native binary #bitbake #native #toolchain #sdk Jean-Pierre Doyon
+  2021-10-05 21:44 ` [yocto] " Khem Raj
+@ 2021-10-06  3:47 ` Chuck Wolber
+  1 sibling, 0 replies; 3+ messages in thread
+From: Chuck Wolber @ 2021-10-06  3:47 UTC (permalink / raw)
+  To: Jean-Pierre Doyon; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2695 bytes --]
+
+Native recipes are meant for the build machine itself to aid your build. If
+you are packaging something to run on a destination machine, you should be
+producing non-native recipe images.
+
+..Ch:W..
+
+On Tue, Oct 5, 2021 at 1:59 PM Jean-Pierre Doyon <jpdoyon@newtrax.com>
+wrote:
+
+> I'm attempting to create a USB first boot tarball for our custom iMX6
+> board that would contain the imx-usb-loader executable, config files and
+> u-boot/SPL files. The goal being to deploy that to the production machine
+> to program the empty boards right after being assembled.
+>
+> While I had plenty of hurdles figuring out how to do this (I'm still
+> pretty newbie with Yocyo), I managed to get everything just the way I
+> wanted it. But when I get the tarball to the production machine, which runs
+> the exact same Ubuntu 18.04 LTS Linux as the build machine, the imx_usb
+> tool won't run. The reason being that it's missing some library. Running
+> LDD on the executable turns up this:
+>
+> └─$> ldd usr/bin/imx_usb
+>     linux-vdso.so.1 =>  (0x00007ffd7031d000)
+>     libusb-1.0.so.0 => /lib/x86_64-linux-gnu/libusb-1.0.so.0 (0x00007f986a47e000)
+>     libc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x00007f986a0b4000)
+>     libudev.so.1 => /lib/x86_64-linux-gnu/libudev.so.1 (0x00007f986a86c000)
+>     libpthread.so.0 => /lib/x86_64-linux-gnu/libpthread.so.0 (0x00007f9869e97000)
+>     /home/jpdoyon/newtrax-layersetup-dunfell/build/tmp/sysroots-uninative/x86_64-linux/lib/ld-linux-x86-64.so.2 => /lib64/ld-linux-x86-64.so.2 (0x00007f986a696000)
+>     librt.so.1 => /lib/x86_64-linux-gnu/librt.so.1 (0x00007f9869c8f000)
+>
+> Why is the ld-linux-x86-64.so.2 using an absolute path while all the other
+> libraries aren't?
+>
+> If I install the library in the location above, then the executable starts
+> working... So how do I make sure Yocto doesn't do this?
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#54970):
+> https://lists.yoctoproject.org/g/yocto/message/54970
+> Mute This Topic: https://lists.yoctoproject.org/mt/86104726/894569
+> Mute #toolchain:
+> https://lists.yoctoproject.org/g/yocto/mutehashtag/toolchain
+> Mute #sdk:https://lists.yoctoproject.org/g/yocto/mutehashtag/sdk
+> Mute #bitbake:https://lists.yoctoproject.org/g/yocto/mutehashtag/bitbake
+> Mute #native:https://lists.yoctoproject.org/g/yocto/mutehashtag/native
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> chuckwolber@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+-- 
+*"Perfection must be reached by degrees; she requires the slow hand of
+time." - Voltaire*
+
+[-- Attachment #2: Type: text/html, Size: 5821 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2021-10-06  3:47 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-10-05 20:59 Getting absolute paths in yocto generated native binary #bitbake #native #toolchain #sdk Jean-Pierre Doyon
+2021-10-05 21:44 ` [yocto] " Khem Raj
+2021-10-06  3:47 ` Chuck Wolber
+

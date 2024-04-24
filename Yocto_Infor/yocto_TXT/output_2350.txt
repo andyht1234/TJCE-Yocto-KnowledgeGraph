@@ -1,0 +1,90 @@
+* Installing specific systemd service file according to selected distro
+@ 2022-01-14  5:54 Davis Roman
+  2022-01-14  8:19 ` [yocto] " Konrad Weihmann
+  0 siblings, 1 reply; 2+ messages in thread
+From: Davis Roman @ 2022-01-14  5:54 UTC (permalink / raw)
+  To: yocto; +Cc: song li
+
+Hello,
+
+I have a recipe that contains two service files( A and B) and I build
+for two distros where each include the foo recipe.
+
+When I build for distro A, I need to use foo's service file A but when
+I build distro B, I need to use foo's service file B.
+
+I could add some logic in the foo recipe to detect the DISTRO and
+install the proper service file but I have a feeling this isn't the
+yocto way.
+
+Is there a better way of handling this use case?
+
+Thank you,
+
+Davis
+
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+* Re: [yocto] Installing specific systemd service file according to selected distro
+  2022-01-14  5:54 Installing specific systemd service file according to selected distro Davis Roman
+@ 2022-01-14  8:19 ` Konrad Weihmann
+  0 siblings, 0 replies; 2+ messages in thread
+From: Konrad Weihmann @ 2022-01-14  8:19 UTC (permalink / raw)
+  To: davis roman, yocto; +Cc: song li
+
+Fairly easy, each distro creates an OVERRIDE by default, so you could do
+
+A:poky = "foo.service"
+A:yourdistro = "bar.service"
+
+SYSTEMD_PACKAGES = "${A}"
+
+do_install:append() {
+	install -d ${D}${systemd_system_unitdir}
+	install -m 0644 ${WORKDIR}/${A} ${D}${systemd_system_unitdir}
+}
+
+you could also try to create distro-specific do_install appends like
+
+do_install:append:<yourdistro> if you need to do further step besides 
+installing
+
+On 14.01.22 06:54, davis roman wrote:
+> Hello,
+> 
+> I have a recipe that contains two service files( A and B) and I build
+> for two distros where each include the foo recipe.
+> 
+> When I build for distro A, I need to use foo's service file A but when
+> I build distro B, I need to use foo's service file B.
+> 
+> I could add some logic in the foo recipe to detect the DISTRO and
+> install the proper service file but I have a feeling this isn't the
+> yocto way.
+> 
+> Is there a better way of handling this use case?
+> 
+> Thank you,
+> 
+> Davis
+> 
+> 
+> 
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#55850): https://lists.yoctoproject.org/g/yocto/message/55850
+> Mute This Topic: https://lists.yoctoproject.org/mt/88415464/3647476
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [kweihmann@outlook.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+> 
+
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2022-01-14  8:19 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-01-14  5:54 Installing specific systemd service file according to selected distro Davis Roman
+2022-01-14  8:19 ` [yocto] " Konrad Weihmann
+

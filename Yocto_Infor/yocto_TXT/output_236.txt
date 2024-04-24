@@ -1,0 +1,239 @@
+* [patchtest][PATCH] patchtest: refactor and simplify modules
+@ 2023-08-25 20:01 Trevor Gamblin
+  0 siblings, 0 replies; only message in thread
+From: Trevor Gamblin @ 2023-08-25 20:01 UTC (permalink / raw)
+  To: yocto
+
+The current layout of patchtest is inconsistent in module and class
+naming, as well as inter-dependencies. Start making the code more
+maintainable by:
+
+- Simplifying module names to remove namespacing
+- Add namespacing to the classes themselves
+- Make imports of classes explicit, instead of using aliases like "pti"
+
+Signed-off-by: Trevor Gamblin <tgamblin@baylibre.com>
+---
+ lib/{patchtestdata.py => data.py}   |  0
+ lib/{patchtestpatch.py => patch.py} |  6 ++---
+ lib/{patchtestrepo.py => repo.py}   | 10 ++++-----
+ patchtest                           | 35 +++++++++++++++--------------
+ 4 files changed, 26 insertions(+), 25 deletions(-)
+ rename lib/{patchtestdata.py => data.py} (100%)
+ rename lib/{patchtestpatch.py => patch.py} (92%)
+ rename lib/{patchtestrepo.py => repo.py} (95%)
+
+diff --git a/lib/patchtestdata.py b/lib/data.py
+similarity index 100%
+rename from lib/patchtestdata.py
+rename to lib/data.py
+diff --git a/lib/patchtestpatch.py b/lib/patch.py
+similarity index 92%
+rename from lib/patchtestpatch.py
+rename to lib/patch.py
+index 4583b5c..c0e7d57 100644
+--- a/lib/patchtestpatch.py
++++ b/lib/patch.py
+@@ -1,7 +1,7 @@
+ # ex:ts=4:sw=4:sts=4:et
+ # -*- tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*-
+ #
+-# patchtestpatch: Patch class which abstracts a patch file
++# patchtestpatch: PatchTestPatch class which abstracts a patch file
+ #
+ # Copyright (C) 2016 Intel Corporation
+ #
+@@ -24,7 +24,7 @@ import utils
+ 
+ logger = logging.getLogger('patchtest')
+ 
+-class Patch(object):
++class PatchTestPatch(object):
+     MERGE_STATUS_INVALID = 'INVALID'
+     MERGE_STATUS_NOT_MERGED = 'NOTMERGED'
+     MERGE_STATUS_MERGED_SUCCESSFULL = 'PASS'
+@@ -40,7 +40,7 @@ class Patch(object):
+ 
+         self._contents = None
+         self._branch = None
+-        self._merge_status = Patch.MERGE_STATUS_NOT_MERGED
++        self._merge_status = PatchTestPatch.MERGE_STATUS_NOT_MERGED
+ 
+     @property
+     def contents(self):
+diff --git a/lib/patchtestrepo.py b/lib/repo.py
+similarity index 95%
+rename from lib/patchtestrepo.py
+rename to lib/repo.py
+index 3c38b9c..5c85c65 100644
+--- a/lib/patchtestrepo.py
++++ b/lib/repo.py
+@@ -1,7 +1,7 @@
+ # ex:ts=4:sw=4:sts=4:et
+ # -*- tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*-
+ #
+-# patchtestrepo: Repo class used mainly to control a git repo from patchtest
++# patchtestrepo: PatchTestRepo class used mainly to control a git repo from patchtest
+ #
+ # Copyright (C) 2016 Intel Corporation
+ #
+@@ -22,19 +22,19 @@ import os
+ import utils
+ import logging
+ import json
+-import patchtestpatch
++from patch import PatchTestPatch
+ 
+ logger = logging.getLogger('patchtest')
+ info=logger.info
+ 
+-class Repo(object):
++class PatchTestRepo(object):
+ 
+     # prefixes used for temporal branches/stashes
+     prefix = 'patchtest'
+ 
+     def __init__(self, patch, repodir, commit=None, branch=None):
+         self._repodir = repodir
+-        self._patch = patchtestpatch.Patch(patch)
++        self._patch = PatchTestPatch(patch)
+         self._current_branch = self._get_current_branch()
+ 
+         # targeted branch defined on the patch may be invalid, so make sure there
+@@ -61,7 +61,7 @@ class Repo(object):
+           self._get_commitid(valid_patch_branch) or \
+           self._get_commitid('HEAD')
+ 
+-        self._workingbranch = "%s_%s" % (Repo.prefix, os.getpid())
++        self._workingbranch = "%s_%s" % (PatchTestRepo.prefix, os.getpid())
+ 
+         # create working branch
+         self._exec({'cmd': ['git', 'checkout', '-b', self._workingbranch, self._commit]})
+diff --git a/patchtest b/patchtest
+index 592f73e..8d3efda 100755
+--- a/patchtest
++++ b/patchtest
+@@ -36,14 +36,15 @@ sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+ # Include patchtest library
+ sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), 'lib'))
+ 
+-from patchtestdata import PatchTestInput as pti
++from data import PatchTestInput
++from repo import PatchTestRepo
+ 
+ import utils
+ logger = utils.logger_create('patchtest')
+ info = logger.info
+ error = logger.error
+ 
+-import patchtestrepo
++import repo
+ 
+ def getResult(patch, mergepatch):
+ 
+@@ -78,9 +79,9 @@ def getResult(patch, mergepatch):
+         def startTestRun(self):
+             # let's create the repo already, it can be used later on
+             repoargs = {
+-                'repodir': pti.repodir,
+-                'commit' : pti.basecommit,
+-                'branch' : pti.basebranch,
++                'repodir': PatchTestInput.repodir,
++                'commit' : PatchTestInput.basecommit,
++                'branch' : PatchTestInput.basebranch,
+                 'patch'  : patch,
+             }
+ 
+@@ -89,7 +90,7 @@ def getResult(patch, mergepatch):
+             self.test_failure  = False
+ 
+             try:
+-                self.repo = pti.repo = patchtestrepo.Repo(**repoargs)
++                self.repo = PatchTestInput.repo = PatchTestRepo(**repoargs)
+             except:
+                 logger.error(traceback.print_exc())
+                 self.repo_error = True
+@@ -106,19 +107,19 @@ def getResult(patch, mergepatch):
+ 
+         def addFailure(self, test, err):
+             self.test_failure = True
+-            if pti.json:
++            if PatchTestInput.json:
+                 print(self.JSON(self.fail, err[1]))
+             else:
+                 print('{} {}'.format(self.fail, test.id()))
+ 
+         def addSuccess(self, test):
+-            if pti.json:
++            if PatchTestInput.json:
+                 print(self.JSON(self.success, test))
+             else:
+                 print('{} {}'.format(self.success, test.id()))
+ 
+         def addSkip(self, test, reason):
+-            if pti.json:
++            if PatchTestInput.json:
+                 print(self.JSON(self.skip, reason))
+             else:
+                 print('{} {}'.format(self.skip, test.id()))
+@@ -140,7 +141,7 @@ def _runner(resultklass, prefix=None):
+         loader.testMethodPrefix = prefix
+ 
+     # create the suite with discovered tests and the corresponding runner
+-    suite = loader.discover(start_dir=pti.startdir, pattern=pti.pattern, top_level_dir=pti.topdir)
++    suite = loader.discover(start_dir=PatchTestInput.startdir, pattern=PatchTestInput.pattern, top_level_dir=PatchTestInput.topdir)
+     ntc = suite.countTestCases()
+ 
+     # if there are no test cases, just quit
+@@ -177,16 +178,16 @@ def run(patch):
+ 
+ def main():
+     tmp_patch = False
+-    patch = pti.patch
++    patch = PatchTestInput.patch
+     if not sys.stdin.isatty():
+         tmp_patch = True
+-        patch = pti.namespace_stdin(fileinput.input('-'))
++        patch = PatchTestInput.namespace_stdin(fileinput.input('-'))
+ 
+     if os.path.getsize(patch) == 0:
+         logger.error('patchtest: patch is empty')
+         return 1
+ 
+-    if not pti.json:
++    if not PatchTestInput.json:
+         logger.info('Testing patch %s' % patch)
+     try:
+         run(patch)
+@@ -198,15 +199,15 @@ if __name__ == '__main__':
+     ret = 1
+ 
+     # Parse the command line arguments and store it on the PatchTestInput namespace
+-    pti.set_namespace()
++    PatchTestInput.set_namespace()
+ 
+     # set debugging level
+-    if pti.debug:
++    if PatchTestInput.debug:
+         logger.setLevel(logging.DEBUG)
+ 
+     # if topdir not define, default it to startdir
+-    if not pti.topdir:
+-        pti.topdir = pti.startdir
++    if not PatchTestInput.topdir:
++        PatchTestInput.topdir = PatchTestInput.startdir
+ 
+     try:
+         ret = main()
+-- 
+2.41.0
+
+
+
+^ permalink raw reply related	[flat|nested] only message in thread
+only message in thread, other threads:[~2023-08-25 20:01 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-08-25 20:01 [patchtest][PATCH] patchtest: refactor and simplify modules Trevor Gamblin
+

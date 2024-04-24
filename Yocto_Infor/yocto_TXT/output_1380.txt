@@ -1,0 +1,2856 @@
+* Adding Vulkan to core-image-weston
+@ 2022-09-16 11:43 Edgar Mobile
+  2022-09-16 12:14 ` [yocto] " Alexander Kanavin
+  0 siblings, 1 reply; 36+ messages in thread
+From: Edgar Mobile @ 2022-09-16 11:43 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 275 bytes --]
+
+Greetings,
+
+I'd like to test graphics rendering with Vulkan on an Aarch64 Yocto honister (qemu, host is x64). Can you tell me which parameters I need to add to local.conf to get all libs and headers installed (plus maybe some useful tools and demo if present)?
+
+Regards
+
+[-- Attachment #2: Type: text/html, Size: 1044 bytes --]
+
+^ permalink raw reply	[flat|nested] 36+ messages in thread
+* Re: [yocto] Adding Vulkan to core-image-weston
+  2022-09-16 11:43 Adding Vulkan to core-image-weston Edgar Mobile
+@ 2022-09-16 12:14 ` Alexander Kanavin
+  2022-09-16 17:17   ` Edgar Mobile
+  0 siblings, 1 reply; 36+ messages in thread
+From: Alexander Kanavin @ 2022-09-16 12:14 UTC (permalink / raw)
+  To: Edgar Mobile; +Cc: yocto
+
+You can start by adding vulkan-samples to the image - the recipe is in
+core. We do not test vulkan in qemu, because the software vulkan
+rendering is still under active development, and marked as
+experimental in virglrenderer.
+
+It may help if you use qemux86_64 and kvm for it, because software
+graphical paths are too slow without it generally.
+
+Alex
+
+On Fri, 16 Sept 2022 at 13:43, Edgar Mobile <heideggm@hotmail.com> wrote:
+>
+> Greetings,
+>
+> I'd like to test graphics rendering with Vulkan on an Aarch64 Yocto honister (qemu, host is x64). Can you tell me which parameters I need to add to local.conf to get all libs and headers installed (plus maybe some useful tools and demo if present)?
+>
+> Regards
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#58059): https://lists.yoctoproject.org/g/yocto/message/58059
+> Mute This Topic: https://lists.yoctoproject.org/mt/93720286/1686489
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 36+ messages in thread
+* Re: [yocto] Adding Vulkan to core-image-weston
+  2022-09-16 12:14 ` [yocto] " Alexander Kanavin
+@ 2022-09-16 17:17   ` Edgar Mobile
+  2022-09-17  8:28     ` Alexander Kanavin
+  0 siblings, 1 reply; 36+ messages in thread
+From: Edgar Mobile @ 2022-09-16 17:17 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1571 bytes --]
+
+Ok, so I switched to Kirkstone and added vulkan-samples to CORE_IMAGE_EXTRA_INSTALL.
+But no libvulkan.so in /usr/lib.
+
+Am I missing something?
+
+________________________________
+From: Alexander Kanavin <alex.kanavin@gmail.com>
+Sent: Friday, September 16, 2022 12:14 PM
+To: Edgar Mobile <heideggm@hotmail.com>
+Cc: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+Subject: Re: [yocto] Adding Vulkan to core-image-weston
+
+You can start by adding vulkan-samples to the image - the recipe is in
+core. We do not test vulkan in qemu, because the software vulkan
+rendering is still under active development, and marked as
+experimental in virglrenderer.
+
+It may help if you use qemux86_64 and kvm for it, because software
+graphical paths are too slow without it generally.
+
+Alex
+
+On Fri, 16 Sept 2022 at 13:43, Edgar Mobile <heideggm@hotmail.com> wrote:
+>
+> Greetings,
+>
+> I'd like to test graphics rendering with Vulkan on an Aarch64 Yocto honister (qemu, host is x64). Can you tell me which parameters I need to add to local.conf to get all libs and headers installed (plus maybe some useful tools and demo if present)?
+>
+> Regards
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#58059): https://lists.yoctoproject.org/g/yocto/message/58059
+> Mute This Topic: https://lists.yoctoproject.org/mt/93720286/1686489
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+[-- Attachment #2: Type: text/html, Size: 3160 bytes --]
+
+^ permalink raw reply	[flat|nested] 36+ messages in thread
+* Re: [yocto] Adding Vulkan to core-image-weston
+  2022-09-16 17:17   ` Edgar Mobile
+@ 2022-09-17  8:28     ` Alexander Kanavin
+  2022-09-19  7:36       ` Edgar Mobile
+  0 siblings, 1 reply; 36+ messages in thread
+From: Alexander Kanavin @ 2022-09-17  8:28 UTC (permalink / raw)
+  To: Edgar Mobile; +Cc: yocto
+
+If the samples don't link with libvulkan directly, it won't get pulled
+into the images. How are they loading that library, is it via dlopen()
+somewhere? Invisible dlopen() dependencies typically need to be listed
+explicitly in RDEPENDS.
+
+As a quick fix, you can add vulkan-loader to the same
+CORE_IMAGE_EXTRA_INSTALL list.
+
+Alex
+
+On Fri, 16 Sept 2022 at 19:17, Edgar Mobile <heideggm@hotmail.com> wrote:
+>
+> Ok, so I switched to Kirkstone and added vulkan-samples to CORE_IMAGE_EXTRA_INSTALL.
+> But no libvulkan.so in /usr/lib.
+>
+> Am I missing something?
+>
+> ________________________________
+> From: Alexander Kanavin <alex.kanavin@gmail.com>
+> Sent: Friday, September 16, 2022 12:14 PM
+> To: Edgar Mobile <heideggm@hotmail.com>
+> Cc: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+> Subject: Re: [yocto] Adding Vulkan to core-image-weston
+>
+> You can start by adding vulkan-samples to the image - the recipe is in
+> core. We do not test vulkan in qemu, because the software vulkan
+> rendering is still under active development, and marked as
+> experimental in virglrenderer.
+>
+> It may help if you use qemux86_64 and kvm for it, because software
+> graphical paths are too slow without it generally.
+>
+> Alex
+>
+> On Fri, 16 Sept 2022 at 13:43, Edgar Mobile <heideggm@hotmail.com> wrote:
+> >
+> > Greetings,
+> >
+> > I'd like to test graphics rendering with Vulkan on an Aarch64 Yocto honister (qemu, host is x64). Can you tell me which parameters I need to add to local.conf to get all libs and headers installed (plus maybe some useful tools and demo if present)?
+> >
+> > Regards
+> >
+> > -=-=-=-=-=-=-=-=-=-=-=-
+> > Links: You receive all messages sent to this group.
+> > View/Reply Online (#58059): https://lists.yoctoproject.org/g/yocto/message/58059
+> > Mute This Topic: https://lists.yoctoproject.org/mt/93720286/1686489
+> > Group Owner: yocto+owner@lists.yoctoproject.org
+> > Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com]
+> > -=-=-=-=-=-=-=-=-=-=-=-
+> >
+
+
+^ permalink raw reply	[flat|nested] 36+ messages in thread
+* Re: [yocto] Adding Vulkan to core-image-weston
+  2022-09-17  8:28     ` Alexander Kanavin
+@ 2022-09-19  7:36       ` Edgar Mobile
+  2022-09-19  8:25         ` Alexander Kanavin
+  0 siblings, 1 reply; 36+ messages in thread
+From: Edgar Mobile @ 2022-09-19  7:36 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2535 bytes --]
+
+Greetings,
+
+I see the libvulkan.so.* libs now, but I don't see any sample binaries that look like Vulkan. Is there a list somewhere for all the files in vulkan-samples?
+Regards
+
+________________________________
+From: Alexander Kanavin <alex.kanavin@gmail.com>
+Sent: Saturday, September 17, 2022 8:28 AM
+To: Edgar Mobile <heideggm@hotmail.com>
+Cc: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+Subject: Re: [yocto] Adding Vulkan to core-image-weston
+
+If the samples don't link with libvulkan directly, it won't get pulled
+into the images. How are they loading that library, is it via dlopen()
+somewhere? Invisible dlopen() dependencies typically need to be listed
+explicitly in RDEPENDS.
+
+As a quick fix, you can add vulkan-loader to the same
+CORE_IMAGE_EXTRA_INSTALL list.
+
+Alex
+
+On Fri, 16 Sept 2022 at 19:17, Edgar Mobile <heideggm@hotmail.com> wrote:
+>
+> Ok, so I switched to Kirkstone and added vulkan-samples to CORE_IMAGE_EXTRA_INSTALL.
+> But no libvulkan.so in /usr/lib.
+>
+> Am I missing something?
+>
+> ________________________________
+> From: Alexander Kanavin <alex.kanavin@gmail.com>
+> Sent: Friday, September 16, 2022 12:14 PM
+> To: Edgar Mobile <heideggm@hotmail.com>
+> Cc: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+> Subject: Re: [yocto] Adding Vulkan to core-image-weston
+>
+> You can start by adding vulkan-samples to the image - the recipe is in
+> core. We do not test vulkan in qemu, because the software vulkan
+> rendering is still under active development, and marked as
+> experimental in virglrenderer.
+>
+> It may help if you use qemux86_64 and kvm for it, because software
+> graphical paths are too slow without it generally.
+>
+> Alex
+>
+> On Fri, 16 Sept 2022 at 13:43, Edgar Mobile <heideggm@hotmail.com> wrote:
+> >
+> > Greetings,
+> >
+> > I'd like to test graphics rendering with Vulkan on an Aarch64 Yocto honister (qemu, host is x64). Can you tell me which parameters I need to add to local.conf to get all libs and headers installed (plus maybe some useful tools and demo if present)?
+> >
+> > Regards
+> >
+> > -=-=-=-=-=-=-=-=-=-=-=-
+> > Links: You receive all messages sent to this group.
+> > View/Reply Online (#58059): https://lists.yoctoproject.org/g/yocto/message/58059
+> > Mute This Topic: https://lists.yoctoproject.org/mt/93720286/1686489
+> > Group Owner: yocto+owner@lists.yoctoproject.org
+> > Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com]
+> > -=-=-=-=-=-=-=-=-=-=-=-
+> >
+
+[-- Attachment #2: Type: text/html, Size: 4361 bytes --]
+
+^ permalink raw reply	[flat|nested] 36+ messages in thread
+* Re: [yocto] Adding Vulkan to core-image-weston
+  2022-09-19  7:36       ` Edgar Mobile
+@ 2022-09-19  8:25         ` Alexander Kanavin
+  2022-09-19 12:28           ` Edgar Mobile
+  0 siblings, 1 reply; 36+ messages in thread
+From: Alexander Kanavin @ 2022-09-19  8:25 UTC (permalink / raw)
+  To: Edgar Mobile; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2951 bytes --]
+
+I suppose you need to look at compile and install logs for vulkan-samples.
+And how the installed items get split into packages. I’m short, inspect
+${WORKDIR} for it.
+
+Alex
+
+On Mon 19. Sep 2022 at 9.36, Edgar Mobile <heideggm@hotmail.com> wrote:
+
+> Greetings,
+>
+> I see the libvulkan.so.* libs now, but I don't see any sample binaries
+> that look like Vulkan. Is there a list somewhere for all the files in
+> vulkan-samples?
+> Regards
+>
+> ------------------------------
+> *From:* Alexander Kanavin <alex.kanavin@gmail.com>
+> *Sent:* Saturday, September 17, 2022 8:28 AM
+>
+> *To:* Edgar Mobile <heideggm@hotmail.com>
+> *Cc:* yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+> *Subject:* Re: [yocto] Adding Vulkan to core-image-weston
+>
+> If the samples don't link with libvulkan directly, it won't get pulled
+> into the images. How are they loading that library, is it via dlopen()
+> somewhere? Invisible dlopen() dependencies typically need to be listed
+> explicitly in RDEPENDS.
+>
+> As a quick fix, you can add vulkan-loader to the same
+> CORE_IMAGE_EXTRA_INSTALL list.
+>
+> Alex
+>
+> On Fri, 16 Sept 2022 at 19:17, Edgar Mobile <heideggm@hotmail.com> wrote:
+> >
+> > Ok, so I switched to Kirkstone and added vulkan-samples to
+> CORE_IMAGE_EXTRA_INSTALL.
+> > But no libvulkan.so in /usr/lib.
+> >
+> > Am I missing something?
+> >
+> > ________________________________
+> > From: Alexander Kanavin <alex.kanavin@gmail.com>
+> > Sent: Friday, September 16, 2022 12:14 PM
+> > To: Edgar Mobile <heideggm@hotmail.com>
+> > Cc: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+> > Subject: Re: [yocto] Adding Vulkan to core-image-weston
+> >
+> > You can start by adding vulkan-samples to the image - the recipe is in
+> > core. We do not test vulkan in qemu, because the software vulkan
+> > rendering is still under active development, and marked as
+> > experimental in virglrenderer.
+> >
+> > It may help if you use qemux86_64 and kvm for it, because software
+> > graphical paths are too slow without it generally.
+> >
+> > Alex
+> >
+> > On Fri, 16 Sept 2022 at 13:43, Edgar Mobile <heideggm@hotmail.com>
+> wrote:
+> > >
+> > > Greetings,
+> > >
+> > > I'd like to test graphics rendering with Vulkan on an Aarch64 Yocto
+> honister (qemu, host is x64). Can you tell me which parameters I need to
+> add to local.conf to get all libs and headers installed (plus maybe some
+> useful tools and demo if present)?
+> > >
+> > > Regards
+> > >
+> > > -=-=-=-=-=-=-=-=-=-=-=-
+> > > Links: You receive all messages sent to this group.
+> > > View/Reply Online (#58059):
+> https://lists.yoctoproject.org/g/yocto/message/58059
+> > > Mute This Topic: https://lists.yoctoproject.org/mt/93720286/1686489
+> > > Group Owner: yocto+owner@lists.yoctoproject.org
+> > > Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> alex.kanavin@gmail.com]
+> > > -=-=-=-=-=-=-=-=-=-=-=-
+> > >
+>
+
+[-- Attachment #2: Type: text/html, Size: 6094 bytes --]
+
+^ permalink raw reply	[flat|nested] 36+ messages in thread
+* Re: [yocto] Adding Vulkan to core-image-weston
+  2022-09-19  8:25         ` Alexander Kanavin
+@ 2022-09-19 12:28           ` Edgar Mobile
+  2022-09-19 13:31             ` Alexander Kanavin
+  0 siblings, 1 reply; 36+ messages in thread
+From: Edgar Mobile @ 2022-09-19 12:28 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 3657 bytes --]
+
+I have the impression that the only binary vulkan-samples installs is /usr/bin/spirv-cross . Are there other packages that install more samples?
+
+________________________________
+From: Alexander Kanavin <alex.kanavin@gmail.com>
+Sent: Monday, September 19, 2022 8:25 AM
+To: Edgar Mobile <heideggm@hotmail.com>
+Cc: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+Subject: Re: [yocto] Adding Vulkan to core-image-weston
+
+I suppose you need to look at compile and install logs for vulkan-samples. And how the installed items get split into packages. I’m short, inspect ${WORKDIR} for it.
+
+Alex
+
+On Mon 19. Sep 2022 at 9.36, Edgar Mobile <heideggm@hotmail.com<mailto:heideggm@hotmail.com>> wrote:
+Greetings,
+
+I see the libvulkan.so.* libs now, but I don't see any sample binaries that look like Vulkan. Is there a list somewhere for all the files in vulkan-samples?
+Regards
+
+________________________________
+From: Alexander Kanavin <alex.kanavin@gmail.com<mailto:alex.kanavin@gmail.com>>
+Sent: Saturday, September 17, 2022 8:28 AM
+
+To: Edgar Mobile <heideggm@hotmail.com<mailto:heideggm@hotmail.com>>
+Cc: yocto@lists.yoctoproject.org<mailto:yocto@lists.yoctoproject.org> <yocto@lists.yoctoproject.org<mailto:yocto@lists.yoctoproject.org>>
+Subject: Re: [yocto] Adding Vulkan to core-image-weston
+
+If the samples don't link with libvulkan directly, it won't get pulled
+into the images. How are they loading that library, is it via dlopen()
+somewhere? Invisible dlopen() dependencies typically need to be listed
+explicitly in RDEPENDS.
+
+As a quick fix, you can add vulkan-loader to the same
+CORE_IMAGE_EXTRA_INSTALL list.
+
+Alex
+
+On Fri, 16 Sept 2022 at 19:17, Edgar Mobile <heideggm@hotmail.com<mailto:heideggm@hotmail.com>> wrote:
+>
+> Ok, so I switched to Kirkstone and added vulkan-samples to CORE_IMAGE_EXTRA_INSTALL.
+> But no libvulkan.so in /usr/lib.
+>
+> Am I missing something?
+>
+> ________________________________
+> From: Alexander Kanavin <alex.kanavin@gmail.com<mailto:alex.kanavin@gmail.com>>
+> Sent: Friday, September 16, 2022 12:14 PM
+> To: Edgar Mobile <heideggm@hotmail.com<mailto:heideggm@hotmail.com>>
+> Cc: yocto@lists.yoctoproject.org<mailto:yocto@lists.yoctoproject.org> <yocto@lists.yoctoproject.org<mailto:yocto@lists.yoctoproject.org>>
+> Subject: Re: [yocto] Adding Vulkan to core-image-weston
+>
+> You can start by adding vulkan-samples to the image - the recipe is in
+> core. We do not test vulkan in qemu, because the software vulkan
+> rendering is still under active development, and marked as
+> experimental in virglrenderer.
+>
+> It may help if you use qemux86_64 and kvm for it, because software
+> graphical paths are too slow without it generally.
+>
+> Alex
+>
+> On Fri, 16 Sept 2022 at 13:43, Edgar Mobile <heideggm@hotmail.com<mailto:heideggm@hotmail.com>> wrote:
+> >
+> > Greetings,
+> >
+> > I'd like to test graphics rendering with Vulkan on an Aarch64 Yocto honister (qemu, host is x64). Can you tell me which parameters I need to add to local.conf to get all libs and headers installed (plus maybe some useful tools and demo if present)?
+> >
+> > Regards
+> >
+> > -=-=-=-=-=-=-=-=-=-=-=-
+> > Links: You receive all messages sent to this group.
+> > View/Reply Online (#58059): https://lists.yoctoproject.org/g/yocto/message/58059
+> > Mute This Topic: https://lists.yoctoproject.org/mt/93720286/1686489
+> > Group Owner: yocto+owner@lists.yoctoproject.org<mailto:yocto%2Bowner@lists.yoctoproject.org>
+> > Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com<mailto:alex.kanavin@gmail.com>]
+> > -=-=-=-=-=-=-=-=-=-=-=-
+> >
+
+[-- Attachment #2: Type: text/html, Size: 7483 bytes --]
+
+^ permalink raw reply	[flat|nested] 36+ messages in thread
+* Re: [yocto] Adding Vulkan to core-image-weston
+  2022-09-19 12:28           ` Edgar Mobile
+@ 2022-09-19 13:31             ` Alexander Kanavin
+  2022-09-19 13:52               ` Edgar Mobile
+  0 siblings, 1 reply; 36+ messages in thread
+From: Alexander Kanavin @ 2022-09-19 13:31 UTC (permalink / raw)
+  To: Edgar Mobile; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 3621 bytes --]
+
+As I said you need to inspect the working directory of the recipe to find
+out what goes where.
+
+
+Alex
+
+On Mon 19. Sep 2022 at 13.28, Edgar Mobile <heideggm@hotmail.com> wrote:
+
+> I have the impression that the only binary vulkan-samples installs is
+> /usr/bin/spirv-cross . Are there other packages that install more samples?
+>
+> ------------------------------
+> *From:* Alexander Kanavin <alex.kanavin@gmail.com>
+> *Sent:* Monday, September 19, 2022 8:25 AM
+>
+> *To:* Edgar Mobile <heideggm@hotmail.com>
+> *Cc:* yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+> *Subject:* Re: [yocto] Adding Vulkan to core-image-weston
+>
+> I suppose you need to look at compile and install logs for vulkan-samples.
+> And how the installed items get split into packages. I’m short, inspect
+> ${WORKDIR} for it.
+>
+> Alex
+>
+> On Mon 19. Sep 2022 at 9.36, Edgar Mobile <heideggm@hotmail.com> wrote:
+>
+> Greetings,
+>
+> I see the libvulkan.so.* libs now, but I don't see any sample binaries
+> that look like Vulkan. Is there a list somewhere for all the files in
+> vulkan-samples?
+> Regards
+>
+> ------------------------------
+> *From:* Alexander Kanavin <alex.kanavin@gmail.com>
+> *Sent:* Saturday, September 17, 2022 8:28 AM
+>
+> *To:* Edgar Mobile <heideggm@hotmail.com>
+> *Cc:* yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+> *Subject:* Re: [yocto] Adding Vulkan to core-image-weston
+>
+> If the samples don't link with libvulkan directly, it won't get pulled
+> into the images. How are they loading that library, is it via dlopen()
+> somewhere? Invisible dlopen() dependencies typically need to be listed
+> explicitly in RDEPENDS.
+>
+> As a quick fix, you can add vulkan-loader to the same
+> CORE_IMAGE_EXTRA_INSTALL list.
+>
+> Alex
+>
+> On Fri, 16 Sept 2022 at 19:17, Edgar Mobile <heideggm@hotmail.com> wrote:
+> >
+> > Ok, so I switched to Kirkstone and added vulkan-samples to
+> CORE_IMAGE_EXTRA_INSTALL.
+> > But no libvulkan.so in /usr/lib.
+> >
+> > Am I missing something?
+> >
+> > ________________________________
+> > From: Alexander Kanavin <alex.kanavin@gmail.com>
+> > Sent: Friday, September 16, 2022 12:14 PM
+> > To: Edgar Mobile <heideggm@hotmail.com>
+> > Cc: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+> > Subject: Re: [yocto] Adding Vulkan to core-image-weston
+> >
+> > You can start by adding vulkan-samples to the image - the recipe is in
+> > core. We do not test vulkan in qemu, because the software vulkan
+> > rendering is still under active development, and marked as
+> > experimental in virglrenderer.
+> >
+> > It may help if you use qemux86_64 and kvm for it, because software
+> > graphical paths are too slow without it generally.
+> >
+> > Alex
+> >
+> > On Fri, 16 Sept 2022 at 13:43, Edgar Mobile <heideggm@hotmail.com>
+> wrote:
+> > >
+> > > Greetings,
+> > >
+> > > I'd like to test graphics rendering with Vulkan on an Aarch64 Yocto
+> honister (qemu, host is x64). Can you tell me which parameters I need to
+> add to local.conf to get all libs and headers installed (plus maybe some
+> useful tools and demo if present)?
+> > >
+> > > Regards
+> > >
+> > > -=-=-=-=-=-=-=-=-=-=-=-
+> > > Links: You receive all messages sent to this group.
+> > > View/Reply Online (#58059):
+> https://lists.yoctoproject.org/g/yocto/message/58059
+> > > Mute This Topic: https://lists.yoctoproject.org/mt/93720286/1686489
+> > > Group Owner: yocto+owner@lists.yoctoproject.org
+> > > Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> alex.kanavin@gmail.com]
+> > > -=-=-=-=-=-=-=-=-=-=-=-
+> > >
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 8564 bytes --]
+
+^ permalink raw reply	[flat|nested] 36+ messages in thread
+* Re: [yocto] Adding Vulkan to core-image-weston
+  2022-09-19 13:31             ` Alexander Kanavin
+@ 2022-09-19 13:52               ` Edgar Mobile
+  2022-09-19 14:20                 ` Alexander Kanavin
+  0 siblings, 1 reply; 36+ messages in thread
+From: Edgar Mobile @ 2022-09-19 13:52 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 4565 bytes --]
+
+For the time being I use vulkan-tools so I get vulkaninfo. It fails apparently due to no appropriate driver available.
+I think adding virtio-experimental to mesa may be necessary, right? Or is there another core recipse that will add mesa vulkan drivers?
+
+Regards
+
+________________________________
+From: Alexander Kanavin <alex.kanavin@gmail.com>
+Sent: Monday, September 19, 2022 1:31 PM
+To: Edgar Mobile <heideggm@hotmail.com>
+Cc: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+Subject: Re: [yocto] Adding Vulkan to core-image-weston
+
+As I said you need to inspect the working directory of the recipe to find out what goes where.
+
+
+Alex
+
+On Mon 19. Sep 2022 at 13.28, Edgar Mobile <heideggm@hotmail.com<mailto:heideggm@hotmail.com>> wrote:
+I have the impression that the only binary vulkan-samples installs is /usr/bin/spirv-cross . Are there other packages that install more samples?
+
+________________________________
+From: Alexander Kanavin <alex.kanavin@gmail.com<mailto:alex.kanavin@gmail.com>>
+Sent: Monday, September 19, 2022 8:25 AM
+
+To: Edgar Mobile <heideggm@hotmail.com<mailto:heideggm@hotmail.com>>
+Cc: yocto@lists.yoctoproject.org<mailto:yocto@lists.yoctoproject.org> <yocto@lists.yoctoproject.org<mailto:yocto@lists.yoctoproject.org>>
+Subject: Re: [yocto] Adding Vulkan to core-image-weston
+
+I suppose you need to look at compile and install logs for vulkan-samples. And how the installed items get split into packages. I’m short, inspect ${WORKDIR} for it.
+
+Alex
+
+On Mon 19. Sep 2022 at 9.36, Edgar Mobile <heideggm@hotmail.com<mailto:heideggm@hotmail.com>> wrote:
+Greetings,
+
+I see the libvulkan.so.* libs now, but I don't see any sample binaries that look like Vulkan. Is there a list somewhere for all the files in vulkan-samples?
+Regards
+
+________________________________
+From: Alexander Kanavin <alex.kanavin@gmail.com<mailto:alex.kanavin@gmail.com>>
+Sent: Saturday, September 17, 2022 8:28 AM
+
+To: Edgar Mobile <heideggm@hotmail.com<mailto:heideggm@hotmail.com>>
+Cc: yocto@lists.yoctoproject.org<mailto:yocto@lists.yoctoproject.org> <yocto@lists.yoctoproject.org<mailto:yocto@lists.yoctoproject.org>>
+Subject: Re: [yocto] Adding Vulkan to core-image-weston
+
+If the samples don't link with libvulkan directly, it won't get pulled
+into the images. How are they loading that library, is it via dlopen()
+somewhere? Invisible dlopen() dependencies typically need to be listed
+explicitly in RDEPENDS.
+
+As a quick fix, you can add vulkan-loader to the same
+CORE_IMAGE_EXTRA_INSTALL list.
+
+Alex
+
+On Fri, 16 Sept 2022 at 19:17, Edgar Mobile <heideggm@hotmail.com<mailto:heideggm@hotmail.com>> wrote:
+>
+> Ok, so I switched to Kirkstone and added vulkan-samples to CORE_IMAGE_EXTRA_INSTALL.
+> But no libvulkan.so in /usr/lib.
+>
+> Am I missing something?
+>
+> ________________________________
+> From: Alexander Kanavin <alex.kanavin@gmail.com<mailto:alex.kanavin@gmail.com>>
+> Sent: Friday, September 16, 2022 12:14 PM
+> To: Edgar Mobile <heideggm@hotmail.com<mailto:heideggm@hotmail.com>>
+> Cc: yocto@lists.yoctoproject.org<mailto:yocto@lists.yoctoproject.org> <yocto@lists.yoctoproject.org<mailto:yocto@lists.yoctoproject.org>>
+> Subject: Re: [yocto] Adding Vulkan to core-image-weston
+>
+> You can start by adding vulkan-samples to the image - the recipe is in
+> core. We do not test vulkan in qemu, because the software vulkan
+> rendering is still under active development, and marked as
+> experimental in virglrenderer.
+>
+> It may help if you use qemux86_64 and kvm for it, because software
+> graphical paths are too slow without it generally.
+>
+> Alex
+>
+> On Fri, 16 Sept 2022 at 13:43, Edgar Mobile <heideggm@hotmail.com<mailto:heideggm@hotmail.com>> wrote:
+> >
+> > Greetings,
+> >
+> > I'd like to test graphics rendering with Vulkan on an Aarch64 Yocto honister (qemu, host is x64). Can you tell me which parameters I need to add to local.conf to get all libs and headers installed (plus maybe some useful tools and demo if present)?
+> >
+> > Regards
+> >
+> > -=-=-=-=-=-=-=-=-=-=-=-
+> > Links: You receive all messages sent to this group.
+> > View/Reply Online (#58059): https://lists.yoctoproject.org/g/yocto/message/58059
+> > Mute This Topic: https://lists.yoctoproject.org/mt/93720286/1686489
+> > Group Owner: yocto+owner@lists.yoctoproject.org<mailto:yocto%2Bowner@lists.yoctoproject.org>
+> > Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com<mailto:alex.kanavin@gmail.com>]
+> > -=-=-=-=-=-=-=-=-=-=-=-
+> >
+
+[-- Attachment #2: Type: text/html, Size: 10466 bytes --]
+
+^ permalink raw reply	[flat|nested] 36+ messages in thread
+* Re: [yocto] Adding Vulkan to core-image-weston
+  2022-09-19 13:52               ` Edgar Mobile
+@ 2022-09-19 14:20                 ` Alexander Kanavin
+  2022-09-19 14:30                   ` Edgar Mobile
+  0 siblings, 1 reply; 36+ messages in thread
+From: Alexander Kanavin @ 2022-09-19 14:20 UTC (permalink / raw)
+  To: Edgar Mobile; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 4588 bytes --]
+
+I think swrast Vulkan driver may be a better option to start with. At least
+that is contained entirely in qemu guest so you won’t have to wrestle with
+pass through code paths to the host which are all experimental. It’s
+entirely uncharted waters for me as well.
+
+Alex
+
+On Mon 19. Sep 2022 at 14.52, Edgar Mobile <heideggm@hotmail.com> wrote:
+
+> For the time being I use vulkan-tools so I get vulkaninfo. It fails
+> apparently due to no appropriate driver available.
+> I think adding virtio-experimental to mesa may be necessary, right? Or is
+> there another core recipse that will add mesa vulkan drivers?
+>
+> Regards
+>
+> ------------------------------
+> *From:* Alexander Kanavin <alex.kanavin@gmail.com>
+> *Sent:* Monday, September 19, 2022 1:31 PM
+>
+> *To:* Edgar Mobile <heideggm@hotmail.com>
+> *Cc:* yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+> *Subject:* Re: [yocto] Adding Vulkan to core-image-weston
+>
+> As I said you need to inspect the working directory of the recipe to find
+> out what goes where.
+>
+>
+> Alex
+>
+> On Mon 19. Sep 2022 at 13.28, Edgar Mobile <heideggm@hotmail.com> wrote:
+>
+> I have the impression that the only binary vulkan-samples installs is
+> /usr/bin/spirv-cross . Are there other packages that install more samples?
+>
+> ------------------------------
+> *From:* Alexander Kanavin <alex.kanavin@gmail.com>
+> *Sent:* Monday, September 19, 2022 8:25 AM
+>
+> *To:* Edgar Mobile <heideggm@hotmail.com>
+> *Cc:* yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+> *Subject:* Re: [yocto] Adding Vulkan to core-image-weston
+>
+> I suppose you need to look at compile and install logs for vulkan-samples.
+> And how the installed items get split into packages. I’m short, inspect
+> ${WORKDIR} for it.
+>
+> Alex
+>
+> On Mon 19. Sep 2022 at 9.36, Edgar Mobile <heideggm@hotmail.com> wrote:
+>
+> Greetings,
+>
+> I see the libvulkan.so.* libs now, but I don't see any sample binaries
+> that look like Vulkan. Is there a list somewhere for all the files in
+> vulkan-samples?
+> Regards
+>
+> ------------------------------
+> *From:* Alexander Kanavin <alex.kanavin@gmail.com>
+> *Sent:* Saturday, September 17, 2022 8:28 AM
+>
+> *To:* Edgar Mobile <heideggm@hotmail.com>
+> *Cc:* yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+> *Subject:* Re: [yocto] Adding Vulkan to core-image-weston
+>
+> If the samples don't link with libvulkan directly, it won't get pulled
+> into the images. How are they loading that library, is it via dlopen()
+> somewhere? Invisible dlopen() dependencies typically need to be listed
+> explicitly in RDEPENDS.
+>
+> As a quick fix, you can add vulkan-loader to the same
+> CORE_IMAGE_EXTRA_INSTALL list.
+>
+> Alex
+>
+> On Fri, 16 Sept 2022 at 19:17, Edgar Mobile <heideggm@hotmail.com> wrote:
+> >
+> > Ok, so I switched to Kirkstone and added vulkan-samples to
+> CORE_IMAGE_EXTRA_INSTALL.
+> > But no libvulkan.so in /usr/lib.
+> >
+> > Am I missing something?
+> >
+> > ________________________________
+> > From: Alexander Kanavin <alex.kanavin@gmail.com>
+> > Sent: Friday, September 16, 2022 12:14 PM
+> > To: Edgar Mobile <heideggm@hotmail.com>
+> > Cc: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+> > Subject: Re: [yocto] Adding Vulkan to core-image-weston
+> >
+> > You can start by adding vulkan-samples to the image - the recipe is in
+> > core. We do not test vulkan in qemu, because the software vulkan
+> > rendering is still under active development, and marked as
+> > experimental in virglrenderer.
+> >
+> > It may help if you use qemux86_64 and kvm for it, because software
+> > graphical paths are too slow without it generally.
+> >
+> > Alex
+> >
+> > On Fri, 16 Sept 2022 at 13:43, Edgar Mobile <heideggm@hotmail.com>
+> wrote:
+> > >
+> > > Greetings,
+> > >
+> > > I'd like to test graphics rendering with Vulkan on an Aarch64 Yocto
+> honister (qemu, host is x64). Can you tell me which parameters I need to
+> add to local.conf to get all libs and headers installed (plus maybe some
+> useful tools and demo if present)?
+> > >
+> > > Regards
+> > >
+> > > -=-=-=-=-=-=-=-=-=-=-=-
+> > > Links: You receive all messages sent to this group.
+> > > View/Reply Online (#58059):
+> https://lists.yoctoproject.org/g/yocto/message/58059
+> > > Mute This Topic: https://lists.yoctoproject.org/mt/93720286/1686489
+> > > Group Owner: yocto+owner@lists.yoctoproject.org
+> > > Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> alex.kanavin@gmail.com]
+> > > -=-=-=-=-=-=-=-=-=-=-=-
+> > >
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 11671 bytes --]
+
+^ permalink raw reply	[flat|nested] 36+ messages in thread
+* Re: [yocto] Adding Vulkan to core-image-weston
+  2022-09-19 14:20                 ` Alexander Kanavin
+@ 2022-09-19 14:30                   ` Edgar Mobile
+  2022-09-19 14:36                     ` Alexander Kanavin
+  0 siblings, 1 reply; 36+ messages in thread
+From: Edgar Mobile @ 2022-09-19 14:30 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 5528 bytes --]
+
+What are the qemu params to activate swrast vulkan driver? And do I still need mesa vulkan package? meson logs show it wasnt't compiled with vulkan-drivers.
+
+________________________________
+From: Alexander Kanavin <alex.kanavin@gmail.com>
+Sent: Monday, September 19, 2022 2:20 PM
+To: Edgar Mobile <heideggm@hotmail.com>
+Cc: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+Subject: Re: [yocto] Adding Vulkan to core-image-weston
+
+I think swrast Vulkan driver may be a better option to start with. At least that is contained entirely in qemu guest so you won’t have to wrestle with pass through code paths to the host which are all experimental. It’s entirely uncharted waters for me as well.
+
+Alex
+
+On Mon 19. Sep 2022 at 14.52, Edgar Mobile <heideggm@hotmail.com<mailto:heideggm@hotmail.com>> wrote:
+For the time being I use vulkan-tools so I get vulkaninfo. It fails apparently due to no appropriate driver available.
+I think adding virtio-experimental to mesa may be necessary, right? Or is there another core recipse that will add mesa vulkan drivers?
+
+Regards
+
+________________________________
+From: Alexander Kanavin <alex.kanavin@gmail.com<mailto:alex.kanavin@gmail.com>>
+Sent: Monday, September 19, 2022 1:31 PM
+
+To: Edgar Mobile <heideggm@hotmail.com<mailto:heideggm@hotmail.com>>
+Cc: yocto@lists.yoctoproject.org<mailto:yocto@lists.yoctoproject.org> <yocto@lists.yoctoproject.org<mailto:yocto@lists.yoctoproject.org>>
+Subject: Re: [yocto] Adding Vulkan to core-image-weston
+
+As I said you need to inspect the working directory of the recipe to find out what goes where.
+
+
+Alex
+
+On Mon 19. Sep 2022 at 13.28, Edgar Mobile <heideggm@hotmail.com<mailto:heideggm@hotmail.com>> wrote:
+I have the impression that the only binary vulkan-samples installs is /usr/bin/spirv-cross . Are there other packages that install more samples?
+
+________________________________
+From: Alexander Kanavin <alex.kanavin@gmail.com<mailto:alex.kanavin@gmail.com>>
+Sent: Monday, September 19, 2022 8:25 AM
+
+To: Edgar Mobile <heideggm@hotmail.com<mailto:heideggm@hotmail.com>>
+Cc: yocto@lists.yoctoproject.org<mailto:yocto@lists.yoctoproject.org> <yocto@lists.yoctoproject.org<mailto:yocto@lists.yoctoproject.org>>
+Subject: Re: [yocto] Adding Vulkan to core-image-weston
+
+I suppose you need to look at compile and install logs for vulkan-samples. And how the installed items get split into packages. I’m short, inspect ${WORKDIR} for it.
+
+Alex
+
+On Mon 19. Sep 2022 at 9.36, Edgar Mobile <heideggm@hotmail.com<mailto:heideggm@hotmail.com>> wrote:
+Greetings,
+
+I see the libvulkan.so.* libs now, but I don't see any sample binaries that look like Vulkan. Is there a list somewhere for all the files in vulkan-samples?
+Regards
+
+________________________________
+From: Alexander Kanavin <alex.kanavin@gmail.com<mailto:alex.kanavin@gmail.com>>
+Sent: Saturday, September 17, 2022 8:28 AM
+
+To: Edgar Mobile <heideggm@hotmail.com<mailto:heideggm@hotmail.com>>
+Cc: yocto@lists.yoctoproject.org<mailto:yocto@lists.yoctoproject.org> <yocto@lists.yoctoproject.org<mailto:yocto@lists.yoctoproject.org>>
+Subject: Re: [yocto] Adding Vulkan to core-image-weston
+
+If the samples don't link with libvulkan directly, it won't get pulled
+into the images. How are they loading that library, is it via dlopen()
+somewhere? Invisible dlopen() dependencies typically need to be listed
+explicitly in RDEPENDS.
+
+As a quick fix, you can add vulkan-loader to the same
+CORE_IMAGE_EXTRA_INSTALL list.
+
+Alex
+
+On Fri, 16 Sept 2022 at 19:17, Edgar Mobile <heideggm@hotmail.com<mailto:heideggm@hotmail.com>> wrote:
+>
+> Ok, so I switched to Kirkstone and added vulkan-samples to CORE_IMAGE_EXTRA_INSTALL.
+> But no libvulkan.so in /usr/lib.
+>
+> Am I missing something?
+>
+> ________________________________
+> From: Alexander Kanavin <alex.kanavin@gmail.com<mailto:alex.kanavin@gmail.com>>
+> Sent: Friday, September 16, 2022 12:14 PM
+> To: Edgar Mobile <heideggm@hotmail.com<mailto:heideggm@hotmail.com>>
+> Cc: yocto@lists.yoctoproject.org<mailto:yocto@lists.yoctoproject.org> <yocto@lists.yoctoproject.org<mailto:yocto@lists.yoctoproject.org>>
+> Subject: Re: [yocto] Adding Vulkan to core-image-weston
+>
+> You can start by adding vulkan-samples to the image - the recipe is in
+> core. We do not test vulkan in qemu, because the software vulkan
+> rendering is still under active development, and marked as
+> experimental in virglrenderer.
+>
+> It may help if you use qemux86_64 and kvm for it, because software
+> graphical paths are too slow without it generally.
+>
+> Alex
+>
+> On Fri, 16 Sept 2022 at 13:43, Edgar Mobile <heideggm@hotmail.com<mailto:heideggm@hotmail.com>> wrote:
+> >
+> > Greetings,
+> >
+> > I'd like to test graphics rendering with Vulkan on an Aarch64 Yocto honister (qemu, host is x64). Can you tell me which parameters I need to add to local.conf to get all libs and headers installed (plus maybe some useful tools and demo if present)?
+> >
+> > Regards
+> >
+> > -=-=-=-=-=-=-=-=-=-=-=-
+> > Links: You receive all messages sent to this group.
+> > View/Reply Online (#58059): https://lists.yoctoproject.org/g/yocto/message/58059
+> > Mute This Topic: https://lists.yoctoproject.org/mt/93720286/1686489
+> > Group Owner: yocto+owner@lists.yoctoproject.org<mailto:yocto%2Bowner@lists.yoctoproject.org>
+> > Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com<mailto:alex.kanavin@gmail.com>]
+> > -=-=-=-=-=-=-=-=-=-=-=-
+> >
+
+[-- Attachment #2: Type: text/html, Size: 13230 bytes --]
+
+^ permalink raw reply	[flat|nested] 36+ messages in thread
+* Re: [yocto] Adding Vulkan to core-image-weston
+  2022-09-19 14:30                   ` Edgar Mobile
+@ 2022-09-19 14:36                     ` Alexander Kanavin
+  2022-09-19 14:40                       ` Edgar Mobile
+  0 siblings, 1 reply; 36+ messages in thread
+From: Alexander Kanavin @ 2022-09-19 14:36 UTC (permalink / raw)
+  To: Edgar Mobile; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 5324 bytes --]
+
+You do, yes. It’s not qemu, it’s in Mesa. You can see the options here:
+https://gitlab.freedesktop.org/mesa/mesa/-/blob/main/meson_options.txt
+
+
+Alex
+
+On Mon 19. Sep 2022 at 15.30, Edgar Mobile <heideggm@hotmail.com> wrote:
+
+> What are the qemu params to activate swrast vulkan driver? And do I still
+> need mesa vulkan package? meson logs show it wasnt't compiled with
+> vulkan-drivers.
+>
+> ------------------------------
+> *From:* Alexander Kanavin <alex.kanavin@gmail.com>
+> *Sent:* Monday, September 19, 2022 2:20 PM
+>
+> *To:* Edgar Mobile <heideggm@hotmail.com>
+> *Cc:* yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+> *Subject:* Re: [yocto] Adding Vulkan to core-image-weston
+>
+> I think swrast Vulkan driver may be a better option to start with. At
+> least that is contained entirely in qemu guest so you won’t have to wrestle
+> with pass through code paths to the host which are all experimental. It’s
+> entirely uncharted waters for me as well.
+>
+> Alex
+>
+> On Mon 19. Sep 2022 at 14.52, Edgar Mobile <heideggm@hotmail.com> wrote:
+>
+> For the time being I use vulkan-tools so I get vulkaninfo. It fails
+> apparently due to no appropriate driver available.
+> I think adding virtio-experimental to mesa may be necessary, right? Or is
+> there another core recipse that will add mesa vulkan drivers?
+>
+> Regards
+>
+> ------------------------------
+> *From:* Alexander Kanavin <alex.kanavin@gmail.com>
+> *Sent:* Monday, September 19, 2022 1:31 PM
+>
+> *To:* Edgar Mobile <heideggm@hotmail.com>
+> *Cc:* yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+> *Subject:* Re: [yocto] Adding Vulkan to core-image-weston
+>
+> As I said you need to inspect the working directory of the recipe to find
+> out what goes where.
+>
+>
+> Alex
+>
+> On Mon 19. Sep 2022 at 13.28, Edgar Mobile <heideggm@hotmail.com> wrote:
+>
+> I have the impression that the only binary vulkan-samples installs is
+> /usr/bin/spirv-cross . Are there other packages that install more samples?
+>
+> ------------------------------
+> *From:* Alexander Kanavin <alex.kanavin@gmail.com>
+> *Sent:* Monday, September 19, 2022 8:25 AM
+>
+> *To:* Edgar Mobile <heideggm@hotmail.com>
+> *Cc:* yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+> *Subject:* Re: [yocto] Adding Vulkan to core-image-weston
+>
+> I suppose you need to look at compile and install logs for vulkan-samples.
+> And how the installed items get split into packages. I’m short, inspect
+> ${WORKDIR} for it.
+>
+> Alex
+>
+> On Mon 19. Sep 2022 at 9.36, Edgar Mobile <heideggm@hotmail.com> wrote:
+>
+> Greetings,
+>
+> I see the libvulkan.so.* libs now, but I don't see any sample binaries
+> that look like Vulkan. Is there a list somewhere for all the files in
+> vulkan-samples?
+> Regards
+>
+> ------------------------------
+> *From:* Alexander Kanavin <alex.kanavin@gmail.com>
+> *Sent:* Saturday, September 17, 2022 8:28 AM
+>
+> *To:* Edgar Mobile <heideggm@hotmail.com>
+> *Cc:* yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+> *Subject:* Re: [yocto] Adding Vulkan to core-image-weston
+>
+> If the samples don't link with libvulkan directly, it won't get pulled
+> into the images. How are they loading that library, is it via dlopen()
+> somewhere? Invisible dlopen() dependencies typically need to be listed
+> explicitly in RDEPENDS.
+>
+> As a quick fix, you can add vulkan-loader to the same
+> CORE_IMAGE_EXTRA_INSTALL list.
+>
+> Alex
+>
+> On Fri, 16 Sept 2022 at 19:17, Edgar Mobile <heideggm@hotmail.com> wrote:
+> >
+> > Ok, so I switched to Kirkstone and added vulkan-samples to
+> CORE_IMAGE_EXTRA_INSTALL.
+> > But no libvulkan.so in /usr/lib.
+> >
+> > Am I missing something?
+> >
+> > ________________________________
+> > From: Alexander Kanavin <alex.kanavin@gmail.com>
+> > Sent: Friday, September 16, 2022 12:14 PM
+> > To: Edgar Mobile <heideggm@hotmail.com>
+> > Cc: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+> > Subject: Re: [yocto] Adding Vulkan to core-image-weston
+> >
+> > You can start by adding vulkan-samples to the image - the recipe is in
+> > core. We do not test vulkan in qemu, because the software vulkan
+> > rendering is still under active development, and marked as
+> > experimental in virglrenderer.
+> >
+> > It may help if you use qemux86_64 and kvm for it, because software
+> > graphical paths are too slow without it generally.
+> >
+> > Alex
+> >
+> > On Fri, 16 Sept 2022 at 13:43, Edgar Mobile <heideggm@hotmail.com>
+> wrote:
+> > >
+> > > Greetings,
+> > >
+> > > I'd like to test graphics rendering with Vulkan on an Aarch64 Yocto
+> honister (qemu, host is x64). Can you tell me which parameters I need to
+> add to local.conf to get all libs and headers installed (plus maybe some
+> useful tools and demo if present)?
+> > >
+> > > Regards
+> > >
+> > > -=-=-=-=-=-=-=-=-=-=-=-
+> > > Links: You receive all messages sent to this group.
+> > > View/Reply Online (#58059):
+> https://lists.yoctoproject.org/g/yocto/message/58059
+> > > Mute This Topic: https://lists.yoctoproject.org/mt/93720286/1686489
+> > > Group Owner: yocto+owner@lists.yoctoproject.org
+> > > Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> alex.kanavin@gmail.com]
+> > > -=-=-=-=-=-=-=-=-=-=-=-
+> > >
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 14454 bytes --]
+
+^ permalink raw reply	[flat|nested] 36+ messages in thread
+* Re: [yocto] Adding Vulkan to core-image-weston
+  2022-09-19 14:36                     ` Alexander Kanavin
+@ 2022-09-19 14:40                       ` Edgar Mobile
+  2022-09-19 15:33                         ` Alexander Kanavin
+  0 siblings, 1 reply; 36+ messages in thread
+From: Edgar Mobile @ 2022-09-19 14:40 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 6295 bytes --]
+
+Is editing meson_options.txt the recommended way to customize Mesa in Yocto?
+
+________________________________
+From: Alexander Kanavin <alex.kanavin@gmail.com>
+Sent: Monday, September 19, 2022 2:36 PM
+To: Edgar Mobile <heideggm@hotmail.com>
+Cc: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+Subject: Re: [yocto] Adding Vulkan to core-image-weston
+
+You do, yes. It’s not qemu, it’s in Mesa. You can see the options here:
+https://gitlab.freedesktop.org/mesa/mesa/-/blob/main/meson_options.txt
+
+
+Alex
+
+On Mon 19. Sep 2022 at 15.30, Edgar Mobile <heideggm@hotmail.com<mailto:heideggm@hotmail.com>> wrote:
+What are the qemu params to activate swrast vulkan driver? And do I still need mesa vulkan package? meson logs show it wasnt't compiled with vulkan-drivers.
+
+________________________________
+From: Alexander Kanavin <alex.kanavin@gmail.com<mailto:alex.kanavin@gmail.com>>
+Sent: Monday, September 19, 2022 2:20 PM
+
+To: Edgar Mobile <heideggm@hotmail.com<mailto:heideggm@hotmail.com>>
+Cc: yocto@lists.yoctoproject.org<mailto:yocto@lists.yoctoproject.org> <yocto@lists.yoctoproject.org<mailto:yocto@lists.yoctoproject.org>>
+Subject: Re: [yocto] Adding Vulkan to core-image-weston
+
+I think swrast Vulkan driver may be a better option to start with. At least that is contained entirely in qemu guest so you won’t have to wrestle with pass through code paths to the host which are all experimental. It’s entirely uncharted waters for me as well.
+
+Alex
+
+On Mon 19. Sep 2022 at 14.52, Edgar Mobile <heideggm@hotmail.com<mailto:heideggm@hotmail.com>> wrote:
+For the time being I use vulkan-tools so I get vulkaninfo. It fails apparently due to no appropriate driver available.
+I think adding virtio-experimental to mesa may be necessary, right? Or is there another core recipse that will add mesa vulkan drivers?
+
+Regards
+
+________________________________
+From: Alexander Kanavin <alex.kanavin@gmail.com<mailto:alex.kanavin@gmail.com>>
+Sent: Monday, September 19, 2022 1:31 PM
+
+To: Edgar Mobile <heideggm@hotmail.com<mailto:heideggm@hotmail.com>>
+Cc: yocto@lists.yoctoproject.org<mailto:yocto@lists.yoctoproject.org> <yocto@lists.yoctoproject.org<mailto:yocto@lists.yoctoproject.org>>
+Subject: Re: [yocto] Adding Vulkan to core-image-weston
+
+As I said you need to inspect the working directory of the recipe to find out what goes where.
+
+
+Alex
+
+On Mon 19. Sep 2022 at 13.28, Edgar Mobile <heideggm@hotmail.com<mailto:heideggm@hotmail.com>> wrote:
+I have the impression that the only binary vulkan-samples installs is /usr/bin/spirv-cross . Are there other packages that install more samples?
+
+________________________________
+From: Alexander Kanavin <alex.kanavin@gmail.com<mailto:alex.kanavin@gmail.com>>
+Sent: Monday, September 19, 2022 8:25 AM
+
+To: Edgar Mobile <heideggm@hotmail.com<mailto:heideggm@hotmail.com>>
+Cc: yocto@lists.yoctoproject.org<mailto:yocto@lists.yoctoproject.org> <yocto@lists.yoctoproject.org<mailto:yocto@lists.yoctoproject.org>>
+Subject: Re: [yocto] Adding Vulkan to core-image-weston
+
+I suppose you need to look at compile and install logs for vulkan-samples. And how the installed items get split into packages. I’m short, inspect ${WORKDIR} for it.
+
+Alex
+
+On Mon 19. Sep 2022 at 9.36, Edgar Mobile <heideggm@hotmail.com<mailto:heideggm@hotmail.com>> wrote:
+Greetings,
+
+I see the libvulkan.so.* libs now, but I don't see any sample binaries that look like Vulkan. Is there a list somewhere for all the files in vulkan-samples?
+Regards
+
+________________________________
+From: Alexander Kanavin <alex.kanavin@gmail.com<mailto:alex.kanavin@gmail.com>>
+Sent: Saturday, September 17, 2022 8:28 AM
+
+To: Edgar Mobile <heideggm@hotmail.com<mailto:heideggm@hotmail.com>>
+Cc: yocto@lists.yoctoproject.org<mailto:yocto@lists.yoctoproject.org> <yocto@lists.yoctoproject.org<mailto:yocto@lists.yoctoproject.org>>
+Subject: Re: [yocto] Adding Vulkan to core-image-weston
+
+If the samples don't link with libvulkan directly, it won't get pulled
+into the images. How are they loading that library, is it via dlopen()
+somewhere? Invisible dlopen() dependencies typically need to be listed
+explicitly in RDEPENDS.
+
+As a quick fix, you can add vulkan-loader to the same
+CORE_IMAGE_EXTRA_INSTALL list.
+
+Alex
+
+On Fri, 16 Sept 2022 at 19:17, Edgar Mobile <heideggm@hotmail.com<mailto:heideggm@hotmail.com>> wrote:
+>
+> Ok, so I switched to Kirkstone and added vulkan-samples to CORE_IMAGE_EXTRA_INSTALL.
+> But no libvulkan.so in /usr/lib.
+>
+> Am I missing something?
+>
+> ________________________________
+> From: Alexander Kanavin <alex.kanavin@gmail.com<mailto:alex.kanavin@gmail.com>>
+> Sent: Friday, September 16, 2022 12:14 PM
+> To: Edgar Mobile <heideggm@hotmail.com<mailto:heideggm@hotmail.com>>
+> Cc: yocto@lists.yoctoproject.org<mailto:yocto@lists.yoctoproject.org> <yocto@lists.yoctoproject.org<mailto:yocto@lists.yoctoproject.org>>
+> Subject: Re: [yocto] Adding Vulkan to core-image-weston
+>
+> You can start by adding vulkan-samples to the image - the recipe is in
+> core. We do not test vulkan in qemu, because the software vulkan
+> rendering is still under active development, and marked as
+> experimental in virglrenderer.
+>
+> It may help if you use qemux86_64 and kvm for it, because software
+> graphical paths are too slow without it generally.
+>
+> Alex
+>
+> On Fri, 16 Sept 2022 at 13:43, Edgar Mobile <heideggm@hotmail.com<mailto:heideggm@hotmail.com>> wrote:
+> >
+> > Greetings,
+> >
+> > I'd like to test graphics rendering with Vulkan on an Aarch64 Yocto honister (qemu, host is x64). Can you tell me which parameters I need to add to local.conf to get all libs and headers installed (plus maybe some useful tools and demo if present)?
+> >
+> > Regards
+> >
+> > -=-=-=-=-=-=-=-=-=-=-=-
+> > Links: You receive all messages sent to this group.
+> > View/Reply Online (#58059): https://lists.yoctoproject.org/g/yocto/message/58059
+> > Mute This Topic: https://lists.yoctoproject.org/mt/93720286/1686489
+> > Group Owner: yocto+owner@lists.yoctoproject.org<mailto:yocto%2Bowner@lists.yoctoproject.org>
+> > Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com<mailto:alex.kanavin@gmail.com>]
+> > -=-=-=-=-=-=-=-=-=-=-=-
+> >
+
+[-- Attachment #2: Type: text/html, Size: 16034 bytes --]
+
+^ permalink raw reply	[flat|nested] 36+ messages in thread
+* Re: [yocto] Adding Vulkan to core-image-weston
+  2022-09-19 14:40                       ` Edgar Mobile
+@ 2022-09-19 15:33                         ` Alexander Kanavin
+  2022-09-19 16:37                           ` Markus Volk
+  0 siblings, 1 reply; 36+ messages in thread
+From: Alexander Kanavin @ 2022-09-19 15:33 UTC (permalink / raw)
+  To: Edgar Mobile; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 6049 bytes --]
+
+You need to check the Mesa recipe to see how the build options are defined,
+and add swrast to the list of vulkan drivers if necessary. Meson_options
+only defines available options in Mesa, not the actual set used in yocto.
+
+Alex
+
+On Mon 19. Sep 2022 at 15.40, Edgar Mobile <heideggm@hotmail.com> wrote:
+
+> Is editing meson_options.txt the recommended way to customize Mesa in
+> Yocto?
+>
+> ------------------------------
+> *From:* Alexander Kanavin <alex.kanavin@gmail.com>
+> *Sent:* Monday, September 19, 2022 2:36 PM
+>
+> *To:* Edgar Mobile <heideggm@hotmail.com>
+> *Cc:* yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+> *Subject:* Re: [yocto] Adding Vulkan to core-image-weston
+>
+> You do, yes. It’s not qemu, it’s in Mesa. You can see the options here:
+> https://gitlab.freedesktop.org/mesa/mesa/-/blob/main/meson_options.txt
+>
+>
+> Alex
+>
+> On Mon 19. Sep 2022 at 15.30, Edgar Mobile <heideggm@hotmail.com> wrote:
+>
+> What are the qemu params to activate swrast vulkan driver? And do I still
+> need mesa vulkan package? meson logs show it wasnt't compiled with
+> vulkan-drivers.
+>
+> ------------------------------
+> *From:* Alexander Kanavin <alex.kanavin@gmail.com>
+> *Sent:* Monday, September 19, 2022 2:20 PM
+>
+> *To:* Edgar Mobile <heideggm@hotmail.com>
+> *Cc:* yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+> *Subject:* Re: [yocto] Adding Vulkan to core-image-weston
+>
+> I think swrast Vulkan driver may be a better option to start with. At
+> least that is contained entirely in qemu guest so you won’t have to wrestle
+> with pass through code paths to the host which are all experimental. It’s
+> entirely uncharted waters for me as well.
+>
+> Alex
+>
+> On Mon 19. Sep 2022 at 14.52, Edgar Mobile <heideggm@hotmail.com> wrote:
+>
+> For the time being I use vulkan-tools so I get vulkaninfo. It fails
+> apparently due to no appropriate driver available.
+> I think adding virtio-experimental to mesa may be necessary, right? Or is
+> there another core recipse that will add mesa vulkan drivers?
+>
+> Regards
+>
+> ------------------------------
+> *From:* Alexander Kanavin <alex.kanavin@gmail.com>
+> *Sent:* Monday, September 19, 2022 1:31 PM
+>
+> *To:* Edgar Mobile <heideggm@hotmail.com>
+> *Cc:* yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+> *Subject:* Re: [yocto] Adding Vulkan to core-image-weston
+>
+> As I said you need to inspect the working directory of the recipe to find
+> out what goes where.
+>
+>
+> Alex
+>
+> On Mon 19. Sep 2022 at 13.28, Edgar Mobile <heideggm@hotmail.com> wrote:
+>
+> I have the impression that the only binary vulkan-samples installs is
+> /usr/bin/spirv-cross . Are there other packages that install more samples?
+>
+> ------------------------------
+> *From:* Alexander Kanavin <alex.kanavin@gmail.com>
+> *Sent:* Monday, September 19, 2022 8:25 AM
+>
+> *To:* Edgar Mobile <heideggm@hotmail.com>
+> *Cc:* yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+> *Subject:* Re: [yocto] Adding Vulkan to core-image-weston
+>
+> I suppose you need to look at compile and install logs for vulkan-samples.
+> And how the installed items get split into packages. I’m short, inspect
+> ${WORKDIR} for it.
+>
+> Alex
+>
+> On Mon 19. Sep 2022 at 9.36, Edgar Mobile <heideggm@hotmail.com> wrote:
+>
+> Greetings,
+>
+> I see the libvulkan.so.* libs now, but I don't see any sample binaries
+> that look like Vulkan. Is there a list somewhere for all the files in
+> vulkan-samples?
+> Regards
+>
+> ------------------------------
+> *From:* Alexander Kanavin <alex.kanavin@gmail.com>
+> *Sent:* Saturday, September 17, 2022 8:28 AM
+>
+> *To:* Edgar Mobile <heideggm@hotmail.com>
+> *Cc:* yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+> *Subject:* Re: [yocto] Adding Vulkan to core-image-weston
+>
+> If the samples don't link with libvulkan directly, it won't get pulled
+> into the images. How are they loading that library, is it via dlopen()
+> somewhere? Invisible dlopen() dependencies typically need to be listed
+> explicitly in RDEPENDS.
+>
+> As a quick fix, you can add vulkan-loader to the same
+> CORE_IMAGE_EXTRA_INSTALL list.
+>
+> Alex
+>
+> On Fri, 16 Sept 2022 at 19:17, Edgar Mobile <heideggm@hotmail.com> wrote:
+> >
+> > Ok, so I switched to Kirkstone and added vulkan-samples to
+> CORE_IMAGE_EXTRA_INSTALL.
+> > But no libvulkan.so in /usr/lib.
+> >
+> > Am I missing something?
+> >
+> > ________________________________
+> > From: Alexander Kanavin <alex.kanavin@gmail.com>
+> > Sent: Friday, September 16, 2022 12:14 PM
+> > To: Edgar Mobile <heideggm@hotmail.com>
+> > Cc: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+> > Subject: Re: [yocto] Adding Vulkan to core-image-weston
+> >
+> > You can start by adding vulkan-samples to the image - the recipe is in
+> > core. We do not test vulkan in qemu, because the software vulkan
+> > rendering is still under active development, and marked as
+> > experimental in virglrenderer.
+> >
+> > It may help if you use qemux86_64 and kvm for it, because software
+> > graphical paths are too slow without it generally.
+> >
+> > Alex
+> >
+> > On Fri, 16 Sept 2022 at 13:43, Edgar Mobile <heideggm@hotmail.com>
+> wrote:
+> > >
+> > > Greetings,
+> > >
+> > > I'd like to test graphics rendering with Vulkan on an Aarch64 Yocto
+> honister (qemu, host is x64). Can you tell me which parameters I need to
+> add to local.conf to get all libs and headers installed (plus maybe some
+> useful tools and demo if present)?
+> > >
+> > > Regards
+> > >
+> > > -=-=-=-=-=-=-=-=-=-=-=-
+> > > Links: You receive all messages sent to this group.
+> > > View/Reply Online (#58059):
+> https://lists.yoctoproject.org/g/yocto/message/58059
+> > > Mute This Topic: https://lists.yoctoproject.org/mt/93720286/1686489
+> > > Group Owner: yocto+owner@lists.yoctoproject.org
+> > > Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> alex.kanavin@gmail.com]
+> > > -=-=-=-=-=-=-=-=-=-=-=-
+> > >
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 17200 bytes --]
+
+^ permalink raw reply	[flat|nested] 36+ messages in thread
+* Re: [yocto] Adding Vulkan to core-image-weston
+  2022-09-19 15:33                         ` Alexander Kanavin
+@ 2022-09-19 16:37                           ` Markus Volk
+  2022-09-19 16:54                             ` Edgar Mobile
+  0 siblings, 1 reply; 36+ messages in thread
+From: Markus Volk @ 2022-09-19 16:37 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: Edgar Mobile, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 370 bytes --]
+
+Am Mo, 19. Sep 2022 um 16:33:11 +0100 schrieb Alexander Kanavin 
+<alex.kanavin@gmail.com>:
+> You need to check the Mesa recipe to see how the build options are 
+> defined
+
+mesa builds vulkan support, if you add 'vulkan' to DISTRO_FEATURES. If 
+you need to, you can add additional drivers with a line like this to a 
+mesa_%.bbappend:
+
+VULKAN_DRIVERS:append = ",foo,bar"
+
+
+[-- Attachment #2: Type: text/html, Size: 492 bytes --]
+
+^ permalink raw reply	[flat|nested] 36+ messages in thread
+* Re: [yocto] Adding Vulkan to core-image-weston
+  2022-09-19 16:37                           ` Markus Volk
+@ 2022-09-19 16:54                             ` Edgar Mobile
+  2022-09-19 17:16                               ` Markus Volk
+  0 siblings, 1 reply; 36+ messages in thread
+From: Edgar Mobile @ 2022-09-19 16:54 UTC (permalink / raw)
+  To: Markus Volk, Alexander Kanavin; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 986 bytes --]
+
+My current configuration is
+
+DISTRO_FEATURES:append = "opengl x11 vulkan"
+
+This wasn't enough for libvulkan.so.* to be installed or vulkaninfo to work. Only the simple weston egl examples work.
+
+I also tried adding virtio-experimental to VULKAN_DRIVERS in mesa.inc, didn't help either.
+
+________________________________
+From: Markus Volk <f_l_k@t-online.de>
+Sent: Monday, September 19, 2022 4:37 PM
+To: Alexander Kanavin <alex.kanavin@gmail.com>
+Cc: Edgar Mobile <heideggm@hotmail.com>; yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+Subject: Re: [yocto] Adding Vulkan to core-image-weston
+
+Am Mo, 19. Sep 2022 um 16:33:11 +0100 schrieb Alexander Kanavin <alex.kanavin@gmail.com>:
+You need to check the Mesa recipe to see how the build options are defined
+
+mesa builds vulkan support, if you add 'vulkan' to DISTRO_FEATURES. If you need to, you can add additional drivers with a line like this to a mesa_%.bbappend:
+
+VULKAN_DRIVERS:append = ",foo,bar"
+
+[-- Attachment #2: Type: text/html, Size: 2530 bytes --]
+
+^ permalink raw reply	[flat|nested] 36+ messages in thread
+* Re: [yocto] Adding Vulkan to core-image-weston
+  2022-09-19 16:54                             ` Edgar Mobile
+@ 2022-09-19 17:16                               ` Markus Volk
+  2022-09-20  7:28                                 ` Edgar Mobile
+  2022-09-20  7:39                                 ` Edgar Mobile
+  0 siblings, 2 replies; 36+ messages in thread
+From: Markus Volk @ 2022-09-19 17:16 UTC (permalink / raw)
+  To: Edgar Mobile; +Cc: Alexander Kanavin, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 311 bytes --]
+
+Am Mo, 19. Sep 2022 um 16:54:52 +0000 schrieb Edgar Mobile 
+<heideggm@hotmail.com>:
+> This wasn't enough
+
+i guess you would also need to add venus support to virglrenderer.bb 
+for qemu:
+
+DEPENDS:append = "vulkan-loader vulkan-headers"
+EXTRA_OEMESON += "-Dvenus-experimental=true"
+
+but i have never tested this
+
+
+[-- Attachment #2: Type: text/html, Size: 563 bytes --]
+
+^ permalink raw reply	[flat|nested] 36+ messages in thread
+* Re: [yocto] Adding Vulkan to core-image-weston
+  2022-09-19 17:16                               ` Markus Volk
+@ 2022-09-20  7:28                                 ` Edgar Mobile
+  2022-09-20  7:39                                 ` Edgar Mobile
+  1 sibling, 0 replies; 36+ messages in thread
+From: Edgar Mobile @ 2022-09-20  7:28 UTC (permalink / raw)
+  To: Markus Volk; +Cc: Alexander Kanavin, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 708 bytes --]
+
+Hmm, I can't find a virglrenderer.bb. Do I need to add something?
+
+________________________________
+From: Markus Volk <f_l_k@t-online.de>
+Sent: Monday, September 19, 2022 5:16 PM
+To: Edgar Mobile <heideggm@hotmail.com>
+Cc: Alexander Kanavin <alex.kanavin@gmail.com>; yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+Subject: Re: [yocto] Adding Vulkan to core-image-weston
+
+Am Mo, 19. Sep 2022 um 16:54:52 +0000 schrieb Edgar Mobile <heideggm@hotmail.com>:
+This wasn't enough
+
+i guess you would also need to add venus support to virglrenderer.bb for qemu:
+
+DEPENDS:append = "vulkan-loader vulkan-headers"
+EXTRA_OEMESON += "-Dvenus-experimental=true"
+
+but i have never tested this
+
+[-- Attachment #2: Type: text/html, Size: 1749 bytes --]
+
+^ permalink raw reply	[flat|nested] 36+ messages in thread
+* Re: [yocto] Adding Vulkan to core-image-weston
+  2022-09-19 17:16                               ` Markus Volk
+  2022-09-20  7:28                                 ` Edgar Mobile
+@ 2022-09-20  7:39                                 ` Edgar Mobile
+  2022-09-20  8:23                                   ` Alexander Kanavin
+  1 sibling, 1 reply; 36+ messages in thread
+From: Edgar Mobile @ 2022-09-20  7:39 UTC (permalink / raw)
+  To: Markus Volk; +Cc: Alexander Kanavin, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1117 bytes --]
+
+Ok, I added these two lines now to a file named virglrenderer_0.9.1.bb . Bitbake now says:
+
+ERROR: Nothing PROVIDES 'ninja-nativevulkan-loader' (but virtual:native: ... DEPENDS on or otherwise requires it)
+ERROR: Required build target 'core-image-weston' has no buildable providers.
+Missing or unbuildable dependency chain was: {'core-image-weston', 'meta-extsdk-toolchain', 'qemu-helper-native', 'qemu-system-native', 'virglrenderer-native', 'ninja-nativevulkan-loader'
+
+________________________________
+From: Markus Volk <f_l_k@t-online.de>
+Sent: Monday, September 19, 2022 5:16 PM
+To: Edgar Mobile <heideggm@hotmail.com>
+Cc: Alexander Kanavin <alex.kanavin@gmail.com>; yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+Subject: Re: [yocto] Adding Vulkan to core-image-weston
+
+Am Mo, 19. Sep 2022 um 16:54:52 +0000 schrieb Edgar Mobile <heideggm@hotmail.com>:
+This wasn't enough
+
+i guess you would also need to add venus support to virglrenderer.bb for qemu:
+
+DEPENDS:append = "vulkan-loader vulkan-headers"
+EXTRA_OEMESON += "-Dvenus-experimental=true"
+
+but i have never tested this
+
+[-- Attachment #2: Type: text/html, Size: 2588 bytes --]
+
+^ permalink raw reply	[flat|nested] 36+ messages in thread
+* Re: [yocto] Adding Vulkan to core-image-weston
+  2022-09-20  7:39                                 ` Edgar Mobile
+@ 2022-09-20  8:23                                   ` Alexander Kanavin
+  2022-09-20  8:40                                     ` PHIL
+  0 siblings, 1 reply; 36+ messages in thread
+From: Alexander Kanavin @ 2022-09-20  8:23 UTC (permalink / raw)
+  To: Edgar Mobile; +Cc: Markus Volk, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1368 bytes --]
+
+Don’t bother with virgl yet. Start with the pure software implementation in
+Mesa.
+
+Alex
+
+On Tue 20. Sep 2022 at 8.39, Edgar Mobile <heideggm@hotmail.com> wrote:
+
+> Ok, I added these two lines now to a file named virglrenderer_0.9.1.bb .
+> Bitbake now says:
+>
+> ERROR: Nothing PROVIDES 'ninja-nativevulkan-loader' (but virtual:native:
+> ... DEPENDS on or otherwise requires it)
+> ERROR: Required build target 'core-image-weston' has no buildable
+> providers.
+> Missing or unbuildable dependency chain was: {'core-image-weston',
+> 'meta-extsdk-toolchain', 'qemu-helper-native', 'qemu-system-native',
+> 'virglrenderer-native', 'ninja-nativevulkan-loader'
+>
+> ------------------------------
+> *From:* Markus Volk <f_l_k@t-online.de>
+> *Sent:* Monday, September 19, 2022 5:16 PM
+> *To:* Edgar Mobile <heideggm@hotmail.com>
+> *Cc:* Alexander Kanavin <alex.kanavin@gmail.com>;
+> yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+> *Subject:* Re: [yocto] Adding Vulkan to core-image-weston
+>
+> Am Mo, 19. Sep 2022 um 16:54:52 +0000 schrieb Edgar Mobile <
+> heideggm@hotmail.com>:
+>
+> This wasn't enough
+>
+>
+> i guess you would also need to add venus support to virglrenderer.bb for
+> qemu:
+>
+> DEPENDS:append = "vulkan-loader vulkan-headers"
+> EXTRA_OEMESON += "-Dvenus-experimental=true"
+>
+> but i have never tested this
+>
+
+[-- Attachment #2: Type: text/html, Size: 4018 bytes --]
+
+^ permalink raw reply	[flat|nested] 36+ messages in thread
+* Re: [yocto] Adding Vulkan to core-image-weston
+  2022-09-20  8:23                                   ` Alexander Kanavin
+@ 2022-09-20  8:40                                     ` PHIL
+  2022-09-20  9:17                                       ` Alexander Kanavin
+  0 siblings, 1 reply; 36+ messages in thread
+From: PHIL @ 2022-09-20  8:40 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: Markus Volk, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1715 bytes --]
+
+What would be the simplest way to achieve that with bitbake? I tried swrast in mesa yesterday but it complained because it wants Gallium.
+
+Am 20. September 2022 10:23:38 MESZ schrieb Alexander Kanavin <alex.kanavin@gmail.com>:
+>Don’t bother with virgl yet. Start with the pure software implementation in
+>Mesa.
+>
+>Alex
+>
+>On Tue 20. Sep 2022 at 8.39, Edgar Mobile <heideggm@hotmail.com> wrote:
+>
+>> Ok, I added these two lines now to a file named virglrenderer_0.9.1.bb .
+>> Bitbake now says:
+>>
+>> ERROR: Nothing PROVIDES 'ninja-nativevulkan-loader' (but virtual:native:
+>> ... DEPENDS on or otherwise requires it)
+>> ERROR: Required build target 'core-image-weston' has no buildable
+>> providers.
+>> Missing or unbuildable dependency chain was: {'core-image-weston',
+>> 'meta-extsdk-toolchain', 'qemu-helper-native', 'qemu-system-native',
+>> 'virglrenderer-native', 'ninja-nativevulkan-loader'
+>>
+>> ------------------------------
+>> *From:* Markus Volk <f_l_k@t-online.de>
+>> *Sent:* Monday, September 19, 2022 5:16 PM
+>> *To:* Edgar Mobile <heideggm@hotmail.com>
+>> *Cc:* Alexander Kanavin <alex.kanavin@gmail.com>;
+>> yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+>> *Subject:* Re: [yocto] Adding Vulkan to core-image-weston
+>>
+>> Am Mo, 19. Sep 2022 um 16:54:52 +0000 schrieb Edgar Mobile <
+>> heideggm@hotmail.com>:
+>>
+>> This wasn't enough
+>>
+>>
+>> i guess you would also need to add venus support to virglrenderer.bb for
+>> qemu:
+>>
+>> DEPENDS:append = "vulkan-loader vulkan-headers"
+>> EXTRA_OEMESON += "-Dvenus-experimental=true"
+>>
+>> but i have never tested this
+>>
+
+-- 
+Diese Nachricht wurde von meinem Android-Gerät mit K-9 Mail gesendet.
+
+[-- Attachment #2: Type: text/html, Size: 4637 bytes --]
+
+^ permalink raw reply	[flat|nested] 36+ messages in thread
+* Re: [yocto] Adding Vulkan to core-image-weston
+  2022-09-20  8:40                                     ` PHIL
+@ 2022-09-20  9:17                                       ` Alexander Kanavin
+  2022-09-20  9:25                                         ` PHIL
+  0 siblings, 1 reply; 36+ messages in thread
+From: Alexander Kanavin @ 2022-09-20  9:17 UTC (permalink / raw)
+  To: PHIL; +Cc: Markus Volk, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1930 bytes --]
+
+It helps if you say what you did precisely and show the complaint.
+
+Alex
+
+On Tue 20. Sep 2022 at 9.40, PHIL <heideggm@hotmail.com> wrote:
+
+> What would be the simplest way to achieve that with bitbake? I tried
+> swrast in mesa yesterday but it complained because it wants Gallium.
+>
+>
+> Am 20. September 2022 10:23:38 MESZ schrieb Alexander Kanavin <
+> alex.kanavin@gmail.com>:
+>>
+>> Don’t bother with virgl yet. Start with the pure software implementation
+>> in Mesa.
+>>
+>> Alex
+>>
+>> On Tue 20. Sep 2022 at 8.39, Edgar Mobile <heideggm@hotmail.com> wrote:
+>>
+>>> Ok, I added these two lines now to a file named virglrenderer_0.9.1.bb
+>>> . Bitbake now says:
+>>>
+>>> ERROR: Nothing PROVIDES 'ninja-nativevulkan-loader' (but virtual:native:
+>>> ... DEPENDS on or otherwise requires it)
+>>> ERROR: Required build target 'core-image-weston' has no buildable
+>>> providers.
+>>> Missing or unbuildable dependency chain was: {'core-image-weston',
+>>> 'meta-extsdk-toolchain', 'qemu-helper-native', 'qemu-system-native',
+>>> 'virglrenderer-native', 'ninja-nativevulkan-loader'
+>>>
+>>> ------------------------------
+>>> *From:* Markus Volk <f_l_k@t-online.de>
+>>> *Sent:* Monday, September 19, 2022 5:16 PM
+>>> *To:* Edgar Mobile <heideggm@hotmail.com>
+>>> *Cc:* Alexander Kanavin <alex.kanavin@gmail.com>;
+>>> yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+>>> *Subject:* Re: [yocto] Adding Vulkan to core-image-weston
+>>>
+>>> Am Mo, 19. Sep 2022 um 16:54:52 +0000 schrieb Edgar Mobile <
+>>> heideggm@hotmail.com>:
+>>>
+>>> This wasn't enough
+>>>
+>>>
+>>> i guess you would also need to add venus support to virglrenderer.bb
+>>> for qemu:
+>>>
+>>> DEPENDS:append = "vulkan-loader vulkan-headers"
+>>> EXTRA_OEMESON += "-Dvenus-experimental=true"
+>>>
+>>> but i have never tested this
+>>>
+>> --
+> Diese Nachricht wurde von meinem Android-Gerät mit K-9 Mail gesendet.
+>
+
+[-- Attachment #2: Type: text/html, Size: 5278 bytes --]
+
+^ permalink raw reply	[flat|nested] 36+ messages in thread
+* Re: [yocto] Adding Vulkan to core-image-weston
+  2022-09-20  9:17                                       ` Alexander Kanavin
+@ 2022-09-20  9:25                                         ` PHIL
+  2022-09-20 13:26                                           ` Alexander Kanavin
+  0 siblings, 1 reply; 36+ messages in thread
+From: PHIL @ 2022-09-20  9:25 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: Markus Volk, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 212 bytes --]
+
+Ok it seems to use Software now given how slow weston-simple-egl has become. But vulkaninfo still fails with ERROR_INCOMPATIBLE_DRIVER.
+-- 
+Diese Nachricht wurde von meinem Android-Gerät mit K-9 Mail gesendet.
+
+[-- Attachment #2: Type: text/html, Size: 416 bytes --]
+
+^ permalink raw reply	[flat|nested] 36+ messages in thread
+* Re: [yocto] Adding Vulkan to core-image-weston
+  2022-09-20  9:25                                         ` PHIL
+@ 2022-09-20 13:26                                           ` Alexander Kanavin
+  2022-09-21 11:38                                             ` PHIL
+  0 siblings, 1 reply; 36+ messages in thread
+From: Alexander Kanavin @ 2022-09-20 13:26 UTC (permalink / raw)
+  To: PHIL; +Cc: Markus Volk, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 491 bytes --]
+
+What often works is running it under strace - you might be able to see the
+one key syscall that causes the failure. Otherwise you might have to go
+through the heavier gdb step through.
+
+Alex
+
+On Tue 20. Sep 2022 at 10.25, PHIL <heideggm@hotmail.com> wrote:
+
+> Ok it seems to use Software now given how slow weston-simple-egl has
+> become. But vulkaninfo still fails with ERROR_INCOMPATIBLE_DRIVER.
+> --
+> Diese Nachricht wurde von meinem Android-Gerät mit K-9 Mail gesendet.
+>
+
+[-- Attachment #2: Type: text/html, Size: 936 bytes --]
+
+^ permalink raw reply	[flat|nested] 36+ messages in thread
+* Re: [yocto] Adding Vulkan to core-image-weston
+  2022-09-20 13:26                                           ` Alexander Kanavin
+@ 2022-09-21 11:38                                             ` PHIL
+  2022-09-21 11:57                                               ` Alexander Kanavin
+  0 siblings, 1 reply; 36+ messages in thread
+From: PHIL @ 2022-09-21 11:38 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: Markus Volk, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 825 bytes --]
+
+If I read the mesa-vulkan-drivers recipe right it should install libvulkan_*.so but it didnt I had to use vulkan-loader. Any idea in how to debug that?
+
+Am 20. September 2022 15:26:45 MESZ schrieb Alexander Kanavin <alex.kanavin@gmail.com>:
+>What often works is running it under strace - you might be able to see the
+>one key syscall that causes the failure. Otherwise you might have to go
+>through the heavier gdb step through.
+>
+>Alex
+>
+>On Tue 20. Sep 2022 at 10.25, PHIL <heideggm@hotmail.com> wrote:
+>
+>> Ok it seems to use Software now given how slow weston-simple-egl has
+>> become. But vulkaninfo still fails with ERROR_INCOMPATIBLE_DRIVER.
+>> --
+>> Diese Nachricht wurde von meinem Android-Gerät mit K-9 Mail gesendet.
+>>
+
+-- 
+Diese Nachricht wurde von meinem Android-Gerät mit K-9 Mail gesendet.
+
+[-- Attachment #2: Type: text/html, Size: 1625 bytes --]
+
+^ permalink raw reply	[flat|nested] 36+ messages in thread
+* Re: [yocto] Adding Vulkan to core-image-weston
+  2022-09-21 11:38                                             ` PHIL
+@ 2022-09-21 11:57                                               ` Alexander Kanavin
+  2022-09-21 12:12                                                 ` PHIL
+  0 siblings, 1 reply; 36+ messages in thread
+From: Alexander Kanavin @ 2022-09-21 11:57 UTC (permalink / raw)
+  To: PHIL; +Cc: Markus Volk, yocto
+
+You need to go to mesa's build directlory and inspect what is getting
+built, with which options, and how it is installed and packaged. All
+the needed bits are there, but it does take a bit of 'yocto skill' to
+find your way around there. Start by looking at temp/log.do_configure
+(and then do_compile and do_install).
+
+Alex
+
+On Wed, 21 Sept 2022 at 13:38, PHIL <heideggm@hotmail.com> wrote:
+>
+> If I read the mesa-vulkan-drivers recipe right it should install libvulkan_*.so but it didnt I had to use vulkan-loader. Any idea in how to debug that?
+>
+> Am 20. September 2022 15:26:45 MESZ schrieb Alexander Kanavin <alex.kanavin@gmail.com>:
+>>
+>> What often works is running it under strace - you might be able to see the one key syscall that causes the failure. Otherwise you might have to go through the heavier gdb step through.
+>>
+>> Alex
+>>
+>> On Tue 20. Sep 2022 at 10.25, PHIL <heideggm@hotmail.com> wrote:
+>>>
+>>> Ok it seems to use Software now given how slow weston-simple-egl has become. But vulkaninfo still fails with ERROR_INCOMPATIBLE_DRIVER.
+>>> --
+>>> Diese Nachricht wurde von meinem Android-Gerät mit K-9 Mail gesendet.
+>
+> --
+> Diese Nachricht wurde von meinem Android-Gerät mit K-9 Mail gesendet.
+
+
+^ permalink raw reply	[flat|nested] 36+ messages in thread
+* Re: [yocto] Adding Vulkan to core-image-weston
+  2022-09-21 11:57                                               ` Alexander Kanavin
+@ 2022-09-21 12:12                                                 ` PHIL
+  2022-09-21 12:14                                                   ` Alexander Kanavin
+  0 siblings, 1 reply; 36+ messages in thread
+From: PHIL @ 2022-09-21 12:12 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: Markus Volk, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1925 bytes --]
+
+One of the logs has this
+
+
+
+Error:
+ Problem: package packagegroup-base-extended-1.0-r83.qemuarm64 requires packagegroup-base, but none of the providers can be installed
+  - package packagegroup-base-1.0-r83.qemuarm64 requires packagegroup-distro-base, but none of the providers can be installed
+  - conflicting requests
+  - nothing provides mesa-vulkan-drivers needed by packagegroup-distro-base-1.0-r83.qemuarm64
+(try to add '--skip-broken' to skip uninstallable packages)
+
+Am 21. September 2022 13:57:17 MESZ schrieb Alexander Kanavin <alex.kanavin@gmail.com>:
+>You need to go to mesa's build directlory and inspect what is getting
+>built, with which options, and how it is installed and packaged. All
+>the needed bits are there, but it does take a bit of 'yocto skill' to
+>find your way around there. Start by looking at temp/log.do_configure
+>(and then do_compile and do_install).
+>
+>Alex
+>
+>On Wed, 21 Sept 2022 at 13:38, PHIL <heideggm@hotmail.com> wrote:
+>>
+>> If I read the mesa-vulkan-drivers recipe right it should install libvulkan_*.so but it didnt I had to use vulkan-loader. Any idea in how to debug that?
+>>
+>> Am 20. September 2022 15:26:45 MESZ schrieb Alexander Kanavin <alex.kanavin@gmail.com>:
+>>>
+>>> What often works is running it under strace - you might be able to see the one key syscall that causes the failure. Otherwise you might have to go through the heavier gdb step through.
+>>>
+>>> Alex
+>>>
+>>> On Tue 20. Sep 2022 at 10.25, PHIL <heideggm@hotmail.com> wrote:
+>>>>
+>>>> Ok it seems to use Software now given how slow weston-simple-egl has become. But vulkaninfo still fails with ERROR_INCOMPATIBLE_DRIVER.
+>>>> --
+>>>> Diese Nachricht wurde von meinem Android-Gerät mit K-9 Mail gesendet.
+>>
+>> --
+>> Diese Nachricht wurde von meinem Android-Gerät mit K-9 Mail gesendet.
+
+-- 
+Diese Nachricht wurde von meinem Android-Gerät mit K-9 Mail gesendet.
+
+[-- Attachment #2: Type: text/html, Size: 2770 bytes --]
+
+^ permalink raw reply	[flat|nested] 36+ messages in thread
+* Re: [yocto] Adding Vulkan to core-image-weston
+  2022-09-21 12:12                                                 ` PHIL
+@ 2022-09-21 12:14                                                   ` Alexander Kanavin
+  2022-09-21 12:21                                                     ` PHIL
+  2022-09-21 12:30                                                     ` PHIL
+  0 siblings, 2 replies; 36+ messages in thread
+From: Alexander Kanavin @ 2022-09-21 12:14 UTC (permalink / raw)
+  To: PHIL; +Cc: Markus Volk, yocto
+
+This is not logs from mesa, this is logs from your image recipe. You
+need to start with mesa.
+
+Alex
+
+On Wed, 21 Sept 2022 at 14:12, PHIL <heideggm@hotmail.com> wrote:
+>
+> One of the logs has this
+>
+>
+>
+> Error:
+>  Problem: package packagegroup-base-extended-1.0-r83.qemuarm64 requires packagegroup-base, but none of the providers can be installed
+>   - package packagegroup-base-1.0-r83.qemuarm64 requires packagegroup-distro-base, but none of the providers can be installed
+>   - conflicting requests
+>   - nothing provides mesa-vulkan-drivers needed by packagegroup-distro-base-1.0-r83.qemuarm64
+> (try to add '--skip-broken' to skip uninstallable packages)
+>
+> Am 21. September 2022 13:57:17 MESZ schrieb Alexander Kanavin <alex.kanavin@gmail.com>:
+>>
+>> You need to go to mesa's build directlory and inspect what is getting
+>> built, with which options, and how it is installed and packaged. All
+>> the needed bits are there, but it does take a bit of 'yocto skill' to
+>> find your way around there. Start by looking at temp/log.do_configure
+>> (and then do_compile and do_install).
+>>
+>> Alex
+>>
+>> On Wed, 21 Sept 2022 at 13:38, PHIL <heideggm@hotmail.com> wrote:
+>>>
+>>>
+>>>  If I read the mesa-vulkan-drivers recipe right it should install libvulkan_*.so but it didnt I had to use vulkan-loader. Any idea in how to debug that?
+>>>
+>>>  Am 20. September 2022 15:26:45 MESZ schrieb Alexander Kanavin <alex.kanavin@gmail.com>:
+>>>>
+>>>>
+>>>>  What often works is running it under strace - you might be able to see the one key syscall that causes the failure. Otherwise you might have to go through the heavier gdb step through.
+>>>>
+>>>>  Alex
+>>>>
+>>>>  On Tue 20. Sep 2022 at 10.25, PHIL <heideggm@hotmail.com> wrote:
+>>>>>
+>>>>>
+>>>>>  Ok it seems to use Software now given how slow weston-simple-egl has become. But vulkaninfo still fails with ERROR_INCOMPATIBLE_DRIVER.
+>>>>>  --
+>>>>>  Diese Nachricht wurde von meinem Android-Gerät mit K-9 Mail gesendet.
+>>>
+>>>
+>>>  --
+>>>  Diese Nachricht wurde von meinem Android-Gerät mit K-9 Mail gesendet.
+>
+> --
+> Diese Nachricht wurde von meinem Android-Gerät mit K-9 Mail gesendet.
+
+
+^ permalink raw reply	[flat|nested] 36+ messages in thread
+* Re: [yocto] Adding Vulkan to core-image-weston
+  2022-09-21 12:14                                                   ` Alexander Kanavin
+@ 2022-09-21 12:21                                                     ` PHIL
+  2022-09-21 12:30                                                     ` PHIL
+  1 sibling, 0 replies; 36+ messages in thread
+From: PHIL @ 2022-09-21 12:21 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: Markus Volk, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 16601 bytes --]
+
+Another logfile has this
+
+ERROR: /media/user/SSD1TB/yoctoqemu/poky/meta/recipes-graphics/mesa/mesa-gl_22.0.0.bb: Error during parse shell code, the last 5 lines are:
+    bbnote Executing meson      -Dshared-glapi=enabled     -Dglx-read-only-text=true     -Dplatforms='x11'    -Ddri3=disabled  -Degl=disabled  -Delf-tls=false  -Dgallium-drivers=''  -Dllvm=disabled -Dgbm=disabled  -Dgles1=disabled -Dgles2=disabled -Dlmsensors=disabled -Dgallium-opencl=disabled -Dopencl-spirv=false -Dopengl=true -Dosmesa=false -Dlibunwind=disabled -Dgallium-va=disabled -Dgallium-vdpau=disabled  -Dvulkan-drivers='swrast  -Dgallium-xa=disabled -Dgallium-xvmc=disabled...
+    if ! meson  --prefix /usr               --buildtype plain               --bindir bin               --sbindir sbin               --datadir share               --libdir lib               --libexecdir libexec               --includedir include               --mandir share/man               --infodir share/info               --sysconfdir /etc               --localstatedir /var               --sharedstatedir /com               --wrap-mode nodownload               --native-file /media/user/SSD1TB/yoctoqemu/poky/build-virgl/tmp/work/cortexa57-poky-linux/mesa-gl/2_22.0.0-r0/meson.native "/media/user/SSD1TB/yoctoqemu/poky/build-virgl/tmp/work/cortexa57-poky-linux/mesa-gl/2_22.0.0-r0/mesa-22.0.0" "/media/user/SSD1TB/yoctoqemu/poky/build-virgl/tmp/work/cortexa57-poky-linux/mesa-gl/2_22.0.0-r0/build" --cross-file /media/user/SSD1TB/yoctoqemu/poky/build-virgl/tmp/work/cortexa57-poky-linux/mesa-gl/2_22.0.0-r0/meson.cross      -Dshared-glapi=enabled     -Dglx-read-only-text=true     -Dplatforms='x11'    -Ddri3=disabled  -Degl=disabled  -Delf-tls=false  -Dgallium-drivers=''  -Dllvm=disabled -Dgbm=disabled  -Dgles1=disabled -Dgles2=disabled -Dlmsensors=disabled -Dgallium-opencl=disabled -Dopencl-spirv=false -Dopengl=true -Dosmesa=false -Dlibunwind=disabled -Dgallium-va=disabled -Dgallium-vdpau=disabled  -Dvulkan-drivers='swrast  -Dgallium-xa=disabled -Dgallium-xvmc=disabled; then
+        bbfatal_log meson failed
+    fi
+
+ERROR: /media/user/SSD1TB/yoctoqemu/poky/meta/recipes-graphics/mesa/mesa_22.0.0.bb: Error during parse shell code, the last 5 lines are:
+    bbnote Executing meson      -Dshared-glapi=enabled     -Dglx-read-only-text=true     -Dplatforms='wayland,x11'   -Ddri3=enabled -Degl=enabled -Delf-tls=true -Dgallium-drivers=swrast,virgl  -Dllvm=disabled -Dgbm=enabled -Dgles1=enabled -Dgles2=enabled -Dlmsensors=disabled -Dgallium-opencl=disabled -Dopencl-spirv=false -Dopengl=true -Dosmesa=false -Dlibunwind=disabled -Dgallium-va=disabled -Dgallium-vdpau=disabled  -Dvulkan-drivers='swrast  -Dgallium-xa=disabled -Dgallium-xvmc=disabled...
+    if ! meson  --prefix /media/user/SSD1TB/yoctoqemu/poky/build-virgl/tmp/work/x86_64-linux/mesa-native/2_22.0.0-r0/recipe-sysroot-native/usr               --buildtype plain               --bindir bin               --sbindir sbin               --datadir share               --libdir lib               --libexecdir libexec               --includedir include               --mandir share/man               --infodir share/info               --sysconfdir /media/user/SSD1TB/yoctoqemu/poky/build-virgl/tmp/work/x86_64-linux/mesa-native/2_22.0.0-r0/recipe-sysroot-native/etc               --localstatedir /media/user/SSD1TB/yoctoqemu/poky/build-virgl/tmp/work/x86_64-linux/mesa-native/2_22.0.0-r0/recipe-sysroot-native/var               --sharedstatedir /media/user/SSD1TB/yoctoqemu/poky/build-virgl/tmp/work/x86_64-linux/mesa-native/2_22.0.0-r0/recipe-sysroot-native/com               --wrap-mode nodownload               --native-file /media/user/SSD1TB/yoctoqemu/poky/build-virgl/tmp/work/x86_64-linux/mesa-native/2_22.0.0-r0/meson.native "/media/user/SSD1TB/yoctoqemu/poky/build-virgl/tmp/work/x86_64-linux/mesa-native/2_22.0.0-r0/mesa-22.0.0" "/media/user/SSD1TB/yoctoqemu/poky/build-virgl/tmp/work/x86_64-linux/mesa-native/2_22.0.0-r0/build"       -Dshared-glapi=enabled     -Dglx-read-only-text=true     -Dplatforms='wayland,x11'   -Ddri3=enabled -Degl=enabled -Delf-tls=true -Dgallium-drivers=swrast,virgl  -Dllvm=disabled -Dgbm=enabled -Dgles1=enabled -Dgles2=enabled -Dlmsensors=disabled -Dgallium-opencl=disabled -Dopencl-spirv=false -Dopengl=true -Dosmesa=false -Dlibunwind=disabled -Dgallium-va=disabled -Dgallium-vdpau=disabled  -Dvulkan-drivers='swrast  -Dgallium-xa=disabled -Dgallium-xvmc=disabled; then
+        bbfatal_log meson failed
+    fi
+
+ERROR: Unable to parse /media/user/SSD1TB/yoctoqemu/poky/meta/recipes-graphics/mesa/mesa-gl_22.0.0.bb
+Traceback (most recent call last):
+  File "/media/user/SSD1TB/yoctoqemu/poky/bitbake/lib/bb/codeparser.py", line 368, in ShellParser._parse_shell(value='    # Meson requires this to be \'bfd, \'lld\' or \'gold\' from 0.53 onwards\n    # https://github.com/mesonbuild/meson/commit/ef9aeb188ea2bc7353e59916c18901cde90fa2b3\n    unset LD\n\n    # sstate.bbclass no longer removes empty directories to avoid a race (see\n    # commit 4f94d929 "sstate/staging: Handle directory creation race issue").\n    # Unfortunately Python apparently treats an empty egg-info directory as if\n    # the version it previously contained still exists and fails if a newer\n    # version is required, which Meson does. To avoid this, make sure there are\n    # no empty egg-info directories from previous versions left behind. Ignore\n    # all errors from rmdir since the egg-info may be a file rather than a\n    # directory.\n    rmdir /media/user/SSD1TB/yoctoqemu/poky/build-virgl/tmp/work/cortexa57-poky-linux/mesa-gl/2_22.0.0-r0/recipe-sysroot-native/usr/lib/python3.10/site-packages/*.egg-info 2>/dev/null || :\n\n    # Work around "Meson fails if /tmp is mounted with noexec #2972"\n    mkdir -p "/media/user/SSD1TB/yoctoqemu/poky/build-virgl/tmp/work/cortexa57-poky-linux/mesa-gl/2_22.0.0-r0/build/meson-private/tmp"\n    export TMPDIR="/media/user/SSD1TB/yoctoqemu/poky/build-virgl/tmp/work/cortexa57-poky-linux/mesa-gl/2_22.0.0-r0/build/meson-private/tmp"\n    bbnote Executing meson      -Dshared-glapi=enabled     -Dglx-read-only-text=true     -Dplatforms=\'x11\'    -Ddri3=disabled  -Degl=disabled  -Delf-tls=false  -Dgallium-drivers=\'\'  -Dllvm=disabled -Dgbm=disabled  -Dgles1=disabled -Dgles2=disabled -Dlmsensors=disabled -Dgallium-opencl=disabled -Dopencl-spirv=false -Dopengl=true -Dosmesa=false -Dlibunwind=disabled -Dgallium-va=disabled -Dgallium-vdpau=disabled  -Dvulkan-drivers=\'swrast  -Dgallium-xa=disabled -Dgallium-xvmc=disabled...\n    if ! meson  --prefix /usr               --buildtype plain               --bindir bin               --sbindir sbin               --datadir share               --libdir lib               --libexecdir libexec               --includedir include               --mandir share/man               --infodir share/info               --sysconfdir /etc               --localstatedir /var               --sharedstatedir /com               --wrap-mode nodownload               --native-file /media/user/SSD1TB/yoctoqemu/poky/build-virgl/tmp/work/cortexa57-poky-linux/mesa-gl/2_22.0.0-r0/meson.native "/media/user/SSD1TB/yoctoqemu/poky/build-virgl/tmp/work/cortexa57-poky-linux/mesa-gl/2_22.0.0-r0/mesa-22.0.0" "/media/user/SSD1TB/yoctoqemu/poky/build-virgl/tmp/work/cortexa57-poky-linux/mesa-gl/2_22.0.0-r0/build" --cross-file /media/user/SSD1TB/yoctoqemu/poky/build-virgl/tmp/work/cortexa57-poky-linux/mesa-gl/2_22.0.0-r0/meson.cross      -Dshared-glapi=enabled     -Dglx-read-only-text=true     -Dplatforms=\'x11\'    -Ddri3=disabled  -Degl=disabled  -Delf-tls=false  -Dgallium-drivers=\'\'  -Dllvm=disabled -Dgbm=disabled  -Dgles1=disabled -Dgles2=disabled -Dlmsensors=disabled -Dgallium-opencl=disabled -Dopencl-spirv=false -Dopengl=true -Dosmesa=false -Dlibunwind=disabled -Dgallium-va=disabled -Dgallium-vdpau=disabled  -Dvulkan-drivers=\'swrast  -Dgallium-xa=disabled -Dgallium-xvmc=disabled; then\n        bbfatal_log meson failed\n    fi\n'):
+             try:
+    >            tokens, _ = pyshyacc.parse(value, eof=True, debug=False)
+             except Exception:
+  File "/media/user/SSD1TB/yoctoqemu/poky/bitbake/lib/bb/pysh/pyshyacc.py", line 677, in parse(input='    # Meson requires this to be \'bfd, \'lld\' or \'gold\' from 0.53 onwards\n    # https://github.com/mesonbuild/meson/commit/ef9aeb188ea2bc7353e59916c18901cde90fa2b3\n    unset LD\n\n    # sstate.bbclass no longer removes empty directories to avoid a race (see\n    # commit 4f94d929 "sstate/staging: Handle directory creation race issue").\n    # Unfortunately Python apparently treats an empty egg-info directory as if\n    # the version it previously contained still exists and fails if a newer\n    # version is required, which Meson does. To avoid this, make sure there are\n    # no empty egg-info directories from previous versions left behind. Ignore\n    # all errors from rmdir since the egg-info may be a file rather than a\n    # directory.\n    rmdir /media/user/SSD1TB/yoctoqemu/poky/build-virgl/tmp/work/cortexa57-poky-linux/mesa-gl/2_22.0.0-r0/recipe-sysroot-native/usr/lib/python3.10/site-packages/*.egg-info 2>/dev/null || :\n\n    # Work around "Meson fails if /tmp is mounted with noexec #2972"\n    mkdir -p "/media/user/SSD1TB/yoctoqemu/poky/build-virgl/tmp/work/cortexa57-poky-linux/mesa-gl/2_22.0.0-r0/build/meson-private/tmp"\n    export TMPDIR="/media/user/SSD1TB/yoctoqemu/poky/build-virgl/tmp/work/cortexa57-poky-linux/mesa-gl/2_22.0.0-r0/build/meson-private/tmp"\n    bbnote Executing meson      -Dshared-glapi=enabled     -Dglx-read-only-text=true     -Dplatforms=\'x11\'    -Ddri3=disabled  -Degl=disabled  -Delf-tls=false  -Dgallium-drivers=\'\'  -Dllvm=disabled -Dgbm=disabled  -Dgles1=disabled -Dgles2=disabled -Dlmsensors=disabled -Dgallium-opencl=disabled -Dopencl-spirv=false -Dopengl=true -Dosmesa=false -Dlibunwind=disabled -Dgallium-va=disabled -Dgallium-vdpau=disabled  -Dvulkan-drivers=\'swrast  -Dgallium-xa=disabled -Dgallium-xvmc=disabled...\n    if ! meson  --prefix /usr               --buildtype plain               --bindir bin               --sbindir sbin               --datadir share               --libdir lib               --libexecdir libexec               --includedir include               --mandir share/man               --infodir share/info               --sysconfdir /etc               --localstatedir /var               --sharedstatedir /com               --wrap-mode nodownload               --native-file /media/user/SSD1TB/yoctoqemu/poky/build-virgl/tmp/work/cortexa57-poky-linux/mesa-gl/2_22.0.0-r0/meson.native "/media/user/SSD1TB/yoctoqemu/poky/build-virgl/tmp/work/cortexa57-poky-linux/mesa-gl/2_22.0.0-r0/mesa-22.0.0" "/media/user/SSD1TB/yoctoqemu/poky/build-virgl/tmp/work/cortexa57-poky-linux/mesa-gl/2_22.0.0-r0/build" --cross-file /media/user/SSD1TB/yoctoqemu/poky/build-virgl/tmp/work/cortexa57-poky-linux/mesa-gl/2_22.0.0-r0/meson.cross      -Dshared-glapi=enabled     -Dglx-read-only-text=true     -Dplatforms=\'x11\'    -Ddri3=disabled  -Degl=disabled  -Delf-tls=false  -Dgallium-drivers=\'\'  -Dllvm=disabled -Dgbm=disabled  -Dgles1=disabled -Dgles2=disabled -Dlmsensors=disabled -Dgallium-opencl=disabled -Dopencl-spirv=false -Dopengl=true -Dosmesa=false -Dlibunwind=disabled -Dgallium-va=disabled -Dgallium-vdpau=disabled  -Dvulkan-drivers=\'swrast  -Dgallium-xa=disabled -Dgallium-xvmc=disabled; then\n        bbfatal_log meson failed\n    fi\n', eof=True, debug=False):
+             debug = 2
+    >    return yacc.parse(lexer=lexer, debug=debug), remaining
+     
+  File "/media/user/SSD1TB/yoctoqemu/poky/bitbake/lib/ply/yacc.py", line 267, in LRParser.parse(input=None, lexer=<bb.pysh.pyshlex.PLYLexer object at 0x7ff73b1ac0b8>, debug=False, tracking=0, tokenfunc=None):
+             else:
+    >            return self.parseopt_notrack(input,lexer,debug,tracking,tokenfunc)
+             
+  File "/media/user/SSD1TB/yoctoqemu/poky/bitbake/lib/ply/yacc.py", line 1049, in LRParser.parseopt_notrack(input=None, lexer=<bb.pysh.pyshlex.PLYLexer object at 0x7ff73b1ac0b8>, debug=False, tracking=0, tokenfunc=None):
+                                 errtoken.lexer = lexer
+    >                        tok = self.errorfunc(errtoken)
+                             del errok, token, restart   # Delete special functions
+  File "/media/user/SSD1TB/yoctoqemu/poky/bitbake/lib/bb/pysh/pyshyacc.py", line 650, in p_error(p=LexToken(Then,'then',0,0)):
+             w('Unexpected EOF')
+    >    raise sherrors.ShellSyntaxError(''.join(msg))
+     
+bb.pysh.sherrors.ShellSyntaxError: LexToken(Then,'then',0,0)
+followed by:
+  LexToken(NEWLINE,'\n',0,0)
+  LexToken(TOKEN,'bbfatal_log',0,0)
+  LexToken(TOKEN,'meson',0,0)
+  LexToken(TOKEN,'failed',0,0)
+  LexToken(NEWLINE,'\n',0,0)
+
+
+ERROR: Parsing halted due to errors, see error messages above
+
+
+
+
+
+Am 21. September 2022 14:14:10 MESZ schrieb Alexander Kanavin <alex.kanavin@gmail.com>:
+>This is not logs from mesa, this is logs from your image recipe. You
+>need to start with mesa.
+>
+>Alex
+>
+>On Wed, 21 Sept 2022 at 14:12, PHIL <heideggm@hotmail.com> wrote:
+>>
+>> One of the logs has this
+>>
+>>
+>>
+>> Error:
+>>  Problem: package packagegroup-base-extended-1.0-r83.qemuarm64 requires packagegroup-base, but none of the providers can be installed
+>>   - package packagegroup-base-1.0-r83.qemuarm64 requires packagegroup-distro-base, but none of the providers can be installed
+>>   - conflicting requests
+>>   - nothing provides mesa-vulkan-drivers needed by packagegroup-distro-base-1.0-r83.qemuarm64
+>> (try to add '--skip-broken' to skip uninstallable packages)
+>>
+>> Am 21. September 2022 13:57:17 MESZ schrieb Alexander Kanavin <alex.kanavin@gmail.com>:
+>>>
+>>> You need to go to mesa's build directlory and inspect what is getting
+>>> built, with which options, and how it is installed and packaged. All
+>>> the needed bits are there, but it does take a bit of 'yocto skill' to
+>>> find your way around there. Start by looking at temp/log.do_configure
+>>> (and then do_compile and do_install).
+>>>
+>>> Alex
+>>>
+>>> On Wed, 21 Sept 2022 at 13:38, PHIL <heideggm@hotmail.com> wrote:
+>>>>
+>>>>
+>>>>  If I read the mesa-vulkan-drivers recipe right it should install libvulkan_*.so but it didnt I had to use vulkan-loader. Any idea in how to debug that?
+>>>>
+>>>>  Am 20. September 2022 15:26:45 MESZ schrieb Alexander Kanavin <alex.kanavin@gmail.com>:
+>>>>>
+>>>>>
+>>>>>  What often works is running it under strace - you might be able to see the one key syscall that causes the failure. Otherwise you might have to go through the heavier gdb step through.
+>>>>>
+>>>>>  Alex
+>>>>>
+>>>>>  On Tue 20. Sep 2022 at 10.25, PHIL <heideggm@hotmail.com> wrote:
+>>>>>>
+>>>>>>
+>>>>>>  Ok it seems to use Software now given how slow weston-simple-egl has become. But vulkaninfo still fails with ERROR_INCOMPATIBLE_DRIVER.
+>>>>>>  --
+>>>>>>  Diese Nachricht wurde von meinem Android-Gerät mit K-9 Mail gesendet.
+>>>>
+>>>>
+>>>>  --
+>>>>  Diese Nachricht wurde von meinem Android-Gerät mit K-9 Mail gesendet.
+>>
+>> --
+>> Diese Nachricht wurde von meinem Android-Gerät mit K-9 Mail gesendet.
+
+-- 
+Diese Nachricht wurde von meinem Android-Gerät mit K-9 Mail gesendet.
+
+[-- Attachment #2: Type: text/html, Size: 23505 bytes --]
+
+^ permalink raw reply	[flat|nested] 36+ messages in thread
+* Re: [yocto] Adding Vulkan to core-image-weston
+  2022-09-21 12:14                                                   ` Alexander Kanavin
+  2022-09-21 12:21                                                     ` PHIL
+@ 2022-09-21 12:30                                                     ` PHIL
+  2022-09-21 12:38                                                       ` Alexander Kanavin
+  1 sibling, 1 reply; 36+ messages in thread
+From: PHIL @ 2022-09-21 12:30 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: Markus Volk, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2633 bytes --]
+
+Ok, there is a build directory tmp/work/cortexa57-poky-linux/mesa/2_22.0.0-r0 . In there, there is a package directory that has all libGL* libraries and one libvulkan_virtio.so but they are not installed to the Image.
+
+Am 21. September 2022 14:14:10 MESZ schrieb Alexander Kanavin <alex.kanavin@gmail.com>:
+>This is not logs from mesa, this is logs from your image recipe. You
+>need to start with mesa.
+>
+>Alex
+>
+>On Wed, 21 Sept 2022 at 14:12, PHIL <heideggm@hotmail.com> wrote:
+>>
+>> One of the logs has this
+>>
+>>
+>>
+>> Error:
+>>  Problem: package packagegroup-base-extended-1.0-r83.qemuarm64 requires packagegroup-base, but none of the providers can be installed
+>>   - package packagegroup-base-1.0-r83.qemuarm64 requires packagegroup-distro-base, but none of the providers can be installed
+>>   - conflicting requests
+>>   - nothing provides mesa-vulkan-drivers needed by packagegroup-distro-base-1.0-r83.qemuarm64
+>> (try to add '--skip-broken' to skip uninstallable packages)
+>>
+>> Am 21. September 2022 13:57:17 MESZ schrieb Alexander Kanavin <alex.kanavin@gmail.com>:
+>>>
+>>> You need to go to mesa's build directlory and inspect what is getting
+>>> built, with which options, and how it is installed and packaged. All
+>>> the needed bits are there, but it does take a bit of 'yocto skill' to
+>>> find your way around there. Start by looking at temp/log.do_configure
+>>> (and then do_compile and do_install).
+>>>
+>>> Alex
+>>>
+>>> On Wed, 21 Sept 2022 at 13:38, PHIL <heideggm@hotmail.com> wrote:
+>>>>
+>>>>
+>>>>  If I read the mesa-vulkan-drivers recipe right it should install libvulkan_*.so but it didnt I had to use vulkan-loader. Any idea in how to debug that?
+>>>>
+>>>>  Am 20. September 2022 15:26:45 MESZ schrieb Alexander Kanavin <alex.kanavin@gmail.com>:
+>>>>>
+>>>>>
+>>>>>  What often works is running it under strace - you might be able to see the one key syscall that causes the failure. Otherwise you might have to go through the heavier gdb step through.
+>>>>>
+>>>>>  Alex
+>>>>>
+>>>>>  On Tue 20. Sep 2022 at 10.25, PHIL <heideggm@hotmail.com> wrote:
+>>>>>>
+>>>>>>
+>>>>>>  Ok it seems to use Software now given how slow weston-simple-egl has become. But vulkaninfo still fails with ERROR_INCOMPATIBLE_DRIVER.
+>>>>>>  --
+>>>>>>  Diese Nachricht wurde von meinem Android-Gerät mit K-9 Mail gesendet.
+>>>>
+>>>>
+>>>>  --
+>>>>  Diese Nachricht wurde von meinem Android-Gerät mit K-9 Mail gesendet.
+>>
+>> --
+>> Diese Nachricht wurde von meinem Android-Gerät mit K-9 Mail gesendet.
+
+-- 
+Diese Nachricht wurde von meinem Android-Gerät mit K-9 Mail gesendet.
+
+[-- Attachment #2: Type: text/html, Size: 3660 bytes --]
+
+^ permalink raw reply	[flat|nested] 36+ messages in thread
+* Re: [yocto] Adding Vulkan to core-image-weston
+  2022-09-21 12:30                                                     ` PHIL
+@ 2022-09-21 12:38                                                       ` Alexander Kanavin
+  2022-09-21 12:47                                                         ` PHIL
+  0 siblings, 1 reply; 36+ messages in thread
+From: Alexander Kanavin @ 2022-09-21 12:38 UTC (permalink / raw)
+  To: PHIL; +Cc: Markus Volk, yocto
+
+You need to check package-split/ to find out why.
+
+Alex
+
+On Wed, 21 Sept 2022 at 14:30, PHIL <heideggm@hotmail.com> wrote:
+>
+> Ok, there is a build directory tmp/work/cortexa57-poky-linux/mesa/2_22.0.0-r0 . In there, there is a package directory that has all libGL* libraries and one libvulkan_virtio.so but they are not installed to the Image.
+>
+> Am 21. September 2022 14:14:10 MESZ schrieb Alexander Kanavin <alex.kanavin@gmail.com>:
+>>
+>> This is not logs from mesa, this is logs from your image recipe. You
+>> need to start with mesa.
+>>
+>> Alex
+>>
+>> On Wed, 21 Sept 2022 at 14:12, PHIL <heideggm@hotmail.com> wrote:
+>>>
+>>>
+>>>  One of the logs has this
+>>>
+>>>
+>>>
+>>>  Error:
+>>>   Problem: package packagegroup-base-extended-1.0-r83.qemuarm64 requires packagegroup-base, but none of the providers can be installed
+>>>    - package packagegroup-base-1.0-r83.qemuarm64 requires packagegroup-distro-base, but none of the providers can be installed
+>>>    - conflicting requests
+>>>    - nothing provides mesa-vulkan-drivers needed by packagegroup-distro-base-1.0-r83.qemuarm64
+>>>  (try to add '--skip-broken' to skip uninstallable packages)
+>>>
+>>>  Am 21. September 2022 13:57:17 MESZ schrieb Alexander Kanavin <alex.kanavin@gmail.com>:
+>>>>
+>>>>
+>>>>  You need to go to mesa's build directlory and inspect what is getting
+>>>>  built, with which options, and how it is installed and packaged. All
+>>>>  the needed bits are there, but it does take a bit of 'yocto skill' to
+>>>>  find your way around there. Start by looking at temp/log.do_configure
+>>>>  (and then do_compile and do_install).
+>>>>
+>>>>  Alex
+>>>>
+>>>>  On Wed, 21 Sept 2022 at 13:38, PHIL <heideggm@hotmail.com> wrote:
+>>>>>
+>>>>>
+>>>>>
+>>>>>   If I read the mesa-vulkan-drivers recipe right it should install libvulkan_*.so but it didnt I had to use vulkan-loader. Any idea in how to debug that?
+>>>>>
+>>>>>   Am 20. September 2022 15:26:45 MESZ schrieb Alexander Kanavin <alex.kanavin@gmail.com>:
+>>>>>>
+>>>>>>
+>>>>>>
+>>>>>>   What often works is running it under strace - you might be able to see the one key syscall that causes the failure. Otherwise you might have to go through the heavier gdb step through.
+>>>>>>
+>>>>>>   Alex
+>>>>>>
+>>>>>>   On Tue 20. Sep 2022 at 10.25, PHIL <heideggm@hotmail.com> wrote:
+>>>>>>>
+>>>>>>>
+>>>>>>>
+>>>>>>>   Ok it seems to use Software now given how slow weston-simple-egl has become. But vulkaninfo still fails with ERROR_INCOMPATIBLE_DRIVER.
+>>>>>>>   --
+>>>>>>>   Diese Nachricht wurde von meinem Android-Gerät mit K-9 Mail gesendet.
+>>>>>
+>>>>>
+>>>>>
+>>>>>   --
+>>>>>   Diese Nachricht wurde von meinem Android-Gerät mit K-9 Mail gesendet.
+>>>
+>>>
+>>>  --
+>>>  Diese Nachricht wurde von meinem Android-Gerät mit K-9 Mail gesendet.
+>
+> --
+> Diese Nachricht wurde von meinem Android-Gerät mit K-9 Mail gesendet.
+
+
+^ permalink raw reply	[flat|nested] 36+ messages in thread
+* Re: [yocto] Adding Vulkan to core-image-weston
+  2022-09-21 12:38                                                       ` Alexander Kanavin
+@ 2022-09-21 12:47                                                         ` PHIL
+  2022-09-21 12:54                                                           ` Alexander Kanavin
+  0 siblings, 1 reply; 36+ messages in thread
+From: PHIL @ 2022-09-21 12:47 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: Markus Volk, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 3279 bytes --]
+
+It has the individual packages but split up. One directory for mesa-vulkan-drivers etc. I don't know how to process from here.
+
+Am 21. September 2022 14:38:10 MESZ schrieb Alexander Kanavin <alex.kanavin@gmail.com>:
+>You need to check package-split/ to find out why.
+>
+>Alex
+>
+>On Wed, 21 Sept 2022 at 14:30, PHIL <heideggm@hotmail.com> wrote:
+>>
+>> Ok, there is a build directory tmp/work/cortexa57-poky-linux/mesa/2_22.0.0-r0 . In there, there is a package directory that has all libGL* libraries and one libvulkan_virtio.so but they are not installed to the Image.
+>>
+>> Am 21. September 2022 14:14:10 MESZ schrieb Alexander Kanavin <alex.kanavin@gmail.com>:
+>>>
+>>> This is not logs from mesa, this is logs from your image recipe. You
+>>> need to start with mesa.
+>>>
+>>> Alex
+>>>
+>>> On Wed, 21 Sept 2022 at 14:12, PHIL <heideggm@hotmail.com> wrote:
+>>>>
+>>>>
+>>>>  One of the logs has this
+>>>>
+>>>>
+>>>>
+>>>>  Error:
+>>>>   Problem: package packagegroup-base-extended-1.0-r83.qemuarm64 requires packagegroup-base, but none of the providers can be installed
+>>>>    - package packagegroup-base-1.0-r83.qemuarm64 requires packagegroup-distro-base, but none of the providers can be installed
+>>>>    - conflicting requests
+>>>>    - nothing provides mesa-vulkan-drivers needed by packagegroup-distro-base-1.0-r83.qemuarm64
+>>>>  (try to add '--skip-broken' to skip uninstallable packages)
+>>>>
+>>>>  Am 21. September 2022 13:57:17 MESZ schrieb Alexander Kanavin <alex.kanavin@gmail.com>:
+>>>>>
+>>>>>
+>>>>>  You need to go to mesa's build directlory and inspect what is getting
+>>>>>  built, with which options, and how it is installed and packaged. All
+>>>>>  the needed bits are there, but it does take a bit of 'yocto skill' to
+>>>>>  find your way around there. Start by looking at temp/log.do_configure
+>>>>>  (and then do_compile and do_install).
+>>>>>
+>>>>>  Alex
+>>>>>
+>>>>>  On Wed, 21 Sept 2022 at 13:38, PHIL <heideggm@hotmail.com> wrote:
+>>>>>>
+>>>>>>
+>>>>>>
+>>>>>>   If I read the mesa-vulkan-drivers recipe right it should install libvulkan_*.so but it didnt I had to use vulkan-loader. Any idea in how to debug that?
+>>>>>>
+>>>>>>   Am 20. September 2022 15:26:45 MESZ schrieb Alexander Kanavin <alex.kanavin@gmail.com>:
+>>>>>>>
+>>>>>>>
+>>>>>>>
+>>>>>>>   What often works is running it under strace - you might be able to see the one key syscall that causes the failure. Otherwise you might have to go through the heavier gdb step through.
+>>>>>>>
+>>>>>>>   Alex
+>>>>>>>
+>>>>>>>   On Tue 20. Sep 2022 at 10.25, PHIL <heideggm@hotmail.com> wrote:
+>>>>>>>>
+>>>>>>>>
+>>>>>>>>
+>>>>>>>>   Ok it seems to use Software now given how slow weston-simple-egl has become. But vulkaninfo still fails with ERROR_INCOMPATIBLE_DRIVER.
+>>>>>>>>   --
+>>>>>>>>   Diese Nachricht wurde von meinem Android-Gerät mit K-9 Mail gesendet.
+>>>>>>
+>>>>>>
+>>>>>>
+>>>>>>   --
+>>>>>>   Diese Nachricht wurde von meinem Android-Gerät mit K-9 Mail gesendet.
+>>>>
+>>>>
+>>>>  --
+>>>>  Diese Nachricht wurde von meinem Android-Gerät mit K-9 Mail gesendet.
+>>
+>> --
+>> Diese Nachricht wurde von meinem Android-Gerät mit K-9 Mail gesendet.
+
+-- 
+Diese Nachricht wurde von meinem Android-Gerät mit K-9 Mail gesendet.
+
+[-- Attachment #2: Type: text/html, Size: 4446 bytes --]
+
+^ permalink raw reply	[flat|nested] 36+ messages in thread
+* Re: [yocto] Adding Vulkan to core-image-weston
+  2022-09-21 12:47                                                         ` PHIL
+@ 2022-09-21 12:54                                                           ` Alexander Kanavin
+  2022-09-21 13:35                                                             ` PHIL
+                                                                               ` (2 more replies)
+  0 siblings, 3 replies; 36+ messages in thread
+From: Alexander Kanavin @ 2022-09-21 12:54 UTC (permalink / raw)
+  To: PHIL; +Cc: Markus Volk, yocto
+
+Next you need to check if you have the mesa-vulkan-drives package in
+deploy-* in the same mesa builddir, and does it contain the needed
+driver file?
+
+Alex
+
+On Wed, 21 Sept 2022 at 14:48, PHIL <heideggm@hotmail.com> wrote:
+>
+> It has the individual packages but split up. One directory for mesa-vulkan-drivers etc. I don't know how to process from here.
+>
+> Am 21. September 2022 14:38:10 MESZ schrieb Alexander Kanavin <alex.kanavin@gmail.com>:
+>>
+>> You need to check package-split/ to find out why.
+>>
+>> Alex
+>>
+>> On Wed, 21 Sept 2022 at 14:30, PHIL <heideggm@hotmail.com> wrote:
+>>>
+>>>
+>>>  Ok, there is a build directory tmp/work/cortexa57-poky-linux/mesa/2_22.0.0-r0 . In there, there is a package directory that has all libGL* libraries and one libvulkan_virtio.so but they are not installed to the Image.
+>>>
+>>>  Am 21. September 2022 14:14:10 MESZ schrieb Alexander Kanavin <alex.kanavin@gmail.com>:
+>>>>
+>>>>
+>>>>  This is not logs from mesa, this is logs from your image recipe. You
+>>>>  need to start with mesa.
+>>>>
+>>>>  Alex
+>>>>
+>>>>  On Wed, 21 Sept 2022 at 14:12, PHIL <heideggm@hotmail.com> wrote:
+>>>>>
+>>>>>
+>>>>>
+>>>>>   One of the logs has this
+>>>>>
+>>>>>
+>>>>>
+>>>>>   Error:
+>>>>>    Problem: package packagegroup-base-extended-1.0-r83.qemuarm64 requires packagegroup-base, but none of the providers can be installed
+>>>>>     - package packagegroup-base-1.0-r83.qemuarm64 requires packagegroup-distro-base, but none of the providers can be installed
+>>>>>     - conflicting requests
+>>>>>     - nothing provides mesa-vulkan-drivers needed by packagegroup-distro-base-1.0-r83.qemuarm64
+>>>>>   (try to add '--skip-broken' to skip uninstallable packages)
+>>>>>
+>>>>>   Am 21. September 2022 13:57:17 MESZ schrieb Alexander Kanavin <alex.kanavin@gmail.com>:
+>>>>>>
+>>>>>>
+>>>>>>
+>>>>>>   You need to go to mesa's build directlory and inspect what is getting
+>>>>>>   built, with which options, and how it is installed and packaged. All
+>>>>>>   the needed bits are there, but it does take a bit of 'yocto skill' to
+>>>>>>   find your way around there. Start by looking at temp/log.do_configure
+>>>>>>   (and then do_compile and do_install).
+>>>>>>
+>>>>>>   Alex
+>>>>>>
+>>>>>>   On Wed, 21 Sept 2022 at 13:38, PHIL <heideggm@hotmail.com> wrote:
+>>>>>>>
+>>>>>>>
+>>>>>>>
+>>>>>>>
+>>>>>>>    If I read the mesa-vulkan-drivers recipe right it should install libvulkan_*.so but it didnt I had to use vulkan-loader. Any idea in how to debug that?
+>>>>>>>
+>>>>>>>    Am 20. September 2022 15:26:45 MESZ schrieb Alexander Kanavin <alex.kanavin@gmail.com>:
+>>>>>>>>
+>>>>>>>>
+>>>>>>>>
+>>>>>>>>
+>>>>>>>>    What often works is running it under strace - you might be able to see the one key syscall that causes the failure. Otherwise you might have to go through the heavier gdb step through.
+>>>>>>>>
+>>>>>>>>    Alex
+>>>>>>>>
+>>>>>>>>    On Tue 20. Sep 2022 at 10.25, PHIL <heideggm@hotmail.com> wrote:
+>>>>>>>>>
+>>>>>>>>>
+>>>>>>>>>
+>>>>>>>>>
+>>>>>>>>>    Ok it seems to use Software now given how slow weston-simple-egl has become. But vulkaninfo still fails with ERROR_INCOMPATIBLE_DRIVER.
+>>>>>>>>>    --
+>>>>>>>>>    Diese Nachricht wurde von meinem Android-Gerät mit K-9 Mail gesendet.
+>>>>>>>
+>>>>>>>
+>>>>>>>
+>>>>>>>
+>>>>>>>    --
+>>>>>>>    Diese Nachricht wurde von meinem Android-Gerät mit K-9 Mail gesendet.
+>>>>>
+>>>>>
+>>>>>
+>>>>>   --
+>>>>>   Diese Nachricht wurde von meinem Android-Gerät mit K-9 Mail gesendet.
+>>>
+>>>
+>>>  --
+>>>  Diese Nachricht wurde von meinem Android-Gerät mit K-9 Mail gesendet.
+>
+> --
+> Diese Nachricht wurde von meinem Android-Gerät mit K-9 Mail gesendet.
+
+
+^ permalink raw reply	[flat|nested] 36+ messages in thread
+* Re: [yocto] Adding Vulkan to core-image-weston
+  2022-09-21 12:54                                                           ` Alexander Kanavin
+@ 2022-09-21 13:35                                                             ` PHIL
+  2022-09-22 14:54                                                             ` PHIL
+  2022-09-22 16:22                                                             ` PHIL
+  2 siblings, 0 replies; 36+ messages in thread
+From: PHIL @ 2022-09-21 13:35 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: Markus Volk, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 4126 bytes --]
+
+There is a directory called deploy-rpms. It has rpms for all gl/elg/mesa stuff but not the stuff from mesa-vulkan-drivers as libvulkan_virtio.so
+
+Am 21. September 2022 14:54:08 MESZ schrieb Alexander Kanavin <alex.kanavin@gmail.com>:
+>Next you need to check if you have the mesa-vulkan-drives package in
+>deploy-* in the same mesa builddir, and does it contain the needed
+>driver file?
+>
+>Alex
+>
+>On Wed, 21 Sept 2022 at 14:48, PHIL <heideggm@hotmail.com> wrote:
+>>
+>> It has the individual packages but split up. One directory for mesa-vulkan-drivers etc. I don't know how to process from here.
+>>
+>> Am 21. September 2022 14:38:10 MESZ schrieb Alexander Kanavin <alex.kanavin@gmail.com>:
+>>>
+>>> You need to check package-split/ to find out why.
+>>>
+>>> Alex
+>>>
+>>> On Wed, 21 Sept 2022 at 14:30, PHIL <heideggm@hotmail.com> wrote:
+>>>>
+>>>>
+>>>>  Ok, there is a build directory tmp/work/cortexa57-poky-linux/mesa/2_22.0.0-r0 . In there, there is a package directory that has all libGL* libraries and one libvulkan_virtio.so but they are not installed to the Image.
+>>>>
+>>>>  Am 21. September 2022 14:14:10 MESZ schrieb Alexander Kanavin <alex.kanavin@gmail.com>:
+>>>>>
+>>>>>
+>>>>>  This is not logs from mesa, this is logs from your image recipe. You
+>>>>>  need to start with mesa.
+>>>>>
+>>>>>  Alex
+>>>>>
+>>>>>  On Wed, 21 Sept 2022 at 14:12, PHIL <heideggm@hotmail.com> wrote:
+>>>>>>
+>>>>>>
+>>>>>>
+>>>>>>   One of the logs has this
+>>>>>>
+>>>>>>
+>>>>>>
+>>>>>>   Error:
+>>>>>>    Problem: package packagegroup-base-extended-1.0-r83.qemuarm64 requires packagegroup-base, but none of the providers can be installed
+>>>>>>     - package packagegroup-base-1.0-r83.qemuarm64 requires packagegroup-distro-base, but none of the providers can be installed
+>>>>>>     - conflicting requests
+>>>>>>     - nothing provides mesa-vulkan-drivers needed by packagegroup-distro-base-1.0-r83.qemuarm64
+>>>>>>   (try to add '--skip-broken' to skip uninstallable packages)
+>>>>>>
+>>>>>>   Am 21. September 2022 13:57:17 MESZ schrieb Alexander Kanavin <alex.kanavin@gmail.com>:
+>>>>>>>
+>>>>>>>
+>>>>>>>
+>>>>>>>   You need to go to mesa's build directlory and inspect what is getting
+>>>>>>>   built, with which options, and how it is installed and packaged. All
+>>>>>>>   the needed bits are there, but it does take a bit of 'yocto skill' to
+>>>>>>>   find your way around there. Start by looking at temp/log.do_configure
+>>>>>>>   (and then do_compile and do_install).
+>>>>>>>
+>>>>>>>   Alex
+>>>>>>>
+>>>>>>>   On Wed, 21 Sept 2022 at 13:38, PHIL <heideggm@hotmail.com> wrote:
+>>>>>>>>
+>>>>>>>>
+>>>>>>>>
+>>>>>>>>
+>>>>>>>>    If I read the mesa-vulkan-drivers recipe right it should install libvulkan_*.so but it didnt I had to use vulkan-loader. Any idea in how to debug that?
+>>>>>>>>
+>>>>>>>>    Am 20. September 2022 15:26:45 MESZ schrieb Alexander Kanavin <alex.kanavin@gmail.com>:
+>>>>>>>>>
+>>>>>>>>>
+>>>>>>>>>
+>>>>>>>>>
+>>>>>>>>>    What often works is running it under strace - you might be able to see the one key syscall that causes the failure. Otherwise you might have to go through the heavier gdb step through.
+>>>>>>>>>
+>>>>>>>>>    Alex
+>>>>>>>>>
+>>>>>>>>>    On Tue 20. Sep 2022 at 10.25, PHIL <heideggm@hotmail.com> wrote:
+>>>>>>>>>>
+>>>>>>>>>>
+>>>>>>>>>>
+>>>>>>>>>>
+>>>>>>>>>>    Ok it seems to use Software now given how slow weston-simple-egl has become. But vulkaninfo still fails with ERROR_INCOMPATIBLE_DRIVER.
+>>>>>>>>>>    --
+>>>>>>>>>>    Diese Nachricht wurde von meinem Android-Gerät mit K-9 Mail gesendet.
+>>>>>>>>
+>>>>>>>>
+>>>>>>>>
+>>>>>>>>
+>>>>>>>>    --
+>>>>>>>>    Diese Nachricht wurde von meinem Android-Gerät mit K-9 Mail gesendet.
+>>>>>>
+>>>>>>
+>>>>>>
+>>>>>>   --
+>>>>>>   Diese Nachricht wurde von meinem Android-Gerät mit K-9 Mail gesendet.
+>>>>
+>>>>
+>>>>  --
+>>>>  Diese Nachricht wurde von meinem Android-Gerät mit K-9 Mail gesendet.
+>>
+>> --
+>> Diese Nachricht wurde von meinem Android-Gerät mit K-9 Mail gesendet.
+
+-- 
+Diese Nachricht wurde von meinem Android-Gerät mit K-9 Mail gesendet.
+
+[-- Attachment #2: Type: text/html, Size: 5374 bytes --]
+
+^ permalink raw reply	[flat|nested] 36+ messages in thread
+* Re: [yocto] Adding Vulkan to core-image-weston
+  2022-09-21 12:54                                                           ` Alexander Kanavin
+  2022-09-21 13:35                                                             ` PHIL
+@ 2022-09-22 14:54                                                             ` PHIL
+  2022-09-22 16:22                                                             ` PHIL
+  2 siblings, 0 replies; 36+ messages in thread
+From: PHIL @ 2022-09-22 14:54 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: Markus Volk, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 4185 bytes --]
+
+Okay 
+There is a file called mesa_22.0.3.bb. Adding the following line
+VULKAN_DRIVERS:append ="virtio-experimental" there will successfully add /usr/lib/libvulkan_virtio.so.
+Still isn't enough though.
+
+Am 21. September 2022 14:54:08 MESZ schrieb Alexander Kanavin <alex.kanavin@gmail.com>:
+>Next you need to check if you have the mesa-vulkan-drives package in
+>deploy-* in the same mesa builddir, and does it contain the needed
+>driver file?
+>
+>Alex
+>
+>On Wed, 21 Sept 2022 at 14:48, PHIL <heideggm@hotmail.com> wrote:
+>>
+>> It has the individual packages but split up. One directory for mesa-vulkan-drivers etc. I don't know how to process from here.
+>>
+>> Am 21. September 2022 14:38:10 MESZ schrieb Alexander Kanavin <alex.kanavin@gmail.com>:
+>>>
+>>> You need to check package-split/ to find out why.
+>>>
+>>> Alex
+>>>
+>>> On Wed, 21 Sept 2022 at 14:30, PHIL <heideggm@hotmail.com> wrote:
+>>>>
+>>>>
+>>>>  Ok, there is a build directory tmp/work/cortexa57-poky-linux/mesa/2_22.0.0-r0 . In there, there is a package directory that has all libGL* libraries and one libvulkan_virtio.so but they are not installed to the Image.
+>>>>
+>>>>  Am 21. September 2022 14:14:10 MESZ schrieb Alexander Kanavin <alex.kanavin@gmail.com>:
+>>>>>
+>>>>>
+>>>>>  This is not logs from mesa, this is logs from your image recipe. You
+>>>>>  need to start with mesa.
+>>>>>
+>>>>>  Alex
+>>>>>
+>>>>>  On Wed, 21 Sept 2022 at 14:12, PHIL <heideggm@hotmail.com> wrote:
+>>>>>>
+>>>>>>
+>>>>>>
+>>>>>>   One of the logs has this
+>>>>>>
+>>>>>>
+>>>>>>
+>>>>>>   Error:
+>>>>>>    Problem: package packagegroup-base-extended-1.0-r83.qemuarm64 requires packagegroup-base, but none of the providers can be installed
+>>>>>>     - package packagegroup-base-1.0-r83.qemuarm64 requires packagegroup-distro-base, but none of the providers can be installed
+>>>>>>     - conflicting requests
+>>>>>>     - nothing provides mesa-vulkan-drivers needed by packagegroup-distro-base-1.0-r83.qemuarm64
+>>>>>>   (try to add '--skip-broken' to skip uninstallable packages)
+>>>>>>
+>>>>>>   Am 21. September 2022 13:57:17 MESZ schrieb Alexander Kanavin <alex.kanavin@gmail.com>:
+>>>>>>>
+>>>>>>>
+>>>>>>>
+>>>>>>>   You need to go to mesa's build directlory and inspect what is getting
+>>>>>>>   built, with which options, and how it is installed and packaged. All
+>>>>>>>   the needed bits are there, but it does take a bit of 'yocto skill' to
+>>>>>>>   find your way around there. Start by looking at temp/log.do_configure
+>>>>>>>   (and then do_compile and do_install).
+>>>>>>>
+>>>>>>>   Alex
+>>>>>>>
+>>>>>>>   On Wed, 21 Sept 2022 at 13:38, PHIL <heideggm@hotmail.com> wrote:
+>>>>>>>>
+>>>>>>>>
+>>>>>>>>
+>>>>>>>>
+>>>>>>>>    If I read the mesa-vulkan-drivers recipe right it should install libvulkan_*.so but it didnt I had to use vulkan-loader. Any idea in how to debug that?
+>>>>>>>>
+>>>>>>>>    Am 20. September 2022 15:26:45 MESZ schrieb Alexander Kanavin <alex.kanavin@gmail.com>:
+>>>>>>>>>
+>>>>>>>>>
+>>>>>>>>>
+>>>>>>>>>
+>>>>>>>>>    What often works is running it under strace - you might be able to see the one key syscall that causes the failure. Otherwise you might have to go through the heavier gdb step through.
+>>>>>>>>>
+>>>>>>>>>    Alex
+>>>>>>>>>
+>>>>>>>>>    On Tue 20. Sep 2022 at 10.25, PHIL <heideggm@hotmail.com> wrote:
+>>>>>>>>>>
+>>>>>>>>>>
+>>>>>>>>>>
+>>>>>>>>>>
+>>>>>>>>>>    Ok it seems to use Software now given how slow weston-simple-egl has become. But vulkaninfo still fails with ERROR_INCOMPATIBLE_DRIVER.
+>>>>>>>>>>    --
+>>>>>>>>>>    Diese Nachricht wurde von meinem Android-Gerät mit K-9 Mail gesendet.
+>>>>>>>>
+>>>>>>>>
+>>>>>>>>
+>>>>>>>>
+>>>>>>>>    --
+>>>>>>>>    Diese Nachricht wurde von meinem Android-Gerät mit K-9 Mail gesendet.
+>>>>>>
+>>>>>>
+>>>>>>
+>>>>>>   --
+>>>>>>   Diese Nachricht wurde von meinem Android-Gerät mit K-9 Mail gesendet.
+>>>>
+>>>>
+>>>>  --
+>>>>  Diese Nachricht wurde von meinem Android-Gerät mit K-9 Mail gesendet.
+>>
+>> --
+>> Diese Nachricht wurde von meinem Android-Gerät mit K-9 Mail gesendet.
+
+-- 
+Diese Nachricht wurde von meinem Android-Gerät mit K-9 Mail gesendet.
+
+[-- Attachment #2: Type: text/html, Size: 5449 bytes --]
+
+^ permalink raw reply	[flat|nested] 36+ messages in thread
+* Re: [yocto] Adding Vulkan to core-image-weston
+  2022-09-21 12:54                                                           ` Alexander Kanavin
+  2022-09-21 13:35                                                             ` PHIL
+  2022-09-22 14:54                                                             ` PHIL
+@ 2022-09-22 16:22                                                             ` PHIL
+  2 siblings, 0 replies; 36+ messages in thread
+From: PHIL @ 2022-09-22 16:22 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: Markus Volk, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 4201 bytes --]
+
+One more thing: It seems bitbake/meson has problems updating the build flags when I add the Venus-experimental=true flag. Changing the bb file does not update the variables in the meson logs where Venus is still false. 
+
+Am 21. September 2022 14:54:08 MESZ schrieb Alexander Kanavin <alex.kanavin@gmail.com>:
+>Next you need to check if you have the mesa-vulkan-drives package in
+>deploy-* in the same mesa builddir, and does it contain the needed
+>driver file?
+>
+>Alex
+>
+>On Wed, 21 Sept 2022 at 14:48, PHIL <heideggm@hotmail.com> wrote:
+>>
+>> It has the individual packages but split up. One directory for mesa-vulkan-drivers etc. I don't know how to process from here.
+>>
+>> Am 21. September 2022 14:38:10 MESZ schrieb Alexander Kanavin <alex.kanavin@gmail.com>:
+>>>
+>>> You need to check package-split/ to find out why.
+>>>
+>>> Alex
+>>>
+>>> On Wed, 21 Sept 2022 at 14:30, PHIL <heideggm@hotmail.com> wrote:
+>>>>
+>>>>
+>>>>  Ok, there is a build directory tmp/work/cortexa57-poky-linux/mesa/2_22.0.0-r0 . In there, there is a package directory that has all libGL* libraries and one libvulkan_virtio.so but they are not installed to the Image.
+>>>>
+>>>>  Am 21. September 2022 14:14:10 MESZ schrieb Alexander Kanavin <alex.kanavin@gmail.com>:
+>>>>>
+>>>>>
+>>>>>  This is not logs from mesa, this is logs from your image recipe. You
+>>>>>  need to start with mesa.
+>>>>>
+>>>>>  Alex
+>>>>>
+>>>>>  On Wed, 21 Sept 2022 at 14:12, PHIL <heideggm@hotmail.com> wrote:
+>>>>>>
+>>>>>>
+>>>>>>
+>>>>>>   One of the logs has this
+>>>>>>
+>>>>>>
+>>>>>>
+>>>>>>   Error:
+>>>>>>    Problem: package packagegroup-base-extended-1.0-r83.qemuarm64 requires packagegroup-base, but none of the providers can be installed
+>>>>>>     - package packagegroup-base-1.0-r83.qemuarm64 requires packagegroup-distro-base, but none of the providers can be installed
+>>>>>>     - conflicting requests
+>>>>>>     - nothing provides mesa-vulkan-drivers needed by packagegroup-distro-base-1.0-r83.qemuarm64
+>>>>>>   (try to add '--skip-broken' to skip uninstallable packages)
+>>>>>>
+>>>>>>   Am 21. September 2022 13:57:17 MESZ schrieb Alexander Kanavin <alex.kanavin@gmail.com>:
+>>>>>>>
+>>>>>>>
+>>>>>>>
+>>>>>>>   You need to go to mesa's build directlory and inspect what is getting
+>>>>>>>   built, with which options, and how it is installed and packaged. All
+>>>>>>>   the needed bits are there, but it does take a bit of 'yocto skill' to
+>>>>>>>   find your way around there. Start by looking at temp/log.do_configure
+>>>>>>>   (and then do_compile and do_install).
+>>>>>>>
+>>>>>>>   Alex
+>>>>>>>
+>>>>>>>   On Wed, 21 Sept 2022 at 13:38, PHIL <heideggm@hotmail.com> wrote:
+>>>>>>>>
+>>>>>>>>
+>>>>>>>>
+>>>>>>>>
+>>>>>>>>    If I read the mesa-vulkan-drivers recipe right it should install libvulkan_*.so but it didnt I had to use vulkan-loader. Any idea in how to debug that?
+>>>>>>>>
+>>>>>>>>    Am 20. September 2022 15:26:45 MESZ schrieb Alexander Kanavin <alex.kanavin@gmail.com>:
+>>>>>>>>>
+>>>>>>>>>
+>>>>>>>>>
+>>>>>>>>>
+>>>>>>>>>    What often works is running it under strace - you might be able to see the one key syscall that causes the failure. Otherwise you might have to go through the heavier gdb step through.
+>>>>>>>>>
+>>>>>>>>>    Alex
+>>>>>>>>>
+>>>>>>>>>    On Tue 20. Sep 2022 at 10.25, PHIL <heideggm@hotmail.com> wrote:
+>>>>>>>>>>
+>>>>>>>>>>
+>>>>>>>>>>
+>>>>>>>>>>
+>>>>>>>>>>    Ok it seems to use Software now given how slow weston-simple-egl has become. But vulkaninfo still fails with ERROR_INCOMPATIBLE_DRIVER.
+>>>>>>>>>>    --
+>>>>>>>>>>    Diese Nachricht wurde von meinem Android-Gerät mit K-9 Mail gesendet.
+>>>>>>>>
+>>>>>>>>
+>>>>>>>>
+>>>>>>>>
+>>>>>>>>    --
+>>>>>>>>    Diese Nachricht wurde von meinem Android-Gerät mit K-9 Mail gesendet.
+>>>>>>
+>>>>>>
+>>>>>>
+>>>>>>   --
+>>>>>>   Diese Nachricht wurde von meinem Android-Gerät mit K-9 Mail gesendet.
+>>>>
+>>>>
+>>>>  --
+>>>>  Diese Nachricht wurde von meinem Android-Gerät mit K-9 Mail gesendet.
+>>
+>> --
+>> Diese Nachricht wurde von meinem Android-Gerät mit K-9 Mail gesendet.
+
+-- 
+Diese Nachricht wurde von meinem Android-Gerät mit K-9 Mail gesendet.
+
+[-- Attachment #2: Type: text/html, Size: 5449 bytes --]
+
+^ permalink raw reply	[flat|nested] 36+ messages in thread
+end of thread, other threads:[~2022-09-22 16:22 UTC | newest]
+
+Thread overview: 36+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-09-16 11:43 Adding Vulkan to core-image-weston Edgar Mobile
+2022-09-16 12:14 ` [yocto] " Alexander Kanavin
+2022-09-16 17:17   ` Edgar Mobile
+2022-09-17  8:28     ` Alexander Kanavin
+2022-09-19  7:36       ` Edgar Mobile
+2022-09-19  8:25         ` Alexander Kanavin
+2022-09-19 12:28           ` Edgar Mobile
+2022-09-19 13:31             ` Alexander Kanavin
+2022-09-19 13:52               ` Edgar Mobile
+2022-09-19 14:20                 ` Alexander Kanavin
+2022-09-19 14:30                   ` Edgar Mobile
+2022-09-19 14:36                     ` Alexander Kanavin
+2022-09-19 14:40                       ` Edgar Mobile
+2022-09-19 15:33                         ` Alexander Kanavin
+2022-09-19 16:37                           ` Markus Volk
+2022-09-19 16:54                             ` Edgar Mobile
+2022-09-19 17:16                               ` Markus Volk
+2022-09-20  7:28                                 ` Edgar Mobile
+2022-09-20  7:39                                 ` Edgar Mobile
+2022-09-20  8:23                                   ` Alexander Kanavin
+2022-09-20  8:40                                     ` PHIL
+2022-09-20  9:17                                       ` Alexander Kanavin
+2022-09-20  9:25                                         ` PHIL
+2022-09-20 13:26                                           ` Alexander Kanavin
+2022-09-21 11:38                                             ` PHIL
+2022-09-21 11:57                                               ` Alexander Kanavin
+2022-09-21 12:12                                                 ` PHIL
+2022-09-21 12:14                                                   ` Alexander Kanavin
+2022-09-21 12:21                                                     ` PHIL
+2022-09-21 12:30                                                     ` PHIL
+2022-09-21 12:38                                                       ` Alexander Kanavin
+2022-09-21 12:47                                                         ` PHIL
+2022-09-21 12:54                                                           ` Alexander Kanavin
+2022-09-21 13:35                                                             ` PHIL
+2022-09-22 14:54                                                             ` PHIL
+2022-09-22 16:22                                                             ` PHIL
+

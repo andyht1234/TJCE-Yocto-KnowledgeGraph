@@ -1,0 +1,931 @@
+* non-existent task do_package_write_rpm error
+@ 2022-01-21 19:06 Winfried
+  2022-01-21 19:09 ` [yocto] " Alexander Kanavin
+  0 siblings, 1 reply; 7+ messages in thread
+From: Winfried @ 2022-01-21 19:06 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1814 bytes --]
+
+Hi,
+
+I'm writing a recipe for package hardening-check http://deb.debian.org/debian/pool/main/h/hardening-wrapper/ .
+This package builds with only a simple Makefile (that has no install target). The recipe only installs a script hardening-check in /usr/bin.
+
+I would like to include this script in our SDK.
+The recipe itself builds fine (bitbake hardening-check-native).
+
+But when I add hardening-check-native to IMAGE_INSTALL in my image the build fails with:
+
+Task do_populate_sdk in myimage.bb rdepends upon non-existent task do_package_write_rpm in virtual:native:(...)/recipes-devtools/hardening-check/hardening-check_2.6.bb
+
+Same error when I append the package to TOOLCHAIN_HOST_TASK instead.
+
+Any idea how to solve this? Do I need to inherit my recipe from something?
+Recipe included below.
+
+Thanks in advance for the help!
+
+regards,
+Winfried
+
+
+SUMMARY = "Script to check an executable for certain security weaknesses."
+LICENSE = "GPLv2"
+LIC_FILES_CHKSUM = "file://debian/copyright;md5=06ff97d53f05a9b8ce2a416b30f496b9"
+
+SRC_URI = "http://ftp.debian.org/debian/pool/main/h/hardening-wrapper/hardening-wrapper_${PV}.tar.xz \
+          file://0001-perl_regex.patch \
+         "
+SRC_URI[md5sum] = "47c93c05b4d0199be8df0d35dbd68192"
+SRC_URI[sha256sum] = "c5fc46439646d0929a0605e4f3db67e57eefbbf5ceec5a2888440dbdf4450224"
+
+RDEPENDS_${PN} = "perl"
+
+S = "${WORKDIR}/hardening-wrapper"
+
+do_patch () {
+   cd ${S}
+   patch -p1 -u -i ${WORKDIR}/0001-perl_regex.patch
+}
+
+do_configure () {
+       # Specify any needed configure commands here
+       :
+}
+
+do_compile () {
+       export DEB_HOST_ARCH=`uname -m`
+       export DEB_HOST_ARCH_OS=`uname -s`
+       oe_runmake
+}
+
+do_install () {
+   install -d ${D}/${bindir}
+   install -m 755 ${S}/build-tree/hardening-check ${D}/${bindir}
+}
+
+BBCLASSEXTEND = "native nativesdk"
+
+[-- Attachment #2: Type: text/html, Size: 4269 bytes --]
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] non-existent task do_package_write_rpm error
+  2022-01-21 19:06 non-existent task do_package_write_rpm error Winfried
+@ 2022-01-21 19:09 ` Alexander Kanavin
+  2022-01-21 20:00   ` Winfried
+  0 siblings, 1 reply; 7+ messages in thread
+From: Alexander Kanavin @ 2022-01-21 19:09 UTC (permalink / raw)
+  To: W. Dobbe; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2537 bytes --]
+
+You need to drop the -native suffix when installing to target image or SDK.
+-native is only for the bitbake build itself.
+
+Alex
+
+On Fri, 21 Jan 2022 at 20:07, W. Dobbe <winfried_mb2@xmsnet.nl> wrote:
+
+> Hi,
+>
+> I'm writing a recipe for package hardening-check
+> <http://deb.debian.org/debian/pool/main/h/hardening-wrapper/> .
+> This package builds with only a simple Makefile (that has no install
+> target). The recipe only installs a script hardening-check in /usr/bin.
+>
+> I would like to include this script in our SDK.
+> The recipe itself builds fine (bitbake hardening-check-native).
+>
+> But when I add hardening-check-native to IMAGE_INSTALL in my image the
+> build fails with:
+>
+> Task do_populate_sdk in myimage.bb rdepends upon non-existent task do_package_write_rpm in virtual:native:(...)/recipes-devtools/hardening-check/hardening-check_2.6.bb
+>
+> Same error when I append the package to TOOLCHAIN_HOST_TASK instead.
+>
+> Any idea how to solve this? Do I need to inherit my recipe from something?
+> Recipe included below.
+>
+> Thanks in advance for the help!
+>
+> regards,
+> Winfried
+>
+>
+> SUMMARY = "Script to check an executable for certain security weaknesses."
+> LICENSE = "GPLv2"
+> LIC_FILES_CHKSUM =
+> "file://debian/copyright;md5=06ff97d53f05a9b8ce2a416b30f496b9"
+>
+> SRC_URI = "
+> http://ftp.debian.org/debian/pool/main/h/hardening-wrapper/hardening-wrapper_${PV}.tar.xz
+> \
+>           file://0001-perl_regex.patch \
+>          "
+> SRC_URI[md5sum] = "47c93c05b4d0199be8df0d35dbd68192"
+> SRC_URI[sha256sum] =
+> "c5fc46439646d0929a0605e4f3db67e57eefbbf5ceec5a2888440dbdf4450224"
+>
+> RDEPENDS_${PN} = "perl"
+>
+> S = "${WORKDIR}/hardening-wrapper"
+>
+> do_patch () {
+>    cd ${S}
+>    patch -p1 -u -i ${WORKDIR}/0001-perl_regex.patch
+> }
+>
+> do_configure () {
+>        # Specify any needed configure commands here
+>        :
+> }
+>
+> do_compile () {
+>        export DEB_HOST_ARCH=`uname -m`
+>        export DEB_HOST_ARCH_OS=`uname -s`
+>        oe_runmake
+> }
+>
+> do_install () {
+>    install -d ${D}/${bindir}
+>    install -m 755 ${S}/build-tree/hardening-check ${D}/${bindir}
+> }
+>
+> BBCLASSEXTEND = "native nativesdk"
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#55940):
+> https://lists.yoctoproject.org/g/yocto/message/55940
+> Mute This Topic: https://lists.yoctoproject.org/mt/88590330/1686489
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> alex.kanavin@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 5002 bytes --]
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] non-existent task do_package_write_rpm error
+  2022-01-21 19:09 ` [yocto] " Alexander Kanavin
+@ 2022-01-21 20:00   ` Winfried
+  2022-01-21 22:26     ` Alexander Kanavin
+  0 siblings, 1 reply; 7+ messages in thread
+From: Winfried @ 2022-01-21 20:00 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 3241 bytes --]
+
+Hi Alex,
+
+Thanks for the tip. When I add hardening-check to IMAGE_INSTALL the build does indeed succeed.
+But then the script is installed in the target sysroot of the SDK. I would like to have it in the native (x86_64-pokysdk-linux) sysroot as it is a tool to use on the build server.
+
+Any idea how to achieve that ?
+
+Thanks,
+Winfried
+
+> Op 21-01-2022 20:09 schreef Alexander Kanavin <alex.kanavin@gmail.com>:
+> 
+> 
+> You need to drop the -native suffix when installing to target image or SDK. -native is only for the bitbake build itself.
+> 
+> Alex
+> 
+> On Fri, 21 Jan 2022 at 20:07, W. Dobbe <winfried_mb2@xmsnet.nl mailto:winfried_mb2@xmsnet.nl > wrote:
+> 
+> > Hi,
+> > 
+> > I'm writing a recipe for package hardening-check http://deb.debian.org/debian/pool/main/h/hardening-wrapper/ .
+> > This package builds with only a simple Makefile (that has no install target). The recipe only installs a script hardening-check in /usr/bin.
+> > 
+> > I would like to include this script in our SDK.
+> > The recipe itself builds fine (bitbake hardening-check-native).
+> > 
+> > But when I add hardening-check-native to IMAGE_INSTALL in my image the build fails with:
+> > 
+> > Task do_populate_sdk in http://myimage.bb rdepends upon non-existent task do_package_write_rpm in virtual:native:(...)/recipes-devtools/hardening-check/http://hardening-check_2.6.bb
+> > 
+> > Same error when I append the package to TOOLCHAIN_HOST_TASK instead.
+> > 
+> > Any idea how to solve this? Do I need to inherit my recipe from something?
+> > Recipe included below.
+> > 
+> > Thanks in advance for the help!
+> > 
+> > regards,
+> > Winfried
+> > 
+> > 
+> > SUMMARY = "Script to check an executable for certain security weaknesses."
+> > LICENSE = "GPLv2"
+> > LIC_FILES_CHKSUM = "file://debian/copyright;md5=06ff97d53f05a9b8ce2a416b30f496b9"
+> > 
+> > SRC_URI = "http://ftp.debian.org/debian/pool/main/h/hardening-wrapper/hardening-wrapper_${PV}.tar.xz http://ftp.debian.org/debian/pool/main/h/hardening-wrapper/hardening-wrapper_$%7BPV%7D.tar.xz \
+> >           file://0001-perl_regex.patch \
+> >          "
+> > SRC_URI[md5sum] = "47c93c05b4d0199be8df0d35dbd68192"
+> > SRC_URI[sha256sum] = "c5fc46439646d0929a0605e4f3db67e57eefbbf5ceec5a2888440dbdf4450224"
+> > 
+> > RDEPENDS_${PN} = "perl"
+> > 
+> > S = "${WORKDIR}/hardening-wrapper"
+> > 
+> > do_patch () {
+> >    cd ${S}
+> >    patch -p1 -u -i ${WORKDIR}/0001-perl_regex.patch
+> > }
+> > 
+> > do_configure () {
+> >        # Specify any needed configure commands here
+> >        :
+> > }
+> > 
+> > do_compile () {
+> >        export DEB_HOST_ARCH=`uname -m`
+> >        export DEB_HOST_ARCH_OS=`uname -s`
+> >        oe_runmake
+> > }
+> > 
+> > do_install () {
+> >    install -d ${D}/${bindir}
+> >    install -m 755 ${S}/build-tree/hardening-check ${D}/${bindir}
+> > }
+> > 
+> > BBCLASSEXTEND = "native nativesdk"
+> > 
+> > 
+> > 
+> > 
+> 
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#55941): https://lists.yoctoproject.org/g/yocto/message/55941
+> Mute This Topic: https://lists.yoctoproject.org/mt/88590330/3617711
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [winfried_mb2@xmsnet.nl]
+> -=-=-=-=-=-=-=-=-=-=-=-
+> 
+> 
+
+[-- Attachment #2: Type: text/html, Size: 6250 bytes --]
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] non-existent task do_package_write_rpm error
+  2022-01-21 20:00   ` Winfried
+@ 2022-01-21 22:26     ` Alexander Kanavin
+  2022-01-22 13:11       ` Winfried
+  0 siblings, 1 reply; 7+ messages in thread
+From: Alexander Kanavin @ 2022-01-21 22:26 UTC (permalink / raw)
+  To: Winfried; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 3131 bytes --]
+
+Use TOOLCHAIN_HOST_TASK:append = " ..." in your image recipe.
+
+Alex
+
+On Fri, 21 Jan 2022 at 21:00, Winfried <winfried_mb2@xmsnet.nl> wrote:
+
+> Hi Alex,
+>
+> Thanks for the tip. When I add hardening-check to IMAGE_INSTALL the build
+> does indeed succeed.
+> But then the script is installed in the target sysroot of the SDK. I would
+> like to have it in the native (x86_64-pokysdk-linux) sysroot as it is a
+> tool to use on the build server.
+>
+> Any idea how to achieve that ?
+>
+> Thanks,
+> Winfried
+>
+> Op 21-01-2022 20:09 schreef Alexander Kanavin <alex.kanavin@gmail.com>:
+>
+>
+> You need to drop the -native suffix when installing to target image or
+> SDK. -native is only for the bitbake build itself.
+>
+> Alex
+>
+> On Fri, 21 Jan 2022 at 20:07, W. Dobbe <winfried_mb2@xmsnet.nl> wrote:
+>
+> Hi,
+>
+> I'm writing a recipe for package hardening-check
+> <http://deb.debian.org/debian/pool/main/h/hardening-wrapper/> .
+> This package builds with only a simple Makefile (that has no install
+> target). The recipe only installs a script hardening-check in /usr/bin.
+>
+> I would like to include this script in our SDK.
+> The recipe itself builds fine (bitbake hardening-check-native).
+>
+> But when I add hardening-check-native to IMAGE_INSTALL in my image the
+> build fails with:
+>
+> Task do_populate_sdk in myimage.bb rdepends upon non-existent task do_package_write_rpm in virtual:native:(...)/recipes-devtools/hardening-check/hardening-check_2.6.bb
+>
+> Same error when I append the package to TOOLCHAIN_HOST_TASK instead.
+>
+> Any idea how to solve this? Do I need to inherit my recipe from something?
+> Recipe included below.
+>
+> Thanks in advance for the help!
+>
+> regards,
+> Winfried
+>
+>
+> SUMMARY = "Script to check an executable for certain security weaknesses."
+> LICENSE = "GPLv2"
+> LIC_FILES_CHKSUM =
+> "file://debian/copyright;md5=06ff97d53f05a9b8ce2a416b30f496b9"
+>
+> SRC_URI = "
+> http://ftp.debian.org/debian/pool/main/h/hardening-wrapper/hardening-wrapper_${PV}.tar.xz
+> \
+>           file://0001-perl_regex.patch \
+>          "
+> SRC_URI[md5sum] = "47c93c05b4d0199be8df0d35dbd68192"
+> SRC_URI[sha256sum] =
+> "c5fc46439646d0929a0605e4f3db67e57eefbbf5ceec5a2888440dbdf4450224"
+>
+> RDEPENDS_${PN} = "perl"
+>
+> S = "${WORKDIR}/hardening-wrapper"
+>
+> do_patch () {
+>    cd ${S}
+>    patch -p1 -u -i ${WORKDIR}/0001-perl_regex.patch
+> }
+>
+> do_configure () {
+>        # Specify any needed configure commands here
+>        :
+> }
+>
+> do_compile () {
+>        export DEB_HOST_ARCH=`uname -m`
+>        export DEB_HOST_ARCH_OS=`uname -s`
+>        oe_runmake
+> }
+>
+> do_install () {
+>    install -d ${D}/${bindir}
+>    install -m 755 ${S}/build-tree/hardening-check ${D}/${bindir}
+> }
+>
+> BBCLASSEXTEND = "native nativesdk"
+>
+>
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#55941):
+> https://lists.yoctoproject.org/g/yocto/message/55941
+> Mute This Topic: https://lists.yoctoproject.org/mt/88590330/3617711
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> winfried_mb2@xmsnet.nl]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 6797 bytes --]
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] non-existent task do_package_write_rpm error
+  2022-01-21 22:26     ` Alexander Kanavin
+@ 2022-01-22 13:11       ` Winfried
+  2022-01-22 13:34         ` Winfried
+  0 siblings, 1 reply; 7+ messages in thread
+From: Winfried @ 2022-01-22 13:11 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 7605 bytes --]
+
+Thanks.
+With TOOLCHAIN_HOST_TASK_append = “ hardening-check” the sdk build progresses a bit further but then stops with error:
+
+ERROR: dynniq-image-flownode-acu-default-1.0-r0 do_populate_sdk: Could not invoke dnf. Command '/home/wdobbe/yocto/flownode_zeus/build-flownode-acu/tmp/work/dynniq_flownode_acu-poky-linux-gnueabi/dynniq-image-f
+lownode-acu-default/1.0-r0/recipe-sysroot-native/usr/bin/dnf -v --rpmverbosity=info -y -c /home/wdobbe/yocto/flownode_zeus/build-flownode-acu/tmp/work/dynniq_flownode_acu-poky-linux-gnueabi/dynniq-image-flownod
+e-acu-default/1.0-r0/sdk/image/etc/dnf/dnf.conf --setopt=reposdir=/home/wdobbe/yocto/flownode_zeus/build-flownode-acu/tmp/work/dynniq_flownode_acu-poky-linux-gnueabi/dynniq-image-flownode-acu-default/1.0-r0/sdk
+/image/etc/yum.repos.d --installroot=/home/wdobbe/yocto/flownode_zeus/build-flownode-acu/tmp/work/dynniq_flownode_acu-poky-linux-gnueabi/dynniq-image-flownode-acu-default/1.0-r0/sdk/image --setopt=logdir=/home/
+wdobbe/yocto/flownode_zeus/build-flownode-acu/tmp/work/dynniq_flownode_acu-poky-linux-gnueabi/dynniq-image-flownode-acu-default/1.0-r0/temp --repofrompath=oe-repo,/home/wdobbe/yocto/flownode_zeus/build-flownode
+-acu/tmp/work/dynniq_flownode_acu-poky-linux-gnueabi/dynniq-image-flownode-acu-default/1.0-r0/oe-sdk-repo --nogpgcheck install hardening-check nativesdk-cmake nativesdk-packagegroup-qt5-toolchain-host nativesdk
+-packagegroup-sdk-host nativesdk-perl-modules nativesdk-rpm packagegroup-cross-canadian-dynniq-flownode-acu' returned 1:                                                                                           
+DNF version: 4.2.2                                                                        
+cachedir: /home/wdobbe/yocto/flownode_zeus/build-flownode-acu/tmp/work/dynniq_flownode_acu-poky-linux-gnueabi/dynniq-image-flownode-acu-default/1.0-r0/sdk/image/var/cache/dnf                                     
+Added oe-repo repo from /home/wdobbe/yocto/flownode_zeus/build-flownode-acu/tmp/work/dynniq_flownode_acu-poky-linux-gnueabi/dynniq-image-flownode-acu-default/1.0-r0/oe-sdk-repo                                   
+repo: using cache for: oe-repo                                                                                                                          (...)                                                                                                                                         
+Error:                                                                                                                 
+Problem: conflicting requests                                                            
+ - package hardening-check-2.6-r0.cortexa9hf_neon does not have a compatible architecture
+ - nothing provides /usr/bin/perl needed by hardening-check-2.6-r0.cortexa9hf_neon       
+(try to add '--skip-broken' to skip uninstallable packages or '--nobest' to use not only best candidate packages) 
+ 
+ERROR: Logfile of failure stored in: /home/wdobbe/yocto/flownode_zeus/build-flownode-acu/tmp/work/dynniq_flownode_acu-poky-linux-gnueabi/dynniq-image-flownode-acu-default/1.0-r0/temp/log.do_populate_sdk.5994
+ERROR: Task (/home/wdobbe/yocto/flownode_zeus/sources/meta-dynniq-flownode-acu/recipes-dynniq/images/dynniq-image-flownode-acu-default.bb:do_populate_sdk) failed with exit code '1'
+
+
+Bitbake builds package hardening-check for the target architecture (cortexa9hf_neon) i.s.o for x86_64 (or noarch).
+
+Any ideas how to fix that ?
+
+regards,
+Winfried
+
+
+> Op 21-01-2022 23:26 schreef Alexander Kanavin <alex.kanavin@gmail.com>:
+> 
+> 
+> Use TOOLCHAIN_HOST_TASK:append = " ..." in your image recipe.
+> 
+> Alex
+> 
+> On Fri, 21 Jan 2022 at 21:00, Winfried <winfried_mb2@xmsnet.nl mailto:winfried_mb2@xmsnet.nl > wrote:
+> 
+> > Hi Alex,
+> > 
+> > Thanks for the tip. When I add hardening-check to IMAGE_INSTALL the build does indeed succeed.
+> > But then the script is installed in the target sysroot of the SDK. I would like to have it in the native (x86_64-pokysdk-linux) sysroot as it is a tool to use on the build server.
+> > 
+> > Any idea how to achieve that ?
+> > 
+> > Thanks,
+> > Winfried
+> > 
+> > > Op 21-01-2022 20:09 schreef Alexander Kanavin <alex.kanavin@gmail.com mailto:alex.kanavin@gmail.com >:
+> > > 
+> > > 
+> > > You need to drop the -native suffix when installing to target image or SDK. -native is only for the bitbake build itself.
+> > > 
+> > > Alex
+> > > 
+> > > On Fri, 21 Jan 2022 at 20:07, W. Dobbe <winfried_mb2@xmsnet.nl mailto:winfried_mb2@xmsnet.nl > wrote:
+> > > 
+> > > > Hi,
+> > > > 
+> > > > I'm writing a recipe for package hardening-check http://deb.debian.org/debian/pool/main/h/hardening-wrapper/ .
+> > > > This package builds with only a simple Makefile (that has no install target). The recipe only installs a script hardening-check in /usr/bin.
+> > > > 
+> > > > I would like to include this script in our SDK.
+> > > > The recipe itself builds fine (bitbake hardening-check-native).
+> > > > 
+> > > > But when I add hardening-check-native to IMAGE_INSTALL in my image the build fails with:
+> > > > 
+> > > > Task do_populate_sdk in http://myimage.bb rdepends upon non-existent task do_package_write_rpm in virtual:native:(...)/recipes-devtools/hardening-check/http://hardening-check_2.6.bb
+> > > > 
+> > > > Same error when I append the package to TOOLCHAIN_HOST_TASK instead.
+> > > > 
+> > > > Any idea how to solve this? Do I need to inherit my recipe from something?
+> > > > Recipe included below.
+> > > > 
+> > > > Thanks in advance for the help!
+> > > > 
+> > > > regards,
+> > > > Winfried
+> > > > 
+> > > > 
+> > > > SUMMARY = "Script to check an executable for certain security weaknesses."
+> > > > LICENSE = "GPLv2"
+> > > > LIC_FILES_CHKSUM = "file://debian/copyright;md5=06ff97d53f05a9b8ce2a416b30f496b9"
+> > > > 
+> > > > SRC_URI = "http://ftp.debian.org/debian/pool/main/h/hardening-wrapper/hardening-wrapper_${PV}.tar.xz http://ftp.debian.org/debian/pool/main/h/hardening-wrapper/hardening-wrapper_$%7BPV%7D.tar.xz \
+> > > >           file://0001-perl_regex.patch \
+> > > >          "
+> > > > SRC_URI[md5sum] = "47c93c05b4d0199be8df0d35dbd68192"
+> > > > SRC_URI[sha256sum] = "c5fc46439646d0929a0605e4f3db67e57eefbbf5ceec5a2888440dbdf4450224"
+> > > > 
+> > > > RDEPENDS_${PN} = "perl"
+> > > > 
+> > > > S = "${WORKDIR}/hardening-wrapper"
+> > > > 
+> > > > do_patch () {
+> > > >    cd ${S}
+> > > >    patch -p1 -u -i ${WORKDIR}/0001-perl_regex.patch
+> > > > }
+> > > > 
+> > > > do_configure () {
+> > > >        # Specify any needed configure commands here
+> > > >        :
+> > > > }
+> > > > 
+> > > > do_compile () {
+> > > >        export DEB_HOST_ARCH=`uname -m`
+> > > >        export DEB_HOST_ARCH_OS=`uname -s`
+> > > >        oe_runmake
+> > > > }
+> > > > 
+> > > > do_install () {
+> > > >    install -d ${D}/${bindir}
+> > > >    install -m 755 ${S}/build-tree/hardening-check ${D}/${bindir}
+> > > > }
+> > > > 
+> > > > BBCLASSEXTEND = "native nativesdk"
+> > > > 
+> > > > 
+> > > > 
+> > > > 
+> > > 
+> > > -=-=-=-=-=-=-=-=-=-=-=-
+> > > Links: You receive all messages sent to this group.
+> > > View/Reply Online (#55941): https://lists.yoctoproject.org/g/yocto/message/55941
+> > > Mute This Topic: https://lists.yoctoproject.org/mt/88590330/3617711
+> > > Group Owner: yocto+owner@lists.yoctoproject.org mailto:yocto%2Bowner@lists.yoctoproject.org
+> > > Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [winfried_mb2@xmsnet.nl mailto:winfried_mb2@xmsnet.nl ]
+> > > -=-=-=-=-=-=-=-=-=-=-=-
+> > > 
+> > > 
+> > 
+> 
+
+[-- Attachment #2: Type: text/html, Size: 18128 bytes --]
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] non-existent task do_package_write_rpm error
+  2022-01-22 13:11       ` Winfried
+@ 2022-01-22 13:34         ` Winfried
+  2022-01-22 19:56           ` Alexander Kanavin
+  0 siblings, 1 reply; 7+ messages in thread
+From: Winfried @ 2022-01-22 13:34 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 8169 bytes --]
+
+Update:
+
+TOOLCHAIN_HOST_TASK_append = “ nativesdk-hardening-check”
+
+does work. The SDK build succeeds and the hardening-check script is installed in the x86_64-pokysdk-linux sysroot.
+
+regards,
+Winfried
+
+> Op 22-01-2022 14:11 schreef Winfried <winfried_mb2@xmsnet.nl>:
+> 
+> 
+> Thanks.
+> With TOOLCHAIN_HOST_TASK_append = “ hardening-check” the sdk build progresses a bit further but then stops with error:
+> 
+> ERROR: dynniq-image-flownode-acu-default-1.0-r0 do_populate_sdk: Could not invoke dnf. Command '/home/wdobbe/yocto/flownode_zeus/build-flownode-acu/tmp/work/dynniq_flownode_acu-poky-linux-gnueabi/dynniq-image-f
+> lownode-acu-default/1.0-r0/recipe-sysroot-native/usr/bin/dnf -v --rpmverbosity=info -y -c /home/wdobbe/yocto/flownode_zeus/build-flownode-acu/tmp/work/dynniq_flownode_acu-poky-linux-gnueabi/dynniq-image-flownod
+> e-acu-default/1.0-r0/sdk/image/etc/dnf/dnf.conf --setopt=reposdir=/home/wdobbe/yocto/flownode_zeus/build-flownode-acu/tmp/work/dynniq_flownode_acu-poky-linux-gnueabi/dynniq-image-flownode-acu-default/1.0-r0/sdk
+> /image/etc/yum.repos.d --installroot=/home/wdobbe/yocto/flownode_zeus/build-flownode-acu/tmp/work/dynniq_flownode_acu-poky-linux-gnueabi/dynniq-image-flownode-acu-default/1.0-r0/sdk/image --setopt=logdir=/home/
+> wdobbe/yocto/flownode_zeus/build-flownode-acu/tmp/work/dynniq_flownode_acu-poky-linux-gnueabi/dynniq-image-flownode-acu-default/1.0-r0/temp --repofrompath=oe-repo,/home/wdobbe/yocto/flownode_zeus/build-flownode
+> -acu/tmp/work/dynniq_flownode_acu-poky-linux-gnueabi/dynniq-image-flownode-acu-default/1.0-r0/oe-sdk-repo --nogpgcheck install hardening-check nativesdk-cmake nativesdk-packagegroup-qt5-toolchain-host nativesdk
+> -packagegroup-sdk-host nativesdk-perl-modules nativesdk-rpm packagegroup-cross-canadian-dynniq-flownode-acu' returned 1:                                                                                           
+> DNF version: 4.2.2                                                                        
+> cachedir: /home/wdobbe/yocto/flownode_zeus/build-flownode-acu/tmp/work/dynniq_flownode_acu-poky-linux-gnueabi/dynniq-image-flownode-acu-default/1.0-r0/sdk/image/var/cache/dnf                                     
+> Added oe-repo repo from /home/wdobbe/yocto/flownode_zeus/build-flownode-acu/tmp/work/dynniq_flownode_acu-poky-linux-gnueabi/dynniq-image-flownode-acu-default/1.0-r0/oe-sdk-repo                                   
+> repo: using cache for: oe-repo                                                                                                                          (...)                                                                                                                                         
+> Error:                                                                                                                 
+> Problem: conflicting requests                                                            
+>  - package hardening-check-2.6-r0.cortexa9hf_neon does not have a compatible architecture
+>  - nothing provides /usr/bin/perl needed by hardening-check-2.6-r0.cortexa9hf_neon       
+> (try to add '--skip-broken' to skip uninstallable packages or '--nobest' to use not only best candidate packages) 
+>  
+> ERROR: Logfile of failure stored in: /home/wdobbe/yocto/flownode_zeus/build-flownode-acu/tmp/work/dynniq_flownode_acu-poky-linux-gnueabi/dynniq-image-flownode-acu-default/1.0-r0/temp/log.do_populate_sdk.5994
+> ERROR: Task (/home/wdobbe/yocto/flownode_zeus/sources/meta-dynniq-flownode-acu/recipes-dynniq/images/dynniq-image-flownode-acu-default.bb:do_populate_sdk) failed with exit code '1'
+> 
+> 
+> Bitbake builds package hardening-check for the target architecture (cortexa9hf_neon) i.s.o for x86_64 (or noarch).
+> 
+> Any ideas how to fix that ?
+> 
+> regards,
+> Winfried
+> 
+> 
+> > Op 21-01-2022 23:26 schreef Alexander Kanavin <alex.kanavin@gmail.com>:
+> > 
+> > 
+> > Use TOOLCHAIN_HOST_TASK:append = " ..." in your image recipe.
+> > 
+> > Alex
+> > 
+> > On Fri, 21 Jan 2022 at 21:00, Winfried <winfried_mb2@xmsnet.nl mailto:winfried_mb2@xmsnet.nl > wrote:
+> > 
+> > > Hi Alex,
+> > > 
+> > > Thanks for the tip. When I add hardening-check to IMAGE_INSTALL the build does indeed succeed.
+> > > But then the script is installed in the target sysroot of the SDK. I would like to have it in the native (x86_64-pokysdk-linux) sysroot as it is a tool to use on the build server.
+> > > 
+> > > Any idea how to achieve that ?
+> > > 
+> > > Thanks,
+> > > Winfried
+> > > 
+> > > > Op 21-01-2022 20:09 schreef Alexander Kanavin <alex.kanavin@gmail.com mailto:alex.kanavin@gmail.com >:
+> > > > 
+> > > > 
+> > > > You need to drop the -native suffix when installing to target image or SDK. -native is only for the bitbake build itself.
+> > > > 
+> > > > Alex
+> > > > 
+> > > > On Fri, 21 Jan 2022 at 20:07, W. Dobbe <winfried_mb2@xmsnet.nl mailto:winfried_mb2@xmsnet.nl > wrote:
+> > > > 
+> > > > > Hi,
+> > > > > 
+> > > > > I'm writing a recipe for package hardening-check http://deb.debian.org/debian/pool/main/h/hardening-wrapper/ .
+> > > > > This package builds with only a simple Makefile (that has no install target). The recipe only installs a script hardening-check in /usr/bin.
+> > > > > 
+> > > > > I would like to include this script in our SDK.
+> > > > > The recipe itself builds fine (bitbake hardening-check-native).
+> > > > > 
+> > > > > But when I add hardening-check-native to IMAGE_INSTALL in my image the build fails with:
+> > > > > 
+> > > > > Task do_populate_sdk in http://myimage.bb rdepends upon non-existent task do_package_write_rpm in virtual:native:(...)/recipes-devtools/hardening-check/http://hardening-check_2.6.bb
+> > > > > 
+> > > > > Same error when I append the package to TOOLCHAIN_HOST_TASK instead.
+> > > > > 
+> > > > > Any idea how to solve this? Do I need to inherit my recipe from something?
+> > > > > Recipe included below.
+> > > > > 
+> > > > > Thanks in advance for the help!
+> > > > > 
+> > > > > regards,
+> > > > > Winfried
+> > > > > 
+> > > > > 
+> > > > > SUMMARY = "Script to check an executable for certain security weaknesses."
+> > > > > LICENSE = "GPLv2"
+> > > > > LIC_FILES_CHKSUM = "file://debian/copyright;md5=06ff97d53f05a9b8ce2a416b30f496b9"
+> > > > > 
+> > > > > SRC_URI = "http://ftp.debian.org/debian/pool/main/h/hardening-wrapper/hardening-wrapper_${PV}.tar.xz http://ftp.debian.org/debian/pool/main/h/hardening-wrapper/hardening-wrapper_$%7BPV%7D.tar.xz \
+> > > > >           file://0001-perl_regex.patch \
+> > > > >          "
+> > > > > SRC_URI[md5sum] = "47c93c05b4d0199be8df0d35dbd68192"
+> > > > > SRC_URI[sha256sum] = "c5fc46439646d0929a0605e4f3db67e57eefbbf5ceec5a2888440dbdf4450224"
+> > > > > 
+> > > > > RDEPENDS_${PN} = "perl"
+> > > > > 
+> > > > > S = "${WORKDIR}/hardening-wrapper"
+> > > > > 
+> > > > > do_patch () {
+> > > > >    cd ${S}
+> > > > >    patch -p1 -u -i ${WORKDIR}/0001-perl_regex.patch
+> > > > > }
+> > > > > 
+> > > > > do_configure () {
+> > > > >        # Specify any needed configure commands here
+> > > > >        :
+> > > > > }
+> > > > > 
+> > > > > do_compile () {
+> > > > >        export DEB_HOST_ARCH=`uname -m`
+> > > > >        export DEB_HOST_ARCH_OS=`uname -s`
+> > > > >        oe_runmake
+> > > > > }
+> > > > > 
+> > > > > do_install () {
+> > > > >    install -d ${D}/${bindir}
+> > > > >    install -m 755 ${S}/build-tree/hardening-check ${D}/${bindir}
+> > > > > }
+> > > > > 
+> > > > > BBCLASSEXTEND = "native nativesdk"
+> > > > > 
+> > > > > 
+> > > > > 
+> > > > > 
+> > > > 
+> > > > -=-=-=-=-=-=-=-=-=-=-=-
+> > > > Links: You receive all messages sent to this group.
+> > > > View/Reply Online (#55941): https://lists.yoctoproject.org/g/yocto/message/55941
+> > > > Mute This Topic: https://lists.yoctoproject.org/mt/88590330/3617711
+> > > > Group Owner: yocto+owner@lists.yoctoproject.org mailto:yocto%2Bowner@lists.yoctoproject.org
+> > > > Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [winfried_mb2@xmsnet.nl mailto:winfried_mb2@xmsnet.nl ]
+> > > > -=-=-=-=-=-=-=-=-=-=-=-
+> > > > 
+> > > > 
+> > > 
+> > 
+> 
+
+[-- Attachment #2: Type: text/html, Size: 18972 bytes --]
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] non-existent task do_package_write_rpm error
+  2022-01-22 13:34         ` Winfried
+@ 2022-01-22 19:56           ` Alexander Kanavin
+  0 siblings, 0 replies; 7+ messages in thread
+From: Alexander Kanavin @ 2022-01-22 19:56 UTC (permalink / raw)
+  To: Winfried; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 6809 bytes --]
+
+Congratulations, you now know the three major flavors of a recipe, and why
+and where they're needed :)
+
+Alex
+
+On Sat, 22 Jan 2022 at 14:34, Winfried <winfried_mb2@xmsnet.nl> wrote:
+
+> Update:
+>
+> TOOLCHAIN_HOST_TASK_append = “ nativesdk-hardening-check”
+>
+> does work. The SDK build succeeds and the hardening-check script is
+> installed in the x86_64-pokysdk-linux sysroot.
+>
+> regards,
+> Winfried
+>
+> Op 22-01-2022 14:11 schreef Winfried <winfried_mb2@xmsnet.nl>:
+>
+>
+> Thanks.
+> With TOOLCHAIN_HOST_TASK_append = “ hardening-check” the sdk build
+> progresses a bit further but then stops with error:
+>
+> ERROR: dynniq-image-flownode-acu-default-1.0-r0 do_populate_sdk: Could
+> not invoke dnf. Command
+> '/home/wdobbe/yocto/flownode_zeus/build-flownode-acu/tmp/work/dynniq_flownode_acu-poky-linux-gnueabi/dynniq-image-f
+> lownode-acu-default/1.0-r0/recipe-sysroot-native/usr/bin/dnf -v
+> --rpmverbosity=info -y -c
+> /home/wdobbe/yocto/flownode_zeus/build-flownode-acu/tmp/work/dynniq_flownode_acu-poky-linux-gnueabi/dynniq-image-flownod
+> e-acu-default/1.0-r0/sdk/image/etc/dnf/dnf.conf
+> --setopt=reposdir=/home/wdobbe/yocto/flownode_zeus/build-flownode-acu/tmp/work/dynniq_flownode_acu-poky-linux-gnueabi/dynniq-image-flownode-acu-default/1.0-r0/sdk
+> /image/etc/yum.repos.d
+> --installroot=/home/wdobbe/yocto/flownode_zeus/build-flownode-acu/tmp/work/dynniq_flownode_acu-poky-linux-gnueabi/dynniq-image-flownode-acu-default/1.0-r0/sdk/image
+> --setopt=logdir=/home/
+> wdobbe/yocto/flownode_zeus/build-flownode-acu/tmp/work/dynniq_flownode_acu-poky-linux-gnueabi/dynniq-image-flownode-acu-default/1.0-r0/temp
+> --repofrompath=oe-repo,/home/wdobbe/yocto/flownode_zeus/build-flownode
+> -acu/tmp/work/dynniq_flownode_acu-poky-linux-gnueabi/dynniq-image-flownode-acu-default/1.0-r0/oe-sdk-repo
+> --nogpgcheck install hardening-check nativesdk-cmake
+> nativesdk-packagegroup-qt5-toolchain-host nativesdk
+> -packagegroup-sdk-host nativesdk-perl-modules nativesdk-rpm
+> packagegroup-cross-canadian-dynniq-flownode-acu' returned 1:
+>
+>
+> DNF version:
+> 4.2.2
+> cachedir:
+> /home/wdobbe/yocto/flownode_zeus/build-flownode-acu/tmp/work/dynniq_flownode_acu-poky-linux-gnueabi/dynniq-image-flownode-acu-default/1.0-r0/sdk/image/var/cache/dnf
+>
+> Added oe-repo repo from
+> /home/wdobbe/yocto/flownode_zeus/build-flownode-acu/tmp/work/dynniq_flownode_acu-poky-linux-gnueabi/dynniq-image-flownode-acu-default/1.0-r0/oe-sdk-repo
+>
+> repo: using cache for: oe-repo
+>
+> (...)
+> Error:
+>
+> Problem: conflicting
+> requests
+>  - package hardening-check-2.6-r0.cortexa9hf_neon does not have a
+> compatible architecture
+>  - nothing provides /usr/bin/perl needed by
+> hardening-check-2.6-r0.cortexa9hf_neon
+> (try to add '--skip-broken' to skip uninstallable packages or '--nobest'
+> to use not only best candidate packages)
+>
+> ERROR: Logfile of failure stored in:
+> /home/wdobbe/yocto/flownode_zeus/build-flownode-acu/tmp/work/dynniq_flownode_acu-poky-linux-gnueabi/dynniq-image-flownode-acu-default/1.0-r0/temp/log.do_populate_sdk.5994
+> ERROR: Task
+> (/home/wdobbe/yocto/flownode_zeus/sources/meta-dynniq-flownode-acu/recipes-dynniq/images/dynniq-image-flownode-acu-default.bb:do_populate_sdk)
+> failed with exit code '1'
+>
+>
+> Bitbake builds package hardening-check for the target architecture (
+> cortexa9hf_neon) i.s.o for x86_64 (or noarch).
+>
+> Any ideas how to fix that ?
+>
+> regards,
+> Winfried
+>
+> Op 21-01-2022 23:26 schreef Alexander Kanavin <alex.kanavin@gmail.com>:
+>
+>
+> Use TOOLCHAIN_HOST_TASK:append = " ..." in your image recipe.
+>
+> Alex
+>
+> On Fri, 21 Jan 2022 at 21:00, Winfried <winfried_mb2@xmsnet.nl> wrote:
+>
+> Hi Alex,
+>
+> Thanks for the tip. When I add hardening-check to IMAGE_INSTALL the build
+> does indeed succeed.
+> But then the script is installed in the target sysroot of the SDK. I would
+> like to have it in the native (x86_64-pokysdk-linux) sysroot as it is a
+> tool to use on the build server.
+>
+> Any idea how to achieve that ?
+>
+> Thanks,
+> Winfried
+>
+> Op 21-01-2022 20:09 schreef Alexander Kanavin <alex.kanavin@gmail.com>:
+>
+>
+> You need to drop the -native suffix when installing to target image or
+> SDK. -native is only for the bitbake build itself.
+>
+> Alex
+>
+> On Fri, 21 Jan 2022 at 20:07, W. Dobbe <winfried_mb2@xmsnet.nl> wrote:
+>
+> Hi,
+>
+> I'm writing a recipe for package hardening-check
+> <http://deb.debian.org/debian/pool/main/h/hardening-wrapper/> .
+> This package builds with only a simple Makefile (that has no install
+> target). The recipe only installs a script hardening-check in /usr/bin.
+>
+> I would like to include this script in our SDK.
+> The recipe itself builds fine (bitbake hardening-check-native).
+>
+> But when I add hardening-check-native to IMAGE_INSTALL in my image the
+> build fails with:
+>
+> Task do_populate_sdk in myimage.bb rdepends upon non-existent task do_package_write_rpm in virtual:native:(...)/recipes-devtools/hardening-check/hardening-check_2.6.bb
+>
+> Same error when I append the package to TOOLCHAIN_HOST_TASK instead.
+>
+> Any idea how to solve this? Do I need to inherit my recipe from something?
+> Recipe included below.
+>
+> Thanks in advance for the help!
+>
+> regards,
+> Winfried
+>
+>
+> SUMMARY = "Script to check an executable for certain security weaknesses."
+> LICENSE = "GPLv2"
+> LIC_FILES_CHKSUM =
+> "file://debian/copyright;md5=06ff97d53f05a9b8ce2a416b30f496b9"
+>
+> SRC_URI = "
+> http://ftp.debian.org/debian/pool/main/h/hardening-wrapper/hardening-wrapper_${PV}.tar.xz
+> \
+>           file://0001-perl_regex.patch \
+>          "
+> SRC_URI[md5sum] = "47c93c05b4d0199be8df0d35dbd68192"
+> SRC_URI[sha256sum] =
+> "c5fc46439646d0929a0605e4f3db67e57eefbbf5ceec5a2888440dbdf4450224"
+>
+> RDEPENDS_${PN} = "perl"
+>
+> S = "${WORKDIR}/hardening-wrapper"
+>
+> do_patch () {
+>    cd ${S}
+>    patch -p1 -u -i ${WORKDIR}/0001-perl_regex.patch
+> }
+>
+> do_configure () {
+>        # Specify any needed configure commands here
+>        :
+> }
+>
+> do_compile () {
+>        export DEB_HOST_ARCH=`uname -m`
+>        export DEB_HOST_ARCH_OS=`uname -s`
+>        oe_runmake
+> }
+>
+> do_install () {
+>    install -d ${D}/${bindir}
+>    install -m 755 ${S}/build-tree/hardening-check ${D}/${bindir}
+> }
+>
+> BBCLASSEXTEND = "native nativesdk"
+>
+>
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#55941):
+> https://lists.yoctoproject.org/g/yocto/message/55941
+> Mute This Topic: https://lists.yoctoproject.org/mt/88590330/3617711
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> winfried_mb2@xmsnet.nl]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 16718 bytes --]
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+end of thread, other threads:[~2022-01-22 19:56 UTC | newest]
+
+Thread overview: 7+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-01-21 19:06 non-existent task do_package_write_rpm error Winfried
+2022-01-21 19:09 ` [yocto] " Alexander Kanavin
+2022-01-21 20:00   ` Winfried
+2022-01-21 22:26     ` Alexander Kanavin
+2022-01-22 13:11       ` Winfried
+2022-01-22 13:34         ` Winfried
+2022-01-22 19:56           ` Alexander Kanavin
+

@@ -1,0 +1,81 @@
+* Automate updating of SRCREV
+@ 2021-05-14 14:58 Oliver Westermann
+  2021-05-14 15:16 ` [yocto] " Martin Jansa
+  0 siblings, 1 reply; 2+ messages in thread
+From: Oliver Westermann @ 2021-05-14 14:58 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1188 bytes --]
+
+Hey,
+
+maybe somebody already has something for this before I reinvent the wheel ;-) We've several internal tools that mostly have their own CI and are referenced in our yocto layers to be picked up by the nightly build. Usually we manually update the SRCREV and add a `git log --oneline --no-decorate <old_rev>...<new_rev>` into the update commit. That way you can easily scroll over your eg kernel repo to figure out which commit went in when. But by now we have more and more internal tools, all require regular updates so we would like to add a little CI task to update our SRCREVs.
+
+Is there an easy way to tell bitbake / devtool to change a variable like SRCREV? I played around with various combinations of devtool modify, update-recipe and edit-recipe, but I could not get it to work as I expect.
+
+My current goal for my script would be to use a flow roughly following this:
+
+* Get the repo URL & branch from SRC_URI (eg by a bitbake -e <recipe> and some grep magic)
+* Do a shallow clone in a temp dir
+* Get new HEAD commit for branch, compare with current
+* create git log for commit message
+* update REV in recipe
+* commit
+
+Looking forward to suggestions, Olli
+
+[-- Attachment #2: Type: text/html, Size: 1296 bytes --]
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+* Re: [yocto] Automate updating of SRCREV
+  2021-05-14 14:58 Automate updating of SRCREV Oliver Westermann
+@ 2021-05-14 15:16 ` Martin Jansa
+  0 siblings, 0 replies; 2+ messages in thread
+From: Martin Jansa @ 2021-05-14 15:16 UTC (permalink / raw)
+  To: Oliver Westermann; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1917 bytes --]
+
+On Fri, May 14, 2021 at 07:58:02AM -0700, Oliver Westermann wrote:
+> Hey,
+> 
+> maybe somebody already has something for this before I reinvent the wheel ;-) We've several internal tools that mostly have their own CI and are referenced in our yocto layers to be picked up by the nightly build. Usually we manually update the SRCREV and add a `git log --oneline --no-decorate <old_rev>...<new_rev>` into the update commit. That way you can easily scroll over your eg kernel repo to figure out which commit went in when. But by now we have more and more internal tools, all require regular updates so we would like to add a little CI task to update our SRCREVs.
+> 
+> Is there an easy way to tell bitbake / devtool to change a variable like SRCREV? I played around with various combinations of devtool modify, update-recipe and edit-recipe, but I could not get it to work as I expect.
+> 
+> My current goal for my script would be to use a flow roughly following this:
+> 
+> * Get the repo URL & branch from SRC_URI (eg by a bitbake -e <recipe> and some grep magic)
+> * Do a shallow clone in a temp dir
+> * Get new HEAD commit for branch, compare with current
+> * create git log for commit message
+> * update REV in recipe
+> * commit
+> 
+> Looking forward to suggestions, Olli
+
+If you really want to update SRCREVs often for CI jobs, then I would
+setup separate job with some .inc file which sets SRCREVs of all the
+components you want to test to AUTOREV and let it run as often you can
+afford (even triggered from every push if your builds are quick or you
+have many builders available).
+
+Then whenever you want to "release" you can either dump the last built
+revisions from this AUTOREV-build (either directly from
+cache/bb_persist_data.sqlite3 or from e.g. buildhistory and dump them in
+some release-1.2.3.inc included by your DISTRO (or update SRCREVs in the
+individual recipes).
+
+Regards,
+
+[-- Attachment #2: signature.asc --]
+[-- Type: application/pgp-signature, Size: 201 bytes --]
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2021-05-14 15:16 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-05-14 14:58 Automate updating of SRCREV Oliver Westermann
+2021-05-14 15:16 ` [yocto] " Martin Jansa
+

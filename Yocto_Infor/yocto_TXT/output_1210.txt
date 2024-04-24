@@ -1,0 +1,201 @@
+* Re: [yocto] systemd: how to enable auto-loading kernel modules
+       [not found]   ` <1b153bce-a66a-45ee-a5c6-963ea6fb1c82.0d2bd5fa-15cc-4b27-b94e-83614f9e5b38.a4381533-b3df-4ac2-84e4-1b79a49b8d8f@emailsignatures365.codetwo.com>
+@ 2022-11-01 16:00     ` Mike Looijmans
+  2022-11-08  6:58       ` Merlin
+  0 siblings, 1 reply; 3+ messages in thread
+From: Mike Looijmans @ 2022-11-01 16:00 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 3619 bytes --]
+
+Likely there's a problem with the underscore. Recipes (and packages) with an underscore don't work properly because it's used as a version separator.
+
+Rename "my_module" to "my-module".
+
+Having said that, kernel modules rarely need to be forced to load. The rare exceptions are modules that aren't linked to hardware (e.g. some software pipe, or typical test modules that do their thing during init) or modules that need special parameters to work (uio needs this for example).
+
+Normally you'd have a match in the devicetree (or ACPI or PCI or USB or ...) and the match with your module will automatically trigger loading the module (and its dependencies). If your module is hardware related, this is how it should load. If that doesn't work, your hardware wasn't detected anyway and the module, after loading, likely won't do anything anyway.
+
+
+
+On 26-10-2022 08:07, Merlin via lists.yoctoproject.org wrote:
+SUMMARY
+
+What should I do to enable auto-loading kernel modules in a systemd-employed system IN ADDITION TO setting KERNEL_MODULE_AUTOLOAD?
+
+DETAILS
+
+I'm trying to automatically load out-of-tree kernel modules in my distro (built using Dunfell) that uses systemd.
+Kernel modules and the correponding config files are certainly installed to the rootfs (each under `/lib/modules/5.xxx/extra/` and `/etc/modules-load.d/`); however, auto-loading does not occur at all.
+
+My module recipe is as follows. I've added KERNEL_MODULE_AUTOLOAD to enable auto-loading.
+
+```
+LICENSE = "CLOSED"
+SUMMARY = "Some description"
+
+PV = "1.0+git${SRCPV}"
+SRC_URI = "git://url/to/my.git;user=git;protocol=ssh;branch=main"
+SRCREV = "${AUTOREV}"
+
+inherit module
+
+S = "${WORKDIR}/git/src"
+RPROVIDES_${PN} += " kernel-module-my_module"
+KERNEL_MODULE_AUTOLOAD += " my_module"
+```
+
+I've learned that in systemd, systemd-modules-load service is responsible for module autoload, but I couldn't find either systemd-modules-load itself and systemd-modules-load.service in the rootfs.
+It looks like that modules-load existed in past versions of systemd.bb, so I've tried to enable modules-load by adding `PACKAGECONFIG_pn-systemd += " modules-load"` in conf/local.conf. However, bitbake rejected it saying:
+
+```
+WARNING: systemd-1_244.5-r0 do_configure: QA Issue: systemd: invalid PACKAGECONFIG: modules-load [invalid-packageconfig]
+```
+
+Is there anything I can do further?
+
+(Supposedly I'm having the same problem with this? https://lists.yoctoproject.org/g/yocto/message/45275)
+
+Thanks in advance.
+
+Merlin
+
+
+
+
+-=-=-=-=-=-=-=-=-=-=-=-
+Links: You receive all messages sent to this group.
+View/Reply Online (#58437): https://lists.yoctoproject.org/g/yocto/message/58437
+Mute This Topic: https://lists.yoctoproject.org/mt/94648966/3618446
+Group Owner: yocto+owner@lists.yoctoproject.org<mailto:yocto+owner@lists.yoctoproject.org>
+Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [mike.looijmans@topic.nl<mailto:mike.looijmans@topic.nl>]
+-=-=-=-=-=-=-=-=-=-=-=-
+
+
+
+
+--
+Mike Looijmans
+
+Met vriendelijke groet / kind regards,
+
+Mike Looijmans
+System Expert
+
+[cid:LOGO_PRODUCTS_f9d71446-8512-4038-82c1-cda3bc73be36.jpg]
+
+TOPIC Embedded Products B.V.
+Materiaalweg 4
+5681 RJ Best    T:      +31 (0) 499 33 69 69
+The Netherlands E:      mike.looijmans@topicproducts.com<mailto:mike.looijmans@topicproducts.com>
+        W:      www.topic.nl<http://www.topic.nl>
+        L:      LinkedIn<https://www.linkedin.com/company/topic-embedded-systems>
+
+Please consider the environment before printing this e-mail
+
+[cid:Banner_43138712-0930-45dd-bac7-3889e35c9980.png]
+
+[-- Attachment #2.1: Type: text/html, Size: 9070 bytes --]
+
+[-- Attachment #2.2: LOGO_PRODUCTS_f9d71446-8512-4038-82c1-cda3bc73be36.jpg --]
+[-- Type: image/jpeg, Size: 11280 bytes --]
+
+[-- Attachment #2.3: Banner_43138712-0930-45dd-bac7-3889e35c9980.png --]
+[-- Type: image/png, Size: 157422 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: systemd: how to enable auto-loading kernel modules
+  2022-11-01 16:00     ` [yocto] systemd: how to enable auto-loading kernel modules Mike Looijmans
+@ 2022-11-08  6:58       ` Merlin
+       [not found]         ` <1b153bce-a66a-45ee-a5c6-963ea6fb1c82.949ef384-8293-46b8-903f-40a477c056ae.0e8baedb-fee6-4307-b92d-6ce4608737de@emailsignatures365.codetwo.com>
+  0 siblings, 1 reply; 3+ messages in thread
+From: Merlin @ 2022-11-08  6:58 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 416 bytes --]
+
+Thanks Mike for your advice!
+
+I've replaced underscore to hyphen and rerun a build from fetch, but unfortunately that didn't invoke auto-load.
+
+In fact, my modules are device drivers developed in out-of-tree repositories. Some user-space applications depend on them, so I wanted them to be auto-loaded on boot. Autoload didn't occur even though I've added corresponding devicetree properties.
+
+Best
+
+Merlin
+
+[-- Attachment #2: Type: text/html, Size: 446 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] systemd: how to enable auto-loading kernel modules
+       [not found]           ` <1b153bce-a66a-45ee-a5c6-963ea6fb1c82.0d2bd5fa-15cc-4b27-b94e-83614f9e5b38.01ed750e-f735-4e61-96d8-1de328d7bb5d@emailsignatures365.codetwo.com>
+@ 2022-11-21  6:35             ` Mike Looijmans
+  0 siblings, 0 replies; 3+ messages in thread
+From: Mike Looijmans @ 2022-11-21  6:35 UTC (permalink / raw)
+  To: yocto
+
+Guess you'll have to provide more than just "It doesn't work" if you want any 
+serious assistance.
+
+The source code would help. Also telling us whether the drivers actually probe 
+if you load them manually using modprobe.
+
+
+
+Met vriendelijke groet / kind regards,
+
+Mike Looijmans
+System Expert
+
+
+TOPIC Embedded Products B.V.
+Materiaalweg 4, 5681 RJ Best
+The Netherlands
+
+T: +31 (0) 499 33 69 69
+E: mike.looijmans@topicproducts.com
+W: www.topic.nl
+
+Please consider the environment before printing this e-mail
+On 08-11-2022 07:58, Merlin via lists.yoctoproject.org wrote:
+> Thanks Mike for your advice!
+> 
+> I've replaced underscore to hyphen and rerun a build from fetch, but 
+> unfortunately that didn't invoke auto-load.
+> 
+> In fact, my modules are device drivers developed in out-of-tree repositories. 
+> Some user-space applications depend on them, so I wanted them to be 
+> auto-loaded on boot. Autoload didn't occur even though I've added 
+> corresponding devicetree properties.
+> 
+> Best
+> 
+> Merlin
+> 
+> 
+> 
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#58523): https://lists.yoctoproject.org/g/yocto/message/58523
+> Mute This Topic: https://lists.yoctoproject.org/mt/94648966/3618446
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [mike.looijmans@topic.nl]
+> -=-=-=-=-=-=-=-=-=-=-=-
+> 
+
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2022-11-21  6:35 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+     [not found] <oaUe.1666764474219278273.KzfR@lists.yoctoproject.org>
+     [not found] ` <1b153bce-a66a-45ee-a5c6-963ea6fb1c82.949ef384-8293-46b8-903f-40a477c056ae.42972344-517a-41d3-81ec-fce751dce645@emailsignatures365.codetwo.com>
+     [not found]   ` <1b153bce-a66a-45ee-a5c6-963ea6fb1c82.0d2bd5fa-15cc-4b27-b94e-83614f9e5b38.a4381533-b3df-4ac2-84e4-1b79a49b8d8f@emailsignatures365.codetwo.com>
+2022-11-01 16:00     ` [yocto] systemd: how to enable auto-loading kernel modules Mike Looijmans
+2022-11-08  6:58       ` Merlin
+     [not found]         ` <1b153bce-a66a-45ee-a5c6-963ea6fb1c82.949ef384-8293-46b8-903f-40a477c056ae.0e8baedb-fee6-4307-b92d-6ce4608737de@emailsignatures365.codetwo.com>
+     [not found]           ` <1b153bce-a66a-45ee-a5c6-963ea6fb1c82.0d2bd5fa-15cc-4b27-b94e-83614f9e5b38.01ed750e-f735-4e61-96d8-1de328d7bb5d@emailsignatures365.codetwo.com>
+2022-11-21  6:35             ` [yocto] " Mike Looijmans
+

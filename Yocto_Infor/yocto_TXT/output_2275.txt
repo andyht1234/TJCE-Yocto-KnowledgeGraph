@@ -1,0 +1,289 @@
+* wget - The certificate has not yet been activated
+@ 2022-02-03  6:37 Matthias Klein
+  2022-02-03  9:00 ` [yocto] " f_l_k
+  0 siblings, 1 reply; 3+ messages in thread
+From: Matthias Klein @ 2022-02-03  6:37 UTC (permalink / raw)
+  To: yocto
+
+Hello,
+
+I have with the current master branch in a IMX6 Yocto the problem that with wget no HTTPS downloads work:
+
+# wget -4 https://speed.hetzner.de/100MB.bin
+--2022-02-03 06:23:25--  https://speed.hetzner.de/100MB.bin
+SSL_INIT
+Resolving speed.hetzner.de... 88.198.248.254
+Connecting to speed.hetzner.de|88.198.248.254|:443... connected.
+The certificate has not yet been activated
+
+I do not understand why the validation of the certificate does not work.
+With curl it works. It is also not due to the time of the system.
+I use my own kernel based on the mainline kernel 5.10.47 with PREEMPT_RT.
+
+TARGET_SYS           = "arm-poky-linux-gnueabi"
+TUNE_FEATURES        = "arm vfp cortexa9 neon thumb callconvention-hard"
+TARGET_FPU           = "hard"
+
+Can it be that something is missing in the kernel configuration?
+Does anyone have any idea what the problem could be?
+
+# wget --version
+GNU Wget 1.21.2 built on linux-gnueabi.
+
+-cares +digest -gpgme +https +ipv6 -iri +large-file -metalink +nls
++ntlm +opie -psl +ssl/gnutls
+
+Wgetrc:
+    /etc/wgetrc (system)
+Locale:
+    /usr/share/locale
+Compile:
+    arm-poky-linux-gnueabi-gcc -mthumb -mfpu=neon -mfloat-abi=hard
+    -mcpu=cortex-a9 -fstack-protector-strong -O2 -D_FORTIFY_SOURCE=2
+    -Wformat -Wformat-security -Werror=format-security -DHAVE_CONFIG_H
+    -DSYSTEM_WGETRC="/etc/wgetrc" -DLOCALEDIR="/usr/share/locale" -I.
+    -I../../wget-1.21.2/src -I../lib -I../../wget-1.21.2/lib -DNDEBUG
+    -O2 -pipe -g -feliminate-unused-debug-types
+Link:
+    arm-poky-linux-gnueabi-gcc -mthumb -mfpu=neon -mfloat-abi=hard
+    -mcpu=cortex-a9 -fstack-protector-strong -O2 -D_FORTIFY_SOURCE=2
+    -Wformat -Wformat-security -Werror=format-security -DNDEBUG -O2
+    -pipe -g -feliminate-unused-debug-types -Wl,-O1
+    -Wl,--hash-style=gnu -Wl,--as-needed -Wl,-z,relro,-z,now -lpcre
+    -lnettle -lgnutls -lz ftp-opie.o gnutls.o http-ntlm.o
+    ../lib/libgnu.a -lunistring
+
+Copyright (C) 2015 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later
+http://www.gnu.org/licenses/gpl.html.
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.
+
+Originally written by Hrvoje Niksic mailto:hniksic@xemacs.org.
+Please send bug reports and questions to mailto:bug-wget@gnu.org.
+
+A test with gnutls-cli seems to work though:
+
+root@smartrail-8037:~# gnutls-cli -d 1 imap.gmail.com -p 993
+Processed 127 CA certificate(s).
+Resolving 'imap.gmail.com:993'...
+Connecting to '2a00:1450:4013:c02::6d:993'...
+- Certificate type: X.509
+- Got a certificate list of 3 certificates.
+- Certificate[0] info:
+ - subject `CN=imap.gmail.com', issuer `CN=GTS CA 1C3,O=Google Trust Services LLC,C=US', serial 0x65fa03b5a71a05070a000000012e04f6, EC/ECDSA key 256 bits, signed using RSA-SHA256, activated `2022-01-10 03:07:10 UTC', expires `2022-04-04 03:07:09 UTC', pin-sha256="ZrSVXSwpcGu6oCbquwHwx6H2FM7DjzANRxMjQUC/Ng8="
+        Public Key ID:
+                sha1:ae10ac489504779956e7acfc17631471be3e20d6
+                sha256:66b4955d2c29706bbaa026eabb01f0c7a1f614cec38f300d4713234140bf360f
+        Public Key PIN:
+                pin-sha256:ZrSVXSwpcGu6oCbquwHwx6H2FM7DjzANRxMjQUC/Ng8=
+
+- Certificate[1] info:
+ - subject `CN=GTS CA 1C3,O=Google Trust Services LLC,C=US', issuer `CN=GTS Root R1,O=Google Trust Services LLC,C=US', serial 0x0203bc53596b34c718f5015066, RSA key 2048 bits, signed using RSA-SHA256, activated `2020-08-13 00:00:42 UTC', expires `2027-09-30 00:00:42 UTC', pin-sha256="zCTnfLwLKbS9S2sbp+uFz4KZOocFvXxkV06Ce9O5M2w="
+- Certificate[2] info:
+ - subject `CN=GTS Root R1,O=Google Trust Services LLC,C=US', issuer `CN=GlobalSign Root CA,OU=Root CA,O=GlobalSign nv-sa,C=BE', serial 0x77bd0d6cdb36f91aea210fc4f058d30d, RSA key 4096 bits, signed using RSA-SHA256, activated `2020-06-19 00:00:42 UTC', expires `2028-01-28 00:00:42 UTC', pin-sha256="hxqRlPTu1bMS/0DITB1SSu0vd4u/8l8TjPgfaAp63Gc="
+- Status: The certificate is trusted.
+- Description: (TLS1.3-X.509)-(ECDHE-X25519)-(ECDSA-SECP256R1-SHA256)-(AES-256-GCM)
+- Session ID: FB:E7:27:9D:B0:8F:4C:2D:0C:5C:E9:17:0F:5C:9B:28:EE:3F:C0:38:0C:43:15:8D:9B:73:A7:AA:BD:AA:F9:87
+- Options:
+- Handshake was completed
+
+- Simple Client Mode:
+
+* OK Gimap ready for requests from 2a02:908:4c16:7960:20c:c6ff:fe81:e7fa k10mb249481499edf
+
+Best regargds,
+Matthias
+
+
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] wget - The certificate has not yet been activated
+  2022-02-03  6:37 wget - The certificate has not yet been activated Matthias Klein
+@ 2022-02-03  9:00 ` f_l_k
+  2022-02-03  9:14   ` AW: " Matthias Klein
+  0 siblings, 1 reply; 3+ messages in thread
+From: f_l_k @ 2022-02-03  9:00 UTC (permalink / raw)
+  To: Matthias Klein; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 5247 bytes --]
+
+Hi Matthias,
+
+check if busybox is built with this option
+
+CONFIG_FEATURE_WGET_OPENSSL=y
+
+
+
+On Thu, Feb 3 2022 at 06:37:01 AM +0000, Matthias Klein 
+<matthias.klein@optimeas.de> wrote:
+> Hello,
+> 
+> I have with the current master branch in a IMX6 Yocto the problem 
+> that with wget no HTTPS downloads work:
+> 
+> # wget -4 <https://speed.hetzner.de/100MB.bin>
+> --2022-02-03 06:23:25--  <https://speed.hetzner.de/100MB.bin>
+> SSL_INIT
+> Resolving speed.hetzner.de... 88.198.248.254
+> Connecting to speed.hetzner.de|88.198.248.254|:443... connected.
+> The certificate has not yet been activated
+> 
+> I do not understand why the validation of the certificate does not 
+> work.
+> With curl it works. It is also not due to the time of the system.
+> I use my own kernel based on the mainline kernel 5.10.47 with 
+> PREEMPT_RT.
+> 
+> TARGET_SYS           = "arm-poky-linux-gnueabi"
+> TUNE_FEATURES        = "arm vfp cortexa9 neon thumb 
+> callconvention-hard"
+> TARGET_FPU           = "hard"
+> 
+> Can it be that something is missing in the kernel configuration?
+> Does anyone have any idea what the problem could be?
+> 
+> # wget --version
+> GNU Wget 1.21.2 built on linux-gnueabi.
+> 
+> -cares +digest -gpgme +https +ipv6 -iri +large-file -metalink +nls
+> +ntlm +opie -psl +ssl/gnutls
+> 
+> Wgetrc:
+>     /etc/wgetrc (system)
+> Locale:
+>     /usr/share/locale
+> Compile:
+>     arm-poky-linux-gnueabi-gcc -mthumb -mfpu=neon -mfloat-abi=hard
+>     -mcpu=cortex-a9 -fstack-protector-strong -O2 -D_FORTIFY_SOURCE=2
+>     -Wformat -Wformat-security -Werror=format-security -DHAVE_CONFIG_H
+>     -DSYSTEM_WGETRC="/etc/wgetrc" -DLOCALEDIR="/usr/share/locale" -I.
+>     -I../../wget-1.21.2/src -I../lib -I../../wget-1.21.2/lib -DNDEBUG
+>     -O2 -pipe -g -feliminate-unused-debug-types
+> Link:
+>     arm-poky-linux-gnueabi-gcc -mthumb -mfpu=neon -mfloat-abi=hard
+>     -mcpu=cortex-a9 -fstack-protector-strong -O2 -D_FORTIFY_SOURCE=2
+>     -Wformat -Wformat-security -Werror=format-security -DNDEBUG -O2
+>     -pipe -g -feliminate-unused-debug-types -Wl,-O1
+>     -Wl,--hash-style=gnu -Wl,--as-needed -Wl,-z,relro,-z,now -lpcre
+>     -lnettle -lgnutls -lz ftp-opie.o gnutls.o http-ntlm.o
+>     ../lib/libgnu.a -lunistring
+> 
+> Copyright (C) 2015 Free Software Foundation, Inc.
+> License GPLv3+: GNU GPL version 3 or later
+> <http://www.gnu.org/licenses/gpl.html>.
+> This is free software: you are free to change and redistribute it.
+> There is NO WARRANTY, to the extent permitted by law.
+> 
+> Originally written by Hrvoje Niksic <mailto:hniksic@xemacs.org>.
+> Please send bug reports and questions to <mailto:bug-wget@gnu.org>.
+> 
+> A test with gnutls-cli seems to work though:
+> 
+> root@smartrail-8037:~# gnutls-cli -d 1 imap.gmail.com -p 993
+> Processed 127 CA certificate(s).
+> Resolving 'imap.gmail.com:993'...
+> Connecting to '2a00:1450:4013:c02::6d:993'...
+> - Certificate type: X.509
+> - Got a certificate list of 3 certificates.
+> - Certificate[0] info:
+>  - subject `CN=imap.gmail.com', issuer `CN=GTS CA 1C3,O=Google Trust 
+> Services LLC,C=US', serial 0x65fa03b5a71a05070a000000012e04f6, 
+> EC/ECDSA key 256 bits, signed using RSA-SHA256, activated `2022-01-10 
+> 03:07:10 UTC', expires `2022-04-04 03:07:09 UTC', 
+> pin-sha256="ZrSVXSwpcGu6oCbquwHwx6H2FM7DjzANRxMjQUC/Ng8="
+>         Public Key ID:
+>                 sha1:ae10ac489504779956e7acfc17631471be3e20d6
+>                 
+> sha256:66b4955d2c29706bbaa026eabb01f0c7a1f614cec38f300d4713234140bf360f
+>         Public Key PIN:
+>                 
+> pin-sha256:ZrSVXSwpcGu6oCbquwHwx6H2FM7DjzANRxMjQUC/Ng8=
+> 
+> - Certificate[1] info:
+>  - subject `CN=GTS CA 1C3,O=Google Trust Services LLC,C=US', issuer 
+> `CN=GTS Root R1,O=Google Trust Services LLC,C=US', serial 
+> 0x0203bc53596b34c718f5015066, RSA key 2048 bits, signed using 
+> RSA-SHA256, activated `2020-08-13 00:00:42 UTC', expires `2027-09-30 
+> 00:00:42 UTC', 
+> pin-sha256="zCTnfLwLKbS9S2sbp+uFz4KZOocFvXxkV06Ce9O5M2w="
+> - Certificate[2] info:
+>  - subject `CN=GTS Root R1,O=Google Trust Services LLC,C=US', issuer 
+> `CN=GlobalSign Root CA,OU=Root CA,O=GlobalSign nv-sa,C=BE', serial 
+> 0x77bd0d6cdb36f91aea210fc4f058d30d, RSA key 4096 bits, signed using 
+> RSA-SHA256, activated `2020-06-19 00:00:42 UTC', expires `2028-01-28 
+> 00:00:42 UTC', 
+> pin-sha256="hxqRlPTu1bMS/0DITB1SSu0vd4u/8l8TjPgfaAp63Gc="
+> - Status: The certificate is trusted.
+> - Description: 
+> (TLS1.3-X.509)-(ECDHE-X25519)-(ECDSA-SECP256R1-SHA256)-(AES-256-GCM)
+> - Session ID: 
+> FB:E7:27:9D:B0:8F:4C:2D:0C:5C:E9:17:0F:5C:9B:28:EE:3F:C0:38:0C:43:15:8D:9B:73:A7:AA:BD:AA:F9:87
+> - Options:
+> - Handshake was completed
+> 
+> - Simple Client Mode:
+> 
+> * OK Gimap ready for requests from 
+> 2a02:908:4c16:7960:20c:c6ff:fe81:e7fa k10mb249481499edf
+> 
+> Best regargds,
+> Matthias
+> 
+> 
+> 
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#56050): 
+> <https://lists.yoctoproject.org/g/yocto/message/56050>
+> Mute This Topic: <https://lists.yoctoproject.org/mt/88878285/3618223>
+> Group Owner: yocto+owner@lists.yoctoproject.org 
+> <mailto:yocto+owner@lists.yoctoproject.org>
+> Unsubscribe: <https://lists.yoctoproject.org/g/yocto/unsub> 
+> [f_l_k@t-online.de <mailto:f_l_k@t-online.de>]
+> -=-=-=-=-=-=-=-=-=-=-=-
+> 
+
+
+[-- Attachment #2: Type: text/html, Size: 5971 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* AW: [yocto] wget - The certificate has not yet been activated
+  2022-02-03  9:00 ` [yocto] " f_l_k
+@ 2022-02-03  9:14   ` Matthias Klein
+  0 siblings, 0 replies; 3+ messages in thread
+From: Matthias Klein @ 2022-02-03  9:14 UTC (permalink / raw)
+  To: f_l_k; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 328 bytes --]
+
+Hi,
+
+
+  *   check if busybox is built with this option
+
+Thank you fort he tip, but I am using the real wget (not from busybox):
+
+wget --version
+GNU Wget 1.21.2 built on linux-gnueabi.
+
+-cares +digest -gpgme +https +ipv6 -iri +large-file -metalink +nls
++ntlm +opie -psl +ssl/gnutls
+
+
+Best regards,
+Matthias Klein
+
+[-- Attachment #2: Type: text/html, Size: 5438 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2022-02-03  9:14 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-02-03  6:37 wget - The certificate has not yet been activated Matthias Klein
+2022-02-03  9:00 ` [yocto] " f_l_k
+2022-02-03  9:14   ` AW: " Matthias Klein
+

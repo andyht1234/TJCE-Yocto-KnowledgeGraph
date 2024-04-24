@@ -1,0 +1,48 @@
+* Issues setting SELinux file contexts during build #selinux
+@ 2022-02-02 20:59 Ansh
+  0 siblings, 0 replies; only message in thread
+From: Ansh @ 2022-02-02 20:59 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 3439 bytes --]
+
+Hi all,
+
+I am currently working on enabling SELinux on an x86 system (Yocto version 2.4). I was able to successfully enable SELinux on the target but need to set SELinux file contexts during the build. I have inherited the selinux-image.bbclass in my image recipe and can confirm that it's executed during the build. But, when I boot up the image on target all the files have the wrong (or default) file contexts. For e.g. all files in /etc have system_u:object_r:root_t:s0 labels. When I run restorecon, the files get the correct labels. I have managed to narrow it down to the following two issues:
+
+1. setfiles fails during the build but doesn't return any error or error msg causing the build to pass
+
+I looked into the pseudo database table xattr to check if the xattrs are set during the build and found the table empty. So I modified the selinux-image.bbclass and added a setfattr to set xattr for a single file in /etc before it runs setfiles. After the build, I found one entry for the same file for which I was using the setfattr command in the xattr table of pseudo db and was also able to get the xattr using getfattr in the modified selinux-image.bbclass. So that means setfattr was working as expected but not setfiles. Next, I enabled some debug logs for pseudo and found the following that points to setfiles failing after it tries to read security.restorecon_last. Any pointer as to why it is trying to read security.restorecon_last xattr (even though we are not using -d option for setfiles) and fails if it doesn't find it?
+
+27286: wrapper called: getxattr
+27286: getxattr - signals blocked, obtaining lock
+27286: <nil> + build/tmp/work/x86_ctm-poky-linux-musl/custom-image/1.0-r0/rootfs => <build/tmp/work/x86_ctm-poky-linux-musl/custom-image/1.0-r0/rootfs>
+27286: base_path: <nil></>build/tmp/work/x86_ctm-poky-linux-musl/custom-image/1.0-r0/rootfs
+27286: root_path [getxattr, 7008]: 'build/tmp/work/x86_ctm-poky-linux-musl/custom-image/1.0-r0/rootfs' from 'build/tmp/work/x86_ctm-poky-linux-musl/custom-image/1.0-r0/rootfs'
+27286: getxattr(build/tmp/work/x86_ctm-poky-linux-musl/custom-image/1.0-r0/rootfs [fd -1], security.restorecon_last)
+27286: getxattr, name 'security.restorecon_last'
+27286: get-xattr security.restorecon_last -> build/tmp/work/x86_ctm-poky-linux-musl/custom-image/1.0-r0/rootfs (+buf) (040755): processing request [ino 146615528]
+27286: sending request [ino 146615528]
+27286: sending a message: ino 146615528
+27286: msg type 3 (get-xattr), external path build/tmp/work/x86_ctm-poky-linux-musl/custom-image/1.0-r0/rootfs, mode 040755
+27286: wrote 184 bytes
+27286: sent!
+27286: got header, type 4, pathlen 0
+27286: got response type 4
+27286: (27286) fail
+2. xattrs set during the build are not present on the target
+
+As mentioned above, I modified to selinux-image.bbclass to set xattr for a single file in /etc. This works during the build since I can see the corresponding entry in pseudo db and also can get the set xattr using getfattr in the same selinux-image.bbclass. But when I boot up the image on target the xattr is replaced by (I am guessing) the default SELinux label of system_u:object_r:root_t:s0. I am using initramfs for packaging the root filesystem and I found that cpio ignores xattrs and also initramfs doesn't support xattrs. Does that mean I can't set the file contexts during the build because I am using initramfs and cpio?
+
+Thanks,
+Ansh
+
+[-- Attachment #2: Type: text/html, Size: 3994 bytes --]
+
+^ permalink raw reply	[flat|nested] only message in thread
+only message in thread, other threads:[~2022-02-02 20:59 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-02-02 20:59 Issues setting SELinux file contexts during build #selinux Ansh
+

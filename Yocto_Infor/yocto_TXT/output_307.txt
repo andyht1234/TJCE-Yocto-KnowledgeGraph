@@ -1,0 +1,115 @@
+* Sharing DL_DIR and SSTATE_DIR between parallel builds
+@ 2023-08-01 13:25 Daniel Klauer
+  2023-08-01 13:40 ` [yocto] " Alexander Kanavin
+  0 siblings, 1 reply; 3+ messages in thread
+From: Daniel Klauer @ 2023-08-01 13:25 UTC (permalink / raw)
+  To: yocto
+
+Hi,
+
+Is it safe to share DL_DIR and SSTATE_DIR between multiple Yocto builds that are running in parallel? Are all the accesses done by bitbake/Yocto atomic or protected by locking? This came up because I'm wondering whether it would be possible to safely share a single downloads mirror and sstate cache between multiple build agents (and not just read-only over a HTTP server, but writing too).
+
+The documentation contains some sentences like "You can safely share this directory between multiple builds on the same development machine" and "You can reuse the directory for multiple builds", but this does not seem to clarify whether parallel builds are allowed. I have found an older message [1], which suggests that SSTATE_DIR is safe to share, but that still leaves me wondering about DL_DIR. Presumably bitbake uses plain rename()/mv for tarballs, as for sstate, making them thread-safe. But what about Git repos - it's clear that Git itself uses locking, but bitbake may do more than just git operations. Does anyone have any more information on this, besides digging into the bitbake and bbclass sources? Is it "thread-safe"? A potentially related question: How does bitbake handle multiple do_fetch tasks for the same repository running in parallel (if you have multiple recipes using the same repo)?
+
+Thanks & kind regards,
+Daniel
+
+[1] https://www.yoctoproject.org/pipermail/yocto/2016-November/032873.html
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] Sharing DL_DIR and SSTATE_DIR between parallel builds
+  2023-08-01 13:25 Sharing DL_DIR and SSTATE_DIR between parallel builds Daniel Klauer
+@ 2023-08-01 13:40 ` Alexander Kanavin
+  2023-08-02 11:45   ` Daniel Klauer
+  0 siblings, 1 reply; 3+ messages in thread
+From: Alexander Kanavin @ 2023-08-01 13:40 UTC (permalink / raw)
+  To: Daniel Klauer; +Cc: yocto
+
+In short, yes. Sstate files are first written into a random temporary
+file, then renamed when writing is done.
+DL_DIR items are guarded by lock files (look for lockfile in
+bitbake/lib/bb/fetch2/__init__.py).
+
+Clearing out old items from sstate and download caches must be done
+when no builds are running.
+
+Alex
+
+On Tue, 1 Aug 2023 at 15:26, Daniel Klauer <daniel.klauer@gin.de> wrote:
+>
+> Hi,
+>
+> Is it safe to share DL_DIR and SSTATE_DIR between multiple Yocto builds that are running in parallel? Are all the accesses done by bitbake/Yocto atomic or protected by locking? This came up because I'm wondering whether it would be possible to safely share a single downloads mirror and sstate cache between multiple build agents (and not just read-only over a HTTP server, but writing too).
+>
+> The documentation contains some sentences like "You can safely share this directory between multiple builds on the same development machine" and "You can reuse the directory for multiple builds", but this does not seem to clarify whether parallel builds are allowed. I have found an older message [1], which suggests that SSTATE_DIR is safe to share, but that still leaves me wondering about DL_DIR. Presumably bitbake uses plain rename()/mv for tarballs, as for sstate, making them thread-safe. But what about Git repos - it's clear that Git itself uses locking, but bitbake may do more than just git operations. Does anyone have any more information on this, besides digging into the bitbake and bbclass sources? Is it "thread-safe"? A potentially related question: How does bitbake handle multiple do_fetch tasks for the same repository running in parallel (if you have multiple recipes using the same repo)?
+>
+> Thanks & kind regards,
+> Daniel
+>
+> [1] https://www.yoctoproject.org/pipermail/yocto/2016-November/032873.html
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#60695): https://lists.yoctoproject.org/g/yocto/message/60695
+> Mute This Topic: https://lists.yoctoproject.org/mt/100483492/1686489
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] Sharing DL_DIR and SSTATE_DIR between parallel builds
+  2023-08-01 13:40 ` [yocto] " Alexander Kanavin
+@ 2023-08-02 11:45   ` Daniel Klauer
+  0 siblings, 0 replies; 3+ messages in thread
+From: Daniel Klauer @ 2023-08-02 11:45 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: yocto
+
+On 01.08.23 15:40, Alexander Kanavin wrote:
+> In short, yes. Sstate files are first written into a random temporary
+> file, then renamed when writing is done.
+> DL_DIR items are guarded by lock files (look for lockfile in
+> bitbake/lib/bb/fetch2/__init__.py).
+> 
+> Clearing out old items from sstate and download caches must be done
+> when no builds are running.
+
+OK, awesome, thanks. I'll give it a try then. Thanks for pointing me towards fetch2/__init__.py too, I was only looking at fetch2/git.py previously.
+
+> 
+> Alex
+> 
+> On Tue, 1 Aug 2023 at 15:26, Daniel Klauer <daniel.klauer@gin.de> wrote:
+>>
+>> Hi,
+>>
+>> Is it safe to share DL_DIR and SSTATE_DIR between multiple Yocto builds that are running in parallel? Are all the accesses done by bitbake/Yocto atomic or protected by locking? This came up because I'm wondering whether it would be possible to safely share a single downloads mirror and sstate cache between multiple build agents (and not just read-only over a HTTP server, but writing too).
+>>
+>> The documentation contains some sentences like "You can safely share this directory between multiple builds on the same development machine" and "You can reuse the directory for multiple builds", but this does not seem to clarify whether parallel builds are allowed. I have found an older message [1], which suggests that SSTATE_DIR is safe to share, but that still leaves me wondering about DL_DIR. Presumably bitbake uses plain rename()/mv for tarballs, as for sstate, making them thread-safe. But what about Git repos - it's clear that Git itself uses locking, but bitbake may do more than just git operations. Does anyone have any more information on this, besides digging into the bitbake and bbclass sources? Is it "thread-safe"? A potentially related question: How does bitbake handle multiple do_fetch tasks for the same repository running in parallel (if you have multiple recipes using the same repo)?
+>>
+>> Thanks & kind regards,
+>> Daniel
+>>
+>> [1] https://www.yoctoproject.org/pipermail/yocto/2016-November/032873.html <https://www.yoctoproject.org/pipermail/yocto/2016-November/032873.html>
+>>
+>> -=-=-=-=-=-=-=-=-=-=-=-
+>> Links: You receive all messages sent to this group.
+>> View/Reply Online (#60695): https://lists.yoctoproject.org/g/yocto/message/60695 <https://lists.yoctoproject.org/g/yocto/message/60695>
+>> Mute This Topic: https://lists.yoctoproject.org/mt/100483492/1686489 <https://lists.yoctoproject.org/mt/100483492/1686489>
+>> Group Owner: yocto+owner@lists.yoctoproject.org
+>> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub <https://lists.yoctoproject.org/g/yocto/unsub> [alex.kanavin@gmail.com]
+>> -=-=-=-=-=-=-=-=-=-=-=-
+>>
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2023-08-02 11:45 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-08-01 13:25 Sharing DL_DIR and SSTATE_DIR between parallel builds Daniel Klauer
+2023-08-01 13:40 ` [yocto] " Alexander Kanavin
+2023-08-02 11:45   ` Daniel Klauer
+

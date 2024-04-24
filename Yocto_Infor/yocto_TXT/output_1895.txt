@@ -1,0 +1,4491 @@
+* [psplash][RFC PATCH 00/14] Implement DRM backend
+@ 2022-04-25  7:59 Vasyl Vavrychuk
+  2022-04-25  7:59 ` [psplash][RFC PATCH 01/14] Trim trailing spaces Vasyl Vavrychuk
+                   ` (14 more replies)
+  0 siblings, 15 replies; 18+ messages in thread
+From: Vasyl Vavrychuk @ 2022-04-25  7:59 UTC (permalink / raw)
+  To: yocto; +Cc: Vasyl Vavrychuk
+
+It is needed in case display does not support FB.
+
+The missing part is drawing splash screen over all connected displays. I think
+there should be loop somewhere for this, but I am not sure which level is the
+best to put it.
+
+https://github.com/r1mikey/psplash-drm/blob/drm/implement-drm/psplash-draw.c has
+psplash_draw_initial(_one), psplash_draw_msg(_one) and
+psplash_draw_progress(_one) implementing loop over scanouts. I am think about
+doing the same.
+
+Vasyl Vavrychuk (14):
+  Trim trailing spaces
+  Fix 'unused-result' warnings
+  Remove unused save_termios
+  Remove 'psplash-fb.h' from 'psplash.h'
+  Extract plot pixel from psplash-fb
+  Extract draw rect/image from psplash-fb
+  Extract draw font from psplash-fb
+  psplash.c: Make psplash_draw_{msg,progress} independent of FB
+  Rework flip as function pointer
+  Import drm-howto modeset.c as psplash-drm.c
+  Implement drm backend
+  Reverse modeset_list
+  psplash-drm.c: Allocate resources only for the first connector
+  psplash-drm.c: Implement double buffering
+
+ Makefile.am       |  15 +-
+ configure.ac      |   9 +
+ psplash-console.c |  34 +-
+ psplash-console.h |   8 +-
+ psplash-draw.c    | 295 +++++++++++++++++
+ psplash-draw.h    |  81 +++++
+ psplash-drm.c     | 787 ++++++++++++++++++++++++++++++++++++++++++++++
+ psplash-drm.h     |  17 +
+ psplash-fb.c      | 371 +++-------------------
+ psplash-fb.h      |  74 +----
+ psplash-systemd.c |  36 ++-
+ psplash-write.c   |  37 ++-
+ psplash.c         | 186 ++++++-----
+ psplash.h         |   7 +-
+ 14 files changed, 1446 insertions(+), 511 deletions(-)
+ create mode 100644 psplash-draw.c
+ create mode 100644 psplash-draw.h
+ create mode 100644 psplash-drm.c
+ create mode 100644 psplash-drm.h
+
+-- 
+2.30.2
+
+
+
+^ permalink raw reply	[flat|nested] 18+ messages in thread
+* [psplash][RFC PATCH 01/14] Trim trailing spaces
+  2022-04-25  7:59 [psplash][RFC PATCH 00/14] Implement DRM backend Vasyl Vavrychuk
+@ 2022-04-25  7:59 ` Vasyl Vavrychuk
+  2022-04-25  7:59 ` [psplash][RFC PATCH 02/14] Fix 'unused-result' warnings Vasyl Vavrychuk
+                   ` (13 subsequent siblings)
+  14 siblings, 0 replies; 18+ messages in thread
+From: Vasyl Vavrychuk @ 2022-04-25  7:59 UTC (permalink / raw)
+  To: yocto; +Cc: Vasyl Vavrychuk
+
+Signed-off-by: Vasyl Vavrychuk <vasyl.vavrychuk@opensynergy.com>
+---
+ psplash-console.c | 34 +++++++++++-----------
+ psplash-console.h |  8 ++---
+ psplash-fb.c      |  4 +--
+ psplash-fb.h      | 34 +++++++++++-----------
+ psplash-write.c   | 14 ++++-----
+ psplash.c         | 74 +++++++++++++++++++++++------------------------
+ psplash.h         |  4 +--
+ 7 files changed, 86 insertions(+), 86 deletions(-)
+
+diff --git a/psplash-console.c b/psplash-console.c
+index 3a40620..c00c6fe 100644
+--- a/psplash-console.c
++++ b/psplash-console.c
+@@ -1,5 +1,5 @@
+-/* 
+- *  pslash - a lightweight framebuffer splashscreen for embedded devices. 
++/*
++ *  pslash - a lightweight framebuffer splashscreen for embedded devices.
+  *
+  *  Copyright (c) 2006 Matthew Allum <mallum@o-hand.com>
+  *
+@@ -27,12 +27,12 @@ vt_request (int UNUSED(sig))
+ 	perror("Error cannot switch away from console");
+       Visible = 0;
+ 
+-      /* FIXME: 
+-       * We likely now want to signal the main loop as to exit	 
++      /* FIXME:
++       * We likely now want to signal the main loop as to exit
+        * and we've now likely switched to the X tty. Note, this
+        * seems to happen anyway atm due to select() call getting
+        * a signal interuption error - not sure if this is really
+-       * reliable however. 
++       * reliable however.
+       */
+     }
+   else
+@@ -49,7 +49,7 @@ psplash_console_ignore_switches (void)
+ {
+   struct sigaction    act;
+   struct vt_mode      vt_mode;
+-  
++
+   if (ioctl(ConsoleFd, VT_GETMODE, &vt_mode) < 0)
+     {
+       perror("Error VT_SETMODE failed");
+@@ -60,7 +60,7 @@ psplash_console_ignore_switches (void)
+   sigemptyset (&act.sa_mask);
+   act.sa_flags = 0;
+   sigaction (SIGUSR1, &act, 0);
+-  
++
+   vt_mode.mode = VT_AUTO;
+   vt_mode.relsig = 0;
+   vt_mode.acqsig = 0;
+@@ -74,7 +74,7 @@ psplash_console_handle_switches (void)
+ {
+   struct sigaction    act;
+   struct vt_mode      vt_mode;
+- 
++
+   if (ioctl(ConsoleFd, VT_GETMODE, &vt_mode) < 0)
+     {
+       perror("Error VT_SETMODE failed");
+@@ -85,7 +85,7 @@ psplash_console_handle_switches (void)
+   sigemptyset (&act.sa_mask);
+   act.sa_flags = 0;
+   sigaction (SIGUSR1, &act, 0);
+-  
++
+   vt_mode.mode   = VT_PROCESS;
+   vt_mode.relsig = SIGUSR1;
+   vt_mode.acqsig = SIGUSR1;
+@@ -94,8 +94,8 @@ psplash_console_handle_switches (void)
+     perror("Error VT_SETMODE failed");
+ }
+ 
+-void 
+-psplash_console_switch (void) 
++void
++psplash_console_switch (void)
+ {
+   char           vtname[10];
+   int            fd;
+@@ -114,9 +114,9 @@ psplash_console_switch (void)
+       close(fd);
+       return;
+     }
+-  
++
+   close(fd);
+-  
++
+   sprintf(vtname,"/dev/tty%d", VTNum);
+ 
+   if ((ConsoleFd = open(vtname, O_RDWR|O_NDELAY, 0)) < 0)
+@@ -134,12 +134,12 @@ psplash_console_switch (void)
+ 
+   if (ioctl(ConsoleFd, VT_ACTIVATE, VTNum) != 0)
+     perror("Error VT_ACTIVATE failed");
+-  
++
+   if (ioctl(ConsoleFd, VT_WAITACTIVE, VTNum) != 0)
+     perror("Error VT_WAITACTIVE failed\n");
+ 
+   psplash_console_handle_switches ();
+-  
++
+   if (ioctl(ConsoleFd, KDSETMODE, KD_GRAPHICS) < 0)
+     perror("Error KDSETMODE KD_GRAPHICS failed\n");
+ 
+@@ -156,7 +156,7 @@ psplash_console_reset (void)
+     return;
+ 
+   /* Back to text mode */
+-  ioctl(ConsoleFd, KDSETMODE, KD_TEXT); 
++  ioctl(ConsoleFd, KDSETMODE, KD_TEXT);
+ 
+   psplash_console_ignore_switches ();
+ 
+@@ -175,7 +175,7 @@ psplash_console_reset (void)
+ 
+   /* Cleanup */
+ 
+-  close(ConsoleFd); 
++  close(ConsoleFd);
+ 
+   if ((fd = open ("/dev/tty0", O_RDWR|O_NDELAY, 0)) >= 0)
+     {
+diff --git a/psplash-console.h b/psplash-console.h
+index c893bf2..ad51ef2 100644
+--- a/psplash-console.h
++++ b/psplash-console.h
+@@ -1,5 +1,5 @@
+-/* 
+- *  pslash - a lightweight framebuffer splashscreen for embedded devices. 
++/*
++ *  pslash - a lightweight framebuffer splashscreen for embedded devices.
+  *
+  *  Copyright (c) 2006 Matthew Allum <mallum@o-hand.com>
+  *
+@@ -10,8 +10,8 @@
+ #ifndef _HAVE_PSPLASH_CONSOLE_H
+ #define _HAVE_PSPLASH_CONSOLE_H
+ 
+-void 
+-psplash_console_switch (void); 
++void
++psplash_console_switch (void);
+ 
+ void
+ psplash_console_reset (void);
+diff --git a/psplash-fb.c b/psplash-fb.c
+index 2babb5f..1d2d7db 100644
+--- a/psplash-fb.c
++++ b/psplash-fb.c
+@@ -429,13 +429,13 @@ psplash_fb_plot_pixel (PSplashFB    *fb,
+       {
+       case 32:
+         *(volatile uint32_t *) (fb->bdata + off)
+-	  = ((red >> (8 - fb->red_length)) << fb->red_offset) 
++	  = ((red >> (8 - fb->red_length)) << fb->red_offset)
+ 	      | ((green >> (8 - fb->green_length)) << fb->green_offset)
+ 	      | ((blue >> (8 - fb->blue_length)) << fb->blue_offset);
+         break;
+       case 16:
+         *(volatile uint16_t *) (fb->bdata + off)
+-	  = ((red >> (8 - fb->red_length)) << fb->red_offset) 
++	  = ((red >> (8 - fb->red_length)) << fb->red_offset)
+ 	      | ((green >> (8 - fb->green_length)) << fb->green_offset)
+ 	      | ((blue >> (8 - fb->blue_length)) << fb->blue_offset);
+         break;
+diff --git a/psplash-fb.h b/psplash-fb.h
+index 16e2b20..eafa293 100644
+--- a/psplash-fb.h
++++ b/psplash-fb.h
+@@ -1,5 +1,5 @@
+-/* 
+- *  pslash - a lightweight framebuffer splashscreen for embedded devices. 
++/*
++ *  pslash - a lightweight framebuffer splashscreen for embedded devices.
+  *
+  *  Copyright (c) 2006 Matthew Allum <mallum@o-hand.com>
+  *
+@@ -20,11 +20,11 @@ enum RGBMode {
+ 
+ typedef struct PSplashFB
+ {
+-  int            fd;			
++  int            fd;
+   struct fb_var_screeninfo fb_var;
+-  struct termios save_termios;	        
+-  int            type;		        
+-  int            visual;		
++  struct termios save_termios;
++  int            type;
++  int            visual;
+   int            width, height;
+   int            bpp;
+   int            stride;
+@@ -56,20 +56,20 @@ PSplashFB*
+ psplash_fb_new (int angle, int fbdev_id);
+ 
+ void
+-psplash_fb_draw_rect (PSplashFB    *fb, 
+-		      int          x, 
+-		      int          y, 
+-		      int          width, 
++psplash_fb_draw_rect (PSplashFB    *fb,
++		      int          x,
++		      int          y,
++		      int          width,
+ 		      int          height,
+ 		      uint8        red,
+ 		      uint8        green,
+ 		      uint8        blue);
+ 
+ void
+-psplash_fb_draw_image (PSplashFB    *fb, 
+-		       int          x, 
+-		       int          y, 
+-		       int          img_width, 
++psplash_fb_draw_image (PSplashFB    *fb,
++		       int          x,
++		       int          y,
++		       int          img_width,
+ 		       int          img_height,
+ 		       int          img_bytes_pre_pixel,
+ 		       int          img_rowstride,
+@@ -82,9 +82,9 @@ psplash_fb_text_size (int                *width,
+ 		      const char         *text);
+ 
+ void
+-psplash_fb_draw_text (PSplashFB         *fb, 
+-		      int                x, 
+-		      int                y, 
++psplash_fb_draw_text (PSplashFB         *fb,
++		      int                x,
++		      int                y,
+ 		      uint8              red,
+ 		      uint8              green,
+ 		      uint8              blue,
+diff --git a/psplash-write.c b/psplash-write.c
+index a12467a..eee0ea3 100644
+--- a/psplash-write.c
++++ b/psplash-write.c
+@@ -1,5 +1,5 @@
+-/* 
+- *  pslash - a lightweight framebuffer splashscreen for embedded devices. 
++/*
++ *  pslash - a lightweight framebuffer splashscreen for embedded devices.
+  *
+  *  Copyright (c) 2006 Matthew Allum <mallum@o-hand.com>
+  *
+@@ -19,7 +19,7 @@
+ #include <errno.h>
+ #include "psplash.h"
+ 
+-int main(int argc, char **argv) 
++int main(int argc, char **argv)
+ {
+   char *rundir;
+   int   pipe_fd;
+@@ -29,17 +29,17 @@ int main(int argc, char **argv)
+   if (!rundir)
+     rundir = "/run";
+ 
+-  if (argc!=2) 
++  if (argc!=2)
+     {
+       fprintf(stderr, "Wrong number of arguments\n");
+       exit(-1);
+     }
+-  
++
+   chdir(rundir);
+-  
++
+   if ((pipe_fd = open (PSPLASH_FIFO,O_WRONLY|O_NONBLOCK)) == -1)
+     {
+-      /* Silently error out instead of covering the boot process in 
++      /* Silently error out instead of covering the boot process in
+          errors when psplash has exitted due to a VC switch */
+       /* perror("Error unable to open fifo"); */
+       exit (-1);
+diff --git a/psplash.c b/psplash.c
+index ee1af6b..838ac13 100644
+--- a/psplash.c
++++ b/psplash.c
+@@ -1,9 +1,9 @@
+-/* 
+- *  pslash - a lightweight framebuffer splashscreen for embedded devices. 
++/*
++ *  pslash - a lightweight framebuffer splashscreen for embedded devices.
+  *
+  *  Copyright (c) 2006 Matthew Allum <mallum@o-hand.com>
+  *
+- *  Parts of this file ( fifo handling ) based on 'usplash' copyright 
++ *  Parts of this file ( fifo handling ) based on 'usplash' copyright
+  *  Matthew Garret.
+  *
+  *  SPDX-License-Identifier: GPL-2.0-or-later
+@@ -46,15 +46,15 @@ psplash_draw_msg (PSplashFB *fb, const char *msg)
+ 
+   /* Clear */
+ 
+-  psplash_fb_draw_rect (fb, 
+-			0, 
+-			SPLIT_LINE_POS(fb) - h, 
++  psplash_fb_draw_rect (fb,
++			0,
++			SPLIT_LINE_POS(fb) - h,
+ 			fb->width,
+ 			h,
+ 			PSPLASH_BACKGROUND_COLOR);
+ 
+   psplash_fb_draw_text (fb,
+-			(fb->width-w)/2, 
++			(fb->width-w)/2,
+ 			SPLIT_LINE_POS(fb) - h,
+ 			PSPLASH_TEXT_COLOR,
+ 			&FONT_DEF,
+@@ -70,13 +70,13 @@ psplash_draw_progress (PSplashFB *fb, int value)
+   /* 4 pix border */
+   x      = ((fb->width  - BAR_IMG_WIDTH)/2) + 4 ;
+   y      = SPLIT_LINE_POS(fb) + 4;
+-  width  = BAR_IMG_WIDTH - 8; 
++  width  = BAR_IMG_WIDTH - 8;
+   height = BAR_IMG_HEIGHT - 8;
+ 
+   if (value > 0)
+     {
+       barwidth = (CLAMP(value,0,100) * width) / 100;
+-      psplash_fb_draw_rect (fb, x + barwidth, y, 
++      psplash_fb_draw_rect (fb, x + barwidth, y,
+     			width - barwidth, height,
+ 			PSPLASH_BAR_BACKGROUND_COLOR);
+       psplash_fb_draw_rect (fb, x, y, barwidth,
+@@ -85,7 +85,7 @@ psplash_draw_progress (PSplashFB *fb, int value)
+   else
+     {
+       barwidth = (CLAMP(-value,0,100) * width) / 100;
+-      psplash_fb_draw_rect (fb, x, y, 
++      psplash_fb_draw_rect (fb, x, y,
+     			width - barwidth, height,
+ 			PSPLASH_BAR_BACKGROUND_COLOR);
+       psplash_fb_draw_rect (fb, x + width - barwidth,
+@@ -93,18 +93,18 @@ psplash_draw_progress (PSplashFB *fb, int value)
+ 			    PSPLASH_BAR_COLOR);
+     }
+ 
+-  DBG("value: %i, width: %i, barwidth :%i\n", value, 
++  DBG("value: %i, width: %i, barwidth :%i\n", value,
+ 		width, barwidth);
+ }
+ #endif /* PSPLASH_SHOW_PROGRESS_BAR */
+ 
+-static int 
++static int
+ parse_command (PSplashFB *fb, char *string)
+ {
+   char *command;
+ 
+   DBG("got cmd %s", string);
+-	
++
+   if (strcmp(string,"QUIT") == 0)
+     return 1;
+ 
+@@ -116,7 +116,7 @@ parse_command (PSplashFB *fb, char *string)
+ 
+       if (arg)
+         psplash_draw_msg (fb, arg);
+-    } 
++    }
+  #ifdef PSPLASH_SHOW_PROGRESS_BAR
+   else  if (!strcmp(command,"PROGRESS"))
+     {
+@@ -124,9 +124,9 @@ parse_command (PSplashFB *fb, char *string)
+ 
+       if (arg)
+         psplash_draw_progress (fb, atoi(arg));
+-    } 
++    }
+ #endif
+-  else if (!strcmp(command,"QUIT")) 
++  else if (!strcmp(command,"QUIT"))
+     {
+       return 1;
+     }
+@@ -135,8 +135,8 @@ parse_command (PSplashFB *fb, char *string)
+   return 0;
+ }
+ 
+-void 
+-psplash_main (PSplashFB *fb, int pipe_fd, int timeout) 
++void
++psplash_main (PSplashFB *fb, int pipe_fd, int timeout)
+ {
+   int            err;
+   ssize_t        length = 0;
+@@ -154,14 +154,14 @@ psplash_main (PSplashFB *fb, int pipe_fd, int timeout)
+ 
+   end = command;
+ 
+-  while (1) 
++  while (1)
+     {
+-      if (timeout != 0) 
++      if (timeout != 0)
+ 	err = select(pipe_fd+1, &descriptors, NULL, NULL, &tv);
+       else
+ 	err = select(pipe_fd+1, &descriptors, NULL, NULL, NULL);
+-      
+-      if (err <= 0) 
++
++      if (err <= 0)
+ 	{
+ 	  /*
+ 	  if (errno == EINTR)
+@@ -169,10 +169,10 @@ psplash_main (PSplashFB *fb, int pipe_fd, int timeout)
+ 	  */
+ 	  return;
+ 	}
+-      
++
+       length += read (pipe_fd, end, sizeof(command) - (end - command));
+ 
+-      if (length == 0) 
++      if (length == 0)
+ 	{
+ 	  /* Reopen to see if there's anything more for us */
+ 	  close(pipe_fd);
+@@ -208,10 +208,10 @@ psplash_main (PSplashFB *fb, int pipe_fd, int timeout)
+ 
+     out:
+       end = &command[length];
+-    
++
+       tv.tv_sec = timeout;
+       tv.tv_usec = 0;
+-      
++
+       FD_ZERO(&descriptors);
+       FD_SET(pipe_fd,&descriptors);
+     }
+@@ -219,8 +219,8 @@ psplash_main (PSplashFB *fb, int pipe_fd, int timeout)
+   return;
+ }
+ 
+-int 
+-main (int argc, char** argv) 
++int
++main (int argc, char** argv)
+ {
+   char      *rundir;
+   int        pipe_fd, i = 0, angle = 0, fbdev_id = 0, ret = 0;
+@@ -253,8 +253,8 @@ main (int argc, char** argv)
+       }
+ 
+     fail:
+-      fprintf(stderr, 
+-              "Usage: %s [-n|--no-console-switch][-a|--angle <0|90|180|270>][-f|--fbdev <0..9>]\n", 
++      fprintf(stderr,
++              "Usage: %s [-n|--no-console-switch][-a|--angle <0|90|180|270>][-f|--fbdev <0..9>]\n",
+               argv[0]);
+       exit(-1);
+   }
+@@ -268,7 +268,7 @@ main (int argc, char** argv)
+ 
+   if (mkfifo(PSPLASH_FIFO, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP))
+     {
+-      if (errno!=EEXIST) 
++      if (errno!=EEXIST)
+ 	    {
+ 	      perror("mkfifo");
+ 	      exit(-1);
+@@ -276,8 +276,8 @@ main (int argc, char** argv)
+     }
+ 
+   pipe_fd = open (PSPLASH_FIFO,O_RDONLY|O_NONBLOCK);
+-  
+-  if (pipe_fd==-1) 
++
++  if (pipe_fd==-1)
+     {
+       perror("pipe open");
+       exit(-2);
+@@ -301,8 +301,8 @@ main (int argc, char** argv)
+                         PSPLASH_BACKGROUND_COLOR);
+ 
+   /* Draw the Poky logo  */
+-  psplash_fb_draw_image (fb, 
+-			 (fb->width  - POKY_IMG_WIDTH)/2, 
++  psplash_fb_draw_image (fb,
++			 (fb->width  - POKY_IMG_WIDTH)/2,
+ #if PSPLASH_IMG_FULLSCREEN
+ 			 (fb->height - POKY_IMG_HEIGHT)/2,
+ #else
+@@ -317,8 +317,8 @@ main (int argc, char** argv)
+ 
+ #ifdef PSPLASH_SHOW_PROGRESS_BAR
+   /* Draw progress bar border */
+-  psplash_fb_draw_image (fb, 
+-			 (fb->width  - BAR_IMG_WIDTH)/2, 
++  psplash_fb_draw_image (fb,
++			 (fb->width  - BAR_IMG_WIDTH)/2,
+ 			 SPLIT_LINE_POS(fb),
+ 			 BAR_IMG_WIDTH,
+ 			 BAR_IMG_HEIGHT,
+diff --git a/psplash.h b/psplash.h
+index 1c42ec7..3739ca3 100644
+--- a/psplash.h
++++ b/psplash.h
+@@ -1,5 +1,5 @@
+-/* 
+- *  pslash - a lightweight framebuffer splashscreen for embedded devices. 
++/*
++ *  pslash - a lightweight framebuffer splashscreen for embedded devices.
+  *
+  *  Copyright (c) 2006 Matthew Allum <mallum@o-hand.com>
+  *
+-- 
+2.30.2
+
+
+
+^ permalink raw reply related	[flat|nested] 18+ messages in thread
+* [psplash][RFC PATCH 02/14] Fix 'unused-result' warnings
+  2022-04-25  7:59 [psplash][RFC PATCH 00/14] Implement DRM backend Vasyl Vavrychuk
+  2022-04-25  7:59 ` [psplash][RFC PATCH 01/14] Trim trailing spaces Vasyl Vavrychuk
+@ 2022-04-25  7:59 ` Vasyl Vavrychuk
+  2022-04-25  7:59 ` [psplash][RFC PATCH 03/14] Remove unused save_termios Vasyl Vavrychuk
+                   ` (12 subsequent siblings)
+  14 siblings, 0 replies; 18+ messages in thread
+From: Vasyl Vavrychuk @ 2022-04-25  7:59 UTC (permalink / raw)
+  To: yocto; +Cc: Vasyl Vavrychuk
+
+This fixes warnings such as:
+
+    ignoring return value of 'chdir', declared with attribute warn_unused_result [-Wunused-result]
+
+Signed-off-by: Vasyl Vavrychuk <vasyl.vavrychuk@opensynergy.com>
+---
+ psplash-systemd.c | 36 +++++++++++++++++++++++++++++++++---
+ psplash-write.c   | 23 ++++++++++++++++++-----
+ psplash.c         |  5 ++++-
+ 3 files changed, 55 insertions(+), 9 deletions(-)
+
+diff --git a/psplash-systemd.c b/psplash-systemd.c
+index 840bd4e..dcf7e61 100644
+--- a/psplash-systemd.c
++++ b/psplash-systemd.c
+@@ -32,6 +32,7 @@ int get_progress(void)
+ 	int r;
+ 	char buffer[20];
+ 	int len;
++	ssize_t written;
+ 
+         /* Connect to the system bus */
+ 	r = sd_bus_new(&bus);
+@@ -71,11 +72,36 @@ int get_progress(void)
+ 		current_progress = progress;
+ 
+ 	len = snprintf(buffer, 20, "PROGRESS %d", (int)(current_progress * 100));
+-	write(pipe_fd, buffer, len + 1);
++	written = write(pipe_fd, buffer, len + 1);
++	if (written == -1) {
++		/* EPIPE could mean that psplash detected boot complete sooner
++		then psplash-systemd and exited */
++		if (errno != EPIPE) {
++			perror("write");
++			r = -1;
++			goto finish;
++		}
++	} else if (written < len + 1) {
++		fprintf(stderr, "Wrote %zd bytes, less then expected %d bytes\n",
++			written, len + 1);
++		r = -1;
++		goto finish;
++	}
+ 
+ 	if (progress == 1.0) {
+ 		printf("Systemd reported progress of 1.0, quit psplash.\n");
+-		write(pipe_fd, "QUIT", 5);
++		written = write(pipe_fd, "QUIT", 5);
++		if (written == -1) {
++			/* EPIPE could mean that psplash detected boot complete
++			sooner then psplash-systemd and exited */
++			if (errno != EPIPE) {
++				perror("write");
++				r = -1;
++				goto finish;
++			}
++		} else if (written < 5)
++			fprintf(stderr, "Wrote %zd bytes, less then expected 5 bytes\n",
++				written);
+ 		r = -1;
+ 	}
+ 
+@@ -123,7 +149,11 @@ int main()
+ 	if (!rundir)
+ 		rundir = "/run";
+ 
+-	chdir(rundir);
++	r = chdir(rundir);
++	if (r < 0) {
++		perror("chdir");
++		goto finish;
++	}
+ 
+ 	if ((pipe_fd = open (PSPLASH_FIFO,O_WRONLY|O_NONBLOCK)) == -1) {
+ 		fprintf(stderr, "Error unable to open fifo");
+diff --git a/psplash-write.c b/psplash-write.c
+index eee0ea3..16b87e1 100644
+--- a/psplash-write.c
++++ b/psplash-write.c
+@@ -21,8 +21,10 @@
+ 
+ int main(int argc, char **argv)
+ {
+-  char *rundir;
+-  int   pipe_fd;
++  char   *rundir;
++  int     pipe_fd;
++  size_t  count;
++  ssize_t written;
+ 
+   rundir = getenv("PSPLASH_FIFO_DIR");
+ 
+@@ -35,7 +37,10 @@ int main(int argc, char **argv)
+       exit(-1);
+     }
+ 
+-  chdir(rundir);
++  if (chdir(rundir)) {
++    perror("chdir");
++    exit(-1);
++  }
+ 
+   if ((pipe_fd = open (PSPLASH_FIFO,O_WRONLY|O_NONBLOCK)) == -1)
+     {
+@@ -45,8 +50,16 @@ int main(int argc, char **argv)
+       exit (-1);
+     }
+ 
+-  write(pipe_fd, argv[1], strlen(argv[1])+1);
++  count = strlen(argv[1]) + 1;
++  written = write(pipe_fd, argv[1], count);
++  if (written == -1) {
++    perror("write");
++    exit(-1);
++  } else if ((size_t)written < count) {
++    fprintf(stderr, "Wrote %zd bytes, less then expected %zu bytes\n",
++      written, count);
++    exit(-1);
++  }
+ 
+   return 0;
+ }
+-
+diff --git a/psplash.c b/psplash.c
+index 838ac13..62244ba 100644
+--- a/psplash.c
++++ b/psplash.c
+@@ -264,7 +264,10 @@ main (int argc, char** argv)
+   if (!rundir)
+     rundir = "/run";
+ 
+-  chdir(rundir);
++  if (chdir(rundir)) {
++    perror("chdir");
++    exit(-1);
++  }
+ 
+   if (mkfifo(PSPLASH_FIFO, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP))
+     {
+-- 
+2.30.2
+
+
+
+^ permalink raw reply related	[flat|nested] 18+ messages in thread
+* [psplash][RFC PATCH 03/14] Remove unused save_termios
+  2022-04-25  7:59 [psplash][RFC PATCH 00/14] Implement DRM backend Vasyl Vavrychuk
+  2022-04-25  7:59 ` [psplash][RFC PATCH 01/14] Trim trailing spaces Vasyl Vavrychuk
+  2022-04-25  7:59 ` [psplash][RFC PATCH 02/14] Fix 'unused-result' warnings Vasyl Vavrychuk
+@ 2022-04-25  7:59 ` Vasyl Vavrychuk
+  2022-04-25  7:59 ` [psplash][RFC PATCH 04/14] Remove 'psplash-fb.h' from 'psplash.h' Vasyl Vavrychuk
+                   ` (11 subsequent siblings)
+  14 siblings, 0 replies; 18+ messages in thread
+From: Vasyl Vavrychuk @ 2022-04-25  7:59 UTC (permalink / raw)
+  To: yocto; +Cc: Vasyl Vavrychuk
+
+Signed-off-by: Vasyl Vavrychuk <vasyl.vavrychuk@opensynergy.com>
+---
+ psplash-fb.h | 1 -
+ psplash.h    | 1 -
+ 2 files changed, 2 deletions(-)
+
+diff --git a/psplash-fb.h b/psplash-fb.h
+index eafa293..6c4599c 100644
+--- a/psplash-fb.h
++++ b/psplash-fb.h
+@@ -22,7 +22,6 @@ typedef struct PSplashFB
+ {
+   int            fd;
+   struct fb_var_screeninfo fb_var;
+-  struct termios save_termios;
+   int            type;
+   int            visual;
+   int            width, height;
+diff --git a/psplash.h b/psplash.h
+index 3739ca3..8e68b7b 100644
+--- a/psplash.h
++++ b/psplash.h
+@@ -32,7 +32,6 @@
+ #include <sys/stat.h>
+ #include <sys/time.h>
+ #include <sys/types.h>
+-#include <termios.h>
+ #include <unistd.h>
+ 
+ typedef uint8_t  uint8;
+-- 
+2.30.2
+
+
+
+^ permalink raw reply related	[flat|nested] 18+ messages in thread
+* [psplash][RFC PATCH 04/14] Remove 'psplash-fb.h' from 'psplash.h'
+  2022-04-25  7:59 [psplash][RFC PATCH 00/14] Implement DRM backend Vasyl Vavrychuk
+                   ` (2 preceding siblings ...)
+  2022-04-25  7:59 ` [psplash][RFC PATCH 03/14] Remove unused save_termios Vasyl Vavrychuk
+@ 2022-04-25  7:59 ` Vasyl Vavrychuk
+  2022-04-25  7:59 ` [psplash][RFC PATCH 05/14] Extract plot pixel from psplash-fb Vasyl Vavrychuk
+                   ` (10 subsequent siblings)
+  14 siblings, 0 replies; 18+ messages in thread
+From: Vasyl Vavrychuk @ 2022-04-25  7:59 UTC (permalink / raw)
+  To: yocto; +Cc: Vasyl Vavrychuk
+
+psplash might not be necessary based on framebuffer, it could use DRM
+in future too.
+
+Signed-off-by: Vasyl Vavrychuk <vasyl.vavrychuk@opensynergy.com>
+---
+ psplash-fb.c | 2 +-
+ psplash-fb.h | 3 +++
+ psplash.c    | 1 +
+ psplash.h    | 2 --
+ 4 files changed, 5 insertions(+), 3 deletions(-)
+
+diff --git a/psplash-fb.c b/psplash-fb.c
+index 1d2d7db..5dea82a 100644
+--- a/psplash-fb.c
++++ b/psplash-fb.c
+@@ -8,7 +8,7 @@
+  */
+ 
+ #include <endian.h>
+-#include "psplash.h"
++#include "psplash-fb.h"
+ 
+ static void
+ psplash_wait_for_vsync(PSplashFB *fb)
+diff --git a/psplash-fb.h b/psplash-fb.h
+index 6c4599c..4d5c460 100644
+--- a/psplash-fb.h
++++ b/psplash-fb.h
+@@ -10,6 +10,9 @@
+ #ifndef _HAVE_PSPLASH_FB_H
+ #define _HAVE_PSPLASH_FB_H
+ 
++#include <linux/fb.h>
++#include "psplash.h"
++
+ enum RGBMode {
+     RGB565,
+     BGR565,
+diff --git a/psplash.c b/psplash.c
+index 62244ba..18c012b 100644
+--- a/psplash.c
++++ b/psplash.c
+@@ -11,6 +11,7 @@
+  */
+ 
+ #include "psplash.h"
++#include "psplash-fb.h"
+ #include "psplash-config.h"
+ #include "psplash-colors.h"
+ #include "psplash-poky-img.h"
+diff --git a/psplash.h b/psplash.h
+index 8e68b7b..7489e75 100644
+--- a/psplash.h
++++ b/psplash.h
+@@ -15,7 +15,6 @@
+ #include <errno.h>
+ #include <fcntl.h>
+ #include <limits.h>
+-#include <linux/fb.h>
+ #include <linux/kd.h>
+ #include <linux/vt.h>
+ #include <signal.h>
+@@ -78,7 +77,6 @@ typedef struct PSplashFont
+ PSplashFont;
+ 
+ 
+-#include "psplash-fb.h"
+ #include "psplash-console.h"
+ 
+ #endif
+-- 
+2.30.2
+
+
+
+^ permalink raw reply related	[flat|nested] 18+ messages in thread
+* [psplash][RFC PATCH 05/14] Extract plot pixel from psplash-fb
+  2022-04-25  7:59 [psplash][RFC PATCH 00/14] Implement DRM backend Vasyl Vavrychuk
+                   ` (3 preceding siblings ...)
+  2022-04-25  7:59 ` [psplash][RFC PATCH 04/14] Remove 'psplash-fb.h' from 'psplash.h' Vasyl Vavrychuk
+@ 2022-04-25  7:59 ` Vasyl Vavrychuk
+  2022-04-25  7:59 ` [psplash][RFC PATCH 06/14] Extract draw rect/image " Vasyl Vavrychuk
+                   ` (9 subsequent siblings)
+  14 siblings, 0 replies; 18+ messages in thread
+From: Vasyl Vavrychuk @ 2022-04-25  7:59 UTC (permalink / raw)
+  To: yocto; +Cc: Vasyl Vavrychuk
+
+psplash_fb_plot_pixel is in fact framebuffer independent.
+
+Signed-off-by: Vasyl Vavrychuk <vasyl.vavrychuk@opensynergy.com>
+---
+ Makefile.am    |   3 +-
+ psplash-draw.c | 120 +++++++++++++++++++++++++++++++
+ psplash-draw.h |  51 +++++++++++++
+ psplash-fb.c   | 191 +++++++++++--------------------------------------
+ psplash-fb.h   |  25 ++-----
+ psplash.c      |  20 +++---
+ 6 files changed, 229 insertions(+), 181 deletions(-)
+ create mode 100644 psplash-draw.c
+ create mode 100644 psplash-draw.h
+
+diff --git a/Makefile.am b/Makefile.am
+index 310e126..375b926 100644
+--- a/Makefile.am
++++ b/Makefile.am
+@@ -5,7 +5,8 @@ AM_CFLAGS = $(GCC_FLAGS) $(EXTRA_GCC_FLAGS) -D_GNU_SOURCE -DFONT_HEADER=\"$(FONT
+ psplash_SOURCES = psplash.c psplash.h psplash-fb.c psplash-fb.h \
+                   psplash-console.c psplash-console.h           \
+ 		  psplash-colors.h psplash-config.h		\
+-		  psplash-poky-img.h psplash-bar-img.h $(FONT_NAME)-font.h
++		  psplash-poky-img.h psplash-bar-img.h $(FONT_NAME)-font.h \
++		  psplash-draw.c psplash-draw.h
+ BUILT_SOURCES = psplash-poky-img.h psplash-bar-img.h
+ 
+ psplash_write_SOURCES = psplash-write.c psplash.h
+diff --git a/psplash-draw.c b/psplash-draw.c
+new file mode 100644
+index 0000000..570cfce
+--- /dev/null
++++ b/psplash-draw.c
+@@ -0,0 +1,120 @@
++/*
++ *  pslash - a lightweight framebuffer splashscreen for embedded devices.
++ *
++ *  Copyright (c) 2006 Matthew Allum <mallum@o-hand.com>
++ *
++ *  SPDX-License-Identifier: GPL-2.0-or-later
++ *
++ */
++
++#include "psplash-draw.h"
++
++#define OFFSET(canvas, x, y) (((y) * (canvas)->stride) + ((x) * ((canvas)->bpp >> 3)))
++
++/* TODO: change to 'static inline' as psplash_fb_plot_pixel was before */
++void
++psplash_plot_pixel(PSplashCanvas *canvas,
++		   int            x,
++		   int            y,
++		   uint8          red,
++		   uint8          green,
++		   uint8          blue)
++{
++  /* Always write to back data (data) which points to the right data with or
++   * without double buffering support */
++  int off;
++
++  if (x < 0 || x > canvas->width-1 || y < 0 || y > canvas->height-1)
++    return;
++
++  switch (canvas->angle)
++    {
++    case 270:
++      off = OFFSET (canvas, canvas->height - y - 1, x);
++      break;
++    case 180:
++      off = OFFSET (canvas, canvas->width - x - 1, canvas->height - y - 1);
++      break;
++    case 90:
++      off = OFFSET (canvas, y, canvas->width - x - 1);
++      break;
++    case 0:
++    default:
++      off = OFFSET (canvas, x, y);
++      break;
++    }
++
++  if (canvas->rgbmode == RGB565 || canvas->rgbmode == RGB888) {
++    switch (canvas->bpp)
++      {
++      case 24:
++#if __BYTE_ORDER == __BIG_ENDIAN
++        *(canvas->data + off + 0) = red;
++        *(canvas->data + off + 1) = green;
++        *(canvas->data + off + 2) = blue;
++#else
++        *(canvas->data + off + 0) = blue;
++        *(canvas->data + off + 1) = green;
++        *(canvas->data + off + 2) = red;
++#endif
++        break;
++      case 32:
++        *(volatile uint32_t *) (canvas->data + off)
++          = (red << 16) | (green << 8) | (blue);
++        break;
++
++      case 16:
++        *(volatile uint16_t *) (canvas->data + off)
++	  = ((red >> 3) << 11) | ((green >> 2) << 5) | (blue >> 3);
++        break;
++      default:
++        /* depth not supported yet */
++        break;
++      }
++  } else if (canvas->rgbmode == BGR565 || canvas->rgbmode == BGR888) {
++    switch (canvas->bpp)
++      {
++      case 24:
++#if __BYTE_ORDER == __BIG_ENDIAN
++        *(canvas->data + off + 0) = blue;
++        *(canvas->data + off + 1) = green;
++        *(canvas->data + off + 2) = red;
++#else
++        *(canvas->data + off + 0) = red;
++        *(canvas->data + off + 1) = green;
++        *(canvas->data + off + 2) = blue;
++#endif
++        break;
++      case 32:
++        *(volatile uint32_t *) (canvas->data + off)
++          = (blue << 16) | (green << 8) | (red);
++        break;
++      case 16:
++        *(volatile uint16_t *) (canvas->data + off)
++	  = ((blue >> 3) << 11) | ((green >> 2) << 5) | (red >> 3);
++        break;
++      default:
++        /* depth not supported yet */
++        break;
++      }
++  } else {
++    switch (canvas->bpp)
++      {
++      case 32:
++        *(volatile uint32_t *) (canvas->data + off)
++	  = ((red >> (8 - canvas->red_length)) << canvas->red_offset)
++	      | ((green >> (8 - canvas->green_length)) << canvas->green_offset)
++	      | ((blue >> (8 - canvas->blue_length)) << canvas->blue_offset);
++        break;
++      case 16:
++        *(volatile uint16_t *) (canvas->data + off)
++	  = ((red >> (8 - canvas->red_length)) << canvas->red_offset)
++	      | ((green >> (8 - canvas->green_length)) << canvas->green_offset)
++	      | ((blue >> (8 - canvas->blue_length)) << canvas->blue_offset);
++        break;
++      default:
++        /* depth not supported yet */
++        break;
++      }
++  }
++}
+diff --git a/psplash-draw.h b/psplash-draw.h
+new file mode 100644
+index 0000000..ab2d4d2
+--- /dev/null
++++ b/psplash-draw.h
+@@ -0,0 +1,51 @@
++/*
++ *  pslash - a lightweight framebuffer splashscreen for embedded devices.
++ *
++ *  Copyright (c) 2006 Matthew Allum <mallum@o-hand.com>
++ *
++ *  SPDX-License-Identifier: GPL-2.0-or-later
++ *
++ */
++
++#ifndef _HAVE_PSPLASH_CANVAS_H
++#define _HAVE_PSPLASH_CANVAS_H
++
++#include "psplash.h"
++
++enum RGBMode {
++    RGB565,
++    BGR565,
++    RGB888,
++    BGR888,
++    GENERIC,
++};
++
++typedef struct PSplashCanvas
++{
++  int            width, height;
++  int            bpp;
++  int            stride;
++  char		*data;
++
++  int            angle;
++
++  enum RGBMode   rgbmode;
++  int            red_offset;
++  int            red_length;
++  int            green_offset;
++  int            green_length;
++  int            blue_offset;
++  int            blue_length;
++}
++PSplashCanvas;
++
++/* TODO: Remove after rest of drawing functions migrated to psplash-draw.c */
++void
++psplash_plot_pixel(PSplashCanvas *canvas,
++		   int            x,
++		   int            y,
++		   uint8          red,
++		   uint8          green,
++		   uint8          blue);
++
++#endif
+diff --git a/psplash-fb.c b/psplash-fb.c
+index 5dea82a..a7029c5 100644
+--- a/psplash-fb.c
++++ b/psplash-fb.c
+@@ -42,10 +42,11 @@ psplash_fb_flip(PSplashFB *fb, int sync)
+     tmp = fb->fdata;
+     fb->fdata = fb->bdata;
+     fb->bdata = tmp;
++    fb->canvas.data = fb->bdata;
+ 
+     /* Sync new front to new back when requested */
+     if (sync) {
+-      memcpy(fb->bdata, fb->fdata, fb->stride * fb->real_height);
++      memcpy(fb->bdata, fb->fdata, fb->canvas.stride * fb->real_height);
+     }
+   }
+ }
+@@ -220,42 +221,42 @@ psplash_fb_new (int angle, int fbdev_id)
+     }
+   }
+ 
+-  fb->real_width  = fb->width  = fb_var.xres;
+-  fb->real_height = fb->height = fb_var.yres;
+-  fb->bpp    = fb_var.bits_per_pixel;
+-  fb->stride = fb_fix.line_length;
++  fb->real_width  = fb->canvas.width  = fb_var.xres;
++  fb->real_height = fb->canvas.height = fb_var.yres;
++  fb->canvas.bpp    = fb_var.bits_per_pixel;
++  fb->canvas.stride = fb_fix.line_length;
+   fb->type   = fb_fix.type;
+   fb->visual = fb_fix.visual;
+ 
+-  fb->red_offset = fb_var.red.offset;
+-  fb->red_length = fb_var.red.length;
+-  fb->green_offset = fb_var.green.offset;
+-  fb->green_length = fb_var.green.length;
+-  fb->blue_offset = fb_var.blue.offset;
+-  fb->blue_length = fb_var.blue.length;
+-
+-  if (fb->red_offset == 11 && fb->red_length == 5 &&
+-      fb->green_offset == 5 && fb->green_length == 6 &&
+-      fb->blue_offset == 0 && fb->blue_length == 5) {
+-         fb->rgbmode = RGB565;
+-  } else if (fb->red_offset == 0 && fb->red_length == 5 &&
+-      fb->green_offset == 5 && fb->green_length == 6 &&
+-      fb->blue_offset == 11 && fb->blue_length == 5) {
+-         fb->rgbmode = BGR565;
+-  } else if (fb->red_offset == 16 && fb->red_length == 8 &&
+-      fb->green_offset == 8 && fb->green_length == 8 &&
+-      fb->blue_offset == 0 && fb->blue_length == 8) {
+-         fb->rgbmode = RGB888;
+-  } else if (fb->red_offset == 0 && fb->red_length == 8 &&
+-      fb->green_offset == 8 && fb->green_length == 8 &&
+-      fb->blue_offset == 16 && fb->blue_length == 8) {
+-         fb->rgbmode = BGR888;
++  fb->canvas.red_offset = fb_var.red.offset;
++  fb->canvas.red_length = fb_var.red.length;
++  fb->canvas.green_offset = fb_var.green.offset;
++  fb->canvas.green_length = fb_var.green.length;
++  fb->canvas.blue_offset = fb_var.blue.offset;
++  fb->canvas.blue_length = fb_var.blue.length;
++
++  if (fb->canvas.red_offset == 11 && fb->canvas.red_length == 5 &&
++      fb->canvas.green_offset == 5 && fb->canvas.green_length == 6 &&
++      fb->canvas.blue_offset == 0 && fb->canvas.blue_length == 5) {
++         fb->canvas.rgbmode = RGB565;
++  } else if (fb->canvas.red_offset == 0 && fb->canvas.red_length == 5 &&
++      fb->canvas.green_offset == 5 && fb->canvas.green_length == 6 &&
++      fb->canvas.blue_offset == 11 && fb->canvas.blue_length == 5) {
++         fb->canvas.rgbmode = BGR565;
++  } else if (fb->canvas.red_offset == 16 && fb->canvas.red_length == 8 &&
++      fb->canvas.green_offset == 8 && fb->canvas.green_length == 8 &&
++      fb->canvas.blue_offset == 0 && fb->canvas.blue_length == 8) {
++         fb->canvas.rgbmode = RGB888;
++  } else if (fb->canvas.red_offset == 0 && fb->canvas.red_length == 8 &&
++      fb->canvas.green_offset == 8 && fb->canvas.green_length == 8 &&
++      fb->canvas.blue_offset == 16 && fb->canvas.blue_length == 8) {
++         fb->canvas.rgbmode = BGR888;
+   } else {
+-         fb->rgbmode = GENERIC;
++         fb->canvas.rgbmode = GENERIC;
+   }
+ 
+   DBG("width: %i, height: %i, bpp: %i, stride: %i",
+-      fb->width, fb->height, fb->bpp, fb->stride);
++      fb->canvas.width, fb->canvas.height, fb->canvas.bpp, fb->canvas.stride);
+ 
+   fb->base = (char *) mmap ((caddr_t) NULL,
+ 			    fb_fix.smem_len,
+@@ -279,16 +280,17 @@ psplash_fb_new (int angle, int fbdev_id)
+     if (fb->fb_var.yoffset == 0) {
+       printf("to back\n");
+       fb->fdata = fb->data;
+-      fb->bdata = fb->data + fb->stride * fb->height;
++      fb->bdata = fb->data + fb->canvas.stride * fb->canvas.height;
+     } else {
+       printf("to front\n");
+-      fb->fdata = fb->data + fb->stride * fb->height;
++      fb->fdata = fb->data + fb->canvas.stride * fb->canvas.height;
+       fb->bdata = fb->data;
+     }
+   } else {
+     fb->fdata = fb->data;
+     fb->bdata = fb->data;
+   }
++  fb->canvas.data = fb->bdata;
+ 
+ #if 0
+   /* FIXME: No support for 8pp as yet  */
+@@ -312,14 +314,14 @@ psplash_fb_new (int angle, int fbdev_id)
+   status = 2;
+ #endif
+ 
+-  fb->angle = angle;
++  fb->canvas.angle = angle;
+ 
+-  switch (fb->angle)
++  switch (angle)
+     {
+     case 270:
+     case 90:
+-      fb->width  = fb->real_height;
+-      fb->height = fb->real_width;
++      fb->canvas.width  = fb->real_height;
++      fb->canvas.height = fb->real_width;
+       break;
+     case 180:
+     case 0:
+@@ -337,115 +339,6 @@ psplash_fb_new (int angle, int fbdev_id)
+   return NULL;
+ }
+ 
+-#define OFFSET(fb,x,y) (((y) * (fb)->stride) + ((x) * ((fb)->bpp >> 3)))
+-
+-static inline void
+-psplash_fb_plot_pixel (PSplashFB    *fb,
+-		       int          x,
+-		       int          y,
+-		       uint8        red,
+-		       uint8        green,
+-		       uint8        blue)
+-{
+-  /* Always write to back data (bdata) which points to the right data with or
+-   * without double buffering support */
+-  int off;
+-
+-  if (x < 0 || x > fb->width-1 || y < 0 || y > fb->height-1)
+-    return;
+-
+-  switch (fb->angle)
+-    {
+-    case 270:
+-      off = OFFSET (fb, fb->height - y - 1, x);
+-      break;
+-    case 180:
+-      off = OFFSET (fb, fb->width - x - 1, fb->height - y - 1);
+-      break;
+-    case 90:
+-      off = OFFSET (fb, y, fb->width - x - 1);
+-      break;
+-    case 0:
+-    default:
+-      off = OFFSET (fb, x, y);
+-      break;
+-    }
+-
+-  if (fb->rgbmode == RGB565 || fb->rgbmode == RGB888) {
+-    switch (fb->bpp)
+-      {
+-      case 24:
+-#if __BYTE_ORDER == __BIG_ENDIAN
+-        *(fb->bdata + off + 0) = red;
+-        *(fb->bdata + off + 1) = green;
+-        *(fb->bdata + off + 2) = blue;
+-#else
+-        *(fb->bdata + off + 0) = blue;
+-        *(fb->bdata + off + 1) = green;
+-        *(fb->bdata + off + 2) = red;
+-#endif
+-        break;
+-      case 32:
+-        *(volatile uint32_t *) (fb->bdata + off)
+-          = (red << 16) | (green << 8) | (blue);
+-        break;
+-
+-      case 16:
+-        *(volatile uint16_t *) (fb->bdata + off)
+-	  = ((red >> 3) << 11) | ((green >> 2) << 5) | (blue >> 3);
+-        break;
+-      default:
+-        /* depth not supported yet */
+-        break;
+-      }
+-  } else if (fb->rgbmode == BGR565 || fb->rgbmode == BGR888) {
+-    switch (fb->bpp)
+-      {
+-      case 24:
+-#if __BYTE_ORDER == __BIG_ENDIAN
+-        *(fb->bdata + off + 0) = blue;
+-        *(fb->bdata + off + 1) = green;
+-        *(fb->bdata + off + 2) = red;
+-#else
+-        *(fb->bdata + off + 0) = red;
+-        *(fb->bdata + off + 1) = green;
+-        *(fb->bdata + off + 2) = blue;
+-#endif
+-        break;
+-      case 32:
+-        *(volatile uint32_t *) (fb->bdata + off)
+-          = (blue << 16) | (green << 8) | (red);
+-        break;
+-      case 16:
+-        *(volatile uint16_t *) (fb->bdata + off)
+-	  = ((blue >> 3) << 11) | ((green >> 2) << 5) | (red >> 3);
+-        break;
+-      default:
+-        /* depth not supported yet */
+-        break;
+-      }
+-  } else {
+-    switch (fb->bpp)
+-      {
+-      case 32:
+-        *(volatile uint32_t *) (fb->bdata + off)
+-	  = ((red >> (8 - fb->red_length)) << fb->red_offset)
+-	      | ((green >> (8 - fb->green_length)) << fb->green_offset)
+-	      | ((blue >> (8 - fb->blue_length)) << fb->blue_offset);
+-        break;
+-      case 16:
+-        *(volatile uint16_t *) (fb->bdata + off)
+-	  = ((red >> (8 - fb->red_length)) << fb->red_offset)
+-	      | ((green >> (8 - fb->green_length)) << fb->green_offset)
+-	      | ((blue >> (8 - fb->blue_length)) << fb->blue_offset);
+-        break;
+-      default:
+-        /* depth not supported yet */
+-        break;
+-      }
+-  }
+-}
+-
+ void
+ psplash_fb_draw_rect (PSplashFB    *fb,
+ 		      int          x,
+@@ -460,7 +353,7 @@ psplash_fb_draw_rect (PSplashFB    *fb,
+ 
+   for (dy=0; dy < height; dy++)
+     for (dx=0; dx < width; dx++)
+-	psplash_fb_plot_pixel (fb, x+dx, y+dy, red, green, blue);
++	psplash_plot_pixel(&fb->canvas, x+dx, y+dy, red, green, blue);
+ }
+ 
+ void
+@@ -493,7 +386,7 @@ psplash_fb_draw_image (PSplashFB    *fb,
+ 	  do
+ 	    {
+ 	      if ((img_bytes_per_pixel < 4 || *(p+3)) && dx < img_width)
+-	        psplash_fb_plot_pixel (fb, x+dx, y+dy, *(p), *(p+1), *(p+2));
++	        psplash_plot_pixel(&fb->canvas, x+dx, y+dy, *(p), *(p+1), *(p+2));
+ 	      if (++dx * img_bytes_per_pixel >= img_rowstride) { dx=0; dy++; }
+ 	    }
+ 	  while (--len);
+@@ -507,7 +400,7 @@ psplash_fb_draw_image (PSplashFB    *fb,
+ 	  do
+ 	    {
+ 	      if ((img_bytes_per_pixel < 4 || *(p+3)) && dx < img_width)
+-	        psplash_fb_plot_pixel (fb, x+dx, y+dy, *(p), *(p+1), *(p+2));
++	        psplash_plot_pixel(&fb->canvas, x+dx, y+dy, *(p), *(p+1), *(p+2));
+ 	      if (++dx * img_bytes_per_pixel >= img_rowstride) { dx=0; dy++; }
+ 	      p += img_bytes_per_pixel;
+ 	    }
+@@ -613,7 +506,7 @@ psplash_fb_draw_text (PSplashFB         *fb,
+ 	  for (cx = 0; cx < w; cx++)
+ 	    {
+ 	      if (g & 0x80000000)
+-		psplash_fb_plot_pixel (fb, x+dx+cx, y+dy+cy,
++		psplash_plot_pixel(&fb->canvas, x+dx+cx, y+dy+cy,
+ 				       red, green, blue);
+ 	      g <<= 1;
+ 	    }
+diff --git a/psplash-fb.h b/psplash-fb.h
+index 4d5c460..eb02c62 100644
+--- a/psplash-fb.h
++++ b/psplash-fb.h
+@@ -11,25 +11,16 @@
+ #define _HAVE_PSPLASH_FB_H
+ 
+ #include <linux/fb.h>
+-#include "psplash.h"
+-
+-enum RGBMode {
+-    RGB565,
+-    BGR565,
+-    RGB888,
+-    BGR888,
+-    GENERIC,
+-};
++#include "psplash-draw.h"
+ 
+ typedef struct PSplashFB
+ {
++  PSplashCanvas  canvas;
++
+   int            fd;
+   struct fb_var_screeninfo fb_var;
+   int            type;
+   int            visual;
+-  int            width, height;
+-  int            bpp;
+-  int            stride;
+   char		*data;
+   char		*base;
+ 
+@@ -38,16 +29,8 @@ typedef struct PSplashFB
+   char		*bdata;
+   char		*fdata;
+ 
+-  int            angle, fbdev_id;
++  int            fbdev_id;
+   int            real_width, real_height;
+-
+-  enum RGBMode   rgbmode;
+-  int            red_offset;
+-  int            red_length;
+-  int            green_offset;
+-  int            green_length;
+-  int            blue_offset;
+-  int            blue_length;
+ }
+ PSplashFB;
+ 
+diff --git a/psplash.c b/psplash.c
+index 18c012b..f23f03d 100644
+--- a/psplash.c
++++ b/psplash.c
+@@ -22,10 +22,10 @@
+ #include FONT_HEADER
+ 
+ #define SPLIT_LINE_POS(fb)                                  \
+-	(  (fb)->height                                     \
++	(  (fb)->canvas.height                              \
+ 	 - ((  PSPLASH_IMG_SPLIT_DENOMINATOR                \
+ 	     - PSPLASH_IMG_SPLIT_NUMERATOR)                 \
+-	    * (fb)->height / PSPLASH_IMG_SPLIT_DENOMINATOR) \
++	    * (fb)->canvas.height / PSPLASH_IMG_SPLIT_DENOMINATOR) \
+ 	)
+ 
+ void
+@@ -50,12 +50,12 @@ psplash_draw_msg (PSplashFB *fb, const char *msg)
+   psplash_fb_draw_rect (fb,
+ 			0,
+ 			SPLIT_LINE_POS(fb) - h,
+-			fb->width,
++			fb->canvas.width,
+ 			h,
+ 			PSPLASH_BACKGROUND_COLOR);
+ 
+   psplash_fb_draw_text (fb,
+-			(fb->width-w)/2,
++			(fb->canvas.width-w)/2,
+ 			SPLIT_LINE_POS(fb) - h,
+ 			PSPLASH_TEXT_COLOR,
+ 			&FONT_DEF,
+@@ -69,7 +69,7 @@ psplash_draw_progress (PSplashFB *fb, int value)
+   int x, y, width, height, barwidth;
+ 
+   /* 4 pix border */
+-  x      = ((fb->width  - BAR_IMG_WIDTH)/2) + 4 ;
++  x      = ((fb->canvas.width  - BAR_IMG_WIDTH)/2) + 4 ;
+   y      = SPLIT_LINE_POS(fb) + 4;
+   width  = BAR_IMG_WIDTH - 8;
+   height = BAR_IMG_HEIGHT - 8;
+@@ -301,16 +301,16 @@ main (int argc, char** argv)
+ #endif
+ 
+   /* Clear the background with #ecece1 */
+-  psplash_fb_draw_rect (fb, 0, 0, fb->width, fb->height,
++  psplash_fb_draw_rect (fb, 0, 0, fb->canvas.width, fb->canvas.height,
+                         PSPLASH_BACKGROUND_COLOR);
+ 
+   /* Draw the Poky logo  */
+   psplash_fb_draw_image (fb,
+-			 (fb->width  - POKY_IMG_WIDTH)/2,
++			 (fb->canvas.width  - POKY_IMG_WIDTH)/2,
+ #if PSPLASH_IMG_FULLSCREEN
+-			 (fb->height - POKY_IMG_HEIGHT)/2,
++			 (fb->canvas.height - POKY_IMG_HEIGHT)/2,
+ #else
+-			 (fb->height * PSPLASH_IMG_SPLIT_NUMERATOR
++			 (fb->canvas.height * PSPLASH_IMG_SPLIT_NUMERATOR
+ 			  / PSPLASH_IMG_SPLIT_DENOMINATOR - POKY_IMG_HEIGHT)/2,
+ #endif
+ 			 POKY_IMG_WIDTH,
+@@ -322,7 +322,7 @@ main (int argc, char** argv)
+ #ifdef PSPLASH_SHOW_PROGRESS_BAR
+   /* Draw progress bar border */
+   psplash_fb_draw_image (fb,
+-			 (fb->width  - BAR_IMG_WIDTH)/2,
++			 (fb->canvas.width  - BAR_IMG_WIDTH)/2,
+ 			 SPLIT_LINE_POS(fb),
+ 			 BAR_IMG_WIDTH,
+ 			 BAR_IMG_HEIGHT,
+-- 
+2.30.2
+
+
+
+^ permalink raw reply related	[flat|nested] 18+ messages in thread
+* [psplash][RFC PATCH 06/14] Extract draw rect/image from psplash-fb
+  2022-04-25  7:59 [psplash][RFC PATCH 00/14] Implement DRM backend Vasyl Vavrychuk
+                   ` (4 preceding siblings ...)
+  2022-04-25  7:59 ` [psplash][RFC PATCH 05/14] Extract plot pixel from psplash-fb Vasyl Vavrychuk
+@ 2022-04-25  7:59 ` Vasyl Vavrychuk
+  2022-04-25  7:59 ` [psplash][RFC PATCH 07/14] Extract draw font " Vasyl Vavrychuk
+                   ` (8 subsequent siblings)
+  14 siblings, 0 replies; 18+ messages in thread
+From: Vasyl Vavrychuk @ 2022-04-25  7:59 UTC (permalink / raw)
+  To: yocto; +Cc: Vasyl Vavrychuk
+
+Signed-off-by: Vasyl Vavrychuk <vasyl.vavrychuk@opensynergy.com>
+---
+ psplash-draw.c | 70 ++++++++++++++++++++++++++++++++++++++++++++++++++
+ psplash-draw.h | 20 +++++++++++++++
+ psplash-fb.c   | 70 --------------------------------------------------
+ psplash-fb.h   | 20 ---------------
+ psplash.c      | 16 ++++++------
+ 5 files changed, 98 insertions(+), 98 deletions(-)
+
+diff --git a/psplash-draw.c b/psplash-draw.c
+index 570cfce..6887e22 100644
+--- a/psplash-draw.c
++++ b/psplash-draw.c
+@@ -118,3 +118,73 @@ psplash_plot_pixel(PSplashCanvas *canvas,
+       }
+   }
+ }
++
++void
++psplash_draw_rect(PSplashCanvas *canvas,
++		  int            x,
++		  int            y,
++		  int            width,
++		  int            height,
++		  uint8          red,
++		  uint8          green,
++		  uint8          blue)
++{
++  int dx, dy;
++
++  for (dy=0; dy < height; dy++)
++    for (dx=0; dx < width; dx++)
++	psplash_plot_pixel(canvas, x+dx, y+dy, red, green, blue);
++}
++
++void
++psplash_draw_image(PSplashCanvas *canvas,
++		   int            x,
++		   int            y,
++		   int            img_width,
++		   int            img_height,
++		   int            img_bytes_per_pixel,
++		   int            img_rowstride,
++		   uint8         *rle_data)
++{
++  uint8       *p = rle_data;
++  int          dx = 0, dy = 0,  total_len;
++  unsigned int len;
++
++  total_len = img_rowstride * img_height;
++
++  /* FIXME: Optimise, check for over runs ... */
++  while ((p - rle_data) < total_len)
++    {
++      len = *(p++);
++
++      if (len & 128)
++	{
++	  len -= 128;
++
++	  if (len == 0) break;
++
++	  do
++	    {
++	      if ((img_bytes_per_pixel < 4 || *(p+3)) && dx < img_width)
++	        psplash_plot_pixel(canvas, x+dx, y+dy, *(p), *(p+1), *(p+2));
++	      if (++dx * img_bytes_per_pixel >= img_rowstride) { dx=0; dy++; }
++	    }
++	  while (--len);
++
++	  p += img_bytes_per_pixel;
++	}
++      else
++	{
++	  if (len == 0) break;
++
++	  do
++	    {
++	      if ((img_bytes_per_pixel < 4 || *(p+3)) && dx < img_width)
++	        psplash_plot_pixel(canvas, x+dx, y+dy, *(p), *(p+1), *(p+2));
++	      if (++dx * img_bytes_per_pixel >= img_rowstride) { dx=0; dy++; }
++	      p += img_bytes_per_pixel;
++	    }
++	  while (--len && (p - rle_data) < total_len);
++	}
++    }
++}
+diff --git a/psplash-draw.h b/psplash-draw.h
+index ab2d4d2..f8361da 100644
+--- a/psplash-draw.h
++++ b/psplash-draw.h
+@@ -48,4 +48,24 @@ psplash_plot_pixel(PSplashCanvas *canvas,
+ 		   uint8          green,
+ 		   uint8          blue);
+ 
++void
++psplash_draw_rect(PSplashCanvas *canvas,
++		  int            x,
++		  int            y,
++		  int            width,
++		  int            height,
++		  uint8          red,
++		  uint8          green,
++		  uint8          blue);
++
++void
++psplash_draw_image(PSplashCanvas *canvas,
++		   int            x,
++		   int            y,
++		   int            img_width,
++		   int            img_height,
++		   int            img_bytes_per_pixel,
++		   int            img_rowstride,
++		   uint8         *rle_data);
++
+ #endif
+diff --git a/psplash-fb.c b/psplash-fb.c
+index a7029c5..07839d5 100644
+--- a/psplash-fb.c
++++ b/psplash-fb.c
+@@ -339,76 +339,6 @@ psplash_fb_new (int angle, int fbdev_id)
+   return NULL;
+ }
+ 
+-void
+-psplash_fb_draw_rect (PSplashFB    *fb,
+-		      int          x,
+-		      int          y,
+-		      int          width,
+-		      int          height,
+-		      uint8        red,
+-		      uint8        green,
+-		      uint8        blue)
+-{
+-  int dx, dy;
+-
+-  for (dy=0; dy < height; dy++)
+-    for (dx=0; dx < width; dx++)
+-	psplash_plot_pixel(&fb->canvas, x+dx, y+dy, red, green, blue);
+-}
+-
+-void
+-psplash_fb_draw_image (PSplashFB    *fb,
+-		       int          x,
+-		       int          y,
+-		       int          img_width,
+-		       int          img_height,
+-		       int          img_bytes_per_pixel,
+-		       int          img_rowstride,
+-		       uint8       *rle_data)
+-{
+-  uint8       *p = rle_data;
+-  int          dx = 0, dy = 0,  total_len;
+-  unsigned int len;
+-
+-  total_len = img_rowstride * img_height;
+-
+-  /* FIXME: Optimise, check for over runs ... */
+-  while ((p - rle_data) < total_len)
+-    {
+-      len = *(p++);
+-
+-      if (len & 128)
+-	{
+-	  len -= 128;
+-
+-	  if (len == 0) break;
+-
+-	  do
+-	    {
+-	      if ((img_bytes_per_pixel < 4 || *(p+3)) && dx < img_width)
+-	        psplash_plot_pixel(&fb->canvas, x+dx, y+dy, *(p), *(p+1), *(p+2));
+-	      if (++dx * img_bytes_per_pixel >= img_rowstride) { dx=0; dy++; }
+-	    }
+-	  while (--len);
+-
+-	  p += img_bytes_per_pixel;
+-	}
+-      else
+-	{
+-	  if (len == 0) break;
+-
+-	  do
+-	    {
+-	      if ((img_bytes_per_pixel < 4 || *(p+3)) && dx < img_width)
+-	        psplash_plot_pixel(&fb->canvas, x+dx, y+dy, *(p), *(p+1), *(p+2));
+-	      if (++dx * img_bytes_per_pixel >= img_rowstride) { dx=0; dy++; }
+-	      p += img_bytes_per_pixel;
+-	    }
+-	  while (--len && (p - rle_data) < total_len);
+-	}
+-    }
+-}
+-
+ /* Font rendering code based on BOGL by Ben Pfaff */
+ 
+ static int
+diff --git a/psplash-fb.h b/psplash-fb.h
+index eb02c62..1eecb47 100644
+--- a/psplash-fb.h
++++ b/psplash-fb.h
+@@ -40,26 +40,6 @@ psplash_fb_destroy (PSplashFB *fb);
+ PSplashFB*
+ psplash_fb_new (int angle, int fbdev_id);
+ 
+-void
+-psplash_fb_draw_rect (PSplashFB    *fb,
+-		      int          x,
+-		      int          y,
+-		      int          width,
+-		      int          height,
+-		      uint8        red,
+-		      uint8        green,
+-		      uint8        blue);
+-
+-void
+-psplash_fb_draw_image (PSplashFB    *fb,
+-		       int          x,
+-		       int          y,
+-		       int          img_width,
+-		       int          img_height,
+-		       int          img_bytes_pre_pixel,
+-		       int          img_rowstride,
+-		       uint8       *rle_data);
+-
+ void
+ psplash_fb_text_size (int                *width,
+ 		      int                *height,
+diff --git a/psplash.c b/psplash.c
+index f23f03d..2aeb583 100644
+--- a/psplash.c
++++ b/psplash.c
+@@ -47,7 +47,7 @@ psplash_draw_msg (PSplashFB *fb, const char *msg)
+ 
+   /* Clear */
+ 
+-  psplash_fb_draw_rect (fb,
++  psplash_draw_rect(&fb->canvas,
+ 			0,
+ 			SPLIT_LINE_POS(fb) - h,
+ 			fb->canvas.width,
+@@ -77,19 +77,19 @@ psplash_draw_progress (PSplashFB *fb, int value)
+   if (value > 0)
+     {
+       barwidth = (CLAMP(value,0,100) * width) / 100;
+-      psplash_fb_draw_rect (fb, x + barwidth, y,
++      psplash_draw_rect(&fb->canvas, x + barwidth, y,
+     			width - barwidth, height,
+ 			PSPLASH_BAR_BACKGROUND_COLOR);
+-      psplash_fb_draw_rect (fb, x, y, barwidth,
++      psplash_draw_rect(&fb->canvas, x, y, barwidth,
+ 			    height, PSPLASH_BAR_COLOR);
+     }
+   else
+     {
+       barwidth = (CLAMP(-value,0,100) * width) / 100;
+-      psplash_fb_draw_rect (fb, x, y,
++      psplash_draw_rect(&fb->canvas, x, y,
+     			width - barwidth, height,
+ 			PSPLASH_BAR_BACKGROUND_COLOR);
+-      psplash_fb_draw_rect (fb, x + width - barwidth,
++      psplash_draw_rect(&fb->canvas, x + width - barwidth,
+ 			    y, barwidth, height,
+ 			    PSPLASH_BAR_COLOR);
+     }
+@@ -301,11 +301,11 @@ main (int argc, char** argv)
+ #endif
+ 
+   /* Clear the background with #ecece1 */
+-  psplash_fb_draw_rect (fb, 0, 0, fb->canvas.width, fb->canvas.height,
++  psplash_draw_rect(&fb->canvas, 0, 0, fb->canvas.width, fb->canvas.height,
+                         PSPLASH_BACKGROUND_COLOR);
+ 
+   /* Draw the Poky logo  */
+-  psplash_fb_draw_image (fb,
++  psplash_draw_image(&fb->canvas,
+ 			 (fb->canvas.width  - POKY_IMG_WIDTH)/2,
+ #if PSPLASH_IMG_FULLSCREEN
+ 			 (fb->canvas.height - POKY_IMG_HEIGHT)/2,
+@@ -321,7 +321,7 @@ main (int argc, char** argv)
+ 
+ #ifdef PSPLASH_SHOW_PROGRESS_BAR
+   /* Draw progress bar border */
+-  psplash_fb_draw_image (fb,
++  psplash_draw_image(&fb->canvas,
+ 			 (fb->canvas.width  - BAR_IMG_WIDTH)/2,
+ 			 SPLIT_LINE_POS(fb),
+ 			 BAR_IMG_WIDTH,
+-- 
+2.30.2
+
+
+
+^ permalink raw reply related	[flat|nested] 18+ messages in thread
+* [psplash][RFC PATCH 07/14] Extract draw font from psplash-fb
+  2022-04-25  7:59 [psplash][RFC PATCH 00/14] Implement DRM backend Vasyl Vavrychuk
+                   ` (5 preceding siblings ...)
+  2022-04-25  7:59 ` [psplash][RFC PATCH 06/14] Extract draw rect/image " Vasyl Vavrychuk
+@ 2022-04-25  7:59 ` Vasyl Vavrychuk
+  2022-04-25  7:59 ` [psplash][RFC PATCH 08/14] psplash.c: Make psplash_draw_{msg,progress} independent of FB Vasyl Vavrychuk
+                   ` (7 subsequent siblings)
+  14 siblings, 0 replies; 18+ messages in thread
+From: Vasyl Vavrychuk @ 2022-04-25  7:59 UTC (permalink / raw)
+  To: yocto; +Cc: Vasyl Vavrychuk
+
+Signed-off-by: Vasyl Vavrychuk <vasyl.vavrychuk@opensynergy.com>
+---
+ psplash-draw.c | 109 ++++++++++++++++++++++++++++++++++++++++++++++++-
+ psplash-draw.h |  25 ++++++++----
+ psplash-fb.c   | 108 ------------------------------------------------
+ psplash-fb.h   |  16 --------
+ psplash.c      |   4 +-
+ 5 files changed, 125 insertions(+), 137 deletions(-)
+
+diff --git a/psplash-draw.c b/psplash-draw.c
+index 6887e22..aa9887a 100644
+--- a/psplash-draw.c
++++ b/psplash-draw.c
+@@ -11,8 +11,7 @@
+ 
+ #define OFFSET(canvas, x, y) (((y) * (canvas)->stride) + ((x) * ((canvas)->bpp >> 3)))
+ 
+-/* TODO: change to 'static inline' as psplash_fb_plot_pixel was before */
+-void
++static inline void
+ psplash_plot_pixel(PSplashCanvas *canvas,
+ 		   int            x,
+ 		   int            y,
+@@ -188,3 +187,109 @@ psplash_draw_image(PSplashCanvas *canvas,
+ 	}
+     }
+ }
++
++/* Font rendering code based on BOGL by Ben Pfaff */
++
++static int
++psplash_font_glyph (const PSplashFont *font, wchar_t wc, u_int32_t **bitmap)
++{
++  int mask = font->index_mask;
++  int i;
++
++  for (;;)
++    {
++      for (i = font->offset[wc & mask]; font->index[i]; i += 2)
++	{
++	  if ((wchar_t)(font->index[i] & ~mask) == (wc & ~mask))
++	    {
++	      if (bitmap != NULL)
++		*bitmap = &font->content[font->index[i+1]];
++	      return font->index[i] & mask;
++	    }
++	}
++    }
++  return 0;
++}
++
++void
++psplash_text_size(int                *width,
++		  int                *height,
++		  const PSplashFont  *font,
++		  const char         *text)
++{
++  char   *c = (char*)text;
++  wchar_t wc;
++  int     k, n, w, h, mw;
++
++  n = strlen (text);
++  mw = h = w = 0;
++
++  mbtowc (0, 0, 0);
++  for (; (k = mbtowc (&wc, c, n)) > 0; c += k, n -= k)
++    {
++      if (*c == '\n')
++	{
++	  if (w > mw)
++	    mw = w;
++	  w = 0;
++	  h += font->height;
++	  continue;
++	}
++
++      w += psplash_font_glyph (font, wc, NULL);
++    }
++
++  *width  = (w > mw) ? w : mw;
++  *height = (h == 0) ? font->height : h;
++}
++
++void
++psplash_draw_text(PSplashCanvas     *canvas,
++		  int                x,
++		  int                y,
++		  uint8              red,
++		  uint8              green,
++		  uint8              blue,
++		  const PSplashFont *font,
++		  const char        *text)
++{
++  int     h, w, k, n, cx, cy, dx, dy;
++  char   *c = (char*)text;
++  wchar_t wc;
++
++  n = strlen (text);
++  h = font->height;
++  dx = dy = 0;
++
++  mbtowc (0, 0, 0);
++  for (; (k = mbtowc (&wc, c, n)) > 0; c += k, n -= k)
++    {
++      u_int32_t *glyph = NULL;
++
++      if (*c == '\n')
++	{
++	  dy += h;
++	  dx  = 0;
++	  continue;
++	}
++
++      w = psplash_font_glyph (font, wc, &glyph);
++
++      if (glyph == NULL)
++	continue;
++
++      for (cy = 0; cy < h; cy++)
++	{
++	  u_int32_t g = *glyph++;
++
++	  for (cx = 0; cx < w; cx++)
++	    {
++	      if (g & 0x80000000)
++		psplash_plot_pixel(canvas, x+dx+cx, y+dy+cy, red, green, blue);
++	      g <<= 1;
++	    }
++	}
++
++      dx += w;
++    }
++}
+diff --git a/psplash-draw.h b/psplash-draw.h
+index f8361da..44546b0 100644
+--- a/psplash-draw.h
++++ b/psplash-draw.h
+@@ -39,15 +39,6 @@ typedef struct PSplashCanvas
+ }
+ PSplashCanvas;
+ 
+-/* TODO: Remove after rest of drawing functions migrated to psplash-draw.c */
+-void
+-psplash_plot_pixel(PSplashCanvas *canvas,
+-		   int            x,
+-		   int            y,
+-		   uint8          red,
+-		   uint8          green,
+-		   uint8          blue);
+-
+ void
+ psplash_draw_rect(PSplashCanvas *canvas,
+ 		  int            x,
+@@ -68,4 +59,20 @@ psplash_draw_image(PSplashCanvas *canvas,
+ 		   int            img_rowstride,
+ 		   uint8         *rle_data);
+ 
++void
++psplash_text_size(int                *width,
++		  int                *height,
++		  const PSplashFont  *font,
++		  const char         *text);
++
++void
++psplash_draw_text(PSplashCanvas     *canvas,
++		  int                x,
++		  int                y,
++		  uint8              red,
++		  uint8              green,
++		  uint8              blue,
++		  const PSplashFont *font,
++		  const char        *text);
++
+ #endif
+diff --git a/psplash-fb.c b/psplash-fb.c
+index 07839d5..dd50a5a 100644
+--- a/psplash-fb.c
++++ b/psplash-fb.c
+@@ -338,111 +338,3 @@ psplash_fb_new (int angle, int fbdev_id)
+ 
+   return NULL;
+ }
+-
+-/* Font rendering code based on BOGL by Ben Pfaff */
+-
+-static int
+-psplash_font_glyph (const PSplashFont *font, wchar_t wc, u_int32_t **bitmap)
+-{
+-  int mask = font->index_mask;
+-  int i;
+-
+-  for (;;)
+-    {
+-      for (i = font->offset[wc & mask]; font->index[i]; i += 2)
+-	{
+-	  if ((wchar_t)(font->index[i] & ~mask) == (wc & ~mask))
+-	    {
+-	      if (bitmap != NULL)
+-		*bitmap = &font->content[font->index[i+1]];
+-	      return font->index[i] & mask;
+-	    }
+-	}
+-    }
+-  return 0;
+-}
+-
+-void
+-psplash_fb_text_size (int                *width,
+-		      int                *height,
+-		      const PSplashFont  *font,
+-		      const char         *text)
+-{
+-  char   *c = (char*)text;
+-  wchar_t wc;
+-  int     k, n, w, h, mw;
+-
+-  n = strlen (text);
+-  mw = h = w = 0;
+-
+-  mbtowc (0, 0, 0);
+-  for (; (k = mbtowc (&wc, c, n)) > 0; c += k, n -= k)
+-    {
+-      if (*c == '\n')
+-	{
+-	  if (w > mw)
+-	    mw = w;
+-	  w = 0;
+-	  h += font->height;
+-	  continue;
+-	}
+-
+-      w += psplash_font_glyph (font, wc, NULL);
+-    }
+-
+-  *width  = (w > mw) ? w : mw;
+-  *height = (h == 0) ? font->height : h;
+-}
+-
+-void
+-psplash_fb_draw_text (PSplashFB         *fb,
+-		      int                x,
+-		      int                y,
+-		      uint8              red,
+-		      uint8              green,
+-		      uint8              blue,
+-		      const PSplashFont *font,
+-		      const char        *text)
+-{
+-  int     h, w, k, n, cx, cy, dx, dy;
+-  char   *c = (char*)text;
+-  wchar_t wc;
+-
+-  n = strlen (text);
+-  h = font->height;
+-  dx = dy = 0;
+-
+-  mbtowc (0, 0, 0);
+-  for (; (k = mbtowc (&wc, c, n)) > 0; c += k, n -= k)
+-    {
+-      u_int32_t *glyph = NULL;
+-
+-      if (*c == '\n')
+-	{
+-	  dy += h;
+-	  dx  = 0;
+-	  continue;
+-	}
+-
+-      w = psplash_font_glyph (font, wc, &glyph);
+-
+-      if (glyph == NULL)
+-	continue;
+-
+-      for (cy = 0; cy < h; cy++)
+-	{
+-	  u_int32_t g = *glyph++;
+-
+-	  for (cx = 0; cx < w; cx++)
+-	    {
+-	      if (g & 0x80000000)
+-		psplash_plot_pixel(&fb->canvas, x+dx+cx, y+dy+cy,
+-				       red, green, blue);
+-	      g <<= 1;
+-	    }
+-	}
+-
+-      dx += w;
+-    }
+-}
+-
+diff --git a/psplash-fb.h b/psplash-fb.h
+index 1eecb47..1b16bd5 100644
+--- a/psplash-fb.h
++++ b/psplash-fb.h
+@@ -40,22 +40,6 @@ psplash_fb_destroy (PSplashFB *fb);
+ PSplashFB*
+ psplash_fb_new (int angle, int fbdev_id);
+ 
+-void
+-psplash_fb_text_size (int                *width,
+-		      int                *height,
+-		      const PSplashFont  *font,
+-		      const char         *text);
+-
+-void
+-psplash_fb_draw_text (PSplashFB         *fb,
+-		      int                x,
+-		      int                y,
+-		      uint8              red,
+-		      uint8              green,
+-		      uint8              blue,
+-		      const PSplashFont *font,
+-		      const char        *text);
+-
+ void
+ psplash_fb_flip(PSplashFB *fb, int sync);
+ 
+diff --git a/psplash.c b/psplash.c
+index 2aeb583..1a5e543 100644
+--- a/psplash.c
++++ b/psplash.c
+@@ -41,7 +41,7 @@ psplash_draw_msg (PSplashFB *fb, const char *msg)
+ {
+   int w, h;
+ 
+-  psplash_fb_text_size (&w, &h, &FONT_DEF, msg);
++  psplash_text_size(&w, &h, &FONT_DEF, msg);
+ 
+   DBG("displaying '%s' %ix%i\n", msg, w, h);
+ 
+@@ -54,7 +54,7 @@ psplash_draw_msg (PSplashFB *fb, const char *msg)
+ 			h,
+ 			PSPLASH_BACKGROUND_COLOR);
+ 
+-  psplash_fb_draw_text (fb,
++  psplash_draw_text(&fb->canvas,
+ 			(fb->canvas.width-w)/2,
+ 			SPLIT_LINE_POS(fb) - h,
+ 			PSPLASH_TEXT_COLOR,
+-- 
+2.30.2
+
+
+
+^ permalink raw reply related	[flat|nested] 18+ messages in thread
+* [psplash][RFC PATCH 08/14] psplash.c: Make psplash_draw_{msg,progress} independent of FB
+  2022-04-25  7:59 [psplash][RFC PATCH 00/14] Implement DRM backend Vasyl Vavrychuk
+                   ` (6 preceding siblings ...)
+  2022-04-25  7:59 ` [psplash][RFC PATCH 07/14] Extract draw font " Vasyl Vavrychuk
+@ 2022-04-25  7:59 ` Vasyl Vavrychuk
+  2022-04-25  7:59 ` [psplash][RFC PATCH 09/14] Rework flip as function pointer Vasyl Vavrychuk
+                   ` (6 subsequent siblings)
+  14 siblings, 0 replies; 18+ messages in thread
+From: Vasyl Vavrychuk @ 2022-04-25  7:59 UTC (permalink / raw)
+  To: yocto; +Cc: Vasyl Vavrychuk
+
+Signed-off-by: Vasyl Vavrychuk <vasyl.vavrychuk@opensynergy.com>
+---
+ psplash.c | 64 ++++++++++++++++++++++++++++---------------------------
+ 1 file changed, 33 insertions(+), 31 deletions(-)
+
+diff --git a/psplash.c b/psplash.c
+index 1a5e543..c234d46 100644
+--- a/psplash.c
++++ b/psplash.c
+@@ -21,11 +21,11 @@
+ #endif
+ #include FONT_HEADER
+ 
+-#define SPLIT_LINE_POS(fb)                                  \
+-	(  (fb)->canvas.height                              \
+-	 - ((  PSPLASH_IMG_SPLIT_DENOMINATOR                \
+-	     - PSPLASH_IMG_SPLIT_NUMERATOR)                 \
+-	    * (fb)->canvas.height / PSPLASH_IMG_SPLIT_DENOMINATOR) \
++#define SPLIT_LINE_POS(canvas)                                  \
++	(  (canvas)->height                                     \
++	 - ((  PSPLASH_IMG_SPLIT_DENOMINATOR                    \
++	     - PSPLASH_IMG_SPLIT_NUMERATOR)                     \
++	    * (canvas)->height / PSPLASH_IMG_SPLIT_DENOMINATOR) \
+ 	)
+ 
+ void
+@@ -37,7 +37,7 @@ psplash_exit (int UNUSED(signum))
+ }
+ 
+ void
+-psplash_draw_msg (PSplashFB *fb, const char *msg)
++psplash_draw_msg(PSplashCanvas *canvas, const char *msg)
+ {
+   int w, h;
+ 
+@@ -47,16 +47,16 @@ psplash_draw_msg (PSplashFB *fb, const char *msg)
+ 
+   /* Clear */
+ 
+-  psplash_draw_rect(&fb->canvas,
++  psplash_draw_rect(canvas,
+ 			0,
+-			SPLIT_LINE_POS(fb) - h,
+-			fb->canvas.width,
++			SPLIT_LINE_POS(canvas) - h,
++			canvas->width,
+ 			h,
+ 			PSPLASH_BACKGROUND_COLOR);
+ 
+-  psplash_draw_text(&fb->canvas,
+-			(fb->canvas.width-w)/2,
+-			SPLIT_LINE_POS(fb) - h,
++  psplash_draw_text(canvas,
++			(canvas->width-w)/2,
++			SPLIT_LINE_POS(canvas) - h,
+ 			PSPLASH_TEXT_COLOR,
+ 			&FONT_DEF,
+ 			msg);
+@@ -64,32 +64,32 @@ psplash_draw_msg (PSplashFB *fb, const char *msg)
+ 
+ #ifdef PSPLASH_SHOW_PROGRESS_BAR
+ void
+-psplash_draw_progress (PSplashFB *fb, int value)
++psplash_draw_progress(PSplashCanvas *canvas, int value)
+ {
+   int x, y, width, height, barwidth;
+ 
+   /* 4 pix border */
+-  x      = ((fb->canvas.width  - BAR_IMG_WIDTH)/2) + 4 ;
+-  y      = SPLIT_LINE_POS(fb) + 4;
++  x      = ((canvas->width  - BAR_IMG_WIDTH)/2) + 4 ;
++  y      = SPLIT_LINE_POS(canvas) + 4;
+   width  = BAR_IMG_WIDTH - 8;
+   height = BAR_IMG_HEIGHT - 8;
+ 
+   if (value > 0)
+     {
+       barwidth = (CLAMP(value,0,100) * width) / 100;
+-      psplash_draw_rect(&fb->canvas, x + barwidth, y,
++      psplash_draw_rect(canvas, x + barwidth, y,
+     			width - barwidth, height,
+ 			PSPLASH_BAR_BACKGROUND_COLOR);
+-      psplash_draw_rect(&fb->canvas, x, y, barwidth,
++      psplash_draw_rect(canvas, x, y, barwidth,
+ 			    height, PSPLASH_BAR_COLOR);
+     }
+   else
+     {
+       barwidth = (CLAMP(-value,0,100) * width) / 100;
+-      psplash_draw_rect(&fb->canvas, x, y,
++      psplash_draw_rect(canvas, x, y,
+     			width - barwidth, height,
+ 			PSPLASH_BAR_BACKGROUND_COLOR);
+-      psplash_draw_rect(&fb->canvas, x + width - barwidth,
++      psplash_draw_rect(canvas, x + width - barwidth,
+ 			    y, barwidth, height,
+ 			    PSPLASH_BAR_COLOR);
+     }
+@@ -116,7 +116,7 @@ parse_command (PSplashFB *fb, char *string)
+       char *arg = strtok(NULL, "\0");
+ 
+       if (arg)
+-        psplash_draw_msg (fb, arg);
++        psplash_draw_msg(&fb->canvas, arg);
+     }
+  #ifdef PSPLASH_SHOW_PROGRESS_BAR
+   else  if (!strcmp(command,"PROGRESS"))
+@@ -124,7 +124,7 @@ parse_command (PSplashFB *fb, char *string)
+       char *arg = strtok(NULL, "\0");
+ 
+       if (arg)
+-        psplash_draw_progress (fb, atoi(arg));
++        psplash_draw_progress(&fb->canvas, atoi(arg));
+     }
+ #endif
+   else if (!strcmp(command,"QUIT"))
+@@ -226,6 +226,7 @@ main (int argc, char** argv)
+   char      *rundir;
+   int        pipe_fd, i = 0, angle = 0, fbdev_id = 0, ret = 0;
+   PSplashFB *fb;
++  PSplashCanvas *canvas;
+   bool       disable_console_switch = FALSE;
+ 
+   signal(SIGHUP, psplash_exit);
+@@ -295,22 +296,23 @@ main (int argc, char** argv)
+ 	  ret = -1;
+ 	  goto fb_fail;
+     }
++  canvas = &fb->canvas;
+ 
+ #ifdef HAVE_SYSTEMD
+   sd_notify(0, "READY=1");
+ #endif
+ 
+   /* Clear the background with #ecece1 */
+-  psplash_draw_rect(&fb->canvas, 0, 0, fb->canvas.width, fb->canvas.height,
++  psplash_draw_rect(canvas, 0, 0, canvas->width, canvas->height,
+                         PSPLASH_BACKGROUND_COLOR);
+ 
+   /* Draw the Poky logo  */
+-  psplash_draw_image(&fb->canvas,
+-			 (fb->canvas.width  - POKY_IMG_WIDTH)/2,
++  psplash_draw_image(canvas,
++			 (canvas->width  - POKY_IMG_WIDTH)/2,
+ #if PSPLASH_IMG_FULLSCREEN
+-			 (fb->canvas.height - POKY_IMG_HEIGHT)/2,
++			 (canvas->height - POKY_IMG_HEIGHT)/2,
+ #else
+-			 (fb->canvas.height * PSPLASH_IMG_SPLIT_NUMERATOR
++			 (canvas->height * PSPLASH_IMG_SPLIT_NUMERATOR
+ 			  / PSPLASH_IMG_SPLIT_DENOMINATOR - POKY_IMG_HEIGHT)/2,
+ #endif
+ 			 POKY_IMG_WIDTH,
+@@ -321,20 +323,20 @@ main (int argc, char** argv)
+ 
+ #ifdef PSPLASH_SHOW_PROGRESS_BAR
+   /* Draw progress bar border */
+-  psplash_draw_image(&fb->canvas,
+-			 (fb->canvas.width  - BAR_IMG_WIDTH)/2,
+-			 SPLIT_LINE_POS(fb),
++  psplash_draw_image(canvas,
++			 (canvas->width  - BAR_IMG_WIDTH)/2,
++			 SPLIT_LINE_POS(canvas),
+ 			 BAR_IMG_WIDTH,
+ 			 BAR_IMG_HEIGHT,
+ 			 BAR_IMG_BYTES_PER_PIXEL,
+ 			 BAR_IMG_ROWSTRIDE,
+ 			 BAR_IMG_RLE_PIXEL_DATA);
+ 
+-  psplash_draw_progress (fb, 0);
++  psplash_draw_progress(canvas, 0);
+ #endif
+ 
+ #ifdef PSPLASH_STARTUP_MSG
+-  psplash_draw_msg (fb, PSPLASH_STARTUP_MSG);
++  psplash_draw_msg(canvas, PSPLASH_STARTUP_MSG);
+ #endif
+ 
+   /* Scene set so let's flip the buffers. */
+-- 
+2.30.2
+
+
+
+^ permalink raw reply related	[flat|nested] 18+ messages in thread
+* [psplash][RFC PATCH 09/14] Rework flip as function pointer
+  2022-04-25  7:59 [psplash][RFC PATCH 00/14] Implement DRM backend Vasyl Vavrychuk
+                   ` (7 preceding siblings ...)
+  2022-04-25  7:59 ` [psplash][RFC PATCH 08/14] psplash.c: Make psplash_draw_{msg,progress} independent of FB Vasyl Vavrychuk
+@ 2022-04-25  7:59 ` Vasyl Vavrychuk
+  2022-04-25  7:59 ` [psplash][RFC PATCH 10/14] Import drm-howto modeset.c as psplash-drm.c Vasyl Vavrychuk
+                   ` (5 subsequent siblings)
+  14 siblings, 0 replies; 18+ messages in thread
+From: Vasyl Vavrychuk @ 2022-04-25  7:59 UTC (permalink / raw)
+  To: yocto; +Cc: Vasyl Vavrychuk
+
+It allows making parse_command and psplash_main independent of FB.
+
+Signed-off-by: Vasyl Vavrychuk <vasyl.vavrychuk@opensynergy.com>
+---
+ psplash-draw.h |  3 +++
+ psplash-fb.c   |  8 +++++---
+ psplash-fb.h   |  3 ---
+ psplash.c      | 16 ++++++++--------
+ 4 files changed, 16 insertions(+), 14 deletions(-)
+
+diff --git a/psplash-draw.h b/psplash-draw.h
+index 44546b0..292ddd9 100644
+--- a/psplash-draw.h
++++ b/psplash-draw.h
+@@ -36,6 +36,9 @@ typedef struct PSplashCanvas
+   int            green_length;
+   int            blue_offset;
+   int            blue_length;
++
++  void          *priv;
++  void (*flip)(struct PSplashCanvas *canvas, int sync);
+ }
+ PSplashCanvas;
+ 
+diff --git a/psplash-fb.c b/psplash-fb.c
+index dd50a5a..d41c477 100644
+--- a/psplash-fb.c
++++ b/psplash-fb.c
+@@ -18,9 +18,10 @@ psplash_wait_for_vsync(PSplashFB *fb)
+     fprintf(stderr, "Error, FB vsync ioctl [%d]\n", err);
+ }
+ 
+-void
+-psplash_fb_flip(PSplashFB *fb, int sync)
++static void
++psplash_fb_flip(PSplashCanvas *canvas, int sync)
+ {
++  PSplashFB *fb = canvas->priv;
+   char *tmp;
+ 
+   if (fb->double_buffering) {
+@@ -154,7 +155,8 @@ psplash_fb_new (int angle, int fbdev_id)
+     }
+ 
+   memset (fb, 0, sizeof(PSplashFB));
+-
++  fb->canvas.priv = fb;
++  fb->canvas.flip = psplash_fb_flip;
+   fb->fd = -1;
+ 
+   if ((fb->fd = open (fbdev, O_RDWR)) < 0)
+diff --git a/psplash-fb.h b/psplash-fb.h
+index 1b16bd5..979d23a 100644
+--- a/psplash-fb.h
++++ b/psplash-fb.h
+@@ -40,7 +40,4 @@ psplash_fb_destroy (PSplashFB *fb);
+ PSplashFB*
+ psplash_fb_new (int angle, int fbdev_id);
+ 
+-void
+-psplash_fb_flip(PSplashFB *fb, int sync);
+-
+ #endif
+diff --git a/psplash.c b/psplash.c
+index c234d46..036dfb1 100644
+--- a/psplash.c
++++ b/psplash.c
+@@ -100,7 +100,7 @@ psplash_draw_progress(PSplashCanvas *canvas, int value)
+ #endif /* PSPLASH_SHOW_PROGRESS_BAR */
+ 
+ static int
+-parse_command (PSplashFB *fb, char *string)
++parse_command(PSplashCanvas *canvas, char *string)
+ {
+   char *command;
+ 
+@@ -116,7 +116,7 @@ parse_command (PSplashFB *fb, char *string)
+       char *arg = strtok(NULL, "\0");
+ 
+       if (arg)
+-        psplash_draw_msg(&fb->canvas, arg);
++        psplash_draw_msg(canvas, arg);
+     }
+  #ifdef PSPLASH_SHOW_PROGRESS_BAR
+   else  if (!strcmp(command,"PROGRESS"))
+@@ -124,7 +124,7 @@ parse_command (PSplashFB *fb, char *string)
+       char *arg = strtok(NULL, "\0");
+ 
+       if (arg)
+-        psplash_draw_progress(&fb->canvas, atoi(arg));
++        psplash_draw_progress(canvas, atoi(arg));
+     }
+ #endif
+   else if (!strcmp(command,"QUIT"))
+@@ -132,12 +132,12 @@ parse_command (PSplashFB *fb, char *string)
+       return 1;
+     }
+ 
+-  psplash_fb_flip(fb, 0);
++  canvas->flip(canvas, 0);
+   return 0;
+ }
+ 
+ void
+-psplash_main (PSplashFB *fb, int pipe_fd, int timeout)
++psplash_main(PSplashCanvas *canvas, int pipe_fd, int timeout)
+ {
+   int            err;
+   ssize_t        length = 0;
+@@ -200,7 +200,7 @@ psplash_main (PSplashFB *fb, int pipe_fd, int timeout)
+ 	    continue;
+           }
+ 
+-	if (parse_command(fb, cmd))
++	if (parse_command(canvas, cmd))
+ 	  return;
+ 
+ 	length -= cmdlen;
+@@ -345,9 +345,9 @@ main (int argc, char** argv)
+    * text and progress bar change which overwrite the specific areas with every
+    * update.
+    */
+-  psplash_fb_flip(fb, 1);
++  canvas->flip(canvas, 1);
+ 
+-  psplash_main (fb, pipe_fd, 0);
++  psplash_main(canvas, pipe_fd, 0);
+ 
+   psplash_fb_destroy (fb);
+ 
+-- 
+2.30.2
+
+
+
+^ permalink raw reply related	[flat|nested] 18+ messages in thread
+* [psplash][RFC PATCH 10/14] Import drm-howto modeset.c as psplash-drm.c
+  2022-04-25  7:59 [psplash][RFC PATCH 00/14] Implement DRM backend Vasyl Vavrychuk
+                   ` (8 preceding siblings ...)
+  2022-04-25  7:59 ` [psplash][RFC PATCH 09/14] Rework flip as function pointer Vasyl Vavrychuk
+@ 2022-04-25  7:59 ` Vasyl Vavrychuk
+  2022-04-25  7:59 ` [psplash][RFC PATCH 11/14] Implement drm backend Vasyl Vavrychuk
+                   ` (4 subsequent siblings)
+  14 siblings, 0 replies; 18+ messages in thread
+From: Vasyl Vavrychuk @ 2022-04-25  7:59 UTC (permalink / raw)
+  To: yocto; +Cc: Vasyl Vavrychuk
+
+Imported as is from
+repo: https://github.com/dvdhrm/docs.git
+branch: master
+commit: fc5c63f
+path: drm-howto/modeset.c
+
+Signed-off-by: Vasyl Vavrychuk <vasyl.vavrychuk@opensynergy.com>
+---
+ psplash-drm.c | 735 ++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 735 insertions(+)
+ create mode 100644 psplash-drm.c
+
+diff --git a/psplash-drm.c b/psplash-drm.c
+new file mode 100644
+index 0000000..c9a9f5c
+--- /dev/null
++++ b/psplash-drm.c
+@@ -0,0 +1,735 @@
++/*
++ * modeset - DRM Modesetting Example
++ *
++ * Written 2012 by David Rheinsberg <david.rheinsberg@gmail.com>
++ * Dedicated to the Public Domain.
++ */
++
++/*
++ * DRM Modesetting Howto
++ * This document describes the DRM modesetting API. Before we can use the DRM
++ * API, we have to include xf86drm.h and xf86drmMode.h. Both are provided by
++ * libdrm which every major distribution ships by default. It has no other
++ * dependencies and is pretty small.
++ *
++ * Please ignore all forward-declarations of functions which are used later. I
++ * reordered the functions so you can read this document from top to bottom. If
++ * you reimplement it, you would probably reorder the functions to avoid all the
++ * nasty forward declarations.
++ *
++ * For easier reading, we ignore all memory-allocation errors of malloc() and
++ * friends here. However, we try to correctly handle all other kinds of errors
++ * that may occur.
++ *
++ * All functions and global variables are prefixed with "modeset_*" in this
++ * file. So it should be clear whether a function is a local helper or if it is
++ * provided by some external library.
++ */
++
++#define _GNU_SOURCE
++#include <errno.h>
++#include <fcntl.h>
++#include <stdbool.h>
++#include <stdint.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <sys/mman.h>
++#include <time.h>
++#include <unistd.h>
++#include <xf86drm.h>
++#include <xf86drmMode.h>
++
++struct modeset_dev;
++static int modeset_find_crtc(int fd, drmModeRes *res, drmModeConnector *conn,
++			     struct modeset_dev *dev);
++static int modeset_create_fb(int fd, struct modeset_dev *dev);
++static int modeset_setup_dev(int fd, drmModeRes *res, drmModeConnector *conn,
++			     struct modeset_dev *dev);
++static int modeset_open(int *out, const char *node);
++static int modeset_prepare(int fd);
++static void modeset_draw(void);
++static void modeset_cleanup(int fd);
++
++/*
++ * When the linux kernel detects a graphics-card on your machine, it loads the
++ * correct device driver (located in kernel-tree at ./drivers/gpu/drm/<xy>) and
++ * provides two character-devices to control it. Udev (or whatever hotplugging
++ * application you use) will create them as:
++ *     /dev/dri/card0
++ *     /dev/dri/controlID64
++ * We only need the first one. You can hard-code this path into your application
++ * like we do here, but it is recommended to use libudev with real hotplugging
++ * and multi-seat support. However, this is beyond the scope of this document.
++ * Also note that if you have multiple graphics-cards, there may also be
++ * /dev/dri/card1, /dev/dri/card2, ...
++ *
++ * We simply use /dev/dri/card0 here but the user can specify another path on
++ * the command line.
++ *
++ * modeset_open(out, node): This small helper function opens the DRM device
++ * which is given as @node. The new fd is stored in @out on success. On failure,
++ * a negative error code is returned.
++ * After opening the file, we also check for the DRM_CAP_DUMB_BUFFER capability.
++ * If the driver supports this capability, we can create simple memory-mapped
++ * buffers without any driver-dependent code. As we want to avoid any radeon,
++ * nvidia, intel, etc. specific code, we depend on DUMB_BUFFERs here.
++ */
++
++static int modeset_open(int *out, const char *node)
++{
++	int fd, ret;
++	uint64_t has_dumb;
++
++	fd = open(node, O_RDWR | O_CLOEXEC);
++	if (fd < 0) {
++		ret = -errno;
++		fprintf(stderr, "cannot open '%s': %m\n", node);
++		return ret;
++	}
++
++	if (drmGetCap(fd, DRM_CAP_DUMB_BUFFER, &has_dumb) < 0 ||
++	    !has_dumb) {
++		fprintf(stderr, "drm device '%s' does not support dumb buffers\n",
++			node);
++		close(fd);
++		return -EOPNOTSUPP;
++	}
++
++	*out = fd;
++	return 0;
++}
++
++/*
++ * As a next step we need to find our available display devices. libdrm provides
++ * a drmModeRes structure that contains all the needed information. We can
++ * retrieve it via drmModeGetResources(fd) and free it via
++ * drmModeFreeResources(res) again.
++ *
++ * A physical connector on your graphics card is called a "connector". You can
++ * plug a monitor into it and control what is displayed. We are definitely
++ * interested in what connectors are currently used, so we simply iterate
++ * through the list of connectors and try to display a test-picture on each
++ * available monitor.
++ * However, this isn't as easy as it sounds. First, we need to check whether the
++ * connector is actually used (a monitor is plugged in and turned on). Then we
++ * need to find a CRTC that can control this connector. CRTCs are described
++ * later on. After that we create a framebuffer object. If we have all this, we
++ * can mmap() the framebuffer and draw a test-picture into it. Then we can tell
++ * the DRM device to show the framebuffer on the given CRTC with the selected
++ * connector.
++ *
++ * As we want to draw moving pictures on the framebuffer, we actually have to
++ * remember all these settings. Therefore, we create one "struct modeset_dev"
++ * object for each connector+crtc+framebuffer pair that we successfully
++ * initialized and push it into the global device-list.
++ *
++ * Each field of this structure is described when it is first used. But as a
++ * summary:
++ * "struct modeset_dev" contains: {
++ *  - @next: points to the next device in the single-linked list
++ *
++ *  - @width: width of our buffer object
++ *  - @height: height of our buffer object
++ *  - @stride: stride value of our buffer object
++ *  - @size: size of the memory mapped buffer
++ *  - @handle: a DRM handle to the buffer object that we can draw into
++ *  - @map: pointer to the memory mapped buffer
++ *
++ *  - @mode: the display mode that we want to use
++ *  - @fb: a framebuffer handle with our buffer object as scanout buffer
++ *  - @conn: the connector ID that we want to use with this buffer
++ *  - @crtc: the crtc ID that we want to use with this connector
++ *  - @saved_crtc: the configuration of the crtc before we changed it. We use it
++ *                 so we can restore the same mode when we exit.
++ * }
++ */
++
++struct modeset_dev {
++	struct modeset_dev *next;
++
++	uint32_t width;
++	uint32_t height;
++	uint32_t stride;
++	uint32_t size;
++	uint32_t handle;
++	uint8_t *map;
++
++	drmModeModeInfo mode;
++	uint32_t fb;
++	uint32_t conn;
++	uint32_t crtc;
++	drmModeCrtc *saved_crtc;
++};
++
++static struct modeset_dev *modeset_list = NULL;
++
++/*
++ * So as next step we need to actually prepare all connectors that we find. We
++ * do this in this little helper function:
++ *
++ * modeset_prepare(fd): This helper function takes the DRM fd as argument and
++ * then simply retrieves the resource-info from the device. It then iterates
++ * through all connectors and calls other helper functions to initialize this
++ * connector (described later on).
++ * If the initialization was successful, we simply add this object as new device
++ * into the global modeset device list.
++ *
++ * The resource-structure contains a list of all connector-IDs. We use the
++ * helper function drmModeGetConnector() to retrieve more information on each
++ * connector. After we are done with it, we free it again with
++ * drmModeFreeConnector().
++ * Our helper modeset_setup_dev() returns -ENOENT if the connector is currently
++ * unused and no monitor is plugged in. So we can ignore this connector.
++ */
++
++static int modeset_prepare(int fd)
++{
++	drmModeRes *res;
++	drmModeConnector *conn;
++	unsigned int i;
++	struct modeset_dev *dev;
++	int ret;
++
++	/* retrieve resources */
++	res = drmModeGetResources(fd);
++	if (!res) {
++		fprintf(stderr, "cannot retrieve DRM resources (%d): %m\n",
++			errno);
++		return -errno;
++	}
++
++	/* iterate all connectors */
++	for (i = 0; i < res->count_connectors; ++i) {
++		/* get information for each connector */
++		conn = drmModeGetConnector(fd, res->connectors[i]);
++		if (!conn) {
++			fprintf(stderr, "cannot retrieve DRM connector %u:%u (%d): %m\n",
++				i, res->connectors[i], errno);
++			continue;
++		}
++
++		/* create a device structure */
++		dev = malloc(sizeof(*dev));
++		memset(dev, 0, sizeof(*dev));
++		dev->conn = conn->connector_id;
++
++		/* call helper function to prepare this connector */
++		ret = modeset_setup_dev(fd, res, conn, dev);
++		if (ret) {
++			if (ret != -ENOENT) {
++				errno = -ret;
++				fprintf(stderr, "cannot setup device for connector %u:%u (%d): %m\n",
++					i, res->connectors[i], errno);
++			}
++			free(dev);
++			drmModeFreeConnector(conn);
++			continue;
++		}
++
++		/* free connector data and link device into global list */
++		drmModeFreeConnector(conn);
++		dev->next = modeset_list;
++		modeset_list = dev;
++	}
++
++	/* free resources again */
++	drmModeFreeResources(res);
++	return 0;
++}
++
++/*
++ * Now we dig deeper into setting up a single connector. As described earlier,
++ * we need to check several things first:
++ *   * If the connector is currently unused, that is, no monitor is plugged in,
++ *     then we can ignore it.
++ *   * We have to find a suitable resolution and refresh-rate. All this is
++ *     available in drmModeModeInfo structures saved for each crtc. We simply
++ *     use the first mode that is available. This is always the mode with the
++ *     highest resolution.
++ *     A more sophisticated mode-selection should be done in real applications,
++ *     though.
++ *   * Then we need to find an CRTC that can drive this connector. A CRTC is an
++ *     internal resource of each graphics-card. The number of CRTCs controls how
++ *     many connectors can be controlled indepedently. That is, a graphics-cards
++ *     may have more connectors than CRTCs, which means, not all monitors can be
++ *     controlled independently.
++ *     There is actually the possibility to control multiple connectors via a
++ *     single CRTC if the monitors should display the same content. However, we
++ *     do not make use of this here.
++ *     So think of connectors as pipelines to the connected monitors and the
++ *     CRTCs are the controllers that manage which data goes to which pipeline.
++ *     If there are more pipelines than CRTCs, then we cannot control all of
++ *     them at the same time.
++ *   * We need to create a framebuffer for this connector. A framebuffer is a
++ *     memory buffer that we can write XRGB32 data into. So we use this to
++ *     render our graphics and then the CRTC can scan-out this data from the
++ *     framebuffer onto the monitor.
++ */
++
++static int modeset_setup_dev(int fd, drmModeRes *res, drmModeConnector *conn,
++			     struct modeset_dev *dev)
++{
++	int ret;
++
++	/* check if a monitor is connected */
++	if (conn->connection != DRM_MODE_CONNECTED) {
++		fprintf(stderr, "ignoring unused connector %u\n",
++			conn->connector_id);
++		return -ENOENT;
++	}
++
++	/* check if there is at least one valid mode */
++	if (conn->count_modes == 0) {
++		fprintf(stderr, "no valid mode for connector %u\n",
++			conn->connector_id);
++		return -EFAULT;
++	}
++
++	/* copy the mode information into our device structure */
++	memcpy(&dev->mode, &conn->modes[0], sizeof(dev->mode));
++	dev->width = conn->modes[0].hdisplay;
++	dev->height = conn->modes[0].vdisplay;
++	fprintf(stderr, "mode for connector %u is %ux%u\n",
++		conn->connector_id, dev->width, dev->height);
++
++	/* find a crtc for this connector */
++	ret = modeset_find_crtc(fd, res, conn, dev);
++	if (ret) {
++		fprintf(stderr, "no valid crtc for connector %u\n",
++			conn->connector_id);
++		return ret;
++	}
++
++	/* create a framebuffer for this CRTC */
++	ret = modeset_create_fb(fd, dev);
++	if (ret) {
++		fprintf(stderr, "cannot create framebuffer for connector %u\n",
++			conn->connector_id);
++		return ret;
++	}
++
++	return 0;
++}
++
++/*
++ * modeset_find_crtc(fd, res, conn, dev): This small helper tries to find a
++ * suitable CRTC for the given connector. We have actually have to introduce one
++ * more DRM object to make this more clear: Encoders.
++ * Encoders help the CRTC to convert data from a framebuffer into the right
++ * format that can be used for the chosen connector. We do not have to
++ * understand any more of these conversions to make use of it. However, you must
++ * know that each connector has a limited list of encoders that it can use. And
++ * each encoder can only work with a limited list of CRTCs. So what we do is
++ * trying each encoder that is available and looking for a CRTC that this
++ * encoder can work with. If we find the first working combination, we are happy
++ * and write it into the @dev structure.
++ * But before iterating all available encoders, we first try the currently
++ * active encoder+crtc on a connector to avoid a full modeset.
++ *
++ * However, before we can use a CRTC we must make sure that no other device,
++ * that we setup previously, is already using this CRTC. Remember, we can only
++ * drive one connector per CRTC! So we simply iterate through the "modeset_list"
++ * of previously setup devices and check that this CRTC wasn't used before.
++ * Otherwise, we continue with the next CRTC/Encoder combination.
++ */
++
++static int modeset_find_crtc(int fd, drmModeRes *res, drmModeConnector *conn,
++			     struct modeset_dev *dev)
++{
++	drmModeEncoder *enc;
++	unsigned int i, j;
++	int32_t crtc;
++	struct modeset_dev *iter;
++
++	/* first try the currently conected encoder+crtc */
++	if (conn->encoder_id)
++		enc = drmModeGetEncoder(fd, conn->encoder_id);
++	else
++		enc = NULL;
++
++	if (enc) {
++		if (enc->crtc_id) {
++			crtc = enc->crtc_id;
++			for (iter = modeset_list; iter; iter = iter->next) {
++				if (iter->crtc == crtc) {
++					crtc = -1;
++					break;
++				}
++			}
++
++			if (crtc >= 0) {
++				drmModeFreeEncoder(enc);
++				dev->crtc = crtc;
++				return 0;
++			}
++		}
++
++		drmModeFreeEncoder(enc);
++	}
++
++	/* If the connector is not currently bound to an encoder or if the
++	 * encoder+crtc is already used by another connector (actually unlikely
++	 * but lets be safe), iterate all other available encoders to find a
++	 * matching CRTC. */
++	for (i = 0; i < conn->count_encoders; ++i) {
++		enc = drmModeGetEncoder(fd, conn->encoders[i]);
++		if (!enc) {
++			fprintf(stderr, "cannot retrieve encoder %u:%u (%d): %m\n",
++				i, conn->encoders[i], errno);
++			continue;
++		}
++
++		/* iterate all global CRTCs */
++		for (j = 0; j < res->count_crtcs; ++j) {
++			/* check whether this CRTC works with the encoder */
++			if (!(enc->possible_crtcs & (1 << j)))
++				continue;
++
++			/* check that no other device already uses this CRTC */
++			crtc = res->crtcs[j];
++			for (iter = modeset_list; iter; iter = iter->next) {
++				if (iter->crtc == crtc) {
++					crtc = -1;
++					break;
++				}
++			}
++
++			/* we have found a CRTC, so save it and return */
++			if (crtc >= 0) {
++				drmModeFreeEncoder(enc);
++				dev->crtc = crtc;
++				return 0;
++			}
++		}
++
++		drmModeFreeEncoder(enc);
++	}
++
++	fprintf(stderr, "cannot find suitable CRTC for connector %u\n",
++		conn->connector_id);
++	return -ENOENT;
++}
++
++/*
++ * modeset_create_fb(fd, dev): After we have found a crtc+connector+mode
++ * combination, we need to actually create a suitable framebuffer that we can
++ * use with it. There are actually two ways to do that:
++ *   * We can create a so called "dumb buffer". This is a buffer that we can
++ *     memory-map via mmap() and every driver supports this. We can use it for
++ *     unaccelerated software rendering on the CPU.
++ *   * We can use libgbm to create buffers available for hardware-acceleration.
++ *     libgbm is an abstraction layer that creates these buffers for each
++ *     available DRM driver. As there is no generic API for this, each driver
++ *     provides its own way to create these buffers.
++ *     We can then use such buffers to create OpenGL contexts with the mesa3D
++ *     library.
++ * We use the first solution here as it is much simpler and doesn't require any
++ * external libraries. However, if you want to use hardware-acceleration via
++ * OpenGL, it is actually pretty easy to create such buffers with libgbm and
++ * libEGL. But this is beyond the scope of this document.
++ *
++ * So what we do is requesting a new dumb-buffer from the driver. We specify the
++ * same size as the current mode that we selected for the connector.
++ * Then we request the driver to prepare this buffer for memory mapping. After
++ * that we perform the actual mmap() call. So we can now access the framebuffer
++ * memory directly via the dev->map memory map.
++ */
++
++static int modeset_create_fb(int fd, struct modeset_dev *dev)
++{
++	struct drm_mode_create_dumb creq;
++	struct drm_mode_destroy_dumb dreq;
++	struct drm_mode_map_dumb mreq;
++	int ret;
++
++	/* create dumb buffer */
++	memset(&creq, 0, sizeof(creq));
++	creq.width = dev->width;
++	creq.height = dev->height;
++	creq.bpp = 32;
++	ret = drmIoctl(fd, DRM_IOCTL_MODE_CREATE_DUMB, &creq);
++	if (ret < 0) {
++		fprintf(stderr, "cannot create dumb buffer (%d): %m\n",
++			errno);
++		return -errno;
++	}
++	dev->stride = creq.pitch;
++	dev->size = creq.size;
++	dev->handle = creq.handle;
++
++	/* create framebuffer object for the dumb-buffer */
++	ret = drmModeAddFB(fd, dev->width, dev->height, 24, 32, dev->stride,
++			   dev->handle, &dev->fb);
++	if (ret) {
++		fprintf(stderr, "cannot create framebuffer (%d): %m\n",
++			errno);
++		ret = -errno;
++		goto err_destroy;
++	}
++
++	/* prepare buffer for memory mapping */
++	memset(&mreq, 0, sizeof(mreq));
++	mreq.handle = dev->handle;
++	ret = drmIoctl(fd, DRM_IOCTL_MODE_MAP_DUMB, &mreq);
++	if (ret) {
++		fprintf(stderr, "cannot map dumb buffer (%d): %m\n",
++			errno);
++		ret = -errno;
++		goto err_fb;
++	}
++
++	/* perform actual memory mapping */
++	dev->map = mmap(0, dev->size, PROT_READ | PROT_WRITE, MAP_SHARED,
++		        fd, mreq.offset);
++	if (dev->map == MAP_FAILED) {
++		fprintf(stderr, "cannot mmap dumb buffer (%d): %m\n",
++			errno);
++		ret = -errno;
++		goto err_fb;
++	}
++
++	/* clear the framebuffer to 0 */
++	memset(dev->map, 0, dev->size);
++
++	return 0;
++
++err_fb:
++	drmModeRmFB(fd, dev->fb);
++err_destroy:
++	memset(&dreq, 0, sizeof(dreq));
++	dreq.handle = dev->handle;
++	drmIoctl(fd, DRM_IOCTL_MODE_DESTROY_DUMB, &dreq);
++	return ret;
++}
++
++/*
++ * Finally! We have a connector with a suitable CRTC. We know which mode we want
++ * to use and we have a framebuffer of the correct size that we can write to.
++ * There is nothing special left to do. We only have to program the CRTC to
++ * connect each new framebuffer to each selected connector for each combination
++ * that we saved in the global modeset_list.
++ * This is done with a call to drmModeSetCrtc().
++ *
++ * So we are ready for our main() function. First we check whether the user
++ * specified a DRM device on the command line, otherwise we use the default
++ * /dev/dri/card0. Then we open the device via modeset_open(). modeset_prepare()
++ * prepares all connectors and we can loop over "modeset_list" and call
++ * drmModeSetCrtc() on every CRTC/connector combination.
++ *
++ * But printing empty black pages is boring so we have another helper function
++ * modeset_draw() that draws some colors into the framebuffer for 5 seconds and
++ * then returns. And then we have all the cleanup functions which correctly free
++ * all devices again after we used them. All these functions are described below
++ * the main() function.
++ *
++ * As a side note: drmModeSetCrtc() actually takes a list of connectors that we
++ * want to control with this CRTC. We pass only one connector, though. As
++ * explained earlier, if we used multiple connectors, then all connectors would
++ * have the same controlling framebuffer so the output would be cloned. This is
++ * most often not what you want so we avoid explaining this feature here.
++ * Furthermore, all connectors will have to run with the same mode, which is
++ * also often not guaranteed. So instead, we only use one connector per CRTC.
++ *
++ * Before calling drmModeSetCrtc() we also save the current CRTC configuration.
++ * This is used in modeset_cleanup() to restore the CRTC to the same mode as was
++ * before we changed it.
++ * If we don't do this, the screen will stay blank after we exit until another
++ * application performs modesetting itself.
++ */
++
++int main(int argc, char **argv)
++{
++	int ret, fd;
++	const char *card;
++	struct modeset_dev *iter;
++
++	/* check which DRM device to open */
++	if (argc > 1)
++		card = argv[1];
++	else
++		card = "/dev/dri/card0";
++
++	fprintf(stderr, "using card '%s'\n", card);
++
++	/* open the DRM device */
++	ret = modeset_open(&fd, card);
++	if (ret)
++		goto out_return;
++
++	/* prepare all connectors and CRTCs */
++	ret = modeset_prepare(fd);
++	if (ret)
++		goto out_close;
++
++	/* perform actual modesetting on each found connector+CRTC */
++	for (iter = modeset_list; iter; iter = iter->next) {
++		iter->saved_crtc = drmModeGetCrtc(fd, iter->crtc);
++		ret = drmModeSetCrtc(fd, iter->crtc, iter->fb, 0, 0,
++				     &iter->conn, 1, &iter->mode);
++		if (ret)
++			fprintf(stderr, "cannot set CRTC for connector %u (%d): %m\n",
++				iter->conn, errno);
++	}
++
++	/* draw some colors for 5seconds */
++	modeset_draw();
++
++	/* cleanup everything */
++	modeset_cleanup(fd);
++
++	ret = 0;
++
++out_close:
++	close(fd);
++out_return:
++	if (ret) {
++		errno = -ret;
++		fprintf(stderr, "modeset failed with error %d: %m\n", errno);
++	} else {
++		fprintf(stderr, "exiting\n");
++	}
++	return ret;
++}
++
++/*
++ * A short helper function to compute a changing color value. No need to
++ * understand it.
++ */
++
++static uint8_t next_color(bool *up, uint8_t cur, unsigned int mod)
++{
++	uint8_t next;
++
++	next = cur + (*up ? 1 : -1) * (rand() % mod);
++	if ((*up && next < cur) || (!*up && next > cur)) {
++		*up = !*up;
++		next = cur;
++	}
++
++	return next;
++}
++
++/*
++ * modeset_draw(): This draws a solid color into all configured framebuffers.
++ * Every 100ms the color changes to a slightly different color so we get some
++ * kind of smoothly changing color-gradient.
++ *
++ * The color calculation can be ignored as it is pretty boring. So the
++ * interesting stuff is iterating over "modeset_list" and then through all lines
++ * and width. We then set each pixel individually to the current color.
++ *
++ * We do this 50 times as we sleep 100ms after each redraw round. This makes
++ * 50*100ms = 5000ms = 5s so it takes about 5seconds to finish this loop.
++ *
++ * Please note that we draw directly into the framebuffer. This means that you
++ * will see flickering as the monitor might refresh while we redraw the screen.
++ * To avoid this you would need to use two framebuffers and a call to
++ * drmModeSetCrtc() to switch between both buffers.
++ * You can also use drmModePageFlip() to do a vsync'ed pageflip. But this is
++ * beyond the scope of this document.
++ */
++
++static void modeset_draw(void)
++{
++	uint8_t r, g, b;
++	bool r_up, g_up, b_up;
++	unsigned int i, j, k, off;
++	struct modeset_dev *iter;
++
++	srand(time(NULL));
++	r = rand() % 0xff;
++	g = rand() % 0xff;
++	b = rand() % 0xff;
++	r_up = g_up = b_up = true;
++
++	for (i = 0; i < 50; ++i) {
++		r = next_color(&r_up, r, 20);
++		g = next_color(&g_up, g, 10);
++		b = next_color(&b_up, b, 5);
++
++		for (iter = modeset_list; iter; iter = iter->next) {
++			for (j = 0; j < iter->height; ++j) {
++				for (k = 0; k < iter->width; ++k) {
++					off = iter->stride * j + k * 4;
++					*(uint32_t*)&iter->map[off] =
++						     (r << 16) | (g << 8) | b;
++				}
++			}
++		}
++
++		usleep(100000);
++	}
++}
++
++/*
++ * modeset_cleanup(fd): This cleans up all the devices we created during
++ * modeset_prepare(). It resets the CRTCs to their saved states and deallocates
++ * all memory.
++ * It should be pretty obvious how all of this works.
++ */
++
++static void modeset_cleanup(int fd)
++{
++	struct modeset_dev *iter;
++	struct drm_mode_destroy_dumb dreq;
++
++	while (modeset_list) {
++		/* remove from global list */
++		iter = modeset_list;
++		modeset_list = iter->next;
++
++		/* restore saved CRTC configuration */
++		drmModeSetCrtc(fd,
++			       iter->saved_crtc->crtc_id,
++			       iter->saved_crtc->buffer_id,
++			       iter->saved_crtc->x,
++			       iter->saved_crtc->y,
++			       &iter->conn,
++			       1,
++			       &iter->saved_crtc->mode);
++		drmModeFreeCrtc(iter->saved_crtc);
++
++		/* unmap buffer */
++		munmap(iter->map, iter->size);
++
++		/* delete framebuffer */
++		drmModeRmFB(fd, iter->fb);
++
++		/* delete dumb buffer */
++		memset(&dreq, 0, sizeof(dreq));
++		dreq.handle = iter->handle;
++		drmIoctl(fd, DRM_IOCTL_MODE_DESTROY_DUMB, &dreq);
++
++		/* free allocated memory */
++		free(iter);
++	}
++}
++
++/*
++ * I hope this was a short but easy overview of the DRM modesetting API. The DRM
++ * API offers much more capabilities including:
++ *  - double-buffering or tripple-buffering (or whatever you want)
++ *  - vsync'ed page-flips
++ *  - hardware-accelerated rendering (for example via OpenGL)
++ *  - output cloning
++ *  - graphics-clients plus authentication
++ *  - DRM planes/overlays/sprites
++ *  - ...
++ * If you are interested in these topics, I can currently only redirect you to
++ * existing implementations, including:
++ *  - plymouth (which uses dumb-buffers like this example; very easy to understand)
++ *  - kmscon (which uses libuterm to do this)
++ *  - wayland (very sophisticated DRM renderer; hard to understand fully as it
++ *             uses more complicated techniques like DRM planes)
++ *  - xserver (very hard to understand as it is split across many files/projects)
++ *
++ * But understanding how modesetting (as described in this document) works, is
++ * essential to understand all further DRM topics.
++ *
++ * Any feedback is welcome. Feel free to use this code freely for your own
++ * documentation or projects.
++ *
++ *  - Hosted on http://github.com/dvdhrm/docs
++ *  - Written by David Rheinsberg <david.rheinsberg@gmail.com>
++ */
+-- 
+2.30.2
+
+
+
+^ permalink raw reply related	[flat|nested] 18+ messages in thread
+* [psplash][RFC PATCH 11/14] Implement drm backend
+  2022-04-25  7:59 [psplash][RFC PATCH 00/14] Implement DRM backend Vasyl Vavrychuk
+                   ` (9 preceding siblings ...)
+  2022-04-25  7:59 ` [psplash][RFC PATCH 10/14] Import drm-howto modeset.c as psplash-drm.c Vasyl Vavrychuk
+@ 2022-04-25  7:59 ` Vasyl Vavrychuk
+  2022-04-25  7:59 ` [psplash][RFC PATCH 12/14] Reverse modeset_list Vasyl Vavrychuk
+                   ` (3 subsequent siblings)
+  14 siblings, 0 replies; 18+ messages in thread
+From: Vasyl Vavrychuk @ 2022-04-25  7:59 UTC (permalink / raw)
+  To: yocto; +Cc: Vasyl Vavrychuk
+
+Limitation is that splash screen is drawn only on the first connector.
+
+Signed-off-by: Vasyl Vavrychuk <vasyl.vavrychuk@opensynergy.com>
+---
+ Makefile.am   |  12 +++-
+ configure.ac  |   9 +++
+ psplash-drm.c | 179 +++++++++++++++++---------------------------------
+ psplash-drm.h |  17 +++++
+ psplash.c     |  52 +++++++++++----
+ 5 files changed, 135 insertions(+), 134 deletions(-)
+ create mode 100644 psplash-drm.h
+
+diff --git a/Makefile.am b/Makefile.am
+index 375b926..c3d4f03 100644
+--- a/Makefile.am
++++ b/Makefile.am
+@@ -8,12 +8,20 @@ psplash_SOURCES = psplash.c psplash.h psplash-fb.c psplash-fb.h \
+ 		  psplash-poky-img.h psplash-bar-img.h $(FONT_NAME)-font.h \
+ 		  psplash-draw.c psplash-draw.h
+ BUILT_SOURCES = psplash-poky-img.h psplash-bar-img.h
++psplash_CPPFLAGS =
++psplash_LDFLAGS =
+ 
+ psplash_write_SOURCES = psplash-write.c psplash.h
+ 
++if ENABLE_DRM
++psplash_SOURCES += psplash-drm.c psplash-drm.h
++psplash_CPPFLAGS += $(LIBDRM_CFLAGS) -DENABLE_DRM
++psplash_LDFLAGS += $(LIBDRM_LIBS)
++endif
++
+ if HAVE_SYSTEMD
+-psplash_CPPFLAGS = $(SYSTEMD_CFLAGS) -DHAVE_SYSTEMD
+-psplash_LDFLAGS= $(SYSTEMD_LIBS)
++psplash_CPPFLAGS += $(SYSTEMD_CFLAGS) -DHAVE_SYSTEMD
++psplash_LDFLAGS += $(SYSTEMD_LIBS)
+ bin_PROGRAMS += psplash-systemd
+ psplash_systemd_CPPFLAGS = $(SYSTEMD_CFLAGS)
+ psplash_systemd_LDFLAGS= $(SYSTEMD_LIBS)
+diff --git a/configure.ac b/configure.ac
+index 2a7da91..2e5c4f5 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -12,6 +12,15 @@ if test "x$GCC" = "xyes"; then
+         GCC_FLAGS="-g -Wall -Wextra"
+ fi
+ 
++AC_ARG_ENABLE(drm,
++    AS_HELP_STRING([--enable-drm], [enable drm backend (default is 'no')]))
++
++AS_IF([test "x$enable_drm" = "xyes"], [
++    PKG_CHECK_MODULES(LIBDRM, libdrm)
++])
++
++AM_CONDITIONAL([ENABLE_DRM], [test "x$enable_drm" = "xyes"])
++
+ AC_ARG_WITH([systemd], AS_HELP_STRING([--with-systemd], [Build with systemd
+ 	     support]))
+ 
+diff --git a/psplash-drm.c b/psplash-drm.c
+index c9a9f5c..30850ed 100644
+--- a/psplash-drm.c
++++ b/psplash-drm.c
+@@ -26,10 +26,8 @@
+  * provided by some external library.
+  */
+ 
+-#define _GNU_SOURCE
+ #include <errno.h>
+ #include <fcntl.h>
+-#include <stdbool.h>
+ #include <stdint.h>
+ #include <stdio.h>
+ #include <stdlib.h>
+@@ -39,6 +37,7 @@
+ #include <unistd.h>
+ #include <xf86drm.h>
+ #include <xf86drmMode.h>
++#include "psplash-drm.h"
+ 
+ struct modeset_dev;
+ static int modeset_find_crtc(int fd, drmModeRes *res, drmModeConnector *conn,
+@@ -48,8 +47,6 @@ static int modeset_setup_dev(int fd, drmModeRes *res, drmModeConnector *conn,
+ 			     struct modeset_dev *dev);
+ static int modeset_open(int *out, const char *node);
+ static int modeset_prepare(int fd);
+-static void modeset_draw(void);
+-static void modeset_cleanup(int fd);
+ 
+ /*
+  * When the linux kernel detects a graphics-card on your machine, it loads the
+@@ -153,7 +150,7 @@ struct modeset_dev {
+ 	uint32_t stride;
+ 	uint32_t size;
+ 	uint32_t handle;
+-	uint8_t *map;
++	void *map;
+ 
+ 	drmModeModeInfo mode;
+ 	uint32_t fb;
+@@ -187,7 +184,7 @@ static int modeset_prepare(int fd)
+ {
+ 	drmModeRes *res;
+ 	drmModeConnector *conn;
+-	unsigned int i;
++	int i;
+ 	struct modeset_dev *dev;
+ 	int ret;
+ 
+@@ -338,11 +335,10 @@ static int modeset_find_crtc(int fd, drmModeRes *res, drmModeConnector *conn,
+ 			     struct modeset_dev *dev)
+ {
+ 	drmModeEncoder *enc;
+-	unsigned int i, j;
+-	int32_t crtc;
++	int i, j, crtc;
+ 	struct modeset_dev *iter;
+ 
+-	/* first try the currently conected encoder+crtc */
++	/* first try the currently connected encoder+crtc */
+ 	if (conn->encoder_id)
+ 		enc = drmModeGetEncoder(fd, conn->encoder_id);
+ 	else
+@@ -352,7 +348,7 @@ static int modeset_find_crtc(int fd, drmModeRes *res, drmModeConnector *conn,
+ 		if (enc->crtc_id) {
+ 			crtc = enc->crtc_id;
+ 			for (iter = modeset_list; iter; iter = iter->next) {
+-				if (iter->crtc == crtc) {
++				if (iter->crtc == (uint32_t)crtc) {
+ 					crtc = -1;
+ 					break;
+ 				}
+@@ -389,7 +385,7 @@ static int modeset_find_crtc(int fd, drmModeRes *res, drmModeConnector *conn,
+ 			/* check that no other device already uses this CRTC */
+ 			crtc = res->crtcs[j];
+ 			for (iter = modeset_list; iter; iter = iter->next) {
+-				if (iter->crtc == crtc) {
++				if (iter->crtc == (uint32_t)crtc) {
+ 					crtc = -1;
+ 					break;
+ 				}
+@@ -503,6 +499,12 @@ err_destroy:
+ 	return ret;
+ }
+ 
++static void psplash_drm_flip(PSplashCanvas *canvas, int sync)
++{
++	(void)canvas;
++	(void)sync;
++}
++
+ /*
+  * Finally! We have a connector with a suitable CRTC. We know which mode we want
+  * to use and we have a framebuffer of the correct size that we can write to.
+@@ -532,155 +534,89 @@ err_destroy:
+  * also often not guaranteed. So instead, we only use one connector per CRTC.
+  *
+  * Before calling drmModeSetCrtc() we also save the current CRTC configuration.
+- * This is used in modeset_cleanup() to restore the CRTC to the same mode as was
+- * before we changed it.
++ * This is used in psplash_drm_destroy() to restore the CRTC to the same mode as
++ * was before we changed it.
+  * If we don't do this, the screen will stay blank after we exit until another
+  * application performs modesetting itself.
+  */
+ 
+-int main(int argc, char **argv)
++PSplashDRM* psplash_drm_new(int angle, int dev_id)
+ {
+-	int ret, fd;
+-	const char *card;
++	PSplashDRM *drm = NULL;
++	int ret;
++	char card[] = "/dev/dri/card0";
+ 	struct modeset_dev *iter;
+ 
+-	/* check which DRM device to open */
+-	if (argc > 1)
+-		card = argv[1];
+-	else
+-		card = "/dev/dri/card0";
++	if ((drm = malloc(sizeof(*drm))) == NULL) {
++		perror("malloc");
++		goto error;
++	}
++	drm->canvas.priv = drm;
++	drm->canvas.flip = psplash_drm_flip;
++
++	if (dev_id > 0 && dev_id < 10) {
++		// Conversion from integer to ascii.
++		card[13] = dev_id + 48;
++	}
+ 
+ 	fprintf(stderr, "using card '%s'\n", card);
+ 
+ 	/* open the DRM device */
+-	ret = modeset_open(&fd, card);
++	ret = modeset_open(&drm->fd, card);
+ 	if (ret)
+-		goto out_return;
++		goto error;
+ 
+ 	/* prepare all connectors and CRTCs */
+-	ret = modeset_prepare(fd);
++	ret = modeset_prepare(drm->fd);
+ 	if (ret)
+-		goto out_close;
++		goto error;
+ 
+ 	/* perform actual modesetting on each found connector+CRTC */
+ 	for (iter = modeset_list; iter; iter = iter->next) {
+-		iter->saved_crtc = drmModeGetCrtc(fd, iter->crtc);
+-		ret = drmModeSetCrtc(fd, iter->crtc, iter->fb, 0, 0,
++		iter->saved_crtc = drmModeGetCrtc(drm->fd, iter->crtc);
++		ret = drmModeSetCrtc(drm->fd, iter->crtc, iter->fb, 0, 0,
+ 				     &iter->conn, 1, &iter->mode);
+ 		if (ret)
+ 			fprintf(stderr, "cannot set CRTC for connector %u (%d): %m\n",
+ 				iter->conn, errno);
+ 	}
+ 
+-	/* draw some colors for 5seconds */
+-	modeset_draw();
+-
+-	/* cleanup everything */
+-	modeset_cleanup(fd);
+-
+-	ret = 0;
+-
+-out_close:
+-	close(fd);
+-out_return:
+-	if (ret) {
+-		errno = -ret;
+-		fprintf(stderr, "modeset failed with error %d: %m\n", errno);
+-	} else {
+-		fprintf(stderr, "exiting\n");
+-	}
+-	return ret;
++	drm->canvas.data = modeset_list->map;
++	drm->canvas.width = modeset_list->width;
++	drm->canvas.height = modeset_list->height;
++	drm->canvas.bpp = 32;
++	drm->canvas.stride = modeset_list->stride;
++	drm->canvas.angle = angle;
++	drm->canvas.rgbmode = RGB888;
++
++	return drm;
++error:
++	psplash_drm_destroy(drm);
++	return NULL;
+ }
+ 
+ /*
+- * A short helper function to compute a changing color value. No need to
+- * understand it.
+- */
+-
+-static uint8_t next_color(bool *up, uint8_t cur, unsigned int mod)
+-{
+-	uint8_t next;
+-
+-	next = cur + (*up ? 1 : -1) * (rand() % mod);
+-	if ((*up && next < cur) || (!*up && next > cur)) {
+-		*up = !*up;
+-		next = cur;
+-	}
+-
+-	return next;
+-}
+-
+-/*
+- * modeset_draw(): This draws a solid color into all configured framebuffers.
+- * Every 100ms the color changes to a slightly different color so we get some
+- * kind of smoothly changing color-gradient.
+- *
+- * The color calculation can be ignored as it is pretty boring. So the
+- * interesting stuff is iterating over "modeset_list" and then through all lines
+- * and width. We then set each pixel individually to the current color.
+- *
+- * We do this 50 times as we sleep 100ms after each redraw round. This makes
+- * 50*100ms = 5000ms = 5s so it takes about 5seconds to finish this loop.
+- *
+- * Please note that we draw directly into the framebuffer. This means that you
+- * will see flickering as the monitor might refresh while we redraw the screen.
+- * To avoid this you would need to use two framebuffers and a call to
+- * drmModeSetCrtc() to switch between both buffers.
+- * You can also use drmModePageFlip() to do a vsync'ed pageflip. But this is
+- * beyond the scope of this document.
+- */
+-
+-static void modeset_draw(void)
+-{
+-	uint8_t r, g, b;
+-	bool r_up, g_up, b_up;
+-	unsigned int i, j, k, off;
+-	struct modeset_dev *iter;
+-
+-	srand(time(NULL));
+-	r = rand() % 0xff;
+-	g = rand() % 0xff;
+-	b = rand() % 0xff;
+-	r_up = g_up = b_up = true;
+-
+-	for (i = 0; i < 50; ++i) {
+-		r = next_color(&r_up, r, 20);
+-		g = next_color(&g_up, g, 10);
+-		b = next_color(&b_up, b, 5);
+-
+-		for (iter = modeset_list; iter; iter = iter->next) {
+-			for (j = 0; j < iter->height; ++j) {
+-				for (k = 0; k < iter->width; ++k) {
+-					off = iter->stride * j + k * 4;
+-					*(uint32_t*)&iter->map[off] =
+-						     (r << 16) | (g << 8) | b;
+-				}
+-			}
+-		}
+-
+-		usleep(100000);
+-	}
+-}
+-
+-/*
+- * modeset_cleanup(fd): This cleans up all the devices we created during
++ * psplash_drm_destroy(drm): This cleans up all the devices we created during
+  * modeset_prepare(). It resets the CRTCs to their saved states and deallocates
+  * all memory.
+  * It should be pretty obvious how all of this works.
+  */
+ 
+-static void modeset_cleanup(int fd)
++void psplash_drm_destroy(PSplashDRM *drm)
+ {
+ 	struct modeset_dev *iter;
+ 	struct drm_mode_destroy_dumb dreq;
+ 
++	if (!drm)
++		return;
++
+ 	while (modeset_list) {
+ 		/* remove from global list */
+ 		iter = modeset_list;
+ 		modeset_list = iter->next;
+ 
+ 		/* restore saved CRTC configuration */
+-		drmModeSetCrtc(fd,
++		drmModeSetCrtc(drm->fd,
+ 			       iter->saved_crtc->crtc_id,
+ 			       iter->saved_crtc->buffer_id,
+ 			       iter->saved_crtc->x,
+@@ -694,16 +630,19 @@ static void modeset_cleanup(int fd)
+ 		munmap(iter->map, iter->size);
+ 
+ 		/* delete framebuffer */
+-		drmModeRmFB(fd, iter->fb);
++		drmModeRmFB(drm->fd, iter->fb);
+ 
+ 		/* delete dumb buffer */
+ 		memset(&dreq, 0, sizeof(dreq));
+ 		dreq.handle = iter->handle;
+-		drmIoctl(fd, DRM_IOCTL_MODE_DESTROY_DUMB, &dreq);
++		drmIoctl(drm->fd, DRM_IOCTL_MODE_DESTROY_DUMB, &dreq);
+ 
+ 		/* free allocated memory */
+ 		free(iter);
+ 	}
++
++	close(drm->fd);
++	free(drm);
+ }
+ 
+ /*
+diff --git a/psplash-drm.h b/psplash-drm.h
+new file mode 100644
+index 0000000..e987fd6
+--- /dev/null
++++ b/psplash-drm.h
+@@ -0,0 +1,17 @@
++#ifndef _HAVE_PSPLASH_DRM_H
++#define _HAVE_PSPLASH_DRM_H
++
++#include "psplash-draw.h"
++
++typedef struct PSplashDRM
++{
++  PSplashCanvas canvas;
++  int fd;
++}
++PSplashDRM;
++
++void psplash_drm_destroy(PSplashDRM *drm);
++
++PSplashDRM* psplash_drm_new(int angle, int dev_id);
++
++#endif
+diff --git a/psplash.c b/psplash.c
+index 036dfb1..ebf8d7a 100644
+--- a/psplash.c
++++ b/psplash.c
+@@ -12,6 +12,9 @@
+ 
+ #include "psplash.h"
+ #include "psplash-fb.h"
++#ifdef ENABLE_DRM
++#include "psplash-drm.h"
++#endif
+ #include "psplash-config.h"
+ #include "psplash-colors.h"
+ #include "psplash-poky-img.h"
+@@ -224,8 +227,11 @@ int
+ main (int argc, char** argv)
+ {
+   char      *rundir;
+-  int        pipe_fd, i = 0, angle = 0, fbdev_id = 0, ret = 0;
+-  PSplashFB *fb;
++  int        pipe_fd, i = 0, angle = 0, dev_id = 0, use_drm = 0, ret = 0;
++  PSplashFB *fb = NULL;
++#ifdef ENABLE_DRM
++  PSplashDRM *drm = NULL;
++#endif
+   PSplashCanvas *canvas;
+   bool       disable_console_switch = FALSE;
+ 
+@@ -247,16 +253,24 @@ main (int argc, char** argv)
+         continue;
+       }
+ 
+-    if (!strcmp(argv[i],"-f") || !strcmp(argv[i],"--fbdev"))
++    if (!strcmp(argv[i], "-f") || !strcmp(argv[i], "--fbdev") ||
++        !strcmp(argv[i], "-d") || !strcmp(argv[i], "--dev"))
+       {
+         if (++i >= argc) goto fail;
+-        fbdev_id = atoi(argv[i]);
++        dev_id = atoi(argv[i]);
+         continue;
+       }
+ 
++#ifdef ENABLE_DRM
++    if (!strcmp(argv[i], "--drm")) {
++        use_drm = 1;
++        continue;
++    }
++#endif
++
+     fail:
+       fprintf(stderr,
+-              "Usage: %s [-n|--no-console-switch][-a|--angle <0|90|180|270>][-f|--fbdev <0..9>]\n",
++              "Usage: %s [-n|--no-console-switch][-a|--angle <0|90|180|270>][-f|--fbdev|-d|--dev <0..9>][--drm]\n",
+               argv[0]);
+       exit(-1);
+   }
+@@ -291,12 +305,21 @@ main (int argc, char** argv)
+   if (!disable_console_switch)
+     psplash_console_switch ();
+ 
+-  if ((fb = psplash_fb_new(angle,fbdev_id)) == NULL)
+-    {
+-	  ret = -1;
+-	  goto fb_fail;
++  if (use_drm) {
++#ifdef ENABLE_DRM
++    if ((drm = psplash_drm_new(angle, dev_id)) == NULL) {
++      ret = -1;
++      goto error;
++    }
++    canvas = &drm->canvas;
++#endif
++  } else {
++    if ((fb = psplash_fb_new(angle, dev_id)) == NULL) {
++      ret = -1;
++      goto error;
+     }
+-  canvas = &fb->canvas;
++    canvas = &fb->canvas;
++  }
+ 
+ #ifdef HAVE_SYSTEMD
+   sd_notify(0, "READY=1");
+@@ -349,9 +372,14 @@ main (int argc, char** argv)
+ 
+   psplash_main(canvas, pipe_fd, 0);
+ 
+-  psplash_fb_destroy (fb);
++  if (fb)
++    psplash_fb_destroy(fb);
++#ifdef ENABLE_DRM
++  if (drm)
++    psplash_drm_destroy(drm);
++#endif
+ 
+- fb_fail:
++ error:
+   unlink(PSPLASH_FIFO);
+ 
+   if (!disable_console_switch)
+-- 
+2.30.2
+
+
+
+^ permalink raw reply related	[flat|nested] 18+ messages in thread
+* [psplash][RFC PATCH 12/14] Reverse modeset_list
+  2022-04-25  7:59 [psplash][RFC PATCH 00/14] Implement DRM backend Vasyl Vavrychuk
+                   ` (10 preceding siblings ...)
+  2022-04-25  7:59 ` [psplash][RFC PATCH 11/14] Implement drm backend Vasyl Vavrychuk
+@ 2022-04-25  7:59 ` Vasyl Vavrychuk
+  2022-04-25  7:59 ` [psplash][RFC PATCH 13/14] psplash-drm.c: Allocate resources only for the first connector Vasyl Vavrychuk
+                   ` (2 subsequent siblings)
+  14 siblings, 0 replies; 18+ messages in thread
+From: Vasyl Vavrychuk @ 2022-04-25  7:59 UTC (permalink / raw)
+  To: yocto; +Cc: Vasyl Vavrychuk
+
+Now, it has the same order as connectors in drmModeGetResources. As
+result splash screen will be drawn on the first connector.
+
+Signed-off-by: Vasyl Vavrychuk <vasyl.vavrychuk@opensynergy.com>
+---
+ psplash-drm.c | 11 ++++++++---
+ 1 file changed, 8 insertions(+), 3 deletions(-)
+
+diff --git a/psplash-drm.c b/psplash-drm.c
+index 30850ed..2468cf1 100644
+--- a/psplash-drm.c
++++ b/psplash-drm.c
+@@ -185,7 +185,7 @@ static int modeset_prepare(int fd)
+ 	drmModeRes *res;
+ 	drmModeConnector *conn;
+ 	int i;
+-	struct modeset_dev *dev;
++	struct modeset_dev *dev, *last_dev = NULL;
+ 	int ret;
+ 
+ 	/* retrieve resources */
+@@ -226,8 +226,13 @@ static int modeset_prepare(int fd)
+ 
+ 		/* free connector data and link device into global list */
+ 		drmModeFreeConnector(conn);
+-		dev->next = modeset_list;
+-		modeset_list = dev;
++		if (last_dev == NULL) {
++			modeset_list = dev;
++			last_dev = dev;
++		} else {
++			last_dev->next = dev;
++			last_dev = dev;
++		}
+ 	}
+ 
+ 	/* free resources again */
+-- 
+2.30.2
+
+
+
+^ permalink raw reply related	[flat|nested] 18+ messages in thread
+* [psplash][RFC PATCH 13/14] psplash-drm.c: Allocate resources only for the first connector
+  2022-04-25  7:59 [psplash][RFC PATCH 00/14] Implement DRM backend Vasyl Vavrychuk
+                   ` (11 preceding siblings ...)
+  2022-04-25  7:59 ` [psplash][RFC PATCH 12/14] Reverse modeset_list Vasyl Vavrychuk
+@ 2022-04-25  7:59 ` Vasyl Vavrychuk
+  2022-04-25  7:59 ` [psplash][RFC PATCH 14/14] psplash-drm.c: Implement double buffering Vasyl Vavrychuk
+  2022-04-25  8:24 ` [yocto] [psplash][RFC PATCH 00/14] Implement DRM backend Alexander Kanavin
+  14 siblings, 0 replies; 18+ messages in thread
+From: Vasyl Vavrychuk @ 2022-04-25  7:59 UTC (permalink / raw)
+  To: yocto; +Cc: Vasyl Vavrychuk
+
+Since splash screen is shown only on the first scanout, there is no need
+to allocate resources for next connectors.
+
+Signed-off-by: Vasyl Vavrychuk <vasyl.vavrychuk@opensynergy.com>
+---
+ psplash-drm.c | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/psplash-drm.c b/psplash-drm.c
+index 2468cf1..5e56286 100644
+--- a/psplash-drm.c
++++ b/psplash-drm.c
+@@ -39,6 +39,8 @@
+ #include <xf86drmMode.h>
+ #include "psplash-drm.h"
+ 
++#define MIN(a,b) ((a) < (b) ? (a) : (b))
++
+ struct modeset_dev;
+ static int modeset_find_crtc(int fd, drmModeRes *res, drmModeConnector *conn,
+ 			     struct modeset_dev *dev);
+@@ -196,8 +198,10 @@ static int modeset_prepare(int fd)
+ 		return -errno;
+ 	}
+ 
+-	/* iterate all connectors */
+-	for (i = 0; i < res->count_connectors; ++i) {
++	/* ~iterate all connectors~ - Use first connector if present. It is
++	   optimization related workaround since psplash supports drawing splash
++	   screen on one scanout anyway. */
++	for (i = 0; i < MIN(res->count_connectors, 1); ++i) {
+ 		/* get information for each connector */
+ 		conn = drmModeGetConnector(fd, res->connectors[i]);
+ 		if (!conn) {
+-- 
+2.30.2
+
+
+
+^ permalink raw reply related	[flat|nested] 18+ messages in thread
+* [psplash][RFC PATCH 14/14] psplash-drm.c: Implement double buffering
+  2022-04-25  7:59 [psplash][RFC PATCH 00/14] Implement DRM backend Vasyl Vavrychuk
+                   ` (12 preceding siblings ...)
+  2022-04-25  7:59 ` [psplash][RFC PATCH 13/14] psplash-drm.c: Allocate resources only for the first connector Vasyl Vavrychuk
+@ 2022-04-25  7:59 ` Vasyl Vavrychuk
+  2022-04-25  8:24 ` [yocto] [psplash][RFC PATCH 00/14] Implement DRM backend Alexander Kanavin
+  14 siblings, 0 replies; 18+ messages in thread
+From: Vasyl Vavrychuk @ 2022-04-25  7:59 UTC (permalink / raw)
+  To: yocto; +Cc: Vasyl Vavrychuk
+
+Based on
+https://github.com/dvdhrm/docs/blob/master/drm-howto/modeset-double-buffered.c
+
+Signed-off-by: Vasyl Vavrychuk <vasyl.vavrychuk@opensynergy.com>
+---
+ psplash-drm.c | 176 +++++++++++++++++++++++++++++++++++++++-----------
+ 1 file changed, 140 insertions(+), 36 deletions(-)
+
+diff --git a/psplash-drm.c b/psplash-drm.c
+index 5e56286..fcb7507 100644
+--- a/psplash-drm.c
++++ b/psplash-drm.c
+@@ -29,6 +29,7 @@
+ #include <errno.h>
+ #include <fcntl.h>
+ #include <stdint.h>
++#include <inttypes.h>
+ #include <stdio.h>
+ #include <stdlib.h>
+ #include <string.h>
+@@ -41,10 +42,12 @@
+ 
+ #define MIN(a,b) ((a) < (b) ? (a) : (b))
+ 
++struct modeset_buf;
+ struct modeset_dev;
+ static int modeset_find_crtc(int fd, drmModeRes *res, drmModeConnector *conn,
+ 			     struct modeset_dev *dev);
+-static int modeset_create_fb(int fd, struct modeset_dev *dev);
++static int modeset_create_fb(int fd, struct modeset_buf *buf);
++static void modeset_destroy_fb(int fd, struct modeset_buf *buf);
+ static int modeset_setup_dev(int fd, drmModeRes *res, drmModeConnector *conn,
+ 			     struct modeset_dev *dev);
+ static int modeset_open(int *out, const char *node);
+@@ -144,18 +147,45 @@ static int modeset_open(int *out, const char *node)
+  * }
+  */
+ 
+-struct modeset_dev {
+-	struct modeset_dev *next;
++/*
++ * Previously, we used the modeset_dev objects to hold buffer informations, too.
++ * Technically, we could have split them but avoided this to make the
++ * example simpler.
++ * However, in this example we need 2 buffers. One back buffer and one front
++ * buffer. So we introduce a new structure modeset_buf which contains everything
++ * related to a single buffer. Each device now gets an array of two of these
++ * buffers.
++ * Each buffer consists of width, height, stride, size, handle, map and fb-id.
++ * They have the same meaning as before.
++ *
++ * Each device also gets a new integer field: front_buf. This field contains the
++ * index of the buffer that is currently used as front buffer / scanout buffer.
++ * In our example it can be 0 or 1. We flip it by using XOR:
++ *   dev->front_buf ^= dev->front_buf
++ *
++ * Everything else stays the same.
++ */
+ 
++struct modeset_buf {
+ 	uint32_t width;
+ 	uint32_t height;
+ 	uint32_t stride;
+ 	uint32_t size;
+ 	uint32_t handle;
+ 	void *map;
++	uint32_t fb;
++};
++
++struct modeset_dev {
++	struct modeset_dev *next;
++
++	uint32_t width;
++	uint32_t height;
++
++	unsigned int front_buf;
++	struct modeset_buf bufs[2];
+ 
+ 	drmModeModeInfo mode;
+-	uint32_t fb;
+ 	uint32_t conn;
+ 	uint32_t crtc;
+ 	drmModeCrtc *saved_crtc;
+@@ -292,10 +322,15 @@ static int modeset_setup_dev(int fd, drmModeRes *res, drmModeConnector *conn,
+ 		return -EFAULT;
+ 	}
+ 
+-	/* copy the mode information into our device structure */
++	/* copy the mode information into our device structure and into both
++	 * buffers */
+ 	memcpy(&dev->mode, &conn->modes[0], sizeof(dev->mode));
+ 	dev->width = conn->modes[0].hdisplay;
+ 	dev->height = conn->modes[0].vdisplay;
++	dev->bufs[0].width = dev->width;
++	dev->bufs[0].height = dev->height;
++	dev->bufs[1].width = dev->width;
++	dev->bufs[1].height = dev->height;
+ 	fprintf(stderr, "mode for connector %u is %ux%u\n",
+ 		conn->connector_id, dev->width, dev->height);
+ 
+@@ -307,14 +342,30 @@ static int modeset_setup_dev(int fd, drmModeRes *res, drmModeConnector *conn,
+ 		return ret;
+ 	}
+ 
+-	/* create a framebuffer for this CRTC */
+-	ret = modeset_create_fb(fd, dev);
++	/* create framebuffer #1 for this CRTC */
++	ret = modeset_create_fb(fd, &dev->bufs[0]);
+ 	if (ret) {
+ 		fprintf(stderr, "cannot create framebuffer for connector %u\n",
+ 			conn->connector_id);
+ 		return ret;
+ 	}
+ 
++	/* create framebuffer #2 for this CRTC */
++	ret = modeset_create_fb(fd, &dev->bufs[1]);
++	if (ret) {
++		fprintf(stderr, "cannot create framebuffer for connector %u\n",
++			conn->connector_id);
++		modeset_destroy_fb(fd, &dev->bufs[0]);
++		return ret;
++	}
++
++	if (dev->bufs[0].size != dev->bufs[1].size) {
++		fprintf(stderr, "front buffer size %" PRIu32 " does not match "
++				"back buffer size %" PRIu32 "\n",
++				dev->bufs[0].size, dev->bufs[1].size);
++		return -1;
++	}
++
+ 	return 0;
+ }
+ 
+@@ -441,7 +492,7 @@ static int modeset_find_crtc(int fd, drmModeRes *res, drmModeConnector *conn,
+  * memory directly via the dev->map memory map.
+  */
+ 
+-static int modeset_create_fb(int fd, struct modeset_dev *dev)
++static int modeset_create_fb(int fd, struct modeset_buf *buf)
+ {
+ 	struct drm_mode_create_dumb creq;
+ 	struct drm_mode_destroy_dumb dreq;
+@@ -450,8 +501,8 @@ static int modeset_create_fb(int fd, struct modeset_dev *dev)
+ 
+ 	/* create dumb buffer */
+ 	memset(&creq, 0, sizeof(creq));
+-	creq.width = dev->width;
+-	creq.height = dev->height;
++	creq.width = buf->width;
++	creq.height = buf->height;
+ 	creq.bpp = 32;
+ 	ret = drmIoctl(fd, DRM_IOCTL_MODE_CREATE_DUMB, &creq);
+ 	if (ret < 0) {
+@@ -459,13 +510,13 @@ static int modeset_create_fb(int fd, struct modeset_dev *dev)
+ 			errno);
+ 		return -errno;
+ 	}
+-	dev->stride = creq.pitch;
+-	dev->size = creq.size;
+-	dev->handle = creq.handle;
++	buf->stride = creq.pitch;
++	buf->size = creq.size;
++	buf->handle = creq.handle;
+ 
+ 	/* create framebuffer object for the dumb-buffer */
+-	ret = drmModeAddFB(fd, dev->width, dev->height, 24, 32, dev->stride,
+-			   dev->handle, &dev->fb);
++	ret = drmModeAddFB(fd, buf->width, buf->height, 24, 32, buf->stride,
++			   buf->handle, &buf->fb);
+ 	if (ret) {
+ 		fprintf(stderr, "cannot create framebuffer (%d): %m\n",
+ 			errno);
+@@ -475,7 +526,7 @@ static int modeset_create_fb(int fd, struct modeset_dev *dev)
+ 
+ 	/* prepare buffer for memory mapping */
+ 	memset(&mreq, 0, sizeof(mreq));
+-	mreq.handle = dev->handle;
++	mreq.handle = buf->handle;
+ 	ret = drmIoctl(fd, DRM_IOCTL_MODE_MAP_DUMB, &mreq);
+ 	if (ret) {
+ 		fprintf(stderr, "cannot map dumb buffer (%d): %m\n",
+@@ -485,9 +536,9 @@ static int modeset_create_fb(int fd, struct modeset_dev *dev)
+ 	}
+ 
+ 	/* perform actual memory mapping */
+-	dev->map = mmap(0, dev->size, PROT_READ | PROT_WRITE, MAP_SHARED,
++	buf->map = mmap(0, buf->size, PROT_READ | PROT_WRITE, MAP_SHARED,
+ 		        fd, mreq.offset);
+-	if (dev->map == MAP_FAILED) {
++	if (buf->map == MAP_FAILED) {
+ 		fprintf(stderr, "cannot mmap dumb buffer (%d): %m\n",
+ 			errno);
+ 		ret = -errno;
+@@ -495,23 +546,73 @@ static int modeset_create_fb(int fd, struct modeset_dev *dev)
+ 	}
+ 
+ 	/* clear the framebuffer to 0 */
+-	memset(dev->map, 0, dev->size);
++	memset(buf->map, 0, buf->size);
+ 
+ 	return 0;
+ 
+ err_fb:
+-	drmModeRmFB(fd, dev->fb);
++	drmModeRmFB(fd, buf->fb);
+ err_destroy:
+ 	memset(&dreq, 0, sizeof(dreq));
+-	dreq.handle = dev->handle;
++	dreq.handle = buf->handle;
+ 	drmIoctl(fd, DRM_IOCTL_MODE_DESTROY_DUMB, &dreq);
+ 	return ret;
+ }
+ 
++/*
++ * modeset_destroy_fb() is a new function. It does exactly the reverse of
++ * modeset_create_fb() and destroys a single framebuffer. The modeset.c example
++ * used to do this directly in modeset_cleanup().
++ * We simply unmap the buffer, remove the drm-FB and destroy the memory buffer.
++ */
++
++static void modeset_destroy_fb(int fd, struct modeset_buf *buf)
++{
++	struct drm_mode_destroy_dumb dreq;
++
++	/* unmap buffer */
++	munmap(buf->map, buf->size);
++
++	/* delete framebuffer */
++	drmModeRmFB(fd, buf->fb);
++
++	/* delete dumb buffer */
++	memset(&dreq, 0, sizeof(dreq));
++	dreq.handle = buf->handle;
++	drmIoctl(fd, DRM_IOCTL_MODE_DESTROY_DUMB, &dreq);
++}
++
+ static void psplash_drm_flip(PSplashCanvas *canvas, int sync)
+ {
+-	(void)canvas;
++	PSplashDRM *drm = canvas->priv;
++	struct modeset_buf *buf;
++	int ret;
++
+ 	(void)sync;
++
++	/* pick a back buffer */
++	buf = &modeset_list->bufs[modeset_list->front_buf ^ 1];
++
++	/* set back buffer as a front buffer */
++	ret = drmModeSetCrtc(drm->fd, modeset_list->crtc, buf->fb, 0, 0,
++			&modeset_list->conn, 1, &modeset_list->mode);
++	if (ret) {
++		fprintf(stderr, "cannot flip CRTC for connector %u (%d): %m\n",
++			modeset_list->conn, errno);
++		return;
++	}
++
++	/* update front buffer index */
++	modeset_list->front_buf ^= 1;
++
++	/* update back buffer pointer */
++	drm->canvas.data = modeset_list->bufs[modeset_list->front_buf ^ 1].map;
++
++	/* Sync new front to new back when requested */
++	if (sync)
++		memcpy(modeset_list->bufs[modeset_list->front_buf ^ 1].map,
++			modeset_list->bufs[modeset_list->front_buf].map,
++			modeset_list->bufs[0].size);
+ }
+ 
+ /*
+@@ -555,6 +656,7 @@ PSplashDRM* psplash_drm_new(int angle, int dev_id)
+ 	int ret;
+ 	char card[] = "/dev/dri/card0";
+ 	struct modeset_dev *iter;
++	struct modeset_buf *buf;
+ 
+ 	if ((drm = malloc(sizeof(*drm))) == NULL) {
+ 		perror("malloc");
+@@ -583,18 +685,28 @@ PSplashDRM* psplash_drm_new(int angle, int dev_id)
+ 	/* perform actual modesetting on each found connector+CRTC */
+ 	for (iter = modeset_list; iter; iter = iter->next) {
+ 		iter->saved_crtc = drmModeGetCrtc(drm->fd, iter->crtc);
+-		ret = drmModeSetCrtc(drm->fd, iter->crtc, iter->fb, 0, 0,
++		buf = &iter->bufs[iter->front_buf];
++		ret = drmModeSetCrtc(drm->fd, iter->crtc, buf->fb, 0, 0,
+ 				     &iter->conn, 1, &iter->mode);
+ 		if (ret)
+ 			fprintf(stderr, "cannot set CRTC for connector %u (%d): %m\n",
+ 				iter->conn, errno);
+ 	}
+ 
+-	drm->canvas.data = modeset_list->map;
++	drm->canvas.data = modeset_list->bufs[modeset_list->front_buf ^ 1].map;
+ 	drm->canvas.width = modeset_list->width;
+ 	drm->canvas.height = modeset_list->height;
+ 	drm->canvas.bpp = 32;
+-	drm->canvas.stride = modeset_list->stride;
++
++	if (modeset_list->bufs[0].stride != modeset_list->bufs[1].stride) {
++		fprintf(stderr, "front buffer stride %" PRIu32 " does not match"
++				" back buffer stride %" PRIu32 "\n",
++				modeset_list->bufs[0].stride,
++				modeset_list->bufs[1].stride);
++		goto error;
++	}
++	drm->canvas.stride = modeset_list->bufs[0].stride;
++
+ 	drm->canvas.angle = angle;
+ 	drm->canvas.rgbmode = RGB888;
+ 
+@@ -614,7 +726,6 @@ error:
+ void psplash_drm_destroy(PSplashDRM *drm)
+ {
+ 	struct modeset_dev *iter;
+-	struct drm_mode_destroy_dumb dreq;
+ 
+ 	if (!drm)
+ 		return;
+@@ -635,16 +746,9 @@ void psplash_drm_destroy(PSplashDRM *drm)
+ 			       &iter->saved_crtc->mode);
+ 		drmModeFreeCrtc(iter->saved_crtc);
+ 
+-		/* unmap buffer */
+-		munmap(iter->map, iter->size);
+-
+-		/* delete framebuffer */
+-		drmModeRmFB(drm->fd, iter->fb);
+-
+-		/* delete dumb buffer */
+-		memset(&dreq, 0, sizeof(dreq));
+-		dreq.handle = iter->handle;
+-		drmIoctl(drm->fd, DRM_IOCTL_MODE_DESTROY_DUMB, &dreq);
++		/* destroy framebuffers */
++		modeset_destroy_fb(drm->fd, &iter->bufs[1]);
++		modeset_destroy_fb(drm->fd, &iter->bufs[0]);
+ 
+ 		/* free allocated memory */
+ 		free(iter);
+-- 
+2.30.2
+
+
+
+^ permalink raw reply related	[flat|nested] 18+ messages in thread
+* Re: [yocto] [psplash][RFC PATCH 00/14] Implement DRM backend
+  2022-04-25  7:59 [psplash][RFC PATCH 00/14] Implement DRM backend Vasyl Vavrychuk
+                   ` (13 preceding siblings ...)
+  2022-04-25  7:59 ` [psplash][RFC PATCH 14/14] psplash-drm.c: Implement double buffering Vasyl Vavrychuk
+@ 2022-04-25  8:24 ` Alexander Kanavin
+  2022-04-28 13:54   ` Vasyl Vavrychuk
+  14 siblings, 1 reply; 18+ messages in thread
+From: Alexander Kanavin @ 2022-04-25  8:24 UTC (permalink / raw)
+  To: Vasyl Vavrychuk; +Cc: Yocto-mailing-list
+
+Hello Vasyl,
+
+can you explain how this was tested? Is it possible to automate with
+qemu targets?
+
+Alex
+
+On Mon, 25 Apr 2022 at 10:00, Vasyl Vavrychuk
+<Vasyl.Vavrychuk@opensynergy.com> wrote:
+>
+> It is needed in case display does not support FB.
+>
+> The missing part is drawing splash screen over all connected displays. I think
+> there should be loop somewhere for this, but I am not sure which level is the
+> best to put it.
+>
+> https://github.com/r1mikey/psplash-drm/blob/drm/implement-drm/psplash-draw.c has
+> psplash_draw_initial(_one), psplash_draw_msg(_one) and
+> psplash_draw_progress(_one) implementing loop over scanouts. I am think about
+> doing the same.
+>
+> Vasyl Vavrychuk (14):
+>   Trim trailing spaces
+>   Fix 'unused-result' warnings
+>   Remove unused save_termios
+>   Remove 'psplash-fb.h' from 'psplash.h'
+>   Extract plot pixel from psplash-fb
+>   Extract draw rect/image from psplash-fb
+>   Extract draw font from psplash-fb
+>   psplash.c: Make psplash_draw_{msg,progress} independent of FB
+>   Rework flip as function pointer
+>   Import drm-howto modeset.c as psplash-drm.c
+>   Implement drm backend
+>   Reverse modeset_list
+>   psplash-drm.c: Allocate resources only for the first connector
+>   psplash-drm.c: Implement double buffering
+>
+>  Makefile.am       |  15 +-
+>  configure.ac      |   9 +
+>  psplash-console.c |  34 +-
+>  psplash-console.h |   8 +-
+>  psplash-draw.c    | 295 +++++++++++++++++
+>  psplash-draw.h    |  81 +++++
+>  psplash-drm.c     | 787 ++++++++++++++++++++++++++++++++++++++++++++++
+>  psplash-drm.h     |  17 +
+>  psplash-fb.c      | 371 +++-------------------
+>  psplash-fb.h      |  74 +----
+>  psplash-systemd.c |  36 ++-
+>  psplash-write.c   |  37 ++-
+>  psplash.c         | 186 ++++++-----
+>  psplash.h         |   7 +-
+>  14 files changed, 1446 insertions(+), 511 deletions(-)
+>  create mode 100644 psplash-draw.c
+>  create mode 100644 psplash-draw.h
+>  create mode 100644 psplash-drm.c
+>  create mode 100644 psplash-drm.h
+>
+> --
+> 2.30.2
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#56871): https://lists.yoctoproject.org/g/yocto/message/56871
+> Mute This Topic: https://lists.yoctoproject.org/mt/90680297/1686489
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 18+ messages in thread
+* Re: [yocto] [psplash][RFC PATCH 00/14] Implement DRM backend
+  2022-04-25  8:24 ` [yocto] [psplash][RFC PATCH 00/14] Implement DRM backend Alexander Kanavin
+@ 2022-04-28 13:54   ` Vasyl Vavrychuk
+  2022-04-28 14:57     ` Alexander Kanavin
+  0 siblings, 1 reply; 18+ messages in thread
+From: Vasyl Vavrychuk @ 2022-04-28 13:54 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: Yocto-mailing-list
+
+Hi, Alex,
+
+Thanks for feedback.
+
+> can you explain how this was tested?
+
+In "Implement drm backend" commit I added "--drm" switch to use DRM/KMS 
+instead of FB in psplash. I use this switch to test by changes, I run 
+them without this switch to check that FB keeps working too.
+
+Before weston starts I do
+
+    echo QUIT > /run/psplash_fifo
+
+to stop psplash.
+
+I did not tried personally but it should work under QEMU too.
+
+> Is it possible to automate with qemu targets?
+
+Depends if QEMU/yocto test automation support screenshots. 
+Unfortunately, I don't have expirience with it.
+
+> Alex
+> 
+> On Mon, 25 Apr 2022 at 10:00, Vasyl Vavrychuk
+> <Vasyl.Vavrychuk@opensynergy.com> wrote:
+>>
+>> It is needed in case display does not support FB.
+>>
+>> The missing part is drawing splash screen over all connected displays. I think
+>> there should be loop somewhere for this, but I am not sure which level is the
+>> best to put it.
+>>
+>> https://github.com/r1mikey/psplash-drm/blob/drm/implement-drm/psplash-draw.c has
+>> psplash_draw_initial(_one), psplash_draw_msg(_one) and
+>> psplash_draw_progress(_one) implementing loop over scanouts. I am think about
+>> doing the same.
+>>
+>> Vasyl Vavrychuk (14):
+>>    Trim trailing spaces
+>>    Fix 'unused-result' warnings
+>>    Remove unused save_termios
+>>    Remove 'psplash-fb.h' from 'psplash.h'
+>>    Extract plot pixel from psplash-fb
+>>    Extract draw rect/image from psplash-fb
+>>    Extract draw font from psplash-fb
+>>    psplash.c: Make psplash_draw_{msg,progress} independent of FB
+>>    Rework flip as function pointer
+>>    Import drm-howto modeset.c as psplash-drm.c
+>>    Implement drm backend
+>>    Reverse modeset_list
+>>    psplash-drm.c: Allocate resources only for the first connector
+>>    psplash-drm.c: Implement double buffering
+>>
+>>   Makefile.am       |  15 +-
+>>   configure.ac      |   9 +
+>>   psplash-console.c |  34 +-
+>>   psplash-console.h |   8 +-
+>>   psplash-draw.c    | 295 +++++++++++++++++
+>>   psplash-draw.h    |  81 +++++
+>>   psplash-drm.c     | 787 ++++++++++++++++++++++++++++++++++++++++++++++
+>>   psplash-drm.h     |  17 +
+>>   psplash-fb.c      | 371 +++-------------------
+>>   psplash-fb.h      |  74 +----
+>>   psplash-systemd.c |  36 ++-
+>>   psplash-write.c   |  37 ++-
+>>   psplash.c         | 186 ++++++-----
+>>   psplash.h         |   7 +-
+>>   14 files changed, 1446 insertions(+), 511 deletions(-)
+>>   create mode 100644 psplash-draw.c
+>>   create mode 100644 psplash-draw.h
+>>   create mode 100644 psplash-drm.c
+>>   create mode 100644 psplash-drm.h
+>>
+>> --
+>> 2.30.2
+
+
+^ permalink raw reply	[flat|nested] 18+ messages in thread
+* Re: [yocto] [psplash][RFC PATCH 00/14] Implement DRM backend
+  2022-04-28 13:54   ` Vasyl Vavrychuk
+@ 2022-04-28 14:57     ` Alexander Kanavin
+  0 siblings, 0 replies; 18+ messages in thread
+From: Alexander Kanavin @ 2022-04-28 14:57 UTC (permalink / raw)
+  To: Vasyl Vavrychuk; +Cc: Yocto-mailing-list
+
+On Thu, 28 Apr 2022 at 15:54, Vasyl Vavrychuk
+<vasyl.vavrychuk@opensynergy.com> wrote:
+> I did not tried personally but it should work under QEMU too.
+>
+> > Is it possible to automate with qemu targets?
+>
+> Depends if QEMU/yocto test automation support screenshots.
+> Unfortunately, I don't have expirience with it.
+
+We do need to find some way to test this code in our CI system: I
+would recommend the following:
+
+- make it possible to switch psplash recipe between drm and fb backends
+- use drm by default
+- find a way to check at runtime that the code didn't crash or error
+out: perhaps checking logs for some kind of success message would be
+good
+- investigate qemu and particularly qmp protocol for ability to take screenshots
+
+I can help with all of these if you have specific problems.
+
+Alex
+
+
+^ permalink raw reply	[flat|nested] 18+ messages in thread
+end of thread, other threads:[~2022-04-28 14:57 UTC | newest]
+
+Thread overview: 18+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-04-25  7:59 [psplash][RFC PATCH 00/14] Implement DRM backend Vasyl Vavrychuk
+2022-04-25  7:59 ` [psplash][RFC PATCH 01/14] Trim trailing spaces Vasyl Vavrychuk
+2022-04-25  7:59 ` [psplash][RFC PATCH 02/14] Fix 'unused-result' warnings Vasyl Vavrychuk
+2022-04-25  7:59 ` [psplash][RFC PATCH 03/14] Remove unused save_termios Vasyl Vavrychuk
+2022-04-25  7:59 ` [psplash][RFC PATCH 04/14] Remove 'psplash-fb.h' from 'psplash.h' Vasyl Vavrychuk
+2022-04-25  7:59 ` [psplash][RFC PATCH 05/14] Extract plot pixel from psplash-fb Vasyl Vavrychuk
+2022-04-25  7:59 ` [psplash][RFC PATCH 06/14] Extract draw rect/image " Vasyl Vavrychuk
+2022-04-25  7:59 ` [psplash][RFC PATCH 07/14] Extract draw font " Vasyl Vavrychuk
+2022-04-25  7:59 ` [psplash][RFC PATCH 08/14] psplash.c: Make psplash_draw_{msg,progress} independent of FB Vasyl Vavrychuk
+2022-04-25  7:59 ` [psplash][RFC PATCH 09/14] Rework flip as function pointer Vasyl Vavrychuk
+2022-04-25  7:59 ` [psplash][RFC PATCH 10/14] Import drm-howto modeset.c as psplash-drm.c Vasyl Vavrychuk
+2022-04-25  7:59 ` [psplash][RFC PATCH 11/14] Implement drm backend Vasyl Vavrychuk
+2022-04-25  7:59 ` [psplash][RFC PATCH 12/14] Reverse modeset_list Vasyl Vavrychuk
+2022-04-25  7:59 ` [psplash][RFC PATCH 13/14] psplash-drm.c: Allocate resources only for the first connector Vasyl Vavrychuk
+2022-04-25  7:59 ` [psplash][RFC PATCH 14/14] psplash-drm.c: Implement double buffering Vasyl Vavrychuk
+2022-04-25  8:24 ` [yocto] [psplash][RFC PATCH 00/14] Implement DRM backend Alexander Kanavin
+2022-04-28 13:54   ` Vasyl Vavrychuk
+2022-04-28 14:57     ` Alexander Kanavin
+

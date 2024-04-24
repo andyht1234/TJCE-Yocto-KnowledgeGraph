@@ -1,0 +1,138 @@
+* Additional hardening options
+@ 2022-01-26  1:39 Paul Eggleton
+  2022-02-01  8:08 ` [yocto] " Richard Purdie
+  0 siblings, 1 reply; 3+ messages in thread
+From: Paul Eggleton @ 2022-01-26  1:39 UTC (permalink / raw)
+  To: yocto
+
+Hi folks
+
+I've been looking into a couple of compiler flags for hardening that I think we 
+might want to consider enabling by default in security-flags.inc:
+
+
+1) -fstack-clash-protection
+
+This option was introduced to gcc 8.x and provides protection against the 
+stack clash vulnerability:
+
+https://securingsoftware.blogspot.com/2017/12/stack-clash-vulnerability.html
+
+It has been enabled in some Linux distributions already (e.g. Ubuntu, Fedora).
+
+
+2) -z noexecstack (or alternative mitigations)
+
+gcc will enable an executable stack under a few different circumstances - see 
+here for details
+
+https://wiki.gentoo.org/wiki/Hardened/GNU_stack_quickstart
+
+I've written a check that we could add to insane.bbclass that warns/errors on 
+binaries with an executable stack. Does this seem reasonable to have?
+The other possibility is we add -Wl,-z,noexecstack to LDFLAGS and then see 
+what breaks, but unfortunately issues are likely only going to show up when 
+the program crashes at runtime, and also it will stop the aforementioned check 
+from working.
+
+
+Any opinions?
+
+Thanks
+Paul
+
+
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] Additional hardening options
+  2022-01-26  1:39 Additional hardening options Paul Eggleton
+@ 2022-02-01  8:08 ` Richard Purdie
+  2022-02-01  9:09   ` Robert Berger
+  0 siblings, 1 reply; 3+ messages in thread
+From: Richard Purdie @ 2022-02-01  8:08 UTC (permalink / raw)
+  To: Paul Eggleton, yocto
+
+On Wed, 2022-01-26 at 14:39 +1300, Paul Eggleton wrote:
+> Hi folks
+> 
+> I've been looking into a couple of compiler flags for hardening that I think we 
+> might want to consider enabling by default in security-flags.inc:
+> 
+> 
+> 1) -fstack-clash-protection
+> 
+> This option was introduced to gcc 8.x and provides protection against the 
+> stack clash vulnerability:
+> 
+> https://securingsoftware.blogspot.com/2017/12/stack-clash-vulnerability.html
+> 
+> It has been enabled in some Linux distributions already (e.g. Ubuntu, Fedora).
+> 
+> 
+> 2) -z noexecstack (or alternative mitigations)
+> 
+> gcc will enable an executable stack under a few different circumstances - see 
+> here for details
+> 
+> https://wiki.gentoo.org/wiki/Hardened/GNU_stack_quickstart
+> 
+> I've written a check that we could add to insane.bbclass that warns/errors on 
+> binaries with an executable stack. Does this seem reasonable to have?
+> The other possibility is we add -Wl,-z,noexecstack to LDFLAGS and then see 
+> what breaks, but unfortunately issues are likely only going to show up when 
+> the program crashes at runtime, and also it will stop the aforementioned check 
+> from working.
+> 
+> 
+> Any opinions?
+
+These seem like reasonable things to do, are there any downsides to them?
+
+I'd be happy to test some patches, see if they do cause issues...
+
+Cheers,
+
+Richard
+
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: Additional hardening options
+  2022-02-01  8:08 ` [yocto] " Richard Purdie
+@ 2022-02-01  9:09   ` Robert Berger
+  0 siblings, 0 replies; 3+ messages in thread
+From: Robert Berger @ 2022-02-01  9:09 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 642 bytes --]
+
+Hi,
+
+This[1] is what I usually add as well to the security flags.
+
+With respect to the "default" flags I had some fun with the SDK and -D_FORTIFY_SOURCE=2 and -fstack-protector-strong.
+
+I guess they do have some performance impact as well, but I did not do very thorough research.
+
+Also, I did not confirm it yet but suspect that some of those flags might be the reason for "debuginfod gdb: *** stack smashing detected ***: terminated".[2]
+
+[1] https://gitlab.com/meta-layers/meta-resy/-/blob/master/conf/distro/include/more_security_flags.inc
+
+[2] https://bugzilla.yoctoproject.org/show_bug.cgi?id=14570
+
+Regards,
+
+Robert
+
+[-- Attachment #2: Type: text/html, Size: 969 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2022-02-01  9:09 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-01-26  1:39 Additional hardening options Paul Eggleton
+2022-02-01  8:08 ` [yocto] " Richard Purdie
+2022-02-01  9:09   ` Robert Berger
+

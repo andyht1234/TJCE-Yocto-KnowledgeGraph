@@ -1,0 +1,202 @@
+* [PATCH yocto-autobuilder-helper v17] Add a banner on the old documentation docs.
+@ 2022-05-12 16:39 Abongwa Bonalais Amahnui
+  2022-06-03  9:53 ` [yocto] " Richard Purdie
+  0 siblings, 1 reply; 3+ messages in thread
+From: Abongwa Bonalais Amahnui @ 2022-05-12 16:39 UTC (permalink / raw)
+  To: yocto; +Cc: Abongwa Bonalais Amahnui
+
+Script to add banners to the old docs and outdated dunfell docs
+
+Signed-off-by: Abongwa Bonalais Amahnui <abongwabonalais@gmail.com>
+---
+ scripts/docs_add_banner.py | 83 ++++++++++++++++++++++++++++++++++++++
+ scripts/run-docs-build     |  2 +
+ 2 files changed, 85 insertions(+)
+ create mode 100755 scripts/docs_add_banner.py
+
+diff --git a/scripts/docs_add_banner.py b/scripts/docs_add_banner.py
+new file mode 100755
+index 0000000..307a63a
+--- /dev/null
++++ b/scripts/docs_add_banner.py
+@@ -0,0 +1,83 @@
++#!/usr/bin/env python3
++#
++# SPDX-License-Identifier: GPL-2.0-only
++#
++#Signed-off-by: Abongwa Bonalais Amahnui <abongwabonalais@gmail.com>
++#
++#
++# Script to add banners to the old docs and outdated dunfell docs
++#
++#
++
++
++import os
++
++
++
++
++
++html_content_dunfell = '''
++<div id="outdated-warning">This document is outdated, you should select the <a href="https://docs.yoctoproject.org/dunfell">latest release version</a> in this series.</div>
++<div xml:lang="en" class="body" lang="en">
++'''
++html_content = '''
++<div id="outdated-warning">This version of the project is now considered obsolete, please select and use a <a href="https://docs.yoctoproject.org">more recent version</a>.</div>
++<div xml:lang="en" class="body" lang="en">
++'''
++
++# the class body and the last_div are used to make sure any .body property existing in any css file is not overwritten
++last_div = '''
++</div>
++
++'''
++
++css_replacement_content = '''
++ 
++  font-family: Verdana, Sans, sans-serif;
++
++  width: 100%;
++  margin:  0;
++  padding: 0;
++  color: #333;
++  overflow-x: hidden;
++  }
++ 
++.body{
++margin:  0 auto;
++min-width: 640px;
++padding: 0 5em 5em 5em;
++}
++#outdated-warning{
++text-align: center;
++background-color: rgb(255, 186, 186); 
++color: rgb(106, 14, 14); 
++padding: 0.5em 0; 
++width: 100%;
++position: fixed;
++top: 0;
++
++
++'''
++
++
++def add_banner_old_docs(dir):
++    for root, dirs, filenames in os.walk(dir):
++        
++        if root.startswith('./3.1'):
++            html_replacement = html_content_dunfell
++        else:
++            html_replacement = html_content
++            
++        for filename in filenames:
++            if filename.endswith('.html'):
++                with open(os.path.join(root, filename), 'r', encoding="ISO-8859-1") as f:
++                    current_content = f.read()
++                with open(os.path.join(root, filename), 'w', encoding="ISO-8859-1") as f:
++                    f.write(current_content.replace('<body>', '<body>' + html_replacement)).replace('</body>', last_div + '</body>'))
++            if filename.endswith('.css'):
++                with open(os.path.join(root, filename), 'r', encoding="ISO-8859-1") as f:
++                    css_content = f.read()
++                with open(os.path.join(root, filename), 'w', encoding="ISO-8859-1") as f:
++                    f.write(css_content.replace(css_content[css_content.find('body {'):css_content.find('}'[0])], 'body {' + css_replacement_content ))
++
++add_banner_old_docs('.')
+diff --git a/scripts/run-docs-build b/scripts/run-docs-build
+index ecc5332..dce8f1f 100755
+--- a/scripts/run-docs-build
++++ b/scripts/run-docs-build
+@@ -37,6 +37,8 @@ cd $outputdir
+ echo Extracing old content from archive
+ tar -xJf $docbookarchive
+ 
++$scriptdir/docs_add_banner.py
++
+ cd $bbdocs
+ mkdir $outputdir/bitbake
+ 
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 3+ messages in thread
+* Re: [yocto] [PATCH yocto-autobuilder-helper v17] Add a banner on the old documentation docs.
+  2022-05-12 16:39 [PATCH yocto-autobuilder-helper v17] Add a banner on the old documentation docs Abongwa Bonalais Amahnui
+@ 2022-06-03  9:53 ` Richard Purdie
+  2022-06-03 10:36   ` Abongwa Bonalais
+  0 siblings, 1 reply; 3+ messages in thread
+From: Richard Purdie @ 2022-06-03  9:53 UTC (permalink / raw)
+  To: Abongwa Amahnui Bonalais, yocto
+
+On Thu, 2022-05-12 at 17:39 +0100, Abongwa Amahnui Bonalais wrote:
+> Script to add banners to the old docs and outdated dunfell docs
+> 
+> Signed-off-by: Abongwa Bonalais Amahnui <abongwabonalais@gmail.com>
+> ---
+>  scripts/docs_add_banner.py | 83 ++++++++++++++++++++++++++++++++++++++
+>  scripts/run-docs-build     |  2 +
+>  2 files changed, 85 insertions(+)
+>  create mode 100755 scripts/docs_add_banner.py
+
+This version of the patch didn't run due to a syntax error. Given where
+things are at and the fact we really do want this in, I've merged it
+with a follow up patch to tweak a few things (such as ignoring symlink
+files so we don't apply it twice to some files).
+
+Thanks for working on it!
+
+Cheers,
+
+Richard
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] [PATCH yocto-autobuilder-helper v17] Add a banner on the old documentation docs.
+  2022-06-03  9:53 ` [yocto] " Richard Purdie
+@ 2022-06-03 10:36   ` Abongwa Bonalais
+  0 siblings, 0 replies; 3+ messages in thread
+From: Abongwa Bonalais @ 2022-06-03 10:36 UTC (permalink / raw)
+  To: Richard Purdie; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 880 bytes --]
+
+No worries, thanks for the update!
+
+On Fri, Jun 3, 2022, 10:54 AM Richard Purdie <
+richard.purdie@linuxfoundation.org> wrote:
+
+> On Thu, 2022-05-12 at 17:39 +0100, Abongwa Amahnui Bonalais wrote:
+> > Script to add banners to the old docs and outdated dunfell docs
+> >
+> > Signed-off-by: Abongwa Bonalais Amahnui <abongwabonalais@gmail.com>
+> > ---
+> >  scripts/docs_add_banner.py | 83 ++++++++++++++++++++++++++++++++++++++
+> >  scripts/run-docs-build     |  2 +
+> >  2 files changed, 85 insertions(+)
+> >  create mode 100755 scripts/docs_add_banner.py
+>
+> This version of the patch didn't run due to a syntax error. Given where
+> things are at and the fact we really do want this in, I've merged it
+> with a follow up patch to tweak a few things (such as ignoring symlink
+> files so we don't apply it twice to some files).
+>
+> Thanks for working on it!
+>
+> Cheers,
+>
+> Richard
+>
+
+[-- Attachment #2: Type: text/html, Size: 1411 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2022-06-03 10:37 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-05-12 16:39 [PATCH yocto-autobuilder-helper v17] Add a banner on the old documentation docs Abongwa Bonalais Amahnui
+2022-06-03  9:53 ` [yocto] " Richard Purdie
+2022-06-03 10:36   ` Abongwa Bonalais
+

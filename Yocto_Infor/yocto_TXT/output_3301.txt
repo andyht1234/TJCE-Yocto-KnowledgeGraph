@@ -1,0 +1,261 @@
+* Bitbake failure
+@ 2021-05-31 22:12 Cris Scott
+  2021-06-09  0:27 ` [yocto] " Randy MacLeod
+  0 siblings, 1 reply; 3+ messages in thread
+From: Cris Scott @ 2021-05-31 22:12 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 538 bytes --]
+
+Not sure who to ask about this.
+Using https://push.yoctoproject.org/cgit/cgit.cgi/poky/tree/meta/recipes-extended/lighttpd/lighttpd_1.4.59.bb to build lighttpd, bitbake fails, and I receive tons of messages that look like:
+
+ERROR: lighttpd-1.4.59-r0 do_package_qa: QA Issue: /usr/lib/mod_staticfile.so contained in package lighttpd-module-staticfile requires libc.so.6(GLIBC_2.4), but no providers found in RDEPENDS_lighttpd-module-staticfile? [file-rdeps]
+
+
+Can someone point me in the right direction to resolve this?
+
+-Bill
+
+
+[-- Attachment #2: Type: text/html, Size: 2555 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] Bitbake failure
+  2021-05-31 22:12 Bitbake failure Cris Scott
+@ 2021-06-09  0:27 ` Randy MacLeod
+       [not found]   ` <CY4PR22MB0006580A14D0C7F6E65D7B1499359@CY4PR22MB0006.namprd22.prod.outlook.com>
+  0 siblings, 1 reply; 3+ messages in thread
+From: Randy MacLeod @ 2021-06-09  0:27 UTC (permalink / raw)
+  To: Cris Scott, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2405 bytes --]
+
+On 2021-05-31 6:12 p.m., Cris Scott wrote:
+>
+> Not sure who to ask about this.
+>
+> Using 
+> https://push.yoctoproject.org/cgit/cgit.cgi/poky/tree/meta/recipes-extended/lighttpd/lighttpd_1.4.59.bb 
+> <https://urldefense.com/v3/__https://push.yoctoproject.org/cgit/cgit.cgi/poky/tree/meta/recipes-extended/lighttpd/lighttpd_1.4.59.bb__;!!AjveYdw8EvQ!IjX1DyHZJ7dwUtyALOFQVZn8VgQNRX29XBKx6NBRpbApF9vx-j_t8eKwsxzFofu_-99g-Q$> 
+> to build lighttpd, bitbake fails, and I receive tons of messages that 
+> look like:
+>
+> ERROR: lighttpd-1.4.59-r0 do_package_qa: QA Issue: 
+> /usr/lib/mod_staticfile.so 
+> <https://urldefense.com/v3/__http://mod_staticfile.so__;!!AjveYdw8EvQ!IjX1DyHZJ7dwUtyALOFQVZn8VgQNRX29XBKx6NBRpbApF9vx-j_t8eKwsxzFofsRbsK8iQ$> 
+> contained in package lighttpd-module-staticfile requires 
+> libc.so.6(GLIBC_2.4), but no providers found in 
+> RDEPENDS_lighttpd-module-staticfile? [file-rdeps]
+>
+> Can someone point me in the right direction to resolve this?
+>
+Hi Cris,
+
+It's been a while is this still a problem for you?
+If not, how did you fix it?
+
+
+Can you reproduce the error with poky? git://git.yoctoproject.org/poky
+
+What release/commit are you using?
+
+Does it happen when you just run: bitbake lighttpd ?
+
+Does it happen if you mv your sstate-cache (tmp*) directories aside
+and do a rebuild?
+
+What's in your local.conf?
+
+For completeness, what is your build host distro (I doubt it matters here.).
+
+
+I built poky from:
+7f3c996d30 (HEAD -> master, origin/master, origin/HEAD) lttng-tools: 
+upgrade 2.12.3 -> 2.12.4
+
+on an Ubu-18.04.3 builder, and both:
+$ bitbake lighttpd and
+$ bitbake core-image-minimal
+
+worked fine with:
+
+grep -v "^$" conf/local.conf  | grep -v "^#"
+MACHINE ??= "qemux86-64"
+DISTRO ?= "poky"
+PACKAGE_CLASSES ?= "package_rpm"
+EXTRA_IMAGE_FEATURES ?= "debug-tweaks"
+USER_CLASSES ?= "buildstats image-prelink"
+PATCHRESOLVE = "noop"
+BB_DISKMON_DIRS ??= "\
+     STOPTASKS,${TMPDIR},1G,100K \
+     STOPTASKS,${DL_DIR},1G,100K \
+     STOPTASKS,${SSTATE_DIR},1G,100K \
+     STOPTASKS,/tmp,100M,100K \
+     ABORT,${TMPDIR},100M,1K \
+     ABORT,${DL_DIR},100M,1K \
+     ABORT,${SSTATE_DIR},100M,1K \
+     ABORT,/tmp,10M,1K"
+PACKAGECONFIG_append_pn-qemu-system-native = " sdl"
+CONF_VERSION = "1"
+IMAGE_INSTALL_append = "lighttpd"
+
+../Randy
+
+> -Bill
+>
+>
+> 
+>
+
+-- 
+# Randy MacLeod
+# Wind River Linux
+
+
+[-- Attachment #2: Type: text/html, Size: 5363 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [External] [yocto] Bitbake failure
+       [not found]   ` <CY4PR22MB0006580A14D0C7F6E65D7B1499359@CY4PR22MB0006.namprd22.prod.outlook.com>
+@ 2021-06-10 21:43     ` Randy MacLeod
+  0 siblings, 0 replies; 3+ messages in thread
+From: Randy MacLeod @ 2021-06-10 21:43 UTC (permalink / raw)
+  To: Cris Scott, Yocto discussion list
+
+[-- Attachment #1: Type: text/plain, Size: 4339 bytes --]
+
+On 2021-06-10 6:33 a.m., Cris Scott wrote:
+>
+> It is still a problem and I have tried everything you suggested.  I am 
+> building with Ubuntu 20.4 and that seems to be the issue.
+>
+Lots of people use 20.04 so it seems odd that you'd have a problem 
+specific to that host.
+
+
+> I have moved on from this, so will no longer require any information.  
+> The problem has been turned over to someone new.
+>
+
+Okay, please encourage them to reply on this thread.
+
+We may not always respond right away but there is usually
+someone reading things and in my case, I'll respond eventually.
+
+Thanks,
+
+../Randy
+
+
+> *From:* Randy MacLeod <randy.macleod@windriver.com>
+> *Sent:* Tuesday, June 8, 2021 8:27 PM
+> *To:* Cris Scott <cscott@bird-technologies.com>; 
+> yocto@lists.yoctoproject.org
+> *Subject:* Re: [External] [yocto] Bitbake failure
+>
+> On 2021-05-31 6:12 p.m., Cris Scott wrote:
+>
+>     Not sure who to ask about this.
+>
+>     Using
+>     https://push.yoctoproject.org/cgit/cgit.cgi/poky/tree/meta/recipes-extended/lighttpd/lighttpd_1.4.59.bb
+>     <https://urldefense.proofpoint.com/v2/url?u=https-3A__push.yoctoproject.org_cgit_cgit.cgi_poky_tree_meta_recipes-2Dextended_lighttpd_lighttpd-5F1.4.59.bb&d=DwQD-g&c=euGZstcaTDllvimEN8b7jXrwqOf-v5A_CdpgnVfiiMM&r=bkH5VyRdXOkP5L2u8XTis0WNm1tDq0eP2H1TMFNt8wE&m=bLwJg_DP3pbzHU88yz3nhrh6dLl2OCg03Z8vQmh8dfc&s=n4FuqOvgriQtR_RbsWzNL0VjbrolYBWiDcRE75K137I&e=>
+>     to build lighttpd, bitbake fails, and I receive tons of messages
+>     that look like:
+>
+>     ERROR: lighttpd-1.4.59-r0 do_package_qa: QA Issue:
+>     /usr/lib/mod_staticfile.so
+>     <https://urldefense.proofpoint.com/v2/url?u=https-3A__urldefense.com_v3_-5F-5Fhttp-3A__mod-5Fstaticfile.so-5F-5F-3B-21-21AjveYdw8EvQ-21IjX1DyHZJ7dwUtyALOFQVZn8VgQNRX29XBKx6NBRpbApF9vx-2Dj-5Ft8eKwsxzFofsRbsK8iQ-24&d=DwMD-g&c=euGZstcaTDllvimEN8b7jXrwqOf-v5A_CdpgnVfiiMM&r=bkH5VyRdXOkP5L2u8XTis0WNm1tDq0eP2H1TMFNt8wE&m=bLwJg_DP3pbzHU88yz3nhrh6dLl2OCg03Z8vQmh8dfc&s=qSjqiRkn3YYkhymtTeGmC__gU9nCT7lXO52OpJJ5n-o&e=>
+>     contained in package lighttpd-module-staticfile requires
+>     libc.so.6(GLIBC_2.4), but no providers found in
+>     RDEPENDS_lighttpd-module-staticfile? [file-rdeps]
+>
+>     Can someone point me in the right direction to resolve this?
+>
+> Hi Cris,
+>
+> It's been a while is this still a problem for you?
+> If not, how did you fix it?
+>
+> Can you reproduce the error with poky? git://git.yoctoproject.org/poky
+>
+> What release/commit are you using?
+>
+> Does it happen when you just run: bitbake lighttpd ?
+>
+> Does it happen if you mv your sstate-cache (tmp*) directories aside
+> and do a rebuild?
+>
+> What's in your local.conf?
+>
+> For completeness, what is your build host distro (I doubt it matters 
+> here.).
+>
+> I built poky from:
+> 7f3c996d30 (HEAD -> master, origin/master, origin/HEAD) lttng-tools: 
+> upgrade 2.12.3 -> 2.12.4
+>
+> on an Ubu-18.04.3 builder, and both:
+> $ bitbake lighttpd and
+> $ bitbake core-image-minimal
+>
+> worked fine with:
+>
+> grep -v "^$" conf/local.conf  | grep -v "^#"
+> MACHINE ??= "qemux86-64"
+> DISTRO ?= "poky"
+> PACKAGE_CLASSES ?= "package_rpm"
+> EXTRA_IMAGE_FEATURES ?= "debug-tweaks"
+> USER_CLASSES ?= "buildstats image-prelink"
+> PATCHRESOLVE = "noop"
+> BB_DISKMON_DIRS ??= "\
+>     STOPTASKS,${TMPDIR},1G,100K \
+>     STOPTASKS,${DL_DIR},1G,100K \
+>     STOPTASKS,${SSTATE_DIR},1G,100K \
+>     STOPTASKS,/tmp,100M,100K \
+>     ABORT,${TMPDIR},100M,1K \
+>     ABORT,${DL_DIR},100M,1K \
+>     ABORT,${SSTATE_DIR},100M,1K \
+>     ABORT,/tmp,10M,1K"
+> PACKAGECONFIG_append_pn-qemu-system-native = " sdl"
+> CONF_VERSION = "1"
+> IMAGE_INSTALL_append = "lighttpd"
+>
+> ../Randy
+>
+>     -Bill
+>
+>
+>
+>     
+>
+> -- 
+> # Randy MacLeod
+> # Wind River Linux
+>
+> ------------------------------------------------------------------------
+>
+> This email has been scanned for spam and viruses by Proofpoint 
+> Essentials. Click here 
+> <https://urldefense.com/v3/__https://us4.proofpointessentials.com/index01.php?mod_id=11&mod_option=logitem&mail_id=1623198455-a0PE2AaxolGT&r_address=cscott*40bird-technologies.com&report=1__;JQ!!AjveYdw8EvQ!OWOR32vmBafo2gv8CSF5Rk36l5CmgaNg6CwBh6fTnQVEK-0dHOw1HC-BxFaFh_j9Ezc93w$> 
+> to report this email as spam.
+>
+
+-- 
+# Randy MacLeod
+# Wind River Linux
+
+
+[-- Attachment #2: Type: text/html, Size: 9821 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2021-06-10 21:44 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-05-31 22:12 Bitbake failure Cris Scott
+2021-06-09  0:27 ` [yocto] " Randy MacLeod
+     [not found]   ` <CY4PR22MB0006580A14D0C7F6E65D7B1499359@CY4PR22MB0006.namprd22.prod.outlook.com>
+2021-06-10 21:43     ` [External] " Randy MacLeod
+

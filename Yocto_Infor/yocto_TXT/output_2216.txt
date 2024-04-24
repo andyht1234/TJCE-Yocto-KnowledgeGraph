@@ -1,0 +1,176 @@
+* Re: Controlling features enable/disable across recipe and meta layers ?
+       [not found] <CAOuPNLiMmKbm_KM-sxmSJciAE=ECcDOoxNBSdW5X6Z-Dt0DpgQ@mail.gmail.com>
+@ 2022-02-15 15:05 ` Pintu Agarwal
+  2022-02-15 15:13   ` [linux-yocto] " Alexander Kanavin
+  0 siblings, 1 reply; 2+ messages in thread
+From: Pintu Agarwal @ 2022-02-15 15:05 UTC (permalink / raw)
+  To: linux-yocto, yocto, Pintu Kumar
+
+Hi,
+
+I have many questions about Yocto features.
+My main question is: In Yocto what is the best mechanism to define a
+feature flag such that it can be accessed across many layers and
+recipes ?
+
+We are using Yocto thud and/or dunfell at this moment for 2 different products.
+
+From the Yocto document also it is not very clear which one to use.
+Also, we are confused when one to use when, like we have:
+DISTRO Feature flag,
+PACKAGECONFIG variable,
+IMAGE Feature,
+Global Macro (setVar, getVar), etc.
+
+Example:
+Currently, we have many different releases and many different products use it.
+So, we have many distro features, many of them are common and many of
+them we defined newly for our product.
+But for our product we have only one component (say: auto-prod).
+So, when this component is enabled the same release should be built
+for our product including our feature set.
+And when this component is disabled, all our features should be
+disabled like mainline release.
+
+So, we wanted to define only one DISTRO feature (auto-prod) and list
+all our features under this distro.
+Also we wanted to control all these from a single place, so that
+enabling/disabling all the features in one shot would be easy and
+portable.
+We tried doing it using PACKAGECONFIG but it seems this option can be
+used only at a recipe level and not visible across all layers.
+
+We wanted to do something like this in: auto.conf
+DISTRO_FEATURES = "auto-prod"
+if defined (distro-features == auto-prod) ; then
+     PACKAGECONFIG_append-pn-<recipe1> = "f1 f2 ..."
+     PACKAGECONFIG_append-pn-<recipe2> = "f2 f3 ..."
+     PACKAGECONFIG_append-pn-<recipe3> = "f1 f3 f4..."
+fi
+
+So, if we comment DISTRO_FEATURES all the features listed above should
+be automatically disabled.
+
+Note, our feature flags are used across multiple recipes and layers.
+Bootloader layer, Kernel, meta layer, recipe layer, python source, C
+source, scripts, etc.
+Like: edk2, meta-qti-bsp, meta-security, meta-qti-auto, auto-prod-folder, etc.
+
+Is there a well defined way in Yocto to achieve such a modular design approach ?
+
+If there are any such references please share.
+
+Our reference distro is here:
+https://source.codeaurora.org/quic/le/meta-qti-bsp/tree/conf/distro/auto.conf?h=yocto.lnx.3.0.c28
+
+Thanks,
+Pintu
+
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+* Re: [linux-yocto] Controlling features enable/disable across recipe and meta layers ?
+  2022-02-15 15:05 ` Controlling features enable/disable across recipe and meta layers ? Pintu Agarwal
+@ 2022-02-15 15:13   ` Alexander Kanavin
+  0 siblings, 0 replies; 2+ messages in thread
+From: Alexander Kanavin @ 2022-02-15 15:13 UTC (permalink / raw)
+  To: Pintu Agarwal; +Cc: linux-yocto, Yocto-mailing-list
+
+You need to define several distributions (e.g. several
+conf/distro/something.conf files), then you can set DISTRO_FEATURES
+accordingly in each of them, and then on the recipe level
+PACKAGECONFIGs can be enabled subject to DISTRO_FEATURES. Note that
+each of those .conf files can include the same .inc, where the common
+parts go, and only differ in things that need to be different.
+
+Yocto does not provide a way to have different 'products' or 'builds'
+inside the same distro: you choose a distro, then you choose a target
+MACHINE (e.g. the hardware), then you choose the image to build.
+
+Also, distro definitions do not belong in a BSP layer, they need to go
+to a separate distro layer. You can ask your colleagues at QC how this
+was cleaned up for a certain big german automotive customer and look
+at the resulting layer code.
+
+Alex
+
+On Tue, 15 Feb 2022 at 16:05, Pintu Agarwal <pintu.ping@gmail.com> wrote:
+>
+> Hi,
+>
+> I have many questions about Yocto features.
+> My main question is: In Yocto what is the best mechanism to define a
+> feature flag such that it can be accessed across many layers and
+> recipes ?
+>
+> We are using Yocto thud and/or dunfell at this moment for 2 different products.
+>
+> From the Yocto document also it is not very clear which one to use.
+> Also, we are confused when one to use when, like we have:
+> DISTRO Feature flag,
+> PACKAGECONFIG variable,
+> IMAGE Feature,
+> Global Macro (setVar, getVar), etc.
+>
+> Example:
+> Currently, we have many different releases and many different products use it.
+> So, we have many distro features, many of them are common and many of
+> them we defined newly for our product.
+> But for our product we have only one component (say: auto-prod).
+> So, when this component is enabled the same release should be built
+> for our product including our feature set.
+> And when this component is disabled, all our features should be
+> disabled like mainline release.
+>
+> So, we wanted to define only one DISTRO feature (auto-prod) and list
+> all our features under this distro.
+> Also we wanted to control all these from a single place, so that
+> enabling/disabling all the features in one shot would be easy and
+> portable.
+> We tried doing it using PACKAGECONFIG but it seems this option can be
+> used only at a recipe level and not visible across all layers.
+>
+> We wanted to do something like this in: auto.conf
+> DISTRO_FEATURES = "auto-prod"
+> if defined (distro-features == auto-prod) ; then
+>      PACKAGECONFIG_append-pn-<recipe1> = "f1 f2 ..."
+>      PACKAGECONFIG_append-pn-<recipe2> = "f2 f3 ..."
+>      PACKAGECONFIG_append-pn-<recipe3> = "f1 f3 f4..."
+> fi
+>
+> So, if we comment DISTRO_FEATURES all the features listed above should
+> be automatically disabled.
+>
+> Note, our feature flags are used across multiple recipes and layers.
+> Bootloader layer, Kernel, meta layer, recipe layer, python source, C
+> source, scripts, etc.
+> Like: edk2, meta-qti-bsp, meta-security, meta-qti-auto, auto-prod-folder, etc.
+>
+> Is there a well defined way in Yocto to achieve such a modular design approach ?
+>
+> If there are any such references please share.
+>
+> Our reference distro is here:
+> https://source.codeaurora.org/quic/le/meta-qti-bsp/tree/conf/distro/auto.conf?h=yocto.lnx.3.0.c28
+>
+> Thanks,
+> Pintu
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#10945): https://lists.yoctoproject.org/g/linux-yocto/message/10945
+> Mute This Topic: https://lists.yoctoproject.org/mt/89162429/1686489
+> Group Owner: linux-yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/linux-yocto/unsub [alex.kanavin@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2022-02-15 15:13 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+     [not found] <CAOuPNLiMmKbm_KM-sxmSJciAE=ECcDOoxNBSdW5X6Z-Dt0DpgQ@mail.gmail.com>
+2022-02-15 15:05 ` Controlling features enable/disable across recipe and meta layers ? Pintu Agarwal
+2022-02-15 15:13   ` [linux-yocto] " Alexander Kanavin
+

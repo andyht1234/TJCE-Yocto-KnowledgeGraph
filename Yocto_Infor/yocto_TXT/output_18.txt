@@ -1,0 +1,220 @@
+* [yocto-autobuilder-helper][PATCH v2] meta-oe-mirror: Use a 2 step job to fetch and verify meta-openembedded mirror.
+@ 2023-10-18 13:46 David Pierret
+  2023-10-19 10:58 ` [yocto] " Richard Purdie
+       [not found] ` <178F7D157564D399.11247@lists.yoctoproject.org>
+  0 siblings, 2 replies; 4+ messages in thread
+From: David Pierret @ 2023-10-18 13:46 UTC (permalink / raw)
+  To: yocto; +Cc: David Pierret, Yoann Congal
+
+Inspired from trigger-build and trigger-build-post-trigger
+The branch must be selected on build configuration.
+
+Signed-off-by: David Pierret <david.pierret@smile.fr>
+Reviewed-by: Yoann Congal <yoann.congal@smile.fr>
+---
+ config.json | 30 ++++++++++++++++++++++++++++++
+ 1 file changed, 30 insertions(+)
+
+diff --git a/config.json b/config.json
+index 3acb710..9e6779f 100644
+--- a/config.json
++++ b/config.json
+@@ -1420,6 +1420,36 @@
+                 "${SCRIPTSDIR}/setup-auh ${HELPERBUILDDIR}; ${SCRIPTSDIR}/run-auh ${HELPERBUILDDIR} ${WEBPUBLISH_DIR}/pub/auh/"
+             ]
+         },
++        "meta-oe-mirror" : {
++            "SDKMACHINE" : "x86_64",
++            "MACHINE" : "qemux86-64",
++            "NEEDREPOS" : ["poky", "meta-openembedded"],
++            "ADDLAYER" : [
++                "${BUILDDIR}/../meta-selftest",
++
++                "${BUILDDIR}/../meta-openembedded/meta-oe",
++                "${BUILDDIR}/../meta-openembedded/meta-python",
++                "${BUILDDIR}/../meta-openembedded/meta-perl",
++                "${BUILDDIR}/../meta-openembedded/meta-networking",
++                "${BUILDDIR}/../meta-openembedded/meta-multimedia",
++                "${BUILDDIR}/../meta-openembedded/meta-gnome",
++                "${BUILDDIR}/../meta-openembedded/meta-xfce",
++                "${BUILDDIR}/../meta-openembedded/meta-filesystems",
++                "${BUILDDIR}/../meta-openembedded/meta-initramfs",
++                "${BUILDDIR}/../meta-openembedded/meta-webserver"
++            ],
++            "step1" : {
++                "shortname" : "Sources pre-fetching",
++                "BBTARGETS" : "universe -c fetch -k",
++                "extravars" : [
++                    "SOURCE_MIRROR_FETCH = '1'"
++                ]
++            },
++            "step2" : {
++                    "shortname" : "Source Mirror Selftest",
++                    "EXTRACMDS" : ["${SCRIPTSDIR}/checkvnc; DISPLAY=:1 oe-selftest -r buildoptions.SourceMirroring.test_yocto_source_mirror"],
++            }
++        },
+         "a-quick" : {
+             "TEMPLATE" : "trigger-build"
+         },
+-- 
+2.39.2
+
+
+
+^ permalink raw reply related	[flat|nested] 4+ messages in thread
+* Re: [yocto] [yocto-autobuilder-helper][PATCH v2] meta-oe-mirror: Use a 2 step job to fetch and verify meta-openembedded mirror.
+  2023-10-18 13:46 [yocto-autobuilder-helper][PATCH v2] meta-oe-mirror: Use a 2 step job to fetch and verify meta-openembedded mirror David Pierret
+@ 2023-10-19 10:58 ` Richard Purdie
+       [not found] ` <178F7D157564D399.11247@lists.yoctoproject.org>
+  1 sibling, 0 replies; 4+ messages in thread
+From: Richard Purdie @ 2023-10-19 10:58 UTC (permalink / raw)
+  To: David Pierret, yocto; +Cc: Yoann Congal
+
+On Wed, 2023-10-18 at 15:46 +0200, David Pierret wrote:
+> Inspired from trigger-build and trigger-build-post-trigger
+> The branch must be selected on build configuration.
+> 
+> Signed-off-by: David Pierret <david.pierret@smile.fr>
+> Reviewed-by: Yoann Congal <yoann.congal@smile.fr>
+> ---
+>  config.json | 30 ++++++++++++++++++++++++++++++
+>  1 file changed, 30 insertions(+)
+
+I fixed a json parsing issue and merged. I also added the autobuilder2
+config to support it. A test build is now running here:
+
+https://autobuilder.yoctoproject.org/typhoon/#/builders/156/builds/1
+
+Cheers,
+
+Richard
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] [yocto-autobuilder-helper][PATCH v2] meta-oe-mirror: Use a 2 step job to fetch and verify meta-openembedded mirror.
+       [not found] ` <178F7D157564D399.11247@lists.yoctoproject.org>
+@ 2023-10-19 11:52   ` Richard Purdie
+       [not found]   ` <178F8004D1FBCB68.20272@lists.yoctoproject.org>
+  1 sibling, 0 replies; 4+ messages in thread
+From: Richard Purdie @ 2023-10-19 11:52 UTC (permalink / raw)
+  To: David Pierret, yocto; +Cc: Yoann Congal, Steve Sakoman
+
+On Thu, 2023-10-19 at 11:58 +0100, Richard Purdie via
+lists.yoctoproject.org wrote:
+> On Wed, 2023-10-18 at 15:46 +0200, David Pierret wrote:
+> > Inspired from trigger-build and trigger-build-post-trigger
+> > The branch must be selected on build configuration.
+> > 
+> > Signed-off-by: David Pierret <david.pierret@smile.fr>
+> > Reviewed-by: Yoann Congal <yoann.congal@smile.fr>
+> > ---
+> >  config.json | 30 ++++++++++++++++++++++++++++++
+> >  1 file changed, 30 insertions(+)
+> 
+> I fixed a json parsing issue and merged. I also added the autobuilder2
+> config to support it. A test build is now running here:
+> 
+> https://autobuilder.yoctoproject.org/typhoon/#/builders/156/builds/1
+
+That failed with a single fetch failure which isn't related to this
+patch.
+
+I've therefore pulled the patch into the dunfell, kirkstone and
+mickledore branches.
+
+Autobuilder enabling is here:
+
+https://git.yoctoproject.org/yocto-autobuilder2/commit/?id=93c034d436cbe631db2354a945850c3e97dd46bd
+
+with scheduling for the all branches here:
+
+https://git.yoctoproject.org/yocto-autobuilder2/commit/?id=94f2878f64f11993e8de8295bb1b46202b741019
+
+Cheers,
+
+Richard
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] [yocto-autobuilder-helper][PATCH v2] meta-oe-mirror: Use a 2 step job to fetch and verify meta-openembedded mirror.
+       [not found]   ` <178F8004D1FBCB68.20272@lists.yoctoproject.org>
+@ 2023-10-19 13:47     ` Richard Purdie
+  0 siblings, 0 replies; 4+ messages in thread
+From: Richard Purdie @ 2023-10-19 13:47 UTC (permalink / raw)
+  To: David Pierret, yocto, Khem Raj; +Cc: Yoann Congal, Steve Sakoman
+
+On Thu, 2023-10-19 at 12:52 +0100, Richard Purdie via
+lists.yoctoproject.org wrote:
+> On Thu, 2023-10-19 at 11:58 +0100, Richard Purdie via
+> lists.yoctoproject.org wrote:
+> > On Wed, 2023-10-18 at 15:46 +0200, David Pierret wrote:
+> > > Inspired from trigger-build and trigger-build-post-trigger
+> > > The branch must be selected on build configuration.
+> > > 
+> > > Signed-off-by: David Pierret <david.pierret@smile.fr>
+> > > Reviewed-by: Yoann Congal <yoann.congal@smile.fr>
+> > > ---
+> > >  config.json | 30 ++++++++++++++++++++++++++++++
+> > >  1 file changed, 30 insertions(+)
+> > 
+> > I fixed a json parsing issue and merged. I also added the autobuilder2
+> > config to support it. A test build is now running here:
+> > 
+> > https://autobuilder.yoctoproject.org/typhoon/#/builders/156/builds/1
+> 
+> That failed with a single fetch failure which isn't related to this
+> patch.
+> 
+> I've therefore pulled the patch into the dunfell, kirkstone and
+> mickledore branches.
+> 
+> Autobuilder enabling is here:
+> 
+> https://git.yoctoproject.org/yocto-autobuilder2/commit/?id=93c034d436cbe631db2354a945850c3e97dd46bd
+> 
+> with scheduling for the all branches here:
+> 
+> https://git.yoctoproject.org/yocto-autobuilder2/commit/?id=94f2878f64f11993e8de8295bb1b46202b741019
+
+Master reran and succeeded this time but is showing a lot of warnings:
+
+https://autobuilder.yoctoproject.org/typhoon/#/builders/156/builds/2/steps/12/logs/warnings
+
+Kirkstone has an issue with grubby-git and a missing SRCREV:
+
+https://autobuilder.yoctoproject.org/typhoon/#/builders/156/builds/3/steps/13/logs/stdio
+(plus warnings)
+
+Mickledore has an issue with uutils-coreutils:
+
+https://autobuilder.yoctoproject.org/typhoon/#/builders/156/builds/5
+(plus warnings)
+
+Dunfell broke with space issues so I reran it here:
+
+https://autobuilder.yoctoproject.org/typhoon/#/builders/156/builds/6
+
+So we're making progress but the meta-oe layer maintainers may need
+some tweaks on the same branches or we need to see some missing files
+into the mirror for those branches. We also need to find a way to
+address the warnings.
+
+Cheers,
+
+Richard
+
+
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+end of thread, other threads:[~2023-10-19 13:47 UTC | newest]
+
+Thread overview: 4+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-10-18 13:46 [yocto-autobuilder-helper][PATCH v2] meta-oe-mirror: Use a 2 step job to fetch and verify meta-openembedded mirror David Pierret
+2023-10-19 10:58 ` [yocto] " Richard Purdie
+     [not found] ` <178F7D157564D399.11247@lists.yoctoproject.org>
+2023-10-19 11:52   ` Richard Purdie
+     [not found]   ` <178F8004D1FBCB68.20272@lists.yoctoproject.org>
+2023-10-19 13:47     ` Richard Purdie
+

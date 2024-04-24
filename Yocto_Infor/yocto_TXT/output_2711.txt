@@ -1,0 +1,132 @@
+* glibc -fstack-protector-strong
+@ 2021-10-15  2:35 Paul Eggleton
+  2021-10-15  4:33 ` [yocto] " Khem Raj
+  0 siblings, 1 reply; 2+ messages in thread
+From: Paul Eggleton @ 2021-10-15  2:35 UTC (permalink / raw)
+  To: yocto
+
+Hi folks
+
+I'm looking at how -fstack-protector-strong might be enabled in the glibc
+recipe. It looks like it should already be enabled by default via 
+--enable-stack-protector=strong in EXTRA_OECONF, however looking at the
+compile logs it is passing -fno-stack-protector instead. Examining the
+configure log:
+
+checking for -fstack-protector... (cached) no
+checking for -fstack-protector-strong... (cached) no
+checking for -fstack-protector-all... (cached) no
+
+This in turn comes from libc_cv_ssp_strong=no in CACHED_CONFIGUREVARS in
+glibc.inc. Searching back through the git history I can't find much by way of
+explanation as to why the stack protector options are disabled. Setting
+libc_cv_ssp_strong=yes however results in the following:
+
+| x86_64-poky-linux-gcc  -m64 -march=core2 -mtune=core2 -msse3 -mfpmath=sse  --sysroot=/media/large/oe/poky/tmp/work/core2-64-poky-linux/glibc/2.31+gitAUTOINC+4f0a61f753-r0/recipe-sysroot -Wl,-O1 -Wl,--hash-style=gnu -Wl,--as-needed  -Wl,-z,relro,-z,now -fuse-ld=bfd  -nostdlib -nostartfiles -r -o /media/large/oe/poky/tmp/work/core2-64-poky-linux/glibc/2.31+gitAUTOINC+4f0a61f753-r0/build-x86_64-poky-linux/libc_pic.os \
+|  -Wl,-d -Wl,--whole-archive /media/large/oe/poky/tmp/work/core2-64-poky-linux/glibc/2.31+gitAUTOINC+4f0a61f753-r0/build-x86_64-poky-linux/libc_pic.a -o /media/large/oe/poky/tmp/work/core2-64-poky-linux/glibc/2.31+gitAUTOINC+4f0a61f753-r0/build-x86_64-poky-linux/libc_pic.os
+| x86_64-poky-linux-gcc  -m64 -march=core2 -mtune=core2 -msse3 -mfpmath=sse  --sysroot=/media/large/oe/poky/tmp/work/core2-64-poky-linux/glibc/2.31+gitAUTOINC+4f0a61f753-r0/recipe-sysroot -Wl,-O1 -Wl,--hash-style=gnu -Wl,--as-needed  -Wl,-z,relro,-z,now -fuse-ld=bfd  -nostdlib -nostartfiles -r -o /media/large/oe/poky/tmp/work/core2-64-poky-linux/glibc/2.31+gitAUTOINC+4f0a61f753-r0/build-x86_64-poky-linux/elf/librtld.map.o  \
+|       '-Wl,-(' /media/large/oe/poky/tmp/work/core2-64-poky-linux/glibc/2.31+gitAUTOINC+4f0a61f753-r0/build-x86_64-poky-linux/elf/dl-allobjs.os /media/large/oe/poky/tmp/work/core2-64-poky-linux/glibc/2.31+gitAUTOINC+4f0a61f753-r0/build-x86_64-poky-linux/libc_pic.a -lgcc '-Wl,-)' -Wl,-Map,/media/large/oe/poky/tmp/work/core2-64-poky-linux/glibc/2.31+gitAUTOINC+4f0a61f753-r0/build-x86_64-poky-linux/elf/librtld.mapT
+| /media/large/oe/poky/tmp/work/core2-64-poky-linux/glibc/2.31+gitAUTOINC+4f0a61f753-r0/recipe-sysroot-native/usr/bin/x86_64-poky-linux/../../libexec/x86_64-poky-linux/gcc/x86_64-poky-linux/9.3.0/ld.bfd: /media/large/oe/poky/tmp/work/core2-64-poky-linux/glibc/2.31+gitAUTOINC+4f0a61f753-r0/build-x86_64-poky-linux/libc_pic.a(libc_fatal.os): in function `__GI___libc_fatal':
+| /usr/src/debug/glibc/2.31+gitAUTOINC+4f0a61f753-r0/git/libio/../sysdeps/posix/libc_fatal.c:161: multiple definition of `__GI___libc_fatal'; /media/large/oe/poky/tmp/work/core2-64-poky-linux/glibc/2.31+gitAUTOINC+4f0a61f753-r0/build-x86_64-poky-linux/elf/dl-allobjs.os:/usr/src/debug/glibc/2.31+gitAUTOINC+4f0a61f753-r0/git/elf/dl-minimal.c:188: first defined here
+| /media/large/oe/poky/tmp/work/core2-64-poky-linux/glibc/2.31+gitAUTOINC+4f0a61f753-r0/recipe-sysroot-native/usr/bin/x86_64-poky-linux/../../libexec/x86_64-poky-linux/gcc/x86_64-poky-linux/9.3.0/ld.bfd: /media/large/oe/poky/tmp/work/core2-64-poky-linux/glibc/2.31+gitAUTOINC+4f0a61f753-r0/build-x86_64-poky-linux/libc_pic.a(libc_fatal.os): in function `__GI___libc_fatal':
+| /usr/src/debug/glibc/2.31+gitAUTOINC+4f0a61f753-r0/git/libio/../sysdeps/posix/libc_fatal.c:161: multiple definition of `__libc_fatal'; /media/large/oe/poky/tmp/work/core2-64-poky-linux/glibc/2.31+gitAUTOINC+4f0a61f753-r0/build-x86_64-poky-linux/elf/dl-allobjs.os:/usr/src/debug/glibc/2.31+gitAUTOINC+4f0a61f753-r0/git/elf/dl-minimal.c:188: first defined here
+| collect2: error: ld returned 1 exit status
+| make[2]: *** [Makefile:499: /media/large/oe/poky/tmp/work/core2-64-poky-linux/glibc/2.31+gitAUTOINC+4f0a61f753-r0/build-x86_64-poky-linux/elf/librtld.map] Error 1
+| make[2]: *** Waiting for unfinished jobs....
+| make[2]: Leaving directory '/media/large/oe/poky/tmp/work/core2-64-poky-linux/glibc/2.31+gitAUTOINC+4f0a61f753-r0/git/elf'
+| make[1]: *** [Makefile:490: elf/subdir_lib] Error 2
+| make[1]: Leaving directory '/media/large/oe/poky/tmp/work/core2-64-poky-linux/glibc/2.31+gitAUTOINC+4f0a61f753-r0/git'
+| make: *** [Makefile:9: all] Error 2
+| ERROR: oe_runmake failed
+
+This is not an area I have looked much into before; does anyone have any insights?
+
+Thanks
+Paul
+
+
+
+
+
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+* Re: [yocto] glibc -fstack-protector-strong
+  2021-10-15  2:35 glibc -fstack-protector-strong Paul Eggleton
+@ 2021-10-15  4:33 ` Khem Raj
+  0 siblings, 0 replies; 2+ messages in thread
+From: Khem Raj @ 2021-10-15  4:33 UTC (permalink / raw)
+  To: Paul Eggleton, yocto
+
+
+
+On 10/14/21 7:35 PM, Paul Eggleton wrote:
+> Hi folks
+> 
+> I'm looking at how -fstack-protector-strong might be enabled in the glibc
+> recipe. It looks like it should already be enabled by default via
+> --enable-stack-protector=strong in EXTRA_OECONF, however looking at the
+> compile logs it is passing -fno-stack-protector instead. Examining the
+> configure log:
+> 
+> checking for -fstack-protector... (cached) no
+> checking for -fstack-protector-strong... (cached) no
+> checking for -fstack-protector-all... (cached) no
+> 
+> This in turn comes from libc_cv_ssp_strong=no in CACHED_CONFIGUREVARS in
+> glibc.inc. Searching back through the git history I can't find much by way of
+> explanation as to why the stack protector options are disabled. Setting
+> libc_cv_ssp_strong=yes however results in the following:
+> 
+> | x86_64-poky-linux-gcc  -m64 -march=core2 -mtune=core2 -msse3 -mfpmath=sse  --sysroot=/media/large/oe/poky/tmp/work/core2-64-poky-linux/glibc/2.31+gitAUTOINC+4f0a61f753-r0/recipe-sysroot -Wl,-O1 -Wl,--hash-style=gnu -Wl,--as-needed  -Wl,-z,relro,-z,now -fuse-ld=bfd  -nostdlib -nostartfiles -r -o /media/large/oe/poky/tmp/work/core2-64-poky-linux/glibc/2.31+gitAUTOINC+4f0a61f753-r0/build-x86_64-poky-linux/libc_pic.os \
+> |  -Wl,-d -Wl,--whole-archive /media/large/oe/poky/tmp/work/core2-64-poky-linux/glibc/2.31+gitAUTOINC+4f0a61f753-r0/build-x86_64-poky-linux/libc_pic.a -o /media/large/oe/poky/tmp/work/core2-64-poky-linux/glibc/2.31+gitAUTOINC+4f0a61f753-r0/build-x86_64-poky-linux/libc_pic.os
+> | x86_64-poky-linux-gcc  -m64 -march=core2 -mtune=core2 -msse3 -mfpmath=sse  --sysroot=/media/large/oe/poky/tmp/work/core2-64-poky-linux/glibc/2.31+gitAUTOINC+4f0a61f753-r0/recipe-sysroot -Wl,-O1 -Wl,--hash-style=gnu -Wl,--as-needed  -Wl,-z,relro,-z,now -fuse-ld=bfd  -nostdlib -nostartfiles -r -o /media/large/oe/poky/tmp/work/core2-64-poky-linux/glibc/2.31+gitAUTOINC+4f0a61f753-r0/build-x86_64-poky-linux/elf/librtld.map.o  \
+> |       '-Wl,-(' /media/large/oe/poky/tmp/work/core2-64-poky-linux/glibc/2.31+gitAUTOINC+4f0a61f753-r0/build-x86_64-poky-linux/elf/dl-allobjs.os /media/large/oe/poky/tmp/work/core2-64-poky-linux/glibc/2.31+gitAUTOINC+4f0a61f753-r0/build-x86_64-poky-linux/libc_pic.a -lgcc '-Wl,-)' -Wl,-Map,/media/large/oe/poky/tmp/work/core2-64-poky-linux/glibc/2.31+gitAUTOINC+4f0a61f753-r0/build-x86_64-poky-linux/elf/librtld.mapT
+> | /media/large/oe/poky/tmp/work/core2-64-poky-linux/glibc/2.31+gitAUTOINC+4f0a61f753-r0/recipe-sysroot-native/usr/bin/x86_64-poky-linux/../../libexec/x86_64-poky-linux/gcc/x86_64-poky-linux/9.3.0/ld.bfd: /media/large/oe/poky/tmp/work/core2-64-poky-linux/glibc/2.31+gitAUTOINC+4f0a61f753-r0/build-x86_64-poky-linux/libc_pic.a(libc_fatal.os): in function `__GI___libc_fatal':
+> | /usr/src/debug/glibc/2.31+gitAUTOINC+4f0a61f753-r0/git/libio/../sysdeps/posix/libc_fatal.c:161: multiple definition of `__GI___libc_fatal'; /media/large/oe/poky/tmp/work/core2-64-poky-linux/glibc/2.31+gitAUTOINC+4f0a61f753-r0/build-x86_64-poky-linux/elf/dl-allobjs.os:/usr/src/debug/glibc/2.31+gitAUTOINC+4f0a61f753-r0/git/elf/dl-minimal.c:188: first defined here
+> | /media/large/oe/poky/tmp/work/core2-64-poky-linux/glibc/2.31+gitAUTOINC+4f0a61f753-r0/recipe-sysroot-native/usr/bin/x86_64-poky-linux/../../libexec/x86_64-poky-linux/gcc/x86_64-poky-linux/9.3.0/ld.bfd: /media/large/oe/poky/tmp/work/core2-64-poky-linux/glibc/2.31+gitAUTOINC+4f0a61f753-r0/build-x86_64-poky-linux/libc_pic.a(libc_fatal.os): in function `__GI___libc_fatal':
+> | /usr/src/debug/glibc/2.31+gitAUTOINC+4f0a61f753-r0/git/libio/../sysdeps/posix/libc_fatal.c:161: multiple definition of `__libc_fatal'; /media/large/oe/poky/tmp/work/core2-64-poky-linux/glibc/2.31+gitAUTOINC+4f0a61f753-r0/build-x86_64-poky-linux/elf/dl-allobjs.os:/usr/src/debug/glibc/2.31+gitAUTOINC+4f0a61f753-r0/git/elf/dl-minimal.c:188: first defined here
+> | collect2: error: ld returned 1 exit status
+> | make[2]: *** [Makefile:499: /media/large/oe/poky/tmp/work/core2-64-poky-linux/glibc/2.31+gitAUTOINC+4f0a61f753-r0/build-x86_64-poky-linux/elf/librtld.map] Error 1
+> | make[2]: *** Waiting for unfinished jobs....
+> | make[2]: Leaving directory '/media/large/oe/poky/tmp/work/core2-64-poky-linux/glibc/2.31+gitAUTOINC+4f0a61f753-r0/git/elf'
+> | make[1]: *** [Makefile:490: elf/subdir_lib] Error 2
+> | make[1]: Leaving directory '/media/large/oe/poky/tmp/work/core2-64-poky-linux/glibc/2.31+gitAUTOINC+4f0a61f753-r0/git'
+> | make: *** [Makefile:9: all] Error 2
+> | ERROR: oe_runmake failed
+> 
+> This is not an area I have looked much into before; does anyone have any insights?
+
+This was enabling ssp support in glibc not only for other programs but 
+also for rest of glibc components during compile and that resulted in 
+duplicate symbols, IIRC thats why we disabled it, the error you are 
+seeing looks that we still have that problem lurking around. 
+Unfortunately I dont have a solution handy to offer
+
+> 
+> Thanks
+> Paul
+> 
+> 
+> 
+> 
+> 
+> 
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> You automatically follow any topics you start or reply to.
+> View/Reply Online (#55079): https://lists.yoctoproject.org/g/yocto/message/55079
+> Mute This Topic: https://lists.yoctoproject.org/mt/86330759/1997914
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [raj.khem@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+> 
+
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2021-10-15  4:33 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-10-15  2:35 glibc -fstack-protector-strong Paul Eggleton
+2021-10-15  4:33 ` [yocto] " Khem Raj
+

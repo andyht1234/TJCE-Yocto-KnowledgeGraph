@@ -1,0 +1,135 @@
+* Possible to ignore a missing file in recipe without error?
+@ 2022-02-11 19:03 Howard
+  2022-02-11 20:16 ` [yocto] " Josef Holzmayr
+  0 siblings, 1 reply; 3+ messages in thread
+From: Howard @ 2022-02-11 19:03 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 853 bytes --]
+
+Hi:
+
+I have a simple recipe that installs a few miscellaneous files, one of the files may or may not be present and in reality that's ok for the moment, but I don't see a way to do things in a recipe based on the presence or absence of a file.
+
+For example:
+
+LICENSE="CLOSED"
+
+FILESEXTRAPATHS_prepend := "${THISDIR}/files:"
+
+# always present file
+SRC_URI += "file://myconfig.config"
+
+# sometimes present file - is there a way to conditionally do this statement
+SRC_URI += "file://myOtherConfig.config"
+
+do_install() {
+install -d ${D}${sysconfdir}
+install -m 0755 ${WORKDIR}/myconfig.config ${D}${sysconfdir}
+#same here
+install -m 0755 ${WORKDIR}/myOtherConfig.config ${D}${sysconfdir}
+
+}
+
+FILES_${PN} += " ${sysconfdir}/myconfig.config "
+#same here
+FILES_${PN} += " ${sysconfdir}/myOtherConfig.config "
+
+Many thanks
+Howard
+
+[-- Attachment #2: Type: text/html, Size: 1076 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] Possible to ignore a missing file in recipe without error?
+  2022-02-11 19:03 Possible to ignore a missing file in recipe without error? Howard
+@ 2022-02-11 20:16 ` Josef Holzmayr
+  2022-02-13 15:20   ` Howard
+  0 siblings, 1 reply; 3+ messages in thread
+From: Josef Holzmayr @ 2022-02-11 20:16 UTC (permalink / raw)
+  To: Howard; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2191 bytes --]
+
+Howdy!
+
+> On 11. Feb 2022, at 20:03, Howard <howard.egan@avid.com> wrote:
+> 
+> Hi:
+> 
+> I have a simple recipe that installs a few miscellaneous files, one of the files may or may not be present and in reality that's ok for the moment, but I don't see a way to do things in a recipe based on the presence or absence of a file.  
+
+The real question is: what is the condition? It must be something that is constant across all of the build. And if can only come from either a .conf file or the environment, otherwise it would not be visible in the recipe.
+
+> 
+> For example:
+> 
+> LICENSE="CLOSED"
+> 
+> FILESEXTRAPATHS_prepend := "${THISDIR}/files:"
+> 
+> # always present file
+> SRC_URI += "file://myconfig.config"
+> 
+> # sometimes present file - is there a way to conditionally do this statement
+> SRC_URI += "file://myOtherConfig.config"
+
+A possible approach would be only appending depending on a specific DISTRO_FLAG, via bb.utils.contains. I have done something similar at https://github.com/TheYoctoJester/meta-zinc/blob/5c566c2f7d29d9db15db0c70cd3dd79fa755c351/recipes-zinc/libanswer/libanswer_git.bb#L26 <https://github.com/TheYoctoJester/meta-zinc/blob/5c566c2f7d29d9db15db0c70cd3dd79fa755c351/recipes-zinc/libanswer/libanswer_git.bb#L26>
+
+But again, it depends on the exact use case.
+
+Greetz
+
+> 
+> do_install() {
+>     install -d ${D}${sysconfdir}
+>     install -m 0755 ${WORKDIR}/myconfig.config ${D}${sysconfdir}
+>     #same here
+>     install -m 0755 ${WORKDIR}/myOtherConfig.config ${D}${sysconfdir}
+> 
+> }
+> 
+> FILES_${PN} += " ${sysconfdir}/myconfig.config "
+> #same here
+> FILES_${PN} += " ${sysconfdir}/myOtherConfig.config "
+> 
+> 
+> Many thanks
+> Howard
+> 
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> You automatically follow any topics you start or reply to.
+> View/Reply Online (#56161): https://lists.yoctoproject.org/g/yocto/message/56161
+> Mute This Topic: https://lists.yoctoproject.org/mt/89078696/4689568
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [jester@theyoctojester.info]
+> -=-=-=-=-=-=-=-=-=-=-=-
+> 
+
+
+[-- Attachment #2: Type: text/html, Size: 3791 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: Possible to ignore a missing file in recipe without error?
+  2022-02-11 20:16 ` [yocto] " Josef Holzmayr
+@ 2022-02-13 15:20   ` Howard
+  0 siblings, 0 replies; 3+ messages in thread
+From: Howard @ 2022-02-13 15:20 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 116 bytes --]
+
+Thanks Josef, that sounds like what I want to do isn't really possible   Or if it is, it isn't worth the effort.
+
+[-- Attachment #2: Type: text/html, Size: 124 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2022-02-13 15:20 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-02-11 19:03 Possible to ignore a missing file in recipe without error? Howard
+2022-02-11 20:16 ` [yocto] " Josef Holzmayr
+2022-02-13 15:20   ` Howard
+

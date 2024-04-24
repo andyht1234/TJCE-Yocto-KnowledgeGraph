@@ -1,0 +1,990 @@
+* [meta-tensorflow][PATCH 1/3] tensorflow: do not fail on chmod failure
+@ 2021-12-21  8:42 Julien STEPHAN
+  2021-12-21  8:42 ` [meta-tensorflow][PATCH 2/3] bazel.class: rename BAZEL_ARGS to BAZEL_STARTUP_OPTIONS Julien STEPHAN
+  2021-12-21  8:42 ` [meta-tensorflow][PATCH 3/3] tensorflow-lite: add recipe Julien STEPHAN
+  0 siblings, 2 replies; 6+ messages in thread
+From: Julien STEPHAN @ 2021-12-21  8:42 UTC (permalink / raw)
+  To: yocto; +Cc: Julien STEPHAN
+
+every recipe using tensorflow.inc will inherits the do_compile:append
+task but sometimes, the chmod inside this task fails because the target
+files are not generated, we can safely ignore the chmod exit code and
+always return 0
+
+Signed-off-by: Julien STEPHAN <jstephan@baylibre.com>
+---
+ recipes-framework/tensorflow/tensorflow.inc | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/recipes-framework/tensorflow/tensorflow.inc b/recipes-framework/tensorflow/tensorflow.inc
+index e30cca5..25d2ebf 100644
+--- a/recipes-framework/tensorflow/tensorflow.inc
++++ b/recipes-framework/tensorflow/tensorflow.inc
+@@ -39,6 +39,6 @@ TF_CONFIG ?= " \
+ inherit tensorflow_ver
+ 
+ do_compile:append() {
+-    chmod a+w ${BAZEL_DIR}/output_base/execroot/org_tensorflow/bazel-out/*/bin/tensorflow/lite/python/schema_py_srcs_no_include_all
+-    chmod a+w ${BAZEL_DIR}/output_base/execroot/org_tensorflow/bazel-out/*/bin/tensorflow/lite/python/schema_py_srcs_no_include_all/tflite
++    chmod a+w ${BAZEL_DIR}/output_base/execroot/org_tensorflow/bazel-out/*/bin/tensorflow/lite/python/schema_py_srcs_no_include_all || true
++    chmod a+w ${BAZEL_DIR}/output_base/execroot/org_tensorflow/bazel-out/*/bin/tensorflow/lite/python/schema_py_srcs_no_include_all/tflite || true
+ }
+-- 
+2.34.1
+
+
+
+^ permalink raw reply related	[flat|nested] 6+ messages in thread
+* [meta-tensorflow][PATCH 2/3] bazel.class: rename BAZEL_ARGS to BAZEL_STARTUP_OPTIONS
+  2021-12-21  8:42 [meta-tensorflow][PATCH 1/3] tensorflow: do not fail on chmod failure Julien STEPHAN
+@ 2021-12-21  8:42 ` Julien STEPHAN
+  2021-12-21  8:42 ` [meta-tensorflow][PATCH 3/3] tensorflow-lite: add recipe Julien STEPHAN
+  1 sibling, 0 replies; 6+ messages in thread
+From: Julien STEPHAN @ 2021-12-21  8:42 UTC (permalink / raw)
+  To: yocto; +Cc: Julien STEPHAN
+
+BAZEL_ARGS variable contains bazel startup options so rename the
+variable to be more explicit. Moreover upstream tensorflow uses the
+variable name BAZEL_STARTUP_OPTIONS inside
+https://github.com/tensorflow/tensorflow/blob/master/tensorflow/lite/tools/pip_package/build_pip_package_with_bazel.sh#L97
+so we can keep consistency with upstream and this would be useful for
+future tensorflow-lite recipe
+
+Signed-off-by: Julien STEPHAN <jstephan@baylibre.com>
+---
+ classes/bazel.bbclass | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/classes/bazel.bbclass b/classes/bazel.bbclass
+index e232d30..ccdfd74 100644
+--- a/classes/bazel.bbclass
++++ b/classes/bazel.bbclass
+@@ -7,7 +7,7 @@ inherit bazel-base
+ 
+ BAZEL_DIR ?= "${WORKDIR}/bazel"
+ BAZEL_OUTPUTBASE_DIR ?= "${BAZEL_DIR}/output_base"
+-export BAZEL_ARGS="--output_user_root=${BAZEL_DIR}/user_root \
++export BAZEL_STARTUP_OPTIONS="--output_user_root=${BAZEL_DIR}/user_root \
+                    --output_base=${BAZEL_OUTPUTBASE_DIR} \
+                    --bazelrc=${S}/bazelrc \
+                    --batch  \
+@@ -19,7 +19,7 @@ do_prepare_recipe_sysroot[postfuncs] += "do_install_bazel"
+ do_install_bazel() {
+     mkdir -p ${BAZEL_DIR}
+     install -m 0755 ${STAGING_BINDIR_NATIVE}/bazel ${BAZEL_DIR}
+-    create_cmdline_wrapper ${BAZEL} \$BAZEL_ARGS
++    create_cmdline_wrapper ${BAZEL} \$BAZEL_STARTUP_OPTIONS
+     zip -A ${BAZEL}.real
+ }
+ 
+-- 
+2.34.1
+
+
+
+^ permalink raw reply related	[flat|nested] 6+ messages in thread
+* [meta-tensorflow][PATCH 3/3] tensorflow-lite: add recipe
+  2021-12-21  8:42 [meta-tensorflow][PATCH 1/3] tensorflow: do not fail on chmod failure Julien STEPHAN
+  2021-12-21  8:42 ` [meta-tensorflow][PATCH 2/3] bazel.class: rename BAZEL_ARGS to BAZEL_STARTUP_OPTIONS Julien STEPHAN
+@ 2021-12-21  8:42 ` Julien STEPHAN
+  2021-12-24 18:48   ` [yocto] " Randy MacLeod
+  1 sibling, 1 reply; 6+ messages in thread
+From: Julien STEPHAN @ 2021-12-21  8:42 UTC (permalink / raw)
+  To: yocto; +Cc: Julien STEPHAN
+
+Adding 2.6.1 tensorflow-lite recipe.
+This recipe is directly based on the corresponding 2.6.1 tensorflow
+recipe.
+
+It has been build tested with latest honister and tested on
+several mediatek soc using benchmark_model and label_image (C++ and
+python)
+
+Signed-off-by: Julien STEPHAN <jstephan@baylibre.com>
+---
+ .../tensorflow/tensorflow-lite_2.6.1.bb       | 156 ++++++++++++++++++
+ 1 file changed, 156 insertions(+)
+ create mode 100644 recipes-framework/tensorflow/tensorflow-lite_2.6.1.bb
+
+diff --git a/recipes-framework/tensorflow/tensorflow-lite_2.6.1.bb b/recipes-framework/tensorflow/tensorflow-lite_2.6.1.bb
+new file mode 100644
+index 0000000..104e5a3
+--- /dev/null
++++ b/recipes-framework/tensorflow/tensorflow-lite_2.6.1.bb
+@@ -0,0 +1,156 @@
++include tensorflow.inc
++
++SRC_URI += " \
++           file://0001-add-yocto-toolchain-to-support-cross-compiling.patch \
++           file://0001-fix-build-tensorflow-lite-examples-label_image-label.patch \
++           file://0001-label_image-tweak-default-model-location.patch \
++           file://0001-label_image.lite-tweak-default-model-location.patch \
++           file://0001-CheckFeatureOrDie-use-warning-to-avoid-die.patch \
++           file://0001-support-32-bit-x64-and-arm-for-yocto.patch \
++           file://0001-Revert-set-distinct_host_configuration-false-by-defa.patch \
++           file://0001-fix-default-Bazel-toolchain-not-work.patch \
++           file://0001-distutils-is-deprecated-in-Python-3.10-cross.patch \
++           file://BUILD.in \
++           file://BUILD.yocto_compiler \
++           file://cc_config.bzl.tpl \
++           file://yocto_compiler_configure.bzl \
++          "
++
++SRC_URI += "https://storage.googleapis.com/download.tensorflow.org/models/inception_v3_2016_08_28_frozen.pb.tar.gz;name=model-inv3"
++SRC_URI[model-inv3.md5sum] = "a904ddf15593d03c7dd786d552e22d73"
++SRC_URI[model-inv3.sha256sum] = "7045b72a954af4dce36346f478610acdccbf149168fa25c78e54e32f0c723d6d"
++
++SRC_URI += "https://storage.googleapis.com/download.tensorflow.org/models/tflite/mobilenet_v1_1.0_224_quant_and_labels.zip;name=model-mobv1"
++SRC_URI[model-mobv1.md5sum] = "38ac0c626947875bd311ef96c8baab62"
++SRC_URI[model-mobv1.sha256sum] = "2f8054076cf655e1a73778a49bd8fd0306d32b290b7e576dda9574f00f186c0f"
++
++RDEPENDS:${PN} += " \
++    python3 \
++    python3-core \
++    python3-numpy \
++"
++
++export PYTHON_BIN_PATH="${PYTHON}"
++export PYTHON_LIB_PATH="${STAGING_LIBDIR_NATIVE}/${PYTHON_DIR}/site-packages"
++
++export CROSSTOOL_PYTHON_INCLUDE_PATH="${STAGING_INCDIR}/python${PYTHON_BASEVERSION}${PYTHON_ABI}"
++
++do_configure:append () {
++    if [ ! -e ${CROSSTOOL_PYTHON_INCLUDE_PATH}/pyconfig-target.h ];then
++        mv ${CROSSTOOL_PYTHON_INCLUDE_PATH}/pyconfig.h ${CROSSTOOL_PYTHON_INCLUDE_PATH}/pyconfig-target.h
++    fi
++
++    install -m 644 ${STAGING_INCDIR_NATIVE}/python${PYTHON_BASEVERSION}${PYTHON_ABI}/pyconfig.h \
++       ${CROSSTOOL_PYTHON_INCLUDE_PATH}/pyconfig-native.h
++
++    cat > ${CROSSTOOL_PYTHON_INCLUDE_PATH}/pyconfig.h <<ENDOF
++#if defined (_PYTHON_INCLUDE_TARGET)
++#include "pyconfig-target.h"
++#elif defined (_PYTHON_INCLUDE_NATIVE)
++#include "pyconfig-native.h"
++#else
++#error "_PYTHON_INCLUDE_TARGET or _PYTHON_INCLUDE_NATIVE is not defined"
++#endif // End of #if defined (_PYTHON_INCLUDE_TARGET)
++
++ENDOF
++
++    mkdir -p ${S}/third_party/toolchains/yocto/
++    sed "s#%%CPU%%#${BAZEL_TARGET_CPU}#g" ${WORKDIR}/BUILD.in  > ${S}/third_party/toolchains/yocto/BUILD
++    chmod 644 ${S}/third_party/toolchains/yocto/BUILD
++    install -m 644 ${WORKDIR}/cc_config.bzl.tpl ${S}/third_party/toolchains/yocto/
++    install -m 644 ${WORKDIR}/yocto_compiler_configure.bzl ${S}/third_party/toolchains/yocto/
++    install -m 644 ${WORKDIR}/BUILD.yocto_compiler ${S}
++
++    CT_NAME=$(echo ${HOST_PREFIX} | rev | cut -c 2- | rev)
++    SED_COMMAND="s#%%CT_NAME%%#${CT_NAME}#g"
++    SED_COMMAND="${SED_COMMAND}; s#%%WORKDIR%%#${WORKDIR}#g"
++    SED_COMMAND="${SED_COMMAND}; s#%%YOCTO_COMPILER_PATH%%#${BAZEL_OUTPUTBASE_DIR}/external/yocto_compiler#g"
++
++    sed -i "${SED_COMMAND}" ${S}/BUILD.yocto_compiler \
++                            ${S}/WORKSPACE
++
++    ${TF_CONFIG} \
++    ./configure
++}
++
++TF_TARGET_EXTRA ??= ""
++
++export CUSTOM_BAZEL_FLAGS = " \
++    ${TF_ARGS_EXTRA} \
++    --jobs=auto \
++    -c opt \
++    --cpu=${BAZEL_TARGET_CPU} \
++    --crosstool_top=@local_config_yocto_compiler//:toolchain \
++    --host_crosstool_top=@bazel_tools//tools/cpp:toolchain \
++"
++
++do_compile () {
++    export CT_NAME=$(echo ${HOST_PREFIX} | rev | cut -c 2- | rev)
++    unset CC
++
++    ${BAZEL} build \
++        ${CUSTOM_BAZEL_FLAGS} \
++        --copt -DTF_LITE_DISABLE_X86_NEON --copt -DMESA_EGL_NO_X11_HEADERS \
++        tensorflow/lite:libtensorflowlite.so \
++        tensorflow/lite/tools/benchmark:benchmark_model \
++        //tensorflow/lite/examples/label_image:label_image \
++        ${TF_TARGET_EXTRA}
++
++    # build pip package
++    ${S}/tensorflow/lite/tools/pip_package/build_pip_package_with_bazel.sh
++
++}
++
++do_install() {
++    install -d ${D}${libdir}
++    install -m 644 ${S}/bazel-bin/tensorflow/lite/libtensorflowlite.so \
++        ${D}${libdir}
++
++    install -d ${D}${sbindir}
++    install -m 755 ${S}/bazel-bin/tensorflow/lite/tools/benchmark/benchmark_model \
++        ${D}${sbindir}
++
++    install -m 755 ${S}/bazel-bin/tensorflow/lite/examples/label_image/label_image \
++        ${D}${sbindir}/label_image
++
++    install -d ${D}${datadir}/label_image
++    install -m 644 ${WORKDIR}/imagenet_slim_labels.txt ${D}${datadir}/label_image
++    install -m 644 ${WORKDIR}/inception_v3_2016_08_28_frozen.pb \
++        ${D}${datadir}/label_image
++    install -m 644 ${S}/tensorflow/examples/label_image/data/grace_hopper.jpg \
++        ${D}${datadir}/label_image
++
++    install -m 644 ${WORKDIR}/labels_mobilenet_quant_v1_224.txt ${D}${datadir}/label_image
++    install -m 644 ${WORKDIR}/mobilenet_v1_1.0_224_quant.tflite \
++        ${D}${datadir}/label_image
++    install -m 644 ${S}/tensorflow/lite/examples/label_image/testdata/grace_hopper.bmp \
++        ${D}${datadir}/label_image
++
++
++    #echo "Installing pip package"
++    install -d ${D}/${PYTHON_SITEPACKAGES_DIR}
++    ${STAGING_BINDIR_NATIVE}/pip3 install --disable-pip-version-check -v \
++        -t ${D}/${PYTHON_SITEPACKAGES_DIR} --no-cache-dir --no-deps \
++        ${S}/tensorflow/lite/tools/pip_package/gen/tflite_pip/python3/dist/tflite_runtime-${PV}-*.whl
++
++}
++
++FILES:${PN} += "${libdir} ${sbindir} ${datadir}/*"
++INSANE_SKIP:${PN} += "dev-so \
++                      already-stripped \
++                     "
++
++SOLIBS = ".so"
++FILES_SOLIBSDEV = ""
++ALLOW_EMPTY:${PN} = "1"
++
++FILES:${PN} += "${libdir} /home/root/*"
++
++inherit siteinfo unsupportarch
++python __anonymous() {
++    if d.getVar("SITEINFO_ENDIANNESS") == 'be':
++        msg =  "\nIt failed to use pre-build model to do predict/inference on big-endian platform"
++        msg += "\n(such as qemumips), since upstream does not support big-endian very well."
++        msg += "\nDetails: https://github.com/tensorflow/tensorflow/issues/16364"
++        bb.warn(msg)
++}
+-- 
+2.34.1
+
+
+
+^ permalink raw reply related	[flat|nested] 6+ messages in thread
+* Re: [yocto] [meta-tensorflow][PATCH 3/3] tensorflow-lite: add recipe
+  2021-12-21  8:42 ` [meta-tensorflow][PATCH 3/3] tensorflow-lite: add recipe Julien STEPHAN
+@ 2021-12-24 18:48   ` Randy MacLeod
+  2022-01-14 10:19     ` Julien Stephan
+  0 siblings, 1 reply; 6+ messages in thread
+From: Randy MacLeod @ 2021-12-24 18:48 UTC (permalink / raw)
+  To: Julien STEPHAN, yocto, Jia, Hongxu
+
+Thanks Stephan.
+
+Hongxu, did you miss this?
+
+../Randy
+
+On 2021-12-21 3:42 a.m., Julien STEPHAN wrote:
+> Adding 2.6.1 tensorflow-lite recipe.
+> This recipe is directly based on the corresponding 2.6.1 tensorflow
+> recipe.
+> 
+> It has been build tested with latest honister and tested on
+> several mediatek soc using benchmark_model and label_image (C++ and
+> python)
+> 
+> Signed-off-by: Julien STEPHAN <jstephan@baylibre.com>
+> ---
+>   .../tensorflow/tensorflow-lite_2.6.1.bb       | 156 ++++++++++++++++++
+>   1 file changed, 156 insertions(+)
+>   create mode 100644 recipes-framework/tensorflow/tensorflow-lite_2.6.1.bb
+> 
+> diff --git a/recipes-framework/tensorflow/tensorflow-lite_2.6.1.bb b/recipes-framework/tensorflow/tensorflow-lite_2.6.1.bb
+> new file mode 100644
+> index 0000000..104e5a3
+> --- /dev/null
+> +++ b/recipes-framework/tensorflow/tensorflow-lite_2.6.1.bb
+> @@ -0,0 +1,156 @@
+> +include tensorflow.inc
+> +
+> +SRC_URI += " \
+> +           file://0001-add-yocto-toolchain-to-support-cross-compiling.patch \
+> +           file://0001-fix-build-tensorflow-lite-examples-label_image-label.patch \
+> +           file://0001-label_image-tweak-default-model-location.patch \
+> +           file://0001-label_image.lite-tweak-default-model-location.patch \
+> +           file://0001-CheckFeatureOrDie-use-warning-to-avoid-die.patch \
+> +           file://0001-support-32-bit-x64-and-arm-for-yocto.patch \
+> +           file://0001-Revert-set-distinct_host_configuration-false-by-defa.patch \
+> +           file://0001-fix-default-Bazel-toolchain-not-work.patch \
+> +           file://0001-distutils-is-deprecated-in-Python-3.10-cross.patch \
+> +           file://BUILD.in \
+> +           file://BUILD.yocto_compiler \
+> +           file://cc_config.bzl.tpl \
+> +           file://yocto_compiler_configure.bzl \
+> +          "
+> +
+> +SRC_URI += "https://storage.googleapis.com/download.tensorflow.org/models/inception_v3_2016_08_28_frozen.pb.tar.gz;name=model-inv3"
+> +SRC_URI[model-inv3.md5sum] = "a904ddf15593d03c7dd786d552e22d73"
+> +SRC_URI[model-inv3.sha256sum] = "7045b72a954af4dce36346f478610acdccbf149168fa25c78e54e32f0c723d6d"
+> +
+> +SRC_URI += "https://storage.googleapis.com/download.tensorflow.org/models/tflite/mobilenet_v1_1.0_224_quant_and_labels.zip;name=model-mobv1"
+> +SRC_URI[model-mobv1.md5sum] = "38ac0c626947875bd311ef96c8baab62"
+> +SRC_URI[model-mobv1.sha256sum] = "2f8054076cf655e1a73778a49bd8fd0306d32b290b7e576dda9574f00f186c0f"
+> +
+> +RDEPENDS:${PN} += " \
+> +    python3 \
+> +    python3-core \
+> +    python3-numpy \
+> +"
+> +
+> +export PYTHON_BIN_PATH="${PYTHON}"
+> +export PYTHON_LIB_PATH="${STAGING_LIBDIR_NATIVE}/${PYTHON_DIR}/site-packages"
+> +
+> +export CROSSTOOL_PYTHON_INCLUDE_PATH="${STAGING_INCDIR}/python${PYTHON_BASEVERSION}${PYTHON_ABI}"
+> +
+> +do_configure:append () {
+> +    if [ ! -e ${CROSSTOOL_PYTHON_INCLUDE_PATH}/pyconfig-target.h ];then
+> +        mv ${CROSSTOOL_PYTHON_INCLUDE_PATH}/pyconfig.h ${CROSSTOOL_PYTHON_INCLUDE_PATH}/pyconfig-target.h
+> +    fi
+> +
+> +    install -m 644 ${STAGING_INCDIR_NATIVE}/python${PYTHON_BASEVERSION}${PYTHON_ABI}/pyconfig.h \
+> +       ${CROSSTOOL_PYTHON_INCLUDE_PATH}/pyconfig-native.h
+> +
+> +    cat > ${CROSSTOOL_PYTHON_INCLUDE_PATH}/pyconfig.h <<ENDOF
+> +#if defined (_PYTHON_INCLUDE_TARGET)
+> +#include "pyconfig-target.h"
+> +#elif defined (_PYTHON_INCLUDE_NATIVE)
+> +#include "pyconfig-native.h"
+> +#else
+> +#error "_PYTHON_INCLUDE_TARGET or _PYTHON_INCLUDE_NATIVE is not defined"
+> +#endif // End of #if defined (_PYTHON_INCLUDE_TARGET)
+> +
+> +ENDOF
+> +
+> +    mkdir -p ${S}/third_party/toolchains/yocto/
+> +    sed "s#%%CPU%%#${BAZEL_TARGET_CPU}#g" ${WORKDIR}/BUILD.in  > ${S}/third_party/toolchains/yocto/BUILD
+> +    chmod 644 ${S}/third_party/toolchains/yocto/BUILD
+> +    install -m 644 ${WORKDIR}/cc_config.bzl.tpl ${S}/third_party/toolchains/yocto/
+> +    install -m 644 ${WORKDIR}/yocto_compiler_configure.bzl ${S}/third_party/toolchains/yocto/
+> +    install -m 644 ${WORKDIR}/BUILD.yocto_compiler ${S}
+> +
+> +    CT_NAME=$(echo ${HOST_PREFIX} | rev | cut -c 2- | rev)
+> +    SED_COMMAND="s#%%CT_NAME%%#${CT_NAME}#g"
+> +    SED_COMMAND="${SED_COMMAND}; s#%%WORKDIR%%#${WORKDIR}#g"
+> +    SED_COMMAND="${SED_COMMAND}; s#%%YOCTO_COMPILER_PATH%%#${BAZEL_OUTPUTBASE_DIR}/external/yocto_compiler#g"
+> +
+> +    sed -i "${SED_COMMAND}" ${S}/BUILD.yocto_compiler \
+> +                            ${S}/WORKSPACE
+> +
+> +    ${TF_CONFIG} \
+> +    ./configure
+> +}
+> +
+> +TF_TARGET_EXTRA ??= ""
+> +
+> +export CUSTOM_BAZEL_FLAGS = " \
+> +    ${TF_ARGS_EXTRA} \
+> +    --jobs=auto \
+> +    -c opt \
+> +    --cpu=${BAZEL_TARGET_CPU} \
+> +    --crosstool_top=@local_config_yocto_compiler//:toolchain \
+> +    --host_crosstool_top=@bazel_tools//tools/cpp:toolchain \
+> +"
+> +
+> +do_compile () {
+> +    export CT_NAME=$(echo ${HOST_PREFIX} | rev | cut -c 2- | rev)
+> +    unset CC
+> +
+> +    ${BAZEL} build \
+> +        ${CUSTOM_BAZEL_FLAGS} \
+> +        --copt -DTF_LITE_DISABLE_X86_NEON --copt -DMESA_EGL_NO_X11_HEADERS \
+> +        tensorflow/lite:libtensorflowlite.so \
+> +        tensorflow/lite/tools/benchmark:benchmark_model \
+> +        //tensorflow/lite/examples/label_image:label_image \
+> +        ${TF_TARGET_EXTRA}
+> +
+> +    # build pip package
+> +    ${S}/tensorflow/lite/tools/pip_package/build_pip_package_with_bazel.sh
+> +
+> +}
+> +
+> +do_install() {
+> +    install -d ${D}${libdir}
+> +    install -m 644 ${S}/bazel-bin/tensorflow/lite/libtensorflowlite.so \
+> +        ${D}${libdir}
+> +
+> +    install -d ${D}${sbindir}
+> +    install -m 755 ${S}/bazel-bin/tensorflow/lite/tools/benchmark/benchmark_model \
+> +        ${D}${sbindir}
+> +
+> +    install -m 755 ${S}/bazel-bin/tensorflow/lite/examples/label_image/label_image \
+> +        ${D}${sbindir}/label_image
+> +
+> +    install -d ${D}${datadir}/label_image
+> +    install -m 644 ${WORKDIR}/imagenet_slim_labels.txt ${D}${datadir}/label_image
+> +    install -m 644 ${WORKDIR}/inception_v3_2016_08_28_frozen.pb \
+> +        ${D}${datadir}/label_image
+> +    install -m 644 ${S}/tensorflow/examples/label_image/data/grace_hopper.jpg \
+> +        ${D}${datadir}/label_image
+> +
+> +    install -m 644 ${WORKDIR}/labels_mobilenet_quant_v1_224.txt ${D}${datadir}/label_image
+> +    install -m 644 ${WORKDIR}/mobilenet_v1_1.0_224_quant.tflite \
+> +        ${D}${datadir}/label_image
+> +    install -m 644 ${S}/tensorflow/lite/examples/label_image/testdata/grace_hopper.bmp \
+> +        ${D}${datadir}/label_image
+> +
+> +
+> +    #echo "Installing pip package"
+> +    install -d ${D}/${PYTHON_SITEPACKAGES_DIR}
+> +    ${STAGING_BINDIR_NATIVE}/pip3 install --disable-pip-version-check -v \
+> +        -t ${D}/${PYTHON_SITEPACKAGES_DIR} --no-cache-dir --no-deps \
+> +        ${S}/tensorflow/lite/tools/pip_package/gen/tflite_pip/python3/dist/tflite_runtime-${PV}-*.whl
+> +
+> +}
+> +
+> +FILES:${PN} += "${libdir} ${sbindir} ${datadir}/*"
+> +INSANE_SKIP:${PN} += "dev-so \
+> +                      already-stripped \
+> +                     "
+> +
+> +SOLIBS = ".so"
+> +FILES_SOLIBSDEV = ""
+> +ALLOW_EMPTY:${PN} = "1"
+> +
+> +FILES:${PN} += "${libdir} /home/root/*"
+> +
+> +inherit siteinfo unsupportarch
+> +python __anonymous() {
+> +    if d.getVar("SITEINFO_ENDIANNESS") == 'be':
+> +        msg =  "\nIt failed to use pre-build model to do predict/inference on big-endian platform"
+> +        msg += "\n(such as qemumips), since upstream does not support big-endian very well."
+> +        msg += "\nDetails: https://github.com/tensorflow/tensorflow/issues/16364"
+> +        bb.warn(msg)
+> +}
+> 
+> 
+> 
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#55634): https://lists.yoctoproject.org/g/yocto/message/55634
+> Mute This Topic: https://lists.yoctoproject.org/mt/87873857/3616765
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [randy.macleod@windriver.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+> 
+
+
+-- 
+# Randy MacLeod
+# Wind River Linux
+
+
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] [meta-tensorflow][PATCH 3/3] tensorflow-lite: add recipe
+  2021-12-24 18:48   ` [yocto] " Randy MacLeod
+@ 2022-01-14 10:19     ` Julien Stephan
+  2022-01-24  2:07       ` Jia, Hongxu
+  0 siblings, 1 reply; 6+ messages in thread
+From: Julien Stephan @ 2022-01-14 10:19 UTC (permalink / raw)
+  To: Randy MacLeod; +Cc: yocto, Jia, Hongxu
+
+[-- Attachment #1: Type: text/plain, Size: 8812 bytes --]
+
+Hi Hongxu
+
+Did you have a chance to take a look at it?
+
+Best
+Julien
+
+Le ven. 24 déc. 2021 à 19:48, Randy MacLeod <randy.macleod@windriver.com> a
+écrit :
+
+> Thanks Stephan.
+>
+> Hongxu, did you miss this?
+>
+> ../Randy
+>
+> On 2021-12-21 3:42 a.m., Julien STEPHAN wrote:
+> > Adding 2.6.1 tensorflow-lite recipe.
+> > This recipe is directly based on the corresponding 2.6.1 tensorflow
+> > recipe.
+> >
+> > It has been build tested with latest honister and tested on
+> > several mediatek soc using benchmark_model and label_image (C++ and
+> > python)
+> >
+> > Signed-off-by: Julien STEPHAN <jstephan@baylibre.com>
+> > ---
+> >   .../tensorflow/tensorflow-lite_2.6.1.bb       | 156 ++++++++++++++++++
+> >   1 file changed, 156 insertions(+)
+> >   create mode 100644 recipes-framework/tensorflow/
+> tensorflow-lite_2.6.1.bb
+> >
+> > diff --git a/recipes-framework/tensorflow/tensorflow-lite_2.6.1.bb
+> b/recipes-framework/tensorflow/tensorflow-lite_2.6.1.bb
+> > new file mode 100644
+> > index 0000000..104e5a3
+> > --- /dev/null
+> > +++ b/recipes-framework/tensorflow/tensorflow-lite_2.6.1.bb
+> > @@ -0,0 +1,156 @@
+> > +include tensorflow.inc
+> > +
+> > +SRC_URI += " \
+> > +
+>  file://0001-add-yocto-toolchain-to-support-cross-compiling.patch \
+> > +
+>  file://0001-fix-build-tensorflow-lite-examples-label_image-label.patch \
+> > +           file://0001-label_image-tweak-default-model-location.patch \
+> > +
+>  file://0001-label_image.lite-tweak-default-model-location.patch \
+> > +           file://0001-CheckFeatureOrDie-use-warning-to-avoid-die.patch
+> \
+> > +           file://0001-support-32-bit-x64-and-arm-for-yocto.patch \
+> > +
+>  file://0001-Revert-set-distinct_host_configuration-false-by-defa.patch \
+> > +           file://0001-fix-default-Bazel-toolchain-not-work.patch \
+> > +
+>  file://0001-distutils-is-deprecated-in-Python-3.10-cross.patch \
+> > +           file://BUILD.in \
+> > +           file://BUILD.yocto_compiler \
+> > +           file://cc_config.bzl.tpl \
+> > +           file://yocto_compiler_configure.bzl \
+> > +          "
+> > +
+> > +SRC_URI += "
+> https://storage.googleapis.com/download.tensorflow.org/models/inception_v3_2016_08_28_frozen.pb.tar.gz;name=model-inv3
+> "
+> > +SRC_URI[model-inv3.md5sum] = "a904ddf15593d03c7dd786d552e22d73"
+> > +SRC_URI[model-inv3.sha256sum] =
+> "7045b72a954af4dce36346f478610acdccbf149168fa25c78e54e32f0c723d6d"
+> > +
+> > +SRC_URI += "
+> https://storage.googleapis.com/download.tensorflow.org/models/tflite/mobilenet_v1_1.0_224_quant_and_labels.zip;name=model-mobv1
+> "
+> > +SRC_URI[model-mobv1.md5sum] = "38ac0c626947875bd311ef96c8baab62"
+> > +SRC_URI[model-mobv1.sha256sum] =
+> "2f8054076cf655e1a73778a49bd8fd0306d32b290b7e576dda9574f00f186c0f"
+> > +
+> > +RDEPENDS:${PN} += " \
+> > +    python3 \
+> > +    python3-core \
+> > +    python3-numpy \
+> > +"
+> > +
+> > +export PYTHON_BIN_PATH="${PYTHON}"
+> > +export
+> PYTHON_LIB_PATH="${STAGING_LIBDIR_NATIVE}/${PYTHON_DIR}/site-packages"
+> > +
+> > +export
+> CROSSTOOL_PYTHON_INCLUDE_PATH="${STAGING_INCDIR}/python${PYTHON_BASEVERSION}${PYTHON_ABI}"
+> > +
+> > +do_configure:append () {
+> > +    if [ ! -e ${CROSSTOOL_PYTHON_INCLUDE_PATH}/pyconfig-target.h ];then
+> > +        mv ${CROSSTOOL_PYTHON_INCLUDE_PATH}/pyconfig.h
+> ${CROSSTOOL_PYTHON_INCLUDE_PATH}/pyconfig-target.h
+> > +    fi
+> > +
+> > +    install -m 644
+> ${STAGING_INCDIR_NATIVE}/python${PYTHON_BASEVERSION}${PYTHON_ABI}/pyconfig.h
+> \
+> > +       ${CROSSTOOL_PYTHON_INCLUDE_PATH}/pyconfig-native.h
+> > +
+> > +    cat > ${CROSSTOOL_PYTHON_INCLUDE_PATH}/pyconfig.h <<ENDOF
+> > +#if defined (_PYTHON_INCLUDE_TARGET)
+> > +#include "pyconfig-target.h"
+> > +#elif defined (_PYTHON_INCLUDE_NATIVE)
+> > +#include "pyconfig-native.h"
+> > +#else
+> > +#error "_PYTHON_INCLUDE_TARGET or _PYTHON_INCLUDE_NATIVE is not defined"
+> > +#endif // End of #if defined (_PYTHON_INCLUDE_TARGET)
+> > +
+> > +ENDOF
+> > +
+> > +    mkdir -p ${S}/third_party/toolchains/yocto/
+> > +    sed "s#%%CPU%%#${BAZEL_TARGET_CPU}#g" ${WORKDIR}/BUILD.in  >
+> ${S}/third_party/toolchains/yocto/BUILD
+> > +    chmod 644 ${S}/third_party/toolchains/yocto/BUILD
+> > +    install -m 644 ${WORKDIR}/cc_config.bzl.tpl
+> ${S}/third_party/toolchains/yocto/
+> > +    install -m 644 ${WORKDIR}/yocto_compiler_configure.bzl
+> ${S}/third_party/toolchains/yocto/
+> > +    install -m 644 ${WORKDIR}/BUILD.yocto_compiler ${S}
+> > +
+> > +    CT_NAME=$(echo ${HOST_PREFIX} | rev | cut -c 2- | rev)
+> > +    SED_COMMAND="s#%%CT_NAME%%#${CT_NAME}#g"
+> > +    SED_COMMAND="${SED_COMMAND}; s#%%WORKDIR%%#${WORKDIR}#g"
+> > +    SED_COMMAND="${SED_COMMAND};
+> s#%%YOCTO_COMPILER_PATH%%#${BAZEL_OUTPUTBASE_DIR}/external/yocto_compiler#g"
+> > +
+> > +    sed -i "${SED_COMMAND}" ${S}/BUILD.yocto_compiler \
+> > +                            ${S}/WORKSPACE
+> > +
+> > +    ${TF_CONFIG} \
+> > +    ./configure
+> > +}
+> > +
+> > +TF_TARGET_EXTRA ??= ""
+> > +
+> > +export CUSTOM_BAZEL_FLAGS = " \
+> > +    ${TF_ARGS_EXTRA} \
+> > +    --jobs=auto \
+> > +    -c opt \
+> > +    --cpu=${BAZEL_TARGET_CPU} \
+> > +    --crosstool_top=@local_config_yocto_compiler//:toolchain \
+> > +    --host_crosstool_top=@bazel_tools//tools/cpp:toolchain \
+> > +"
+> > +
+> > +do_compile () {
+> > +    export CT_NAME=$(echo ${HOST_PREFIX} | rev | cut -c 2- | rev)
+> > +    unset CC
+> > +
+> > +    ${BAZEL} build \
+> > +        ${CUSTOM_BAZEL_FLAGS} \
+> > +        --copt -DTF_LITE_DISABLE_X86_NEON --copt
+> -DMESA_EGL_NO_X11_HEADERS \
+> > +        tensorflow/lite:libtensorflowlite.so \
+> > +        tensorflow/lite/tools/benchmark:benchmark_model \
+> > +        //tensorflow/lite/examples/label_image:label_image \
+> > +        ${TF_TARGET_EXTRA}
+> > +
+> > +    # build pip package
+> > +
+> ${S}/tensorflow/lite/tools/pip_package/build_pip_package_with_bazel.sh
+> > +
+> > +}
+> > +
+> > +do_install() {
+> > +    install -d ${D}${libdir}
+> > +    install -m 644 ${S}/bazel-bin/tensorflow/lite/libtensorflowlite.so \
+> > +        ${D}${libdir}
+> > +
+> > +    install -d ${D}${sbindir}
+> > +    install -m 755
+> ${S}/bazel-bin/tensorflow/lite/tools/benchmark/benchmark_model \
+> > +        ${D}${sbindir}
+> > +
+> > +    install -m 755
+> ${S}/bazel-bin/tensorflow/lite/examples/label_image/label_image \
+> > +        ${D}${sbindir}/label_image
+> > +
+> > +    install -d ${D}${datadir}/label_image
+> > +    install -m 644 ${WORKDIR}/imagenet_slim_labels.txt
+> ${D}${datadir}/label_image
+> > +    install -m 644 ${WORKDIR}/inception_v3_2016_08_28_frozen.pb \
+> > +        ${D}${datadir}/label_image
+> > +    install -m 644
+> ${S}/tensorflow/examples/label_image/data/grace_hopper.jpg \
+> > +        ${D}${datadir}/label_image
+> > +
+> > +    install -m 644 ${WORKDIR}/labels_mobilenet_quant_v1_224.txt
+> ${D}${datadir}/label_image
+> > +    install -m 644 ${WORKDIR}/mobilenet_v1_1.0_224_quant.tflite \
+> > +        ${D}${datadir}/label_image
+> > +    install -m 644
+> ${S}/tensorflow/lite/examples/label_image/testdata/grace_hopper.bmp \
+> > +        ${D}${datadir}/label_image
+> > +
+> > +
+> > +    #echo "Installing pip package"
+> > +    install -d ${D}/${PYTHON_SITEPACKAGES_DIR}
+> > +    ${STAGING_BINDIR_NATIVE}/pip3 install --disable-pip-version-check
+> -v \
+> > +        -t ${D}/${PYTHON_SITEPACKAGES_DIR} --no-cache-dir --no-deps \
+> > +
+> ${S}/tensorflow/lite/tools/pip_package/gen/tflite_pip/python3/dist/tflite_runtime-${PV}-*.whl
+> > +
+> > +}
+> > +
+> > +FILES:${PN} += "${libdir} ${sbindir} ${datadir}/*"
+> > +INSANE_SKIP:${PN} += "dev-so \
+> > +                      already-stripped \
+> > +                     "
+> > +
+> > +SOLIBS = ".so"
+> > +FILES_SOLIBSDEV = ""
+> > +ALLOW_EMPTY:${PN} = "1"
+> > +
+> > +FILES:${PN} += "${libdir} /home/root/*"
+> > +
+> > +inherit siteinfo unsupportarch
+> > +python __anonymous() {
+> > +    if d.getVar("SITEINFO_ENDIANNESS") == 'be':
+> > +        msg =  "\nIt failed to use pre-build model to do
+> predict/inference on big-endian platform"
+> > +        msg += "\n(such as qemumips), since upstream does not support
+> big-endian very well."
+> > +        msg += "\nDetails:
+> https://github.com/tensorflow/tensorflow/issues/16364"
+> > +        bb.warn(msg)
+> > +}
+> >
+> >
+> >
+> > -=-=-=-=-=-=-=-=-=-=-=-
+> > Links: You receive all messages sent to this group.
+> > View/Reply Online (#55634):
+> https://lists.yoctoproject.org/g/yocto/message/55634
+> > Mute This Topic: https://lists.yoctoproject.org/mt/87873857/3616765
+> > Group Owner: yocto+owner@lists.yoctoproject.org
+> > Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> randy.macleod@windriver.com]
+> > -=-=-=-=-=-=-=-=-=-=-=-
+> >
+>
+>
+> --
+> # Randy MacLeod
+> # Wind River Linux
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 12057 bytes --]
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] [meta-tensorflow][PATCH 3/3] tensorflow-lite: add recipe
+  2022-01-14 10:19     ` Julien Stephan
+@ 2022-01-24  2:07       ` Jia, Hongxu
+  0 siblings, 0 replies; 6+ messages in thread
+From: Jia, Hongxu @ 2022-01-24  2:07 UTC (permalink / raw)
+  To: Julien Stephan, MacLeod, Randy; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 10848 bytes --]
+
+On 1/14/22 18:19, Julien Stephan wrote:
+[Please note: This e-mail is from an EXTERNAL e-mail address]
+Hi Hongxu
+
+Did you have a chance to take a look at it?
+
+
+Sorry for replying late, thanks for your contribution, merged
+
+//Hongxu
+
+Best
+Julien
+
+Le ven. 24 déc. 2021 à 19:48, Randy MacLeod <randy.macleod@windriver.com<mailto:randy.macleod@windriver.com>> a écrit :
+Thanks Stephan.
+
+Hongxu, did you miss this?
+
+../Randy
+
+On 2021-12-21 3:42 a.m., Julien STEPHAN wrote:
+> Adding 2.6.1 tensorflow-lite recipe.
+> This recipe is directly based on the corresponding 2.6.1 tensorflow
+> recipe.
+>
+> It has been build tested with latest honister and tested on
+> several mediatek soc using benchmark_model and label_image (C++ and
+> python)
+>
+> Signed-off-by: Julien STEPHAN <jstephan@baylibre.com<mailto:jstephan@baylibre.com>>
+> ---
+>   .../tensorflow/tensorflow-lite_2.6.1.bb<https://urldefense.com/v3/__http://tensorflow-lite_2.6.1.bb__;!!AjveYdw8EvQ!OefygVvkNPmaP3BVhhQxru8NW9j-GvUBIhd_NjvaFiUyqWtLct0UIc5WUzHnaoV9UJIs$>       | 156 ++++++++++++++++++
+>   1 file changed, 156 insertions(+)
+>   create mode 100644 recipes-framework/tensorflow/tensorflow-lite_2.6.1.bb<https://urldefense.com/v3/__http://tensorflow-lite_2.6.1.bb__;!!AjveYdw8EvQ!OefygVvkNPmaP3BVhhQxru8NW9j-GvUBIhd_NjvaFiUyqWtLct0UIc5WUzHnaoV9UJIs$>
+>
+> diff --git a/recipes-framework/tensorflow/tensorflow-lite_2.6.1.bb<https://urldefense.com/v3/__http://tensorflow-lite_2.6.1.bb__;!!AjveYdw8EvQ!OefygVvkNPmaP3BVhhQxru8NW9j-GvUBIhd_NjvaFiUyqWtLct0UIc5WUzHnaoV9UJIs$> b/recipes-framework/tensorflow/tensorflow-lite_2.6.1.bb<https://urldefense.com/v3/__http://tensorflow-lite_2.6.1.bb__;!!AjveYdw8EvQ!OefygVvkNPmaP3BVhhQxru8NW9j-GvUBIhd_NjvaFiUyqWtLct0UIc5WUzHnaoV9UJIs$>
+> new file mode 100644
+> index 0000000..104e5a3
+> --- /dev/null
+> +++ b/recipes-framework/tensorflow/tensorflow-lite_2.6.1.bb<https://urldefense.com/v3/__http://tensorflow-lite_2.6.1.bb__;!!AjveYdw8EvQ!OefygVvkNPmaP3BVhhQxru8NW9j-GvUBIhd_NjvaFiUyqWtLct0UIc5WUzHnaoV9UJIs$>
+> @@ -0,0 +1,156 @@
+> +include tensorflow.inc
+> +
+> +SRC_URI += " \
+> +           file://0001-add-yocto-toolchain-to-support-cross-compiling.patch \
+> +           file://0001-fix-build-tensorflow-lite-examples-label_image-label.patch \
+> +           file://0001-label_image-tweak-default-model-location.patch \
+> +           file://0001-label_image.lite-tweak-default-model-location.patch \
+> +           file://0001-CheckFeatureOrDie-use-warning-to-avoid-die.patch \
+> +           file://0001-support-32-bit-x64-and-arm-for-yocto.patch \
+> +           file://0001-Revert-set-distinct_host_configuration-false-by-defa.patch \
+> +           file://0001-fix-default-Bazel-toolchain-not-work.patch \
+> +           file://0001-distutils-is-deprecated-in-Python-3.10-cross.patch \
+> +           file://BUILD.in \
+> +           file://BUILD.yocto_compiler \
+> +           file://cc_config.bzl.tpl \
+> +           file://yocto_compiler_configure.bzl \
+> +          "
+> +
+> +SRC_URI += "https://storage.googleapis.com/download.tensorflow.org/models/inception_v3_2016_08_28_frozen.pb.tar.gz;name=model-inv3<https://urldefense.com/v3/__https://storage.googleapis.com/download.tensorflow.org/models/inception_v3_2016_08_28_frozen.pb.tar.gz;name=model-inv3__;!!AjveYdw8EvQ!OefygVvkNPmaP3BVhhQxru8NW9j-GvUBIhd_NjvaFiUyqWtLct0UIc5WUzHnasT5egS_$>"
+> +SRC_URI[model-inv3.md5sum] = "a904ddf15593d03c7dd786d552e22d73"
+> +SRC_URI[model-inv3.sha256sum] = "7045b72a954af4dce36346f478610acdccbf149168fa25c78e54e32f0c723d6d"
+> +
+> +SRC_URI += "https://storage.googleapis.com/download.tensorflow.org/models/tflite/mobilenet_v1_1.0_224_quant_and_labels.zip;name=model-mobv1<https://urldefense.com/v3/__https://storage.googleapis.com/download.tensorflow.org/models/tflite/mobilenet_v1_1.0_224_quant_and_labels.zip;name=model-mobv1__;!!AjveYdw8EvQ!OefygVvkNPmaP3BVhhQxru8NW9j-GvUBIhd_NjvaFiUyqWtLct0UIc5WUzHnahpbuVO2$>"
+> +SRC_URI[model-mobv1.md5sum] = "38ac0c626947875bd311ef96c8baab62"
+> +SRC_URI[model-mobv1.sha256sum] = "2f8054076cf655e1a73778a49bd8fd0306d32b290b7e576dda9574f00f186c0f"
+> +
+> +RDEPENDS:${PN} += " \
+> +    python3 \
+> +    python3-core \
+> +    python3-numpy \
+> +"
+> +
+> +export PYTHON_BIN_PATH="${PYTHON}"
+> +export PYTHON_LIB_PATH="${STAGING_LIBDIR_NATIVE}/${PYTHON_DIR}/site-packages"
+> +
+> +export CROSSTOOL_PYTHON_INCLUDE_PATH="${STAGING_INCDIR}/python${PYTHON_BASEVERSION}${PYTHON_ABI}"
+> +
+> +do_configure:append () {
+> +    if [ ! -e ${CROSSTOOL_PYTHON_INCLUDE_PATH}/pyconfig-target.h ];then
+> +        mv ${CROSSTOOL_PYTHON_INCLUDE_PATH}/pyconfig.h ${CROSSTOOL_PYTHON_INCLUDE_PATH}/pyconfig-target.h
+> +    fi
+> +
+> +    install -m 644 ${STAGING_INCDIR_NATIVE}/python${PYTHON_BASEVERSION}${PYTHON_ABI}/pyconfig.h \
+> +       ${CROSSTOOL_PYTHON_INCLUDE_PATH}/pyconfig-native.h
+> +
+> +    cat > ${CROSSTOOL_PYTHON_INCLUDE_PATH}/pyconfig.h <<ENDOF
+> +#if defined (_PYTHON_INCLUDE_TARGET)
+> +#include "pyconfig-target.h"
+> +#elif defined (_PYTHON_INCLUDE_NATIVE)
+> +#include "pyconfig-native.h"
+> +#else
+> +#error "_PYTHON_INCLUDE_TARGET or _PYTHON_INCLUDE_NATIVE is not defined"
+> +#endif // End of #if defined (_PYTHON_INCLUDE_TARGET)
+> +
+> +ENDOF
+> +
+> +    mkdir -p ${S}/third_party/toolchains/yocto/
+> +    sed "s#%%CPU%%#${BAZEL_TARGET_CPU}#g" ${WORKDIR}/BUILD.in  > ${S}/third_party/toolchains/yocto/BUILD
+> +    chmod 644 ${S}/third_party/toolchains/yocto/BUILD
+> +    install -m 644 ${WORKDIR}/cc_config.bzl.tpl ${S}/third_party/toolchains/yocto/
+> +    install -m 644 ${WORKDIR}/yocto_compiler_configure.bzl ${S}/third_party/toolchains/yocto/
+> +    install -m 644 ${WORKDIR}/BUILD.yocto_compiler ${S}
+> +
+> +    CT_NAME=$(echo ${HOST_PREFIX} | rev | cut -c 2- | rev)
+> +    SED_COMMAND="s#%%CT_NAME%%#${CT_NAME}#g"
+> +    SED_COMMAND="${SED_COMMAND}; s#%%WORKDIR%%#${WORKDIR}#g"
+> +    SED_COMMAND="${SED_COMMAND}; s#%%YOCTO_COMPILER_PATH%%#${BAZEL_OUTPUTBASE_DIR}/external/yocto_compiler#g"
+> +
+> +    sed -i "${SED_COMMAND}" ${S}/BUILD.yocto_compiler \
+> +                            ${S}/WORKSPACE
+> +
+> +    ${TF_CONFIG} \
+> +    ./configure
+> +}
+> +
+> +TF_TARGET_EXTRA ??= ""
+> +
+> +export CUSTOM_BAZEL_FLAGS = " \
+> +    ${TF_ARGS_EXTRA} \
+> +    --jobs=auto \
+> +    -c opt \
+> +    --cpu=${BAZEL_TARGET_CPU} \
+> +    --crosstool_top=@local_config_yocto_compiler//:toolchain \
+> +    --host_crosstool_top=@bazel_tools//tools/cpp:toolchain \
+> +"
+> +
+> +do_compile () {
+> +    export CT_NAME=$(echo ${HOST_PREFIX} | rev | cut -c 2- | rev)
+> +    unset CC
+> +
+> +    ${BAZEL} build \
+> +        ${CUSTOM_BAZEL_FLAGS} \
+> +        --copt -DTF_LITE_DISABLE_X86_NEON --copt -DMESA_EGL_NO_X11_HEADERS \
+> +        tensorflow/lite:libtensorflowlite.so \
+> +        tensorflow/lite/tools/benchmark:benchmark_model \
+> +        //tensorflow/lite/examples/label_image:label_image \
+> +        ${TF_TARGET_EXTRA}
+> +
+> +    # build pip package
+> +    ${S}/tensorflow/lite/tools/pip_package/build_pip_package_with_bazel.sh<https://urldefense.com/v3/__http://build_pip_package_with_bazel.sh__;!!AjveYdw8EvQ!OefygVvkNPmaP3BVhhQxru8NW9j-GvUBIhd_NjvaFiUyqWtLct0UIc5WUzHnau8ozYeY$>
+> +
+> +}
+> +
+> +do_install() {
+> +    install -d ${D}${libdir}
+> +    install -m 644 ${S}/bazel-bin/tensorflow/lite/libtensorflowlite.so<https://urldefense.com/v3/__http://libtensorflowlite.so__;!!AjveYdw8EvQ!OefygVvkNPmaP3BVhhQxru8NW9j-GvUBIhd_NjvaFiUyqWtLct0UIc5WUzHnatMEYuz0$> \
+> +        ${D}${libdir}
+> +
+> +    install -d ${D}${sbindir}
+> +    install -m 755 ${S}/bazel-bin/tensorflow/lite/tools/benchmark/benchmark_model \
+> +        ${D}${sbindir}
+> +
+> +    install -m 755 ${S}/bazel-bin/tensorflow/lite/examples/label_image/label_image \
+> +        ${D}${sbindir}/label_image
+> +
+> +    install -d ${D}${datadir}/label_image
+> +    install -m 644 ${WORKDIR}/imagenet_slim_labels.txt ${D}${datadir}/label_image
+> +    install -m 644 ${WORKDIR}/inception_v3_2016_08_28_frozen.pb \
+> +        ${D}${datadir}/label_image
+> +    install -m 644 ${S}/tensorflow/examples/label_image/data/grace_hopper.jpg \
+> +        ${D}${datadir}/label_image
+> +
+> +    install -m 644 ${WORKDIR}/labels_mobilenet_quant_v1_224.txt ${D}${datadir}/label_image
+> +    install -m 644 ${WORKDIR}/mobilenet_v1_1.0_224_quant.tflite \
+> +        ${D}${datadir}/label_image
+> +    install -m 644 ${S}/tensorflow/lite/examples/label_image/testdata/grace_hopper.bmp \
+> +        ${D}${datadir}/label_image
+> +
+> +
+> +    #echo "Installing pip package"
+> +    install -d ${D}/${PYTHON_SITEPACKAGES_DIR}
+> +    ${STAGING_BINDIR_NATIVE}/pip3 install --disable-pip-version-check -v \
+> +        -t ${D}/${PYTHON_SITEPACKAGES_DIR} --no-cache-dir --no-deps \
+> +        ${S}/tensorflow/lite/tools/pip_package/gen/tflite_pip/python3/dist/tflite_runtime-${PV}-*.whl
+> +
+> +}
+> +
+> +FILES:${PN} += "${libdir} ${sbindir} ${datadir}/*"
+> +INSANE_SKIP:${PN} += "dev-so \
+> +                      already-stripped \
+> +                     "
+> +
+> +SOLIBS = ".so"
+> +FILES_SOLIBSDEV = ""
+> +ALLOW_EMPTY:${PN} = "1"
+> +
+> +FILES:${PN} += "${libdir} /home/root/*"
+> +
+> +inherit siteinfo unsupportarch
+> +python __anonymous() {
+> +    if d.getVar("SITEINFO_ENDIANNESS") == 'be':
+> +        msg =  "\nIt failed to use pre-build model to do predict/inference on big-endian platform"
+> +        msg += "\n(such as qemumips), since upstream does not support big-endian very well."
+> +        msg += "\nDetails: https://github.com/tensorflow/tensorflow/issues/16364<https://urldefense.com/v3/__https://github.com/tensorflow/tensorflow/issues/16364__;!!AjveYdw8EvQ!OefygVvkNPmaP3BVhhQxru8NW9j-GvUBIhd_NjvaFiUyqWtLct0UIc5WUzHnalR6VAA5$>"
+> +        bb.warn(msg)
+> +}
+>
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#55634): https://lists.yoctoproject.org/g/yocto/message/55634<https://urldefense.com/v3/__https://lists.yoctoproject.org/g/yocto/message/55634__;!!AjveYdw8EvQ!OefygVvkNPmaP3BVhhQxru8NW9j-GvUBIhd_NjvaFiUyqWtLct0UIc5WUzHnai4psPZ7$>
+> Mute This Topic: https://lists.yoctoproject.org/mt/87873857/3616765<https://urldefense.com/v3/__https://lists.yoctoproject.org/mt/87873857/3616765__;!!AjveYdw8EvQ!OefygVvkNPmaP3BVhhQxru8NW9j-GvUBIhd_NjvaFiUyqWtLct0UIc5WUzHnamvPFhzF$>
+> Group Owner: yocto+owner@lists.yoctoproject.org<mailto:yocto%2Bowner@lists.yoctoproject.org>
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub<https://urldefense.com/v3/__https://lists.yoctoproject.org/g/yocto/unsub__;!!AjveYdw8EvQ!OefygVvkNPmaP3BVhhQxru8NW9j-GvUBIhd_NjvaFiUyqWtLct0UIc5WUzHnahyGNgKZ$> [randy.macleod@windriver.com<mailto:randy.macleod@windriver.com>]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+--
+# Randy MacLeod
+# Wind River Linux
+
+
+
+[-- Attachment #2: Type: text/html, Size: 17179 bytes --]
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+end of thread, other threads:[~2022-01-24  2:07 UTC | newest]
+
+Thread overview: 6+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-12-21  8:42 [meta-tensorflow][PATCH 1/3] tensorflow: do not fail on chmod failure Julien STEPHAN
+2021-12-21  8:42 ` [meta-tensorflow][PATCH 2/3] bazel.class: rename BAZEL_ARGS to BAZEL_STARTUP_OPTIONS Julien STEPHAN
+2021-12-21  8:42 ` [meta-tensorflow][PATCH 3/3] tensorflow-lite: add recipe Julien STEPHAN
+2021-12-24 18:48   ` [yocto] " Randy MacLeod
+2022-01-14 10:19     ` Julien Stephan
+2022-01-24  2:07       ` Jia, Hongxu
+

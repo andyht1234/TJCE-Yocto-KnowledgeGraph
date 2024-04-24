@@ -1,0 +1,180 @@
+* [PATCH yocto-autobuilder-helper] scripts/collect-results: copy everything out of tmp/log/oeqa
+@ 2021-09-17 13:38 Alexander Kanavin
+  2021-09-19 10:37 ` [yocto] " Richard Purdie
+  0 siblings, 1 reply; 3+ messages in thread
+From: Alexander Kanavin @ 2021-09-17 13:38 UTC (permalink / raw)
+  To: yocto; +Cc: Alexander Kanavin
+
+There are additional logs there (such as task log or qemu
+console output), which can be useful for debugging test failures.
+
+[YOCTO #14518]
+
+Signed-off-by: Alexander Kanavin <alex@linutronix.de>
+---
+ scripts/collect-results | 8 +++-----
+ 1 file changed, 3 insertions(+), 5 deletions(-)
+
+diff --git a/scripts/collect-results b/scripts/collect-results
+index 93834d6..3663330 100755
+--- a/scripts/collect-results
++++ b/scripts/collect-results
+@@ -3,11 +3,9 @@ WORKDIR=$1
+ DEST=$2
+ target=$3
+ 
+-RESFILE=$WORKDIR/tmp/log/oeqa/testresults.json 
+-
+-if [ -e $RESFILE ]; then
+-    mkdir -p $DEST/$target
+-    cp $WORKDIR/tmp/log/oeqa/testresults.json  $DEST/$target/
++mkdir -p $DEST
++if [ -e $WORKDIR/tmp/log/oeqa/ ]; then
++    cp -rf $WORKDIR/tmp/log/oeqa/ $DEST/$target
+ fi
+ 
+ if [ -e $WORKDIR/buildhistory ]; then
+-- 
+2.20.1
+
+
+^ permalink raw reply related	[flat|nested] 3+ messages in thread
+* Re: [yocto] [PATCH yocto-autobuilder-helper] scripts/collect-results: copy everything out of tmp/log/oeqa
+  2021-09-17 13:38 [PATCH yocto-autobuilder-helper] scripts/collect-results: copy everything out of tmp/log/oeqa Alexander Kanavin
+@ 2021-09-19 10:37 ` Richard Purdie
+  2021-09-19 15:26   ` Alexander Kanavin
+  0 siblings, 1 reply; 3+ messages in thread
+From: Richard Purdie @ 2021-09-19 10:37 UTC (permalink / raw)
+  To: Alexander Kanavin, yocto; +Cc: Alexander Kanavin
+
+On Fri, 2021-09-17 at 15:38 +0200, Alexander Kanavin wrote:
+> There are additional logs there (such as task log or qemu
+> console output), which can be useful for debugging test failures.
+> 
+> [YOCTO #14518]
+> 
+> Signed-off-by: Alexander Kanavin <alex@linutronix.de>
+> ---
+>  scripts/collect-results | 8 +++-----
+>  1 file changed, 3 insertions(+), 5 deletions(-)
+> 
+> diff --git a/scripts/collect-results b/scripts/collect-results
+> index 93834d6..3663330 100755
+> --- a/scripts/collect-results
+> +++ b/scripts/collect-results
+> @@ -3,11 +3,9 @@ WORKDIR=$1
+>  DEST=$2
+>  target=$3
+>  
+> -RESFILE=$WORKDIR/tmp/log/oeqa/testresults.json 
+> -
+> -if [ -e $RESFILE ]; then
+> -    mkdir -p $DEST/$target
+> -    cp $WORKDIR/tmp/log/oeqa/testresults.json  $DEST/$target/
+> +mkdir -p $DEST
+> +if [ -e $WORKDIR/tmp/log/oeqa/ ]; then
+> +    cp -rf $WORKDIR/tmp/log/oeqa/ $DEST/$target
+>  fi
+>  
+>  if [ -e $WORKDIR/buildhistory ]; then
+
+I'm not sure about this since it has the potential to add a lot of files to the
+release directories and I suspect that will confuse the releases and people
+looking at them. At the very least we need to think about layout here...
+
+When I proposed we improve the logging on the autobuilder, I was thinking more
+about printing the logfiles on the console in the failure case. That way the
+logs are immediately visible on the autobuilder log output people are looking at
+and you don't have to go digging for the files. I can see pros/cons to both
+approaches though.
+
+Cheers,
+
+Richard
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] [PATCH yocto-autobuilder-helper] scripts/collect-results: copy everything out of tmp/log/oeqa
+  2021-09-19 10:37 ` [yocto] " Richard Purdie
+@ 2021-09-19 15:26   ` Alexander Kanavin
+  0 siblings, 0 replies; 3+ messages in thread
+From: Alexander Kanavin @ 2021-09-19 15:26 UTC (permalink / raw)
+  To: Richard Purdie; +Cc: Yocto-mailing-list, Alexander Kanavin
+
+[-- Attachment #1: Type: text/plain, Size: 2164 bytes --]
+
+For me it's a different use case: archiving the logs regardless of whether
+things fail or not. They can also be just
+too large and unwieldy to get printed directly. The patch to
+testimage.bbclass splits them into directories by image
+name, so there's already some layout. The image sub-directories would
+simply show up e.g. here:
+https://autobuilder.yocto.io/pub/non-release/20210614-15/testresults/no-x11/
+
+Alex
+
+On Sun, 19 Sept 2021 at 12:37, Richard Purdie <
+richard.purdie@linuxfoundation.org> wrote:
+
+> On Fri, 2021-09-17 at 15:38 +0200, Alexander Kanavin wrote:
+> > There are additional logs there (such as task log or qemu
+> > console output), which can be useful for debugging test failures.
+> >
+> > [YOCTO #14518]
+> >
+> > Signed-off-by: Alexander Kanavin <alex@linutronix.de>
+> > ---
+> >  scripts/collect-results | 8 +++-----
+> >  1 file changed, 3 insertions(+), 5 deletions(-)
+> >
+> > diff --git a/scripts/collect-results b/scripts/collect-results
+> > index 93834d6..3663330 100755
+> > --- a/scripts/collect-results
+> > +++ b/scripts/collect-results
+> > @@ -3,11 +3,9 @@ WORKDIR=$1
+> >  DEST=$2
+> >  target=$3
+> >
+> > -RESFILE=$WORKDIR/tmp/log/oeqa/testresults.json
+> > -
+> > -if [ -e $RESFILE ]; then
+> > -    mkdir -p $DEST/$target
+> > -    cp $WORKDIR/tmp/log/oeqa/testresults.json  $DEST/$target/
+> > +mkdir -p $DEST
+> > +if [ -e $WORKDIR/tmp/log/oeqa/ ]; then
+> > +    cp -rf $WORKDIR/tmp/log/oeqa/ $DEST/$target
+> >  fi
+> >
+> >  if [ -e $WORKDIR/buildhistory ]; then
+>
+> I'm not sure about this since it has the potential to add a lot of files
+> to the
+> release directories and I suspect that will confuse the releases and people
+> looking at them. At the very least we need to think about layout here...
+>
+> When I proposed we improve the logging on the autobuilder, I was thinking
+> more
+> about printing the logfiles on the console in the failure case. That way
+> the
+> logs are immediately visible on the autobuilder log output people are
+> looking at
+> and you don't have to go digging for the files. I can see pros/cons to both
+> approaches though.
+>
+> Cheers,
+>
+> Richard
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 2881 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2021-09-19 15:26 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-09-17 13:38 [PATCH yocto-autobuilder-helper] scripts/collect-results: copy everything out of tmp/log/oeqa Alexander Kanavin
+2021-09-19 10:37 ` [yocto] " Richard Purdie
+2021-09-19 15:26   ` Alexander Kanavin
+

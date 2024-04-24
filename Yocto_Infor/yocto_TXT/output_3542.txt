@@ -1,0 +1,139 @@
+* AppArmor with BusyBox
+@ 2021-04-26 10:29 aladyshev22
+  0 siblings, 0 replies; 2+ messages in thread
+From: aladyshev22 @ 2021-04-26 10:29 UTC (permalink / raw)
+  To: yocto, main
+
+I'm using the OpenBMC system (https://github.com/openbmc/openbmc) and
+I've tried to enable AppArmor functionality from the 'meta-security'
+layer.
+
+To achieve this I've added these strings to my local.conf file:
+DISTRO_FEATURES_append = " apparmor"
+IMAGE_INSTALL += "apparmor"
+
+The AppArmor functionality was installed to my image, but
+unfortunately I've come to this issue:
+
+kernel: AppArmor: AppArmor initialized
+kernel: AppArmor: AppArmor Filesystem Enabled
+kernel: AppArmor: AppArmor sha1 policy hashing enabled
+systemd[1]: systemd 247.3+ running in system mode. (+PAM -AUDIT
+-SELINUX -IMA -APPARMOR -SMACK +SYSVINIT -UTMP -LIBCRYPTSETUP -GCRYPT
+-GNUTLS -ACL +XZ -LZ4 -ZSTD -SECCOMP +BLKID -ELFUTILS +KMOD -IDN2 -IDN
+-PCRE2 default-hierarchy=hybrid)
+systemd[1]: Starting AppArmor initialization...
+apparmor[113]: Starting AppArmor profiles
+apparmor[128]: xargs: invalid option -- 'd'
+apparmor[128]: BusyBox v1.33.0 (2021-04-01 10:05:19 UTC) multi-call binary.
+apparmor[128]: Usage: xargs [OPTIONS] [PROG ARGS]
+apparmor[131]: /lib/apparmor/functions: line 76: echo: write error: Broken pipe
+apparmor[131]: /lib/apparmor/functions: line 76: echo: write error: Broken pipe
+...
+apparmor[131]: /lib/apparmor/functions: line 76: echo: write error: Broken pipe
+apparmor[131]: /lib/apparmor/functions: line 76: echo: write error: Broken pipe
+apparmor[138]: xargs: invalid option -- 'd'
+apparmor[138]: BusyBox v1.33.0 (2021-04-01 10:05:19 UTC) multi-call binary.
+apparmor[138]: Usage: xargs [OPTIONS] [PROG ARGS]
+apparmor[142]: /lib/apparmor/functions: line 92: echo: write error: Broken pipe
+apparmor[142]: /lib/apparmor/functions: line 92: echo: write error: Broken pipe
+...
+apparmor[142]: /lib/apparmor/functions: line 92: echo: write error: Broken pipe
+apparmor[142]: /lib/apparmor/functions: line 92: echo: write error: Broken pipe
+apparmor[113]:  failed!
+systemd[1]: apparmor.service: Main process exited, code=exited, status=1/FAILURE
+systemd[1]: apparmor.service: Failed with result 'exit-code'.
+systemd[1]: Failed to start AppArmor initialization.
+dbus-broker-launch[152]: AppArmor enabled, but not supported. Ignoring.
+
+
+From the way I see it the problems start from this output:
+xargs: invalid option -- 'd'
+
+This error comes from a fact that `xargs` from the `busybox` doesn't
+have the `-d` option
+(https://git.busybox.net/busybox/tree/findutils/xargs.c)
+but this functionality is used in the file:
+https://git.yoctoproject.org/cgit/cgit.cgi/meta-security/tree/recipes-mac/AppArmor/files/functions
+
+Once I've discovered it, I started to wonder if I'm doing everything correctly.
+Is my issue a simple bug, or AppArmor is not supposed to be run in an
+environment like mine?
+
+Best regards,
+Konstantin Aladyshev
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+* AppArmor with BusyBox
+@ 2021-04-26 10:45 Konstantin Aladyshev
+  0 siblings, 0 replies; 2+ messages in thread
+From: Konstantin Aladyshev @ 2021-04-26 10:45 UTC (permalink / raw)
+  To: yocto
+
+I'm using the OpenBMC system (https://github.com/openbmc/openbmc) and
+I've tried to enable AppArmor functionality from the 'meta-security'
+layer.
+
+To achieve this I've added these strings to my local.conf file:
+DISTRO_FEATURES_append = " apparmor"
+IMAGE_INSTALL += "apparmor"
+
+The AppArmor functionality was installed to my image, but
+unfortunately I've come to this issue:
+
+kernel: AppArmor: AppArmor initialized
+kernel: AppArmor: AppArmor Filesystem Enabled
+kernel: AppArmor: AppArmor sha1 policy hashing enabled
+systemd[1]: systemd 247.3+ running in system mode. (+PAM -AUDIT
+-SELINUX -IMA -APPARMOR -SMACK +SYSVINIT -UTMP -LIBCRYPTSETUP -GCRYPT
+-GNUTLS -ACL +XZ -LZ4 -ZSTD -SECCOMP +BLKID -ELFUTILS +KMOD -IDN2 -IDN
+-PCRE2 default-hierarchy=hybrid)
+systemd[1]: Starting AppArmor initialization...
+apparmor[113]: Starting AppArmor profiles
+apparmor[128]: xargs: invalid option -- 'd'
+apparmor[128]: BusyBox v1.33.0 (2021-04-01 10:05:19 UTC) multi-call binary.
+apparmor[128]: Usage: xargs [OPTIONS] [PROG ARGS]
+apparmor[131]: /lib/apparmor/functions: line 76: echo: write error: Broken pipe
+apparmor[131]: /lib/apparmor/functions: line 76: echo: write error: Broken pipe
+...
+apparmor[131]: /lib/apparmor/functions: line 76: echo: write error: Broken pipe
+apparmor[131]: /lib/apparmor/functions: line 76: echo: write error: Broken pipe
+apparmor[138]: xargs: invalid option -- 'd'
+apparmor[138]: BusyBox v1.33.0 (2021-04-01 10:05:19 UTC) multi-call binary.
+apparmor[138]: Usage: xargs [OPTIONS] [PROG ARGS]
+apparmor[142]: /lib/apparmor/functions: line 92: echo: write error: Broken pipe
+apparmor[142]: /lib/apparmor/functions: line 92: echo: write error: Broken pipe
+...
+apparmor[142]: /lib/apparmor/functions: line 92: echo: write error: Broken pipe
+apparmor[142]: /lib/apparmor/functions: line 92: echo: write error: Broken pipe
+apparmor[113]:  failed!
+systemd[1]: apparmor.service: Main process exited, code=exited, status=1/FAILURE
+systemd[1]: apparmor.service: Failed with result 'exit-code'.
+systemd[1]: Failed to start AppArmor initialization.
+dbus-broker-launch[152]: AppArmor enabled, but not supported. Ignoring.
+
+
+From the way I see it the problems start from this output:
+xargs: invalid option -- 'd'
+
+This error comes from a fact that `xargs` from the `busybox` doesn't
+have the `-d` option
+(https://git.busybox.net/busybox/tree/findutils/xargs.c)
+but this functionality is used in the file:
+https://git.yoctoproject.org/cgit/cgit.cgi/meta-security/tree/recipes-mac/AppArmor/files/functions
+
+Once I've discovered it, I started to wonder if I'm doing everything correctly.
+Is my issue a simple bug, or AppArmor is not supposed to be run in an
+environment like mine?
+
+Best regards,
+Konstantin Aladyshev
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2021-04-26 10:43 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-04-26 10:29 AppArmor with BusyBox aladyshev22
+2021-04-26 10:45 Konstantin Aladyshev
+

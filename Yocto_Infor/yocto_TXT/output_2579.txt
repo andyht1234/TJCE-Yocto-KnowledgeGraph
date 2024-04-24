@@ -1,0 +1,199 @@
+* Task vardeps on a variable changed externally
+@ 2019-10-09  9:42 Andrei Gherzan
+  2019-10-09 10:07 ` Paul Barker
+  2019-10-09 14:44 ` Richard Purdie
+  0 siblings, 2 replies; 5+ messages in thread
+From: Andrei Gherzan @ 2019-10-09  9:42 UTC (permalink / raw)
+  To: yocto
+
+Hi guys,
+
+I struggle to figure out an issue that I lately got into. I want to have 
+a recipe which writes a manifest of all the layers part of the build. 
+These layers are all git repositories and I want their revision to be 
+exposed at runtime. So I obviously have a a python function which 
+computes let's say, for the sake of example, a revision of one layer.
+
+def get_rev(d):
+     # returns revision of a repository
+
+LAYER_REVISION := "${get_rev(d)}"
+
+The recipe also has a `do_compile` variable dependency:
+do_compile[vardeps] += "LAYER_REVISION"
+
+Checking the task signature I see the inclusion of the expanded variable 
+LAYER_REVISION.
+
+Now, if I externally change the revision of that respective layer the 
+task is not re-triggered even so the recipe environment reports the 
+updated variable (bitbake -e). What is even more confusing is that if 
+for whatever reason the do_compile task gets invalidated (or I force 
+it), the build system returns a "basehash value changed" error.
+
+I would expect that the change of revision to trickle a task 
+invalidation and the task to be rerun but that doesn't seem to happen as 
+described above.
+
+-- 
+Andrei Gherzan
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: Task vardeps on a variable changed externally
+  2019-10-09  9:42 Task vardeps on a variable changed externally Andrei Gherzan
+@ 2019-10-09 10:07 ` Paul Barker
+  2019-10-09 10:21   ` Andrei Gherzan
+  2019-10-09 14:44 ` Richard Purdie
+  1 sibling, 1 reply; 5+ messages in thread
+From: Paul Barker @ 2019-10-09 10:07 UTC (permalink / raw)
+  To: Andrei Gherzan, Yocto discussion list
+
+On Wed, 9 Oct 2019, at 10:42, Andrei Gherzan wrote:
+> Hi guys,
+> 
+> I struggle to figure out an issue that I lately got into. I want to have 
+> a recipe which writes a manifest of all the layers part of the build. 
+> These layers are all git repositories and I want their revision to be 
+> exposed at runtime.
+
+Do you need this to be an actual package or would you be happy with it just injected into the rootfs via IMAGE_PREPROCESS_COMMAND? If so you could take a look at image-buildinfo.bbclass which seemed to work well when I've done it in the past.
+
+The only other way I've done something like this in the past is to put the git commands into do_compile for a recipe and set do_compile[nostamp] = "1". That way the task and every task that depends on it are always re-ran. It does mean that it will be re-ran even if the git repositories haven't been updated at all.
+
+Thanks,
+
+-- 
+Paul Barker
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: Task vardeps on a variable changed externally
+  2019-10-09 10:07 ` Paul Barker
+@ 2019-10-09 10:21   ` Andrei Gherzan
+  0 siblings, 0 replies; 5+ messages in thread
+From: Andrei Gherzan @ 2019-10-09 10:21 UTC (permalink / raw)
+  To: Paul Barker, Yocto discussion list
+
+Cheers Paul!
+
+On 09/10/2019 11:07, Paul Barker wrote:
+> On Wed, 9 Oct 2019, at 10:42, Andrei Gherzan wrote:
+>> Hi guys,
+>>
+>> I struggle to figure out an issue that I lately got into. I want to have
+>> a recipe which writes a manifest of all the layers part of the build.
+>> These layers are all git repositories and I want their revision to be
+>> exposed at runtime.
+> 
+> Do you need this to be an actual package or would you be happy with it just injected into the rootfs via IMAGE_PREPROCESS_COMMAND? If so you could take a look at image-buildinfo.bbclass which seemed to work well when I've done it in the past.
+
+That is exactly what I've done in the past to workaround this but now, 
+when facing the same issue again, I thought that there must be something 
+better. It really sounds to me as a bug and I'm mainly searching for an 
+explanation if that is not the case.
+
+> 
+> The only other way I've done something like this in the past is to put the git commands into do_compile for a recipe and set do_compile[nostamp] = "1". That way the task and every task that depends on it are always re-ran. It does mean that it will be re-ran even if the git repositories haven't been updated at all.
+
+Myeah. That would always invalidate the recipe. Not great.
+
+-- 
+Andrei Gherzan
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: Task vardeps on a variable changed externally
+  2019-10-09  9:42 Task vardeps on a variable changed externally Andrei Gherzan
+  2019-10-09 10:07 ` Paul Barker
+@ 2019-10-09 14:44 ` Richard Purdie
+  2021-11-16 14:54   ` mohanad.oraby
+  1 sibling, 1 reply; 5+ messages in thread
+From: Richard Purdie @ 2019-10-09 14:44 UTC (permalink / raw)
+  To: Andrei Gherzan, yocto
+
+On Wed, 2019-10-09 at 10:42 +0100, Andrei Gherzan wrote:
+> I struggle to figure out an issue that I lately got into. I want to
+> have a recipe which writes a manifest of all the layers part of the
+> build. 
+> These layers are all git repositories and I want their revision to
+> be exposed at runtime. So I obviously have a a python function which 
+> computes let's say, for the sake of example, a revision of one layer.
+> 
+> def get_rev(d):
+>      # returns revision of a repository
+> 
+> LAYER_REVISION := "${get_rev(d)}"
+> 
+> The recipe also has a `do_compile` variable dependency:
+> do_compile[vardeps] += "LAYER_REVISION"
+> 
+> Checking the task signature I see the inclusion of the expanded
+> variable 
+> LAYER_REVISION.
+> 
+> Now, if I externally change the revision of that respective layer
+> the 
+> task is not re-triggered even so the recipe environment reports the 
+> updated variable (bitbake -e). What is even more confusing is that
+> if 
+> for whatever reason the do_compile task gets invalidated (or I force 
+> it), the build system returns a "basehash value changed" error.
+> 
+> I would expect that the change of revision to trickle a task 
+> invalidation and the task to be rerun but that doesn't seem to happen
+> as described above.
+
+The hashes are generated at parse time. The key question is how does
+bitbake know when to reparse this recipe?
+
+You'd need to make the recipe always reparse so it can rerun that
+function.
+
+I think BB_DONT_CACHE = "1" may do that.
+
+Cheers,
+
+Richard
+
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: Task vardeps on a variable changed externally
+  2019-10-09 14:44 ` Richard Purdie
+@ 2021-11-16 14:54   ` mohanad.oraby
+  0 siblings, 0 replies; 5+ messages in thread
+From: mohanad.oraby @ 2021-11-16 14:54 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1010 bytes --]
+
+Hi,
+
+I am facing the same problem right now. I have created some new variables e.g., INTERNAL_VARIABLE, added them to BB_ENV_EXTRAWHITE, and in some recipes, I expect that some tasks are executed again, when I change these variables
+e.g., do_install[vardeps] = "INTERNAL_VARIABLE"
+
+I have two possible values for this variable. When I set the variable for the first time, everything works and there is no problem, the do_install will run when I change from one value to another. However, if I set the variable again to the old value, and I execite "bitbake recipename" again, this does not work, and this leads to some wrong/old data located in work directory, and also produced in the image.
+
+I tried setting BB_DONT_CACHE, but this did not work at all.
+
+I do not want to always run the tasks i.e., do_install[[nostamp] = "1", I just want it to run again every time I change this INTERNAL_VARIABLE.
+
+Is what I am expecting a normal behavior? Or Yocto does not work this way?
+
+Regards,
+Mohannad
+
+[-- Attachment #2: Type: text/html, Size: 1072 bytes --]
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+end of thread, other threads:[~2021-11-16 14:54 UTC | newest]
+
+Thread overview: 5+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2019-10-09  9:42 Task vardeps on a variable changed externally Andrei Gherzan
+2019-10-09 10:07 ` Paul Barker
+2019-10-09 10:21   ` Andrei Gherzan
+2019-10-09 14:44 ` Richard Purdie
+2021-11-16 14:54   ` mohanad.oraby
+

@@ -1,0 +1,66 @@
+* [meta-tensorflow][PATCH v2] bazel-native: Allow build from sstate-cache
+@ 2023-05-11  9:16 Tomasz Dziendzielski
+  0 siblings, 0 replies; only message in thread
+From: Tomasz Dziendzielski @ 2023-05-11  9:16 UTC (permalink / raw)
+  To: yocto; +Cc: Tomasz Dziendzielski
+
+Using TOPDIR variable breaks the sstate-cache every time build directory
+changes totally breaking build from sstate-cache among different workspaces.
+
+Changing that to TMPDIR that is included in BB_HASHEXCLUDE_COMMON.
+
+Another thing is disabling the UNINATIVE_LOADER, causing sstate-cache
+artifacts not working in different workspaces. On
+populate_sysroot_setscene patchelf-uninative --set-interpreter with
+empty argument is ran which does not change the interpreter path and
+then bazel binary ends up with path to the interpreter that might not
+exist, since the bazel was taken from sstate-cache.
+
+Removing the UNINATIVE_LOADER = "" so that uninative.bbclass can
+correctly replace the interpreter path and make bazel binary usable.
+One could think that it will reintroduce the original issue behind
+disabling uninative, which was some java file corrupted (see commit
+dd7642b), but I think we don't have this problem anymore and also I
+don't think it was the correct solution - since the loader is anyway
+included in the binary, so it wasn't really disabling it, just disabling
+the yocto functionality around uninative. If the error re-occurs I think
+different solution should be found.
+
+Signed-off-by: Tomasz Dziendzielski <tomasz.dziendzielski@gmail.com>
+---
+ recipes-devtools/bazel/bazel-native_5.3.2.bb | 5 +----
+ 1 file changed, 1 insertion(+), 4 deletions(-)
+
+diff --git a/recipes-devtools/bazel/bazel-native_5.3.2.bb b/recipes-devtools/bazel/bazel-native_5.3.2.bb
+index da13a53..3be5546 100644
+--- a/recipes-devtools/bazel/bazel-native_5.3.2.bb
++++ b/recipes-devtools/bazel/bazel-native_5.3.2.bb
+@@ -38,7 +38,7 @@ EXTRA_BAZEL_ARGS = " \
+ 
+ do_compile[network] = "1"
+ do_compile () {
+-    TMPDIR="${TOPDIR}/bazel" \
++    TMPDIR="${TMPDIR}/bazel" \
+     VERBOSE=yes \
+     EXTRA_BAZEL_ARGS="${EXTRA_BAZEL_ARGS}" \
+     ./compile.sh
+@@ -49,7 +49,4 @@ do_install () {
+     install -m 0755 ${S}/output/bazel ${D}${bindir}
+ }
+ 
+-# Explicitly disable uninative
+-UNINATIVE_LOADER = ""
+-
+ inherit native
+-- 
+2.40.1
+
+
+
+^ permalink raw reply related	[flat|nested] only message in thread
+only message in thread, other threads:[~2023-05-11  9:16 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-05-11  9:16 [meta-tensorflow][PATCH v2] bazel-native: Allow build from sstate-cache Tomasz Dziendzielski
+

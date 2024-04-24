@@ -1,0 +1,259 @@
+* Re: [yocto] Meta-raspberrypi - how to configure device tree for MCP251x
+       [not found] <16AA05EDD73208C2.24161@lists.yoctoproject.org>
+@ 2021-10-04  8:21 ` Chris Tapp
+  2021-10-04 16:49   ` Khem Raj
+  0 siblings, 1 reply; 3+ messages in thread
+From: Chris Tapp @ 2021-10-04  8:21 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2301 bytes --]
+
+Sorry, I meant to add that I have tried adding the following to local.conf:
+
+RPI_EXTRA_CONFIG = ' \n \
+    dtparam=spi=on \n \
+    dtoverlay=mcp2515-can0,oscillator=16000000,interrupt=25 \n \
+    dtoverlay=mcp2515-can1,oscillator=16000000,interrupt=23 \n \
+    '
+
+However, this did not make any difference to the interrupts.
+
+Since then, I have manually changed mcp2515-can1-overlay.dts in the kernel build tree (after running bitbake - c do_configure virtual/kernel) and rebuilt the kernel / image. This does result in the interrupt mapping changing, and both CAN channels then operate correctly.
+
+Does anyone know why RPI_EXTRA_CONFIG doesn’t appear to be taking effect?
+
+--
+
+Chris Tapp
+opensource@keylevel.com
+www.keylevel.com
+
+----
+You can tell you're getting older when your car insurance gets real cheap!
+
+> On 1 Oct 2021, at 22:38, Chris Tapp <opensource@keylevel.com> wrote:
+> 
+> I am having trouble getting the Waveshare 2-CH CAN HAT working with an RPI4. Channel 0 does not come up, channel 1 does, but it will only send one message (eventually reporting "write: No buffer space available”) and not receive anything.
+> 
+> Looking at the mcp2515-can0-overlay.dts and mcp2515-can1-overlay.dts device tree files in /tmp/work-shared/raspberrypi4/kernel-source/arch/arm/boot/dts/overlays/, it looks as if the interrupts are not mapped as required for the board.
+> 
+>       DTS               HAT
+> CAN0  brcm,pins = <25>  PIN23
+> CAN1  brcm,pins = <25>  PIN25
+> 
+> This doesn’t look right, and seems consistent with the behaviour I am seeing.
+> 
+> I would also like to check the device chip select signals, but I can't see how (if) they are mapped in the dts files.
+> 
+> How can I override these settings when I build the image?
+> 
+> --
+> 
+> Chris Tapp
+> opensource@keylevel.com <mailto:opensource@keylevel.com>
+> www.keylevel.com
+> 
+> 
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#54927): https://lists.yoctoproject.org/g/yocto/message/54927
+> Mute This Topic: https://lists.yoctoproject.org/mt/86011706/3617534
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [opensource@keylevel.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+> 
+
+
+[-- Attachment #2: Type: text/html, Size: 6291 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] Meta-raspberrypi - how to configure device tree for MCP251x
+  2021-10-04  8:21 ` [yocto] Meta-raspberrypi - how to configure device tree for MCP251x Chris Tapp
+@ 2021-10-04 16:49   ` Khem Raj
+  2021-10-04 22:07     ` Chris Tapp
+  0 siblings, 1 reply; 3+ messages in thread
+From: Khem Raj @ 2021-10-04 16:49 UTC (permalink / raw)
+  To: Chris Tapp; +Cc: Yocto-mailing-list
+
+can you check boot/config.txt and see fi your changes are there in your target ?
+
+On Mon, Oct 4, 2021 at 1:21 AM Chris Tapp <opensource@keylevel.com> wrote:
+>
+> Sorry, I meant to add that I have tried adding the following to local.conf:
+>
+> RPI_EXTRA_CONFIG = ' \n \
+>     dtparam=spi=on \n \
+>     dtoverlay=mcp2515-can0,oscillator=16000000,interrupt=25 \n \
+>     dtoverlay=mcp2515-can1,oscillator=16000000,interrupt=23 \n \
+>     '
+>
+> However, this did not make any difference to the interrupts.
+>
+> Since then, I have manually changed mcp2515-can1-overlay.dts in the kernel build tree (after running bitbake - c do_configure virtual/kernel) and rebuilt the kernel / image. This does result in the interrupt mapping changing, and both CAN channels then operate correctly.
+>
+> Does anyone know why RPI_EXTRA_CONFIG doesn’t appear to be taking effect?
+>
+> --
+>
+> Chris Tapp
+> opensource@keylevel.com
+> www.keylevel.com
+>
+> ----
+> You can tell you're getting older when your car insurance gets real cheap!
+>
+> On 1 Oct 2021, at 22:38, Chris Tapp <opensource@keylevel.com> wrote:
+>
+> I am having trouble getting the Waveshare 2-CH CAN HAT working with an RPI4. Channel 0 does not come up, channel 1 does, but it will only send one message (eventually reporting "write: No buffer space available”) and not receive anything.
+>
+> Looking at the mcp2515-can0-overlay.dts and mcp2515-can1-overlay.dts device tree files in /tmp/work-shared/raspberrypi4/kernel-source/arch/arm/boot/dts/overlays/, it looks as if the interrupts are not mapped as required for the board.
+>
+>       DTS               HAT
+> CAN0  brcm,pins = <25>  PIN23
+> CAN1  brcm,pins = <25>  PIN25
+>
+> This doesn’t look right, and seems consistent with the behaviour I am seeing.
+>
+> I would also like to check the device chip select signals, but I can't see how (if) they are mapped in the dts files.
+>
+> How can I override these settings when I build the image?
+>
+> --
+>
+> Chris Tapp
+> opensource@keylevel.com
+> www.keylevel.com
+>
+>
+>
+>
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> You automatically follow any topics you start or reply to.
+> View/Reply Online (#54936): https://lists.yoctoproject.org/g/yocto/message/54936
+> Mute This Topic: https://lists.yoctoproject.org/mt/86011706/1997914
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [raj.khem@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] Meta-raspberrypi - how to configure device tree for MCP251x
+  2021-10-04 16:49   ` Khem Raj
+@ 2021-10-04 22:07     ` Chris Tapp
+  0 siblings, 0 replies; 3+ messages in thread
+From: Chris Tapp @ 2021-10-04 22:07 UTC (permalink / raw)
+  To: Khem Raj; +Cc: Yocto-mailing-list
+
+[-- Attachment #1: Type: text/plain, Size: 3573 bytes --]
+
+Hi Khem,
+
+There is nothing in /boot once the system has started, but if I mount /dev/mmcblk0p1 I can see a config.txt that includes:
+
+     dtparam=spi=on 
+     dtoverlay=mcp2515-can0,oscillator=16000000,interrupt=25 
+     dtoverlay=mcp2515-can1,oscillator=16000000,interrupt=23 
+
+This is what I could expect.
+
+On a quick scan, this appears to be the same as the one in tmp/deploy/images/raspberrypi4/bootfiles - the timestamp for this file indicated it was old, so I had manually cleaned and rebuilt rpi-bootfiles for changes to RPI_EXTRA_CONFIG to propagate.
+
+However, if I bring the CAN interface up:
+
+ip link set can1 up type can bitrate 100000
+
+and look in /proc/interrupts, I see:
+
+ 66:          0          0          0          0  pinctrl-bcm2835  25 Level     spi0.0
+
+even though can1 is on spi0.1.
+
+--
+
+Chris Tapp
+opensource@keylevel.com
+www.keylevel.com
+
+> On 4 Oct 2021, at 17:49, Khem Raj <raj.khem@gmail.com> wrote:
+> 
+> can you check boot/config.txt and see fi your changes are there in your target ?
+> 
+> On Mon, Oct 4, 2021 at 1:21 AM Chris Tapp <opensource@keylevel.com> wrote:
+>> 
+>> Sorry, I meant to add that I have tried adding the following to local.conf:
+>> 
+>> RPI_EXTRA_CONFIG = ' \n \
+>>    dtparam=spi=on \n \
+>>    dtoverlay=mcp2515-can0,oscillator=16000000,interrupt=25 \n \
+>>    dtoverlay=mcp2515-can1,oscillator=16000000,interrupt=23 \n \
+>>    '
+>> 
+>> However, this did not make any difference to the interrupts.
+>> 
+>> Since then, I have manually changed mcp2515-can1-overlay.dts in the kernel build tree (after running bitbake - c do_configure virtual/kernel) and rebuilt the kernel / image. This does result in the interrupt mapping changing, and both CAN channels then operate correctly.
+>> 
+>> Does anyone know why RPI_EXTRA_CONFIG doesn’t appear to be taking effect?
+>> 
+>> --
+>> 
+>> Chris Tapp
+>> opensource@keylevel.com
+>> www.keylevel.com
+>> 
+>> ----
+>> You can tell you're getting older when your car insurance gets real cheap!
+>> 
+>> On 1 Oct 2021, at 22:38, Chris Tapp <opensource@keylevel.com> wrote:
+>> 
+>> I am having trouble getting the Waveshare 2-CH CAN HAT working with an RPI4. Channel 0 does not come up, channel 1 does, but it will only send one message (eventually reporting "write: No buffer space available”) and not receive anything.
+>> 
+>> Looking at the mcp2515-can0-overlay.dts and mcp2515-can1-overlay.dts device tree files in /tmp/work-shared/raspberrypi4/kernel-source/arch/arm/boot/dts/overlays/, it looks as if the interrupts are not mapped as required for the board.
+>> 
+>>      DTS               HAT
+>> CAN0  brcm,pins = <25>  PIN23
+>> CAN1  brcm,pins = <25>  PIN25
+>> 
+>> This doesn’t look right, and seems consistent with the behaviour I am seeing.
+>> 
+>> I would also like to check the device chip select signals, but I can't see how (if) they are mapped in the dts files.
+>> 
+>> How can I override these settings when I build the image?
+>> 
+>> --
+>> 
+>> Chris Tapp
+>> opensource@keylevel.com
+>> www.keylevel.com
+>> 
+>> 
+>> 
+>> 
+>> 
+>> 
+>> -=-=-=-=-=-=-=-=-=-=-=-
+>> Links: You receive all messages sent to this group.
+>> You automatically follow any topics you start or reply to.
+>> View/Reply Online (#54936): https://lists.yoctoproject.org/g/yocto/message/54936
+>> Mute This Topic: https://lists.yoctoproject.org/mt/86011706/1997914
+>> Group Owner: yocto+owner@lists.yoctoproject.org
+>> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [raj.khem@gmail.com]
+>> -=-=-=-=-=-=-=-=-=-=-=-
+>> 
+
+
+[-- Attachment #2: Type: text/html, Size: 7699 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2021-10-04 22:07 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+     [not found] <16AA05EDD73208C2.24161@lists.yoctoproject.org>
+2021-10-04  8:21 ` [yocto] Meta-raspberrypi - how to configure device tree for MCP251x Chris Tapp
+2021-10-04 16:49   ` Khem Raj
+2021-10-04 22:07     ` Chris Tapp
+

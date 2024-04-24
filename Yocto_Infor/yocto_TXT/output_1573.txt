@@ -1,0 +1,151 @@
+* [meta-security][PATCH 1/2] apparmor: update to 3.0.5
+@ 2022-07-30 22:27 Armin Kuster
+  2022-07-30 22:27 ` [meta-security][PATCH 2/2] clamav: update to 0.104.4 Armin Kuster
+  0 siblings, 1 reply; 2+ messages in thread
+From: Armin Kuster @ 2022-07-30 22:27 UTC (permalink / raw)
+  To: yocto
+
+Signed-off-by: Armin Kuster <akuster808@gmail.com>
+---
+ recipes-mac/AppArmor/{apparmor_3.0.4.bb => apparmor_3.0.5.bb} | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+ rename recipes-mac/AppArmor/{apparmor_3.0.4.bb => apparmor_3.0.5.bb} (99%)
+
+diff --git a/recipes-mac/AppArmor/apparmor_3.0.4.bb b/recipes-mac/AppArmor/apparmor_3.0.5.bb
+similarity index 99%
+rename from recipes-mac/AppArmor/apparmor_3.0.4.bb
+rename to recipes-mac/AppArmor/apparmor_3.0.5.bb
+index 896abfe..45f19d1 100644
+--- a/recipes-mac/AppArmor/apparmor_3.0.4.bb
++++ b/recipes-mac/AppArmor/apparmor_3.0.5.bb
+@@ -22,7 +22,7 @@ SRC_URI = " \
+     file://0001-rc.apparmor.debian-add-missing-functions.patch \
+     "
+ 
+-SRCREV = "9799fbde997820bb12a49e292356f7a6ce12e972"
++SRCREV = "822db765c6fa7f9de7233c4011254a82d4dafe76"
+ S = "${WORKDIR}/git"
+ 
+ PARALLEL_MAKE = ""
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 2+ messages in thread
+* [meta-security][PATCH 2/2] clamav: update to  0.104.4
+  2022-07-30 22:27 [meta-security][PATCH 1/2] apparmor: update to 3.0.5 Armin Kuster
+@ 2022-07-30 22:27 ` Armin Kuster
+  0 siblings, 0 replies; 2+ messages in thread
+From: Armin Kuster @ 2022-07-30 22:27 UTC (permalink / raw)
+  To: yocto
+
+drop accepted patch fix_systemd_socket.patch
+
+allow clamav-libclamav to have a symlink
+
+Signed-off-by: Armin Kuster <akuster808@gmail.com>
+---
+ .../{clamav_0.104.0.bb => clamav_0.104.4.bb}  | 11 ++++----
+ .../clamav/files/fix_systemd_socket.patch     | 25 -------------------
+ 2 files changed, 6 insertions(+), 30 deletions(-)
+ rename recipes-scanners/clamav/{clamav_0.104.0.bb => clamav_0.104.4.bb} (96%)
+ delete mode 100644 recipes-scanners/clamav/files/fix_systemd_socket.patch
+
+diff --git a/recipes-scanners/clamav/clamav_0.104.0.bb b/recipes-scanners/clamav/clamav_0.104.4.bb
+similarity index 96%
+rename from recipes-scanners/clamav/clamav_0.104.0.bb
+rename to recipes-scanners/clamav/clamav_0.104.4.bb
+index 18e8329..68a7d1f 100644
+--- a/recipes-scanners/clamav/clamav_0.104.0.bb
++++ b/recipes-scanners/clamav/clamav_0.104.4.bb
+@@ -10,8 +10,8 @@ COMPATIBLE_HOST:libc-musl:class-target = "null"
+ 
+ LIC_FILES_CHKSUM = "file://COPYING.txt;beginline=2;endline=3;md5=f7029fbbc5898b273d5902896f7bbe17"
+ 
+-# July 27th
+-SRCREV = "c389dfa4c3af92b006ada4f7595bbc3e6df3f356"
++# July 30th, 2022
++SRCREV = "563ba93052f3b7b46fb8725a65ee6299a9c332cf"
+ 
+ SRC_URI = "git://github.com/vrtadmin/clamav-devel;branch=rel/0.104;protocol=https \
+     file://clamd.conf \
+@@ -20,7 +20,6 @@ SRC_URI = "git://github.com/vrtadmin/clamav-devel;branch=rel/0.104;protocol=http
+     file://tmpfiles.clamav \
+     file://headers_fixup.patch \
+     file://oe_cmake_fixup.patch \
+-    file://fix_systemd_socket.patch \
+ "
+ S = "${WORKDIR}/git"
+ 
+@@ -69,7 +68,6 @@ do_install:append () {
+     fi
+ 
+     rm ${D}/${libdir}/libfreshclam.so
+-    rm ${D}/${libdir}/libmspack.so
+ 
+     if ${@bb.utils.contains('DISTRO_FEATURES','systemd','true','false',d)};then
+         install -d ${D}${sysconfdir}/tmpfiles.d
+@@ -125,7 +123,8 @@ FILES:${PN}-freshclam = "${bindir}/freshclam \
+ FILES:${PN}-dev = " ${bindir}/clamav-config ${libdir}/*.la \
+                     ${libdir}/pkgconfig/*.pc \
+                     ${mandir}/man1/clamav-config.* \
+-                    ${includedir}/*.h ${docdir}/libclamav* "
++                    ${includedir}/*.h ${docdir}/libclamav* \
++                    ${libdir}/libmspack.so"
+ 
+ FILES:${PN}-staticdev = "${libdir}/*.a"
+ 
+@@ -150,6 +149,8 @@ SYSTEMD_PACKAGES  = "${PN}-daemon ${PN}-freshclam"
+ SYSTEMD_SERVICE:${PN}-daemon = "clamav-daemon.service"
+ SYSTEMD_SERVICE:${PN}-freshclam = "clamav-freshclam.service"
+ 
++INSANE_SKIP:${PN}-libclamav  += "dev-so"
++
+ RDEPENDS:${PN} = "openssl ncurses-libncurses libxml2 libbz2 ncurses-libtinfo curl libpcre2 clamav-libclamav"
+ RRECOMMENDS:${PN} = "clamav-freshclam"
+ RDEPENDS:${PN}-freshclam = "clamav"
+diff --git a/recipes-scanners/clamav/files/fix_systemd_socket.patch b/recipes-scanners/clamav/files/fix_systemd_socket.patch
+deleted file mode 100644
+index 3347770..0000000
+--- a/recipes-scanners/clamav/files/fix_systemd_socket.patch
++++ /dev/null
+@@ -1,25 +0,0 @@
+-clamd not installing clamav-daemon.socket
+-
+-Fixes:
+-__main__.SystemdUnitNotFoundError: (PosixPath('../security-build-image/1.0-r0/rootfs'), 'clamav-daemon.socket')
+-%post(clamav-daemon-0.104.0-r0.core2_64): waitpid(3587571) rc 3587571 status 100
+-warning: %post(clamav-daemon-0.104.0-r0.core2_64) scriptlet failed, exit status 1
+-
+-Upstream-Status: Pending
+-Signed-off-by: Armin Kuster <akuster808@gmail.com>
+-
+-Index: git/clamd/CMakeLists.txt
+-===================================================================
+---- git.orig/clamd/CMakeLists.txt
+-+++ git/clamd/CMakeLists.txt
+-@@ -60,4 +60,10 @@ if(SYSTEMD_FOUND)
+-     install(
+-         FILES ${CMAKE_CURRENT_BINARY_DIR}/clamav-daemon.socket
+-         DESTINATION ${SYSTEMD_UNIT_DIR})
+-+    configure_file(
+-+        ${CMAKE_CURRENT_SOURCE_DIR}/clamav-daemon.socket.in
+-+        ${CMAKE_CURRENT_BINARY_DIR}/clamav-daemon.socket @ONLY)
+-+    install(
+-+        FILES ${CMAKE_CURRENT_BINARY_DIR}/clamav-daemon.socket
+-+        DESTINATION ${SYSTEMD_UNIT_DIR})
+- endif()
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2022-07-30 22:29 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-07-30 22:27 [meta-security][PATCH 1/2] apparmor: update to 3.0.5 Armin Kuster
+2022-07-30 22:27 ` [meta-security][PATCH 2/2] clamav: update to 0.104.4 Armin Kuster
+

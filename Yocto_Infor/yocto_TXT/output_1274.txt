@@ -1,0 +1,178 @@
+* [PATCH yocto-autobuilder-helper v2] scripts: run-docs-build: make the workdir pristine between tries
+@ 2022-10-13 12:17 Quentin Schulz
+  2022-10-27 16:01 ` Quentin Schulz
+  0 siblings, 1 reply; 2+ messages in thread
+From: Quentin Schulz @ 2022-10-13 12:17 UTC (permalink / raw)
+  To: yocto; +Cc: Quentin Schulz, Quentin Schulz, Peter Kjellerstedt
+
+From: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+
+It happened that the git repositories were dirty and resulted in
+incorrect files being used. Let's use git clean -ffdx to force a
+completely clean git repositories before and after checking out a branch
+so that nothing is left from or to another branch build. Also git reset
+--hard to undo changes to tracked files.
+
+Cc: Quentin Schulz <foss+yocto@0leil.net>
+Reported-by: Peter Kjellerstedt <peter.kjellerstedt@axis.com> #https://lore.kernel.org/yocto-docs/e50abe3c777e4a23a752a3ec25ad0b2a@axis.com/
+Signed-off-by: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+---
+
+v2:
+ - re-added git reset --hard back,
+ - added git reset --hard after git checkout too just to be on the safe
+ side,
+ - added Reported-by and the link to the discussion,
+
+ scripts/run-docs-build | 9 +++++++--
+ 1 file changed, 7 insertions(+), 2 deletions(-)
+
+diff --git a/scripts/run-docs-build b/scripts/run-docs-build
+index c6b3965..970d8bc 100755
+--- a/scripts/run-docs-build
++++ b/scripts/run-docs-build
+@@ -61,6 +61,8 @@ for branch in 1.46 $(git branch --remote --contains "$first_sphinx_commit" --for
+ 
+     echo Building bitbake $branch branch
+     git checkout $branch
++    git reset --hard
++    git clean -ffdx
+     git checkout origin/master releases.rst
+     make clean
+     SPHINXOPTS="-j auto" make publish
+@@ -81,6 +83,7 @@ for branch in 1.46 $(git branch --remote --contains "$first_sphinx_commit" --for
+ 
+     cp -r ./_build/final/* $outputdir/bitbake/$branch
+     git reset --hard
++    git clean -ffdx
+ done
+ 
+ if [ "$PUBLISH" -ne 0 ]; then
+@@ -101,7 +104,7 @@ git checkout origin/master set_versions.py
+ #latest_tag=$(git tag --contains "$first_sphinx_commit" --contains "$first_dunfell_sphinx_commit" --sort="version:refname" 'yocto-*' | tail -1 | sed 's/yocto-//')
+ latest_tag=$(./set_versions.py getlatest)
+ git reset --hard
+-git clean -f
++git clean -ffdx
+ 
+ for branch in dunfell $(git branch --remote --contains "$first_sphinx_commit" --format '%(refname:lstrip=3)') $(git tag --contains "$first_sphinx_commit" --contains "$first_dunfell_sphinx_commit" 'yocto-*') transition; do
+     if [ "$branch" = "HEAD" ]; then
+@@ -116,6 +119,8 @@ for branch in dunfell $(git branch --remote --contains "$first_sphinx_commit" --
+ 
+     echo Building $branch
+     git checkout $branch
++    git reset --hard
++    git clean -ffdx
+ 
+     if [ -e "${scriptdir}/docs-build-patches/${branch}/" ]; then
+         echo Adding patch for $branch
+@@ -161,7 +166,7 @@ for branch in dunfell $(git branch --remote --contains "$first_sphinx_commit" --
+ 
+     cp -r ./_build/final/* $outputdir/$branch
+     git reset --hard
+-    git clean -f
++    git clean -ffdx
+ done
+ 
+ # Update bitbake switchers.js with the copy from master ypdocs
+-- 
+2.37.3
+
+
+
+^ permalink raw reply related	[flat|nested] 2+ messages in thread
+* Re: [PATCH yocto-autobuilder-helper v2] scripts: run-docs-build: make the workdir pristine between tries
+  2022-10-13 12:17 [PATCH yocto-autobuilder-helper v2] scripts: run-docs-build: make the workdir pristine between tries Quentin Schulz
+@ 2022-10-27 16:01 ` Quentin Schulz
+  0 siblings, 0 replies; 2+ messages in thread
+From: Quentin Schulz @ 2022-10-27 16:01 UTC (permalink / raw)
+  To: Quentin Schulz, yocto; +Cc: Peter Kjellerstedt
+
+Hi all,
+
+Gentle ping.
+
+Cheers,
+Quentin
+
+On 10/13/22 14:17, Quentin Schulz wrote:
+> From: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+> 
+> It happened that the git repositories were dirty and resulted in
+> incorrect files being used. Let's use git clean -ffdx to force a
+> completely clean git repositories before and after checking out a branch
+> so that nothing is left from or to another branch build. Also git reset
+> --hard to undo changes to tracked files.
+> 
+> Cc: Quentin Schulz <foss+yocto@0leil.net>
+> Reported-by: Peter Kjellerstedt <peter.kjellerstedt@axis.com> #https://urldefense.proofpoint.com/v2/url?u=https-3A__lore.kernel.org_yocto-2Ddocs_e50abe3c777e4a23a752a3ec25ad0b2a-40axis.com_&d=DwIDAg&c=_sEr5x9kUWhuk4_nFwjJtA&r=LYjLexDn7rXIzVmkNPvw5ymA1XTSqHGq8yBP6m6qZZ4njZguQhZhkI_-172IIy1t&m=sjcVZJ-k5ISKZ9bP1v6Z8e45PceKIzwNAcLdpzaeA2PhyRTTUYU3K1UE3Wsqem3F&s=3-gBIoJfYKyqg6H4LFhHQOPdBGVvSUqi8kFfYVwJWcg&e=
+> Signed-off-by: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+> ---
+> 
+> v2:
+>   - re-added git reset --hard back,
+>   - added git reset --hard after git checkout too just to be on the safe
+>   side,
+>   - added Reported-by and the link to the discussion,
+> 
+>   scripts/run-docs-build | 9 +++++++--
+>   1 file changed, 7 insertions(+), 2 deletions(-)
+> 
+> diff --git a/scripts/run-docs-build b/scripts/run-docs-build
+> index c6b3965..970d8bc 100755
+> --- a/scripts/run-docs-build
+> +++ b/scripts/run-docs-build
+> @@ -61,6 +61,8 @@ for branch in 1.46 $(git branch --remote --contains "$first_sphinx_commit" --for
+>   
+>       echo Building bitbake $branch branch
+>       git checkout $branch
+> +    git reset --hard
+> +    git clean -ffdx
+>       git checkout origin/master releases.rst
+>       make clean
+>       SPHINXOPTS="-j auto" make publish
+> @@ -81,6 +83,7 @@ for branch in 1.46 $(git branch --remote --contains "$first_sphinx_commit" --for
+>   
+>       cp -r ./_build/final/* $outputdir/bitbake/$branch
+>       git reset --hard
+> +    git clean -ffdx
+>   done
+>   
+>   if [ "$PUBLISH" -ne 0 ]; then
+> @@ -101,7 +104,7 @@ git checkout origin/master set_versions.py
+>   #latest_tag=$(git tag --contains "$first_sphinx_commit" --contains "$first_dunfell_sphinx_commit" --sort="version:refname" 'yocto-*' | tail -1 | sed 's/yocto-//')
+>   latest_tag=$(./set_versions.py getlatest)
+>   git reset --hard
+> -git clean -f
+> +git clean -ffdx
+>   
+>   for branch in dunfell $(git branch --remote --contains "$first_sphinx_commit" --format '%(refname:lstrip=3)') $(git tag --contains "$first_sphinx_commit" --contains "$first_dunfell_sphinx_commit" 'yocto-*') transition; do
+>       if [ "$branch" = "HEAD" ]; then
+> @@ -116,6 +119,8 @@ for branch in dunfell $(git branch --remote --contains "$first_sphinx_commit" --
+>   
+>       echo Building $branch
+>       git checkout $branch
+> +    git reset --hard
+> +    git clean -ffdx
+>   
+>       if [ -e "${scriptdir}/docs-build-patches/${branch}/" ]; then
+>           echo Adding patch for $branch
+> @@ -161,7 +166,7 @@ for branch in dunfell $(git branch --remote --contains "$first_sphinx_commit" --
+>   
+>       cp -r ./_build/final/* $outputdir/$branch
+>       git reset --hard
+> -    git clean -f
+> +    git clean -ffdx
+>   done
+>   
+>   # Update bitbake switchers.js with the copy from master ypdocs
+
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2022-10-27 16:01 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-10-13 12:17 [PATCH yocto-autobuilder-helper v2] scripts: run-docs-build: make the workdir pristine between tries Quentin Schulz
+2022-10-27 16:01 ` Quentin Schulz
+

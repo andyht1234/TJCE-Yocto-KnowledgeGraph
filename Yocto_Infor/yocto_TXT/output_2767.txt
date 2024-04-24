@@ -1,0 +1,196 @@
+* [meta-security,dunfell][PATCH] recipes-security/fscrypt: Add fscrypt .bb file
+@ 2021-09-19 19:19 bhupesh.sharma
+       [not found] ` <e5eaf119-402f-8f02-f161-2d195dfda941@gmail.com>
+  0 siblings, 1 reply; 2+ messages in thread
+From: bhupesh.sharma @ 2021-09-19 19:19 UTC (permalink / raw)
+  To: yocto; +Cc: akuster808, bhupesh.sharma, bhupesh.linux
+
+fscrypt is a high-level tool for the management of Linux
+filesystem encryption. fscrypt manages metadata, key generation,
+key wrapping, PAM integration, and provides a uniform interface
+for creating and modifying encrypted directories.
+
+Add recipe for the same in 'recipes-security'.
+
+Signed-off-by: Bhupesh Sharma <bhupesh.sharma@linaro.org>
+---
+ recipes-security/fscrypt/fscrypt_1.0.0.bb | 49 +++++++++++++++++++++++
+ 1 file changed, 49 insertions(+)
+ create mode 100644 recipes-security/fscrypt/fscrypt_1.0.0.bb
+
+diff --git a/recipes-security/fscrypt/fscrypt_1.0.0.bb b/recipes-security/fscrypt/fscrypt_1.0.0.bb
+new file mode 100644
+index 0000000..a70d310
+--- /dev/null
++++ b/recipes-security/fscrypt/fscrypt_1.0.0.bb
+@@ -0,0 +1,49 @@
++SUMMARY = "fscrypt is a high-level tool for the management of Linux filesystem encryption"
++DESCIPTION = "fscrypt manages metadata, key generation, key wrapping, PAM integration, \
++and provides a uniform interface for creating and modifying encrypted directories. For \
++a small, low-level tool that directly sets policies, see fscryptctl \
++(https://github.com/google/fscryptcl)."
++HOMEPAGE = "https://github.com/google/fscrypt"
++SECTION = "base"
++LICENSE = "Apache-2.0"
++LIC_FILES_CHKSUM = "file://src/${GO_IMPORT}/LICENSE;md5=3b83ef96387f14655fc854ddc3c6bd57"
++
++BBCLASSEXTEND = "native nativesdk"
++
++# fscrypt depends on go and libpam
++DEPENDS += "go-dep-native libpam"
++
++SRCREV = "92b1e9a8670ccd3916a7d24a06cab1e4c9815bc4"
++SRC_URI = "git://github.com/google/fscrypt.git"
++GO_IMPORT = "import"
++
++S = "${WORKDIR}/git"
++
++inherit go
++inherit goarch
++
++do_compile() {
++	export GOARCH=${TARGET_GOARCH}
++	export GOROOT="${STAGING_LIBDIR_NATIVE}/${TARGET_SYS}/go"
++	export GOPATH="${WORKDIR}/git"
++
++	# Pass the needed cflags/ldflags so that cgo
++	# can find the needed headers files and libraries
++	export CGO_ENABLED="1"
++	export CGO_CFLAGS="${CFLAGS} --sysroot=${STAGING_DIR_TARGET}"
++	export CGO_LDFLAGS="${LDFLAGS} --sysroot=${STAGING_DIR_TARGET}"
++
++	cd ${S}/src/${GO_IMPORT}
++	oe_runmake
++
++	# Golang forces permissions to 0500 on directories and 0400 on files in
++	# the module cache which prevents us from easily cleaning up the build
++	# directory. Let's just fix the permissions here so we don't have to
++	# hack the clean tasks.
++	chmod -R u+w ${S}/pkg/mod
++}
++
++do_install() {
++	install -d ${D}/${bindir}
++	install ${S}/src/${GO_IMPORT}/bin/fscrypt ${D}/${bindir}/fscrypt
++}
+-- 
+2.31.1
+
+
+^ permalink raw reply related	[flat|nested] 2+ messages in thread
+* Re: [meta-security,dunfell][PATCH] recipes-security/fscrypt: Add fscrypt .bb file
+       [not found] ` <e5eaf119-402f-8f02-f161-2d195dfda941@gmail.com>
+@ 2021-10-05  6:25   ` Bhupesh Sharma
+  0 siblings, 0 replies; 2+ messages in thread
+From: Bhupesh Sharma @ 2021-10-05  6:25 UTC (permalink / raw)
+  To: akuster808; +Cc: yocto, bhupesh.linux
+
+Hello Armin,
+
+Many thanks for your review.
+
+On Sun, 26 Sept 2021 at 03:01, akuster808 <akuster808@gmail.com> wrote:
+>
+>
+>
+> On 9/19/21 12:19 PM, Bhupesh Sharma wrote:
+> > fscrypt is a high-level tool for the management of Linux
+> > filesystem encryption. fscrypt manages metadata, key generation,
+> > key wrapping, PAM integration, and provides a uniform interface
+> > for creating and modifying encrypted directories.
+> >
+> > Add recipe for the same in 'recipes-security'.
+>
+> Was this a double post? or a V2?
+
+Sorry for the double post, but since I had some issues subscribing to
+the OE-list, my first attempt to post was not accepted by the mailing
+list server.
+
+> I follow the OE/YP Stable process and this appears to be adding a new
+> package to a stable release which is not allowed..  I have no issue
+> taking it for Master.
+
+Sure. I realized my mistake later-on. I should have sent it for the
+'master' branch and not stable / dunfell. Can you please consider
+taking this into the 'master' branch, or should I send the patch
+separately.
+
+Thanks and sorry for the late reply,
+Bhupesh
+
+> -armin
+> >
+> > Signed-off-by: Bhupesh Sharma <bhupesh.sharma@linaro.org>
+> > ---
+> >  recipes-security/fscrypt/fscrypt_1.0.0.bb | 49 +++++++++++++++++++++++
+> >  1 file changed, 49 insertions(+)
+> >  create mode 100644 recipes-security/fscrypt/fscrypt_1.0.0.bb
+> >
+> > diff --git a/recipes-security/fscrypt/fscrypt_1.0.0.bb b/recipes-security/fscrypt/fscrypt_1.0.0.bb
+> > new file mode 100644
+> > index 0000000..a70d310
+> > --- /dev/null
+> > +++ b/recipes-security/fscrypt/fscrypt_1.0.0.bb
+> > @@ -0,0 +1,49 @@
+> > +SUMMARY = "fscrypt is a high-level tool for the management of Linux filesystem encryption"
+> > +DESCIPTION = "fscrypt manages metadata, key generation, key wrapping, PAM integration, \
+> > +and provides a uniform interface for creating and modifying encrypted directories. For \
+> > +a small, low-level tool that directly sets policies, see fscryptctl \
+> > +(https://github.com/google/fscryptcl)."
+> > +HOMEPAGE = "https://github.com/google/fscrypt"
+> > +SECTION = "base"
+> > +LICENSE = "Apache-2.0"
+> > +LIC_FILES_CHKSUM = "file://src/${GO_IMPORT}/LICENSE;md5=3b83ef96387f14655fc854ddc3c6bd57"
+> > +
+> > +BBCLASSEXTEND = "native nativesdk"
+> > +
+> > +# fscrypt depends on go and libpam
+> > +DEPENDS += "go-dep-native libpam"
+> > +
+> > +SRCREV = "92b1e9a8670ccd3916a7d24a06cab1e4c9815bc4"
+> > +SRC_URI = "git://github.com/google/fscrypt.git"
+> > +GO_IMPORT = "import"
+> > +
+> > +S = "${WORKDIR}/git"
+> > +
+> > +inherit go
+> > +inherit goarch
+> > +
+> > +do_compile() {
+> > +     export GOARCH=${TARGET_GOARCH}
+> > +     export GOROOT="${STAGING_LIBDIR_NATIVE}/${TARGET_SYS}/go"
+> > +     export GOPATH="${WORKDIR}/git"
+> > +
+> > +     # Pass the needed cflags/ldflags so that cgo
+> > +     # can find the needed headers files and libraries
+> > +     export CGO_ENABLED="1"
+> > +     export CGO_CFLAGS="${CFLAGS} --sysroot=${STAGING_DIR_TARGET}"
+> > +     export CGO_LDFLAGS="${LDFLAGS} --sysroot=${STAGING_DIR_TARGET}"
+> > +
+> > +     cd ${S}/src/${GO_IMPORT}
+> > +     oe_runmake
+> > +
+> > +     # Golang forces permissions to 0500 on directories and 0400 on files in
+> > +     # the module cache which prevents us from easily cleaning up the build
+> > +     # directory. Let's just fix the permissions here so we don't have to
+> > +     # hack the clean tasks.
+> > +     chmod -R u+w ${S}/pkg/mod
+> > +}
+> > +
+> > +do_install() {
+> > +     install -d ${D}/${bindir}
+> > +     install ${S}/src/${GO_IMPORT}/bin/fscrypt ${D}/${bindir}/fscrypt
+> > +}
+>
+
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2021-10-05  6:25 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-09-19 19:19 [meta-security,dunfell][PATCH] recipes-security/fscrypt: Add fscrypt .bb file bhupesh.sharma
+     [not found] ` <e5eaf119-402f-8f02-f161-2d195dfda941@gmail.com>
+2021-10-05  6:25   ` Bhupesh Sharma
+

@@ -1,0 +1,376 @@
+* [meta-raspberrypi][PATCH 1/4] machine: Define firmware packages from separate variables
+@ 2022-09-07 21:39 Andrei Gherzan
+  2022-09-07 21:39 ` [meta-raspberrypi][PATCH 2/4] multiconfig: Add multiconfig setup for Raspberry Pi 3+4 images Andrei Gherzan
+                   ` (2 more replies)
+  0 siblings, 3 replies; 4+ messages in thread
+From: Andrei Gherzan @ 2022-09-07 21:39 UTC (permalink / raw)
+  To: yocto; +Cc: andrei, Andrei Gherzan
+
+From: Andrei Gherzan <andrei.gherzan@huawei.com>
+
+This approach allows someone to easily append firmware packages for
+another target than the current set one. For now, we only define the
+ones for Raspberry Pi 3 and Raspberry Pi 4 as they will be reused for
+in multiconfig builds for generating images that support both of these
+targets.
+
+Signed-off-by: Andrei Gherzan <andrei.gherzan@huawei.com>
+---
+ conf/machine/include/rpi-base.inc | 17 +++++++++++++++++
+ conf/machine/raspberrypi3.conf    |  9 ++-------
+ conf/machine/raspberrypi4.conf    | 11 +++--------
+ 3 files changed, 22 insertions(+), 15 deletions(-)
+
+diff --git a/conf/machine/include/rpi-base.inc b/conf/machine/include/rpi-base.inc
+index a2edf06..6998460 100644
+--- a/conf/machine/include/rpi-base.inc
++++ b/conf/machine/include/rpi-base.inc
+@@ -150,3 +150,20 @@ do_image_wic[recrdeps] = "do_build"
+ # The kernel image is installed into the FAT32 boot partition and does not need
+ # to also be installed into the rootfs.
+ RDEPENDS:${KERNEL_PACKAGE_NAME}-base = ""
++
++RASPBERRYPI_3_FIRMWARE_PACKAGES += "\
++    linux-firmware-rpidistro-bcm43430 \
++    linux-firmware-rpidistro-bcm43455 \
++    bluez-firmware-rpidistro-bcm43430a1-hcd \
++    bluez-firmware-rpidistro-bcm4345c0-hcd \
++"
++RASPBERRYPI_4_FIRMWARE_PACKAGES += "\
++    linux-firmware-rpidistro-bcm43455 \
++    bluez-firmware-rpidistro-bcm4345c0-hcd \
++    linux-firmware-rpidistro-bcm43456 \
++    bluez-firmware-rpidistro-bcm4345c5-hcd \
++"
++
++RASPBERRYPI_3_KERNEL ?= "kernel7.img"
++# 'l' stands for LPAE
++RASPBERRYPI_4_KERNEL ?= "kernel7l.img"
+diff --git a/conf/machine/raspberrypi3.conf b/conf/machine/raspberrypi3.conf
+index 1212498..46961b8 100644
+--- a/conf/machine/raspberrypi3.conf
++++ b/conf/machine/raspberrypi3.conf
+@@ -6,14 +6,9 @@ DEFAULTTUNE ?= "cortexa7thf-neon-vfpv4"
+ require conf/machine/include/arm/armv7a/tune-cortexa7.inc
+ include conf/machine/include/rpi-base.inc
+ 
+-MACHINE_EXTRA_RRECOMMENDS += "\
+-    linux-firmware-rpidistro-bcm43430 \
+-    linux-firmware-rpidistro-bcm43455 \
+-    bluez-firmware-rpidistro-bcm43430a1-hcd \
+-    bluez-firmware-rpidistro-bcm4345c0-hcd \
+-"
++MACHINE_EXTRA_RRECOMMENDS += "${RASPBERRYPI_3_FIRMWARE_PACKAGES}"
+ 
+-SDIMG_KERNELIMAGE ?= "kernel7.img"
++SDIMG_KERNELIMAGE ?= "${RASPBERRYPI_3_KERNEL}"
+ UBOOT_MACHINE = "rpi_3_32b_config"
+ SERIAL_CONSOLES ?= "115200;ttyS0"
+ 
+diff --git a/conf/machine/raspberrypi4.conf b/conf/machine/raspberrypi4.conf
+index 86c57ed..56d0905 100644
+--- a/conf/machine/raspberrypi4.conf
++++ b/conf/machine/raspberrypi4.conf
+@@ -7,15 +7,10 @@ require conf/machine/include/arm/armv7a/tune-cortexa7.inc
+ include conf/machine/include/rpi-base.inc
+ 
+ MACHINE_FEATURES += "pci"
+-MACHINE_EXTRA_RRECOMMENDS += "\
+-    linux-firmware-rpidistro-bcm43455 \
+-    bluez-firmware-rpidistro-bcm4345c0-hcd \
+-    linux-firmware-rpidistro-bcm43456 \
+-    bluez-firmware-rpidistro-bcm4345c5-hcd \
+-"
+ 
+-# 'l' stands for LPAE
+-SDIMG_KERNELIMAGE ?= "kernel7l.img"
++MACHINE_EXTRA_RRECOMMENDS += "${RASPBERRYPI_4_FIRMWARE_PACKAGES}"
++
++SDIMG_KERNELIMAGE ?= "${RASPBERRYPI_4_KERNEL}"
+ UBOOT_MACHINE = "rpi_4_32b_config"
+ SERIAL_CONSOLES ?= "115200;ttyS0"
+ 
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 4+ messages in thread
+* [meta-raspberrypi][PATCH 2/4] multiconfig: Add multiconfig setup for Raspberry Pi 3+4 images
+  2022-09-07 21:39 [meta-raspberrypi][PATCH 1/4] machine: Define firmware packages from separate variables Andrei Gherzan
+@ 2022-09-07 21:39 ` Andrei Gherzan
+  2022-09-07 21:39 ` [meta-raspberrypi][PATCH 3/4] ci: Add jobs for multiconfig builds Andrei Gherzan
+  2022-09-07 21:39 ` [meta-raspberrypi][PATCH 4/4] docs: Add multiconfig documentation Andrei Gherzan
+  2 siblings, 0 replies; 4+ messages in thread
+From: Andrei Gherzan @ 2022-09-07 21:39 UTC (permalink / raw)
+  To: yocto; +Cc: andrei, Andrei Gherzan
+
+From: Andrei Gherzan <andrei.gherzan@huawei.com>
+
+This defines two multiconfigs:
+
+- raspberrypi: can used to generate an image that support both
+  Raspberypi 3 and Raspberrypi 4 booting
+- raspberrypi3: used as a dependency for the above
+
+Signed-off-by: Andrei Gherzan <andrei.gherzan@huawei.com>
+---
+ conf/multiconfig/raspberrypi.conf  | 30 ++++++++++++++++++++++++++++++
+ conf/multiconfig/raspberrypi3.conf |  7 +++++++
+ 2 files changed, 37 insertions(+)
+ create mode 100644 conf/multiconfig/raspberrypi.conf
+ create mode 100644 conf/multiconfig/raspberrypi3.conf
+
+diff --git a/conf/multiconfig/raspberrypi.conf b/conf/multiconfig/raspberrypi.conf
+new file mode 100644
+index 0000000..2b6d6c3
+--- /dev/null
++++ b/conf/multiconfig/raspberrypi.conf
+@@ -0,0 +1,30 @@
++# SPDX-FileCopyrightText: Andrei Gherzan <andrei.gherzan@huawei.com>
++#
++# SPDX-License-Identifier: MIT
++
++TMPDIR = "${TOPDIR}/tmp-multi-raspberrypi"
++
++# Base it on Raspberry Pi 4 (32 bit)
++MACHINE = "raspberrypi4"
++
++#
++# Add boot support for:
++#  - Raspberry Pi 3 (32 bit)
++#
++
++# Make sure the kernel is deployed for all the supported targets.
++do_image_wic[mcdepends] += " \
++	mc:${BB_CURRENT_MC}:raspberrypi3:virtual/kernel:do_deploy \
++"
++
++# Include firmware for all the supported targets.
++MACHINE_EXTRA_RRECOMMENDS:append = " \
++	${RASPBERRYPI_3_FIRMWARE_PACKAGES} \
++"
++
++# Deploy the kernel images for all the supported targets in the boot partition.
++# FIXME: No support for u-boot (yet).
++RASPBERRYPI_3_MULTI_DEPLOY_DIR_IMAGE = "${TOPDIR}/tmp-multi-raspberrypi3/deploy/images/raspberrypi3"
++IMAGE_BOOT_FILES:append = " \
++	${RASPBERRYPI_3_MULTI_DEPLOY_DIR_IMAGE}/${KERNEL_IMAGETYPE_DIRECT};${RASPBERRYPI_3_KERNEL} \
++"
+diff --git a/conf/multiconfig/raspberrypi3.conf b/conf/multiconfig/raspberrypi3.conf
+new file mode 100644
+index 0000000..9fa6245
+--- /dev/null
++++ b/conf/multiconfig/raspberrypi3.conf
+@@ -0,0 +1,7 @@
++# SPDX-FileCopyrightText: Andrei Gherzan <andrei.gherzan@huawei.com>
++#
++# SPDX-License-Identifier: MIT
++
++MACHINE = "raspberrypi3"
++
++TMPDIR = "${TOPDIR}/tmp-multi-raspberrypi3"
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 4+ messages in thread
+* [meta-raspberrypi][PATCH 3/4] ci: Add jobs for multiconfig builds
+  2022-09-07 21:39 [meta-raspberrypi][PATCH 1/4] machine: Define firmware packages from separate variables Andrei Gherzan
+  2022-09-07 21:39 ` [meta-raspberrypi][PATCH 2/4] multiconfig: Add multiconfig setup for Raspberry Pi 3+4 images Andrei Gherzan
+@ 2022-09-07 21:39 ` Andrei Gherzan
+  2022-09-07 21:39 ` [meta-raspberrypi][PATCH 4/4] docs: Add multiconfig documentation Andrei Gherzan
+  2 siblings, 0 replies; 4+ messages in thread
+From: Andrei Gherzan @ 2022-09-07 21:39 UTC (permalink / raw)
+  To: yocto; +Cc: andrei, Andrei Gherzan
+
+From: Andrei Gherzan <andrei.gherzan@huawei.com>
+
+This also fixes a small typo in the normal build matrix.
+
+Signed-off-by: Andrei Gherzan <andrei.gherzan@huawei.com>
+---
+ .github/workflows/yocto-builds.yml | 68 +++++++++++++++++++++++++++++-
+ 1 file changed, 67 insertions(+), 1 deletion(-)
+
+diff --git a/.github/workflows/yocto-builds.yml b/.github/workflows/yocto-builds.yml
+index 824745c..0f2dcf5 100644
+--- a/.github/workflows/yocto-builds.yml
++++ b/.github/workflows/yocto-builds.yml
+@@ -48,7 +48,7 @@ jobs:
+             .github/workflows/docker-images/yocto-builder/**
+             .github/workflows/docker-images/*.sh
+             .github/workflows/yocto-builds.yml
+-            classes/**'
++            classes/**
+             conf/**
+             dynamic-layers/**
+             files/**
+@@ -84,3 +84,69 @@ jobs:
+       - name: Cleanup dangling docker images
+         uses: ./.github/actions/docker-clean-dangling
+         if: always()
++
++  build-multiconfig:
++    strategy:
++      fail-fast: true
++      matrix:
++        machine:
++          - raspberrypi4
++        image: ['mc:raspberrypi:rpi-test-image']
++        distro: [poky]
++    runs-on: [self-hosted, Linux]
++    name: ${{ matrix.machine }}/${{ matrix.image }}/poky/systemd
++    env:
++      DL_DIR: /var/lib/ci/yocto/downloads
++      SSTATE_DIR: /var/lib/ci/yocto/sstate
++    steps:
++      - name: Checkout the code
++        uses: actions/checkout@v2
++        with:
++          fetch-depth: 0
++      - name: Define Yocto build files
++        id: changed-files-specific
++        uses: tj-actions/changed-files@v24
++        with:
++          files: |
++            .github/actions/**
++            .github/workflows/docker-images/yocto-builder/**
++            .github/workflows/docker-images/*.sh
++            .github/workflows/yocto-builds.yml
++            classes/**
++            conf/**
++            dynamic-layers/**
++            files/**
++            lib/**
++            recipes-**
++            wic/**
++      - name: Build a temporary yocto-builder image
++        uses: ./.github/actions/docker-build
++        with:
++          docker_image: yocto-builder
++          id: ${{ github.event.number }}
++        if: steps.changed-files-specific.outputs.any_changed == 'true'
++      - name: Build the image
++        run: |
++          docker run --rm \
++            -v "$GITHUB_WORKSPACE:/work:ro" \
++            -v "$DL_DIR:$DL_DIR:rw" \
++            -v "$SSTATE_DIR:$SSTATE_DIR:rw" \
++            --env "BASE_REF=$GITHUB_BASE_REF" \
++            --env "MACHINE=${{ matrix.machine }}" \
++            --env "DISTRO=${{ matrix.distro }}" \
++            --env "IMAGE=${{ matrix.image }}" \
++            --env "DL_DIR=$DL_DIR" \
++            --env "SSTATE_DIR=$SSTATE_DIR" \
++            --env "BBMULTICONFIG=raspberrypi\ raspberrypi3" \
++            --env "BB_ENV_PASSTHROUGH_ADDITIONS=BBMULTICONFIG" \
++            "yocto-builder-${{ github.event.number }}" \
++            /entrypoint-build.sh
++        if: steps.changed-files-specific.outputs.any_changed == 'true'
++      - name: Cleanup temporary docker image
++        uses: ./.github/actions/docker-clean-image
++        with:
++          docker_image: yocto-builder-${{ github.event.number }}
++        if: always()
++      - name: Cleanup dangling docker images
++        uses: ./.github/actions/docker-clean-dangling
++        if: always()
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 4+ messages in thread
+* [meta-raspberrypi][PATCH 4/4] docs: Add multiconfig documentation
+  2022-09-07 21:39 [meta-raspberrypi][PATCH 1/4] machine: Define firmware packages from separate variables Andrei Gherzan
+  2022-09-07 21:39 ` [meta-raspberrypi][PATCH 2/4] multiconfig: Add multiconfig setup for Raspberry Pi 3+4 images Andrei Gherzan
+  2022-09-07 21:39 ` [meta-raspberrypi][PATCH 3/4] ci: Add jobs for multiconfig builds Andrei Gherzan
+@ 2022-09-07 21:39 ` Andrei Gherzan
+  2 siblings, 0 replies; 4+ messages in thread
+From: Andrei Gherzan @ 2022-09-07 21:39 UTC (permalink / raw)
+  To: yocto; +Cc: andrei, Andrei Gherzan
+
+From: Andrei Gherzan <andrei.gherzan@huawei.com>
+
+Signed-off-by: Andrei Gherzan <andrei.gherzan@huawei.com>
+---
+ docs/index.rst      |  1 +
+ docs/multiconfig.md | 40 ++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 41 insertions(+)
+ create mode 100644 docs/multiconfig.md
+
+diff --git a/docs/index.rst b/docs/index.rst
+index 3f8a088..806ce87 100644
+--- a/docs/index.rst
++++ b/docs/index.rst
+@@ -14,6 +14,7 @@ Contents:
+    readme
+    layer-contents
+    extra-build-config
++   multiconfig
+    extra-apps
+    ipcompliance
+    contributing
+diff --git a/docs/multiconfig.md b/docs/multiconfig.md
+new file mode 100644
+index 0000000..fecbfce
+--- /dev/null
++++ b/docs/multiconfig.md
+@@ -0,0 +1,40 @@
++<!--
++SPDX-FileCopyrightText: Andrei Gherzan <andrei.gherzan@huawei.com>
++
++SPDX-License-Identifier: CC-BY-4.0
++-->
++
++# Multiconfig Support
++
++The build system provides functionality for building multiple configurations in
++the same build invocation while also supporting dependencies between them. For
++more info check the
++[official documentation](https://docs.yoctoproject.org/dev-manual/common-tasks.html#building-images-for-multiple-targets-using-multiple-configurations).
++`meta-raspberrypi` uses this to provide the ability to generate images that can
++boot on multiple targets (for example, being able to boot either a Raspberry Pi
++3 or a Raspberry Pi 4 in 32bit mode using the same image). This is in contrast
++to the classic builds where the `MACHINE` defines the only target intended for
++the final image artefact.
++
++## Generating an Image For Multiple Raspberry Pi Boards
++
++Once you've set up a build environment, the multiconfigs need to be enabled
++adding to the build's `local.conf` the following:
++
++    BBMULTICONFIG += "raspberrypi raspberrypi3"
++
++With that configured, any image can now be build using the `raspberrypi`
++multiconfig.  Here is an example that will build the `core-image-base`:
++
++    bitbake mc:raspberrypi:core-image-base
++
++The final image will be available in:
++
++    <BUILDDIR>/tmp-multi-raspberrypi/deploy/images/raspberrypi4/
++
++This image will boot and provide the support for all the machines listed below.
++
++## Supported Machines for Multiconfig Builds
++
++* raspberrypi3
++* raspberrypi4
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 4+ messages in thread
+end of thread, other threads:[~2022-09-07 21:40 UTC | newest]
+
+Thread overview: 4+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-09-07 21:39 [meta-raspberrypi][PATCH 1/4] machine: Define firmware packages from separate variables Andrei Gherzan
+2022-09-07 21:39 ` [meta-raspberrypi][PATCH 2/4] multiconfig: Add multiconfig setup for Raspberry Pi 3+4 images Andrei Gherzan
+2022-09-07 21:39 ` [meta-raspberrypi][PATCH 3/4] ci: Add jobs for multiconfig builds Andrei Gherzan
+2022-09-07 21:39 ` [meta-raspberrypi][PATCH 4/4] docs: Add multiconfig documentation Andrei Gherzan
+

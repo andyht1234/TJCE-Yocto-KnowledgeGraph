@@ -1,0 +1,236 @@
+* Using custom python modules in classes and functions
+@ 2022-07-22  6:53 Marek Słomiany
+  2022-07-22  8:21 ` [yocto] " Quentin Schulz
+  0 siblings, 1 reply; 3+ messages in thread
+From: Marek Słomiany @ 2022-07-22  6:53 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1153 bytes --]
+
+Hello everyone,
+
+I am working on creating a custom class (basically own image signing) that
+will be using a client's python module, but to simplify I'll use as an
+example a python3 module Magic as it behaves in exactly the same way. I'm
+working on dunfell.
+
+So basically in recipe I am using depends to add the module and it works in
+example like that:
+
+inherit python3native
+DEPENDS += "python3-magic-native"
+do_sometask(){
+        python3 ${S}/testapp.py
+}
+
+and in testapp.py importing magic works fine, but when I'm trying to import
+magic in python function, bitbake-style python functions or in anonymous
+python functions it fails to find the module.
+as an example that do NOT work:
+def foo(d):
+    import magic
+    mime = magic.Magic(mime=True)
+    return "foo"
+
+python do_bar () {
+    bb.warn(foo(d))
+}
+
+Neither it works in do_bar nor in foo as shown above. Always ends up with:
+Exception: ModuleNotFoundError: No module named 'magic'
+
+I have also tried to set variable:
+PYTHON_SITEPACKAGES_DIR =
+"${WORKDIR}/recipe-sysroot/usr/lib/python3.8/site-packages"
+but it does nothing in my case.
+
+Can you help me with this?
+
+Kind Regards,
+Marek Slomiany
+
+[-- Attachment #2: Type: text/html, Size: 1575 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] Using custom python modules in classes and functions
+  2022-07-22  6:53 Using custom python modules in classes and functions Marek Słomiany
+@ 2022-07-22  8:21 ` Quentin Schulz
+  2022-07-22  8:31   ` Marek Słomiany
+  0 siblings, 1 reply; 3+ messages in thread
+From: Quentin Schulz @ 2022-07-22  8:21 UTC (permalink / raw)
+  To: Marek S?omiany, yocto
+
+Hi Marek,
+
+On 7/22/22 08:53, Marek S?omiany wrote:
+> Hello everyone,
+> 
+> I am working on creating a custom class (basically own image signing) that
+> will be using a client's python module, but to simplify I'll use as an
+> example a python3 module Magic as it behaves in exactly the same way. I'm
+> working on dunfell.
+> 
+> So basically in recipe I am using depends to add the module and it works in
+> example like that:
+> 
+> inherit python3native
+> DEPENDS += "python3-magic-native"
+> do_sometask(){
+>          python3 ${S}/testapp.py
+> }
+> 
+> and in testapp.py importing magic works fine, but when I'm trying to import
+> magic in python function, bitbake-style python functions or in anonymous
+> python functions it fails to find the module.
+> as an example that do NOT work:
+> def foo(d):
+>      import magic
+>      mime = magic.Magic(mime=True)
+>      return "foo"
+> 
+> python do_bar () {
+>      bb.warn(foo(d))
+> }
+> 
+> Neither it works in do_bar nor in foo as shown above. Always ends up with:
+> Exception: ModuleNotFoundError: No module named 'magic'
+> 
+> I have also tried to set variable:
+> PYTHON_SITEPACKAGES_DIR =
+> "${WORKDIR}/recipe-sysroot/usr/lib/python3.8/site-packages"
+> but it does nothing in my case.
+> 
+> Can you help me with this?
+> 
+
+Anonymous functions are run during parsing before anything is built. 
+Therefore, I don't think it'll be possible to use a python module from a 
+recipe in an anonymous function.
+
+In order to use native binaries from recipes in another recipe, the 
+binaries need to be in the recipe sysroot-native directory. This is what 
+DEPENDS does behind the scenes, it adds a dependency for one task of 
+your recipe on the population of sysroot-native from all dependencies 
+(DEPENDS). Therefore, your DEPENDS will be enough if it happens in any 
+task running after the do_prepare_recipe_sysroot task of your recipe.
+
+Don't forget that a task is run only if it's in the path of a task 
+requested by the user or another recipe as a dependency. Usually it 
+needs to be in the path of the do_build task. e.g. addtask my_task after 
+do_prepare_recipe_sysroot is not enough if you want my_task to always 
+run during a normal build because nothing has a dependency ON my_task. 
+addtask my_task after do_prepare_recipe_sysroot before do_configure for 
+example, will work, because when do_configure will need to be run, it'll 
+ask my_task to be run too by bitbake.
+
+Cheers,
+Quentin
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] Using custom python modules in classes and functions
+  2022-07-22  8:21 ` [yocto] " Quentin Schulz
+@ 2022-07-22  8:31   ` Marek Słomiany
+  0 siblings, 0 replies; 3+ messages in thread
+From: Marek Słomiany @ 2022-07-22  8:31 UTC (permalink / raw)
+  To: Quentin Schulz; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 3222 bytes --]
+
+Thanks for your reply.
+I am aware that recipe-sysroot has to be populated before and that's fine
+with anonymous functions not working, but even if I make sure that
+recipe-sysroot and recipe-sysroot-native are populated it wont import in
+python functions. In the meantime I have found old mail from 2017 in this
+list https://www.yoctoproject.org/pipermail/yocto/2017-November/039014.html
+according to this in 2017 it was impossible to import modules built by
+yocto. Is this still true?
+
+Regards,
+Marek Slomiany
+
+pt., 22 lip 2022 o 10:21 Quentin Schulz <
+quentin.schulz@theobroma-systems.com> napisał(a):
+
+> Hi Marek,
+>
+> On 7/22/22 08:53, Marek S?omiany wrote:
+> > Hello everyone,
+> >
+> > I am working on creating a custom class (basically own image signing)
+> that
+> > will be using a client's python module, but to simplify I'll use as an
+> > example a python3 module Magic as it behaves in exactly the same way. I'm
+> > working on dunfell.
+> >
+> > So basically in recipe I am using depends to add the module and it works
+> in
+> > example like that:
+> >
+> > inherit python3native
+> > DEPENDS += "python3-magic-native"
+> > do_sometask(){
+> >          python3 ${S}/testapp.py
+> > }
+> >
+> > and in testapp.py importing magic works fine, but when I'm trying to
+> import
+> > magic in python function, bitbake-style python functions or in anonymous
+> > python functions it fails to find the module.
+> > as an example that do NOT work:
+> > def foo(d):
+> >      import magic
+> >      mime = magic.Magic(mime=True)
+> >      return "foo"
+> >
+> > python do_bar () {
+> >      bb.warn(foo(d))
+> > }
+> >
+> > Neither it works in do_bar nor in foo as shown above. Always ends up
+> with:
+> > Exception: ModuleNotFoundError: No module named 'magic'
+> >
+> > I have also tried to set variable:
+> > PYTHON_SITEPACKAGES_DIR =
+> > "${WORKDIR}/recipe-sysroot/usr/lib/python3.8/site-packages"
+> > but it does nothing in my case.
+> >
+> > Can you help me with this?
+> >
+>
+> Anonymous functions are run during parsing before anything is built.
+> Therefore, I don't think it'll be possible to use a python module from a
+> recipe in an anonymous function.
+>
+> In order to use native binaries from recipes in another recipe, the
+> binaries need to be in the recipe sysroot-native directory. This is what
+> DEPENDS does behind the scenes, it adds a dependency for one task of
+> your recipe on the population of sysroot-native from all dependencies
+> (DEPENDS). Therefore, your DEPENDS will be enough if it happens in any
+> task running after the do_prepare_recipe_sysroot task of your recipe.
+>
+> Don't forget that a task is run only if it's in the path of a task
+> requested by the user or another recipe as a dependency. Usually it
+> needs to be in the path of the do_build task. e.g. addtask my_task after
+> do_prepare_recipe_sysroot is not enough if you want my_task to always
+> run during a normal build because nothing has a dependency ON my_task.
+> addtask my_task after do_prepare_recipe_sysroot before do_configure for
+> example, will work, because when do_configure will need to be run, it'll
+> ask my_task to be run too by bitbake.
+>
+> Cheers,
+> Quentin
+>
+
+[-- Attachment #2: Type: text/html, Size: 4003 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2022-07-22  8:31 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-07-22  6:53 Using custom python modules in classes and functions Marek Słomiany
+2022-07-22  8:21 ` [yocto] " Quentin Schulz
+2022-07-22  8:31   ` Marek Słomiany
+

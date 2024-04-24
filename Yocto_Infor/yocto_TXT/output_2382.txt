@@ -1,0 +1,151 @@
+* Problems switching from busybox-udhcpc to dhcpcd
+@ 2022-01-06 14:32 Bryan Evenson
+  0 siblings, 0 replies; 2+ messages in thread
+From: Bryan Evenson @ 2022-01-06 14:32 UTC (permalink / raw)
+  To: yocto
+
+I have a system that is based off core-image-minimal which uses sysvinit and busybox-udhcpc.  I'm trying to switch to dhcpcd because I want to get the NTP server list from the local DHCP server; dhcpcd supports this feature and busybox-udhcpc does not.  I'm on the dunfell branch.  I think I finally got firmware upgrade to work cleanly (with opkg) but I'm having trouble triggering dhcpcd.  It doesn't work straight out of the box and I'm looking for assistance in how to get dhcpcd started.
+
+First, here are the recipe changes I made in my custom layer to install dhcpcd onto my image and for it to get pulled in on firmware upgrade.
+1. I added the following to my busybox_%.bbappend:
+
+Do not install busybox-udcpcd, since we are using dhcpcd
+RRECOMMENDS_${PN} = ""
+
+2. I modified my busybox defconfig to unset all the udhcpc related configuration features
+
+3. I created a dhcpcd_%.bbappend with these contents:
+# Set the package to conflict with busybox-udhcpc
+RCONFLICTS_${PN} = "busybox-udhcpc"
+RREPLACES_${PN} = "busybox-udhcpc"
+
+# Add configuration settings to enable NTP configuration
+PACKAGECONFIG += " \
+                   ntp \
+                 "
+PACKAGECONFIG[ntp] = "--with-hook=ntp, , , ntp"
+
+# Include the hook scripts on the system
+EXTRA_OECONF += " \
+                 --with-hooks \
+                "
+4. In my init-ifupdown_%.bbappend:
+	a. I added dhcpcd to the RDEPENDS list
+	b. I added a script to start dhcpcd and installed it in the ${D}${sysconfdir}/network/if-up directory
+
+5. Here is the if-up script (note: I only have one Ethernet port on this device which will always be eth0):
+#!/bin/sh
+
+# Only do this for eth0 and not the loopback interface
+if [ "$IFACE" == "eth0" ]; then
+  # Start the DHCP client
+  dhcpcd -4 -6 -f /etc/dhcpcd.conf "$IFACE"
+fi
+
+
+I think I'm close, but the dhcpcd never gets called when the Ethernet interface starts up.  As best I can tell from my debugging, I think $IFACE is never set whenever my if-up script is called.  I'm not sure why that is, because I have a pre-up script that depends on $IFACE that has been working for years for me.
+
+Has anyone else made this transition that can offer some more support?  Are there some examples floating around on how to start dhcpcd on ifup that I am missing?
+
+Thanks,
+Bryan Evenson
+
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+* RE: Problems switching from busybox-udhcpc to dhcpcd
+       [not found] <16C7B4F102B4CC94.4141@lists.yoctoproject.org>
+@ 2022-01-10 21:18 ` Bryan Evenson
+  0 siblings, 0 replies; 2+ messages in thread
+From: Bryan Evenson @ 2022-01-10 21:18 UTC (permalink / raw)
+  To: Bryan Evenson, yocto
+
+All,
+
+I solved my problems.
+
+> -----Original Message-----
+> From: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org> On
+> Behalf Of Bryan Evenson via lists.yoctoproject.org
+> Sent: Thursday, January 6, 2022 9:32 AM
+> To: yocto@lists.yoctoproject.org
+> Subject: [yocto] Problems switching from busybox-udhcpc to dhcpcd
+> 
+> I have a system that is based off core-image-minimal which uses sysvinit and
+> busybox-udhcpc.  I'm trying to switch to dhcpcd because I want to get the
+> NTP server list from the local DHCP server; dhcpcd supports this feature and
+> busybox-udhcpc does not.  I'm on the dunfell branch.  I think I finally got
+> firmware upgrade to work cleanly (with opkg) but I'm having trouble
+> triggering dhcpcd.  It doesn't work straight out of the box and I'm looking for
+> assistance in how to get dhcpcd started.
+> 
+> First, here are the recipe changes I made in my custom layer to install dhcpcd
+> onto my image and for it to get pulled in on firmware upgrade.
+> 1. I added the following to my busybox_%.bbappend:
+> 
+> Do not install busybox-udcpcd, since we are using dhcpcd
+> RRECOMMENDS_${PN} = ""
+> 
+> 2. I modified my busybox defconfig to unset all the udhcpc related
+> configuration features
+> 
+> 3. I created a dhcpcd_%.bbappend with these contents:
+> # Set the package to conflict with busybox-udhcpc
+> RCONFLICTS_${PN} = "busybox-udhcpc"
+> RREPLACES_${PN} = "busybox-udhcpc"
+> 
+> # Add configuration settings to enable NTP configuration
+> PACKAGECONFIG += " \
+>                    ntp \
+>                  "
+> PACKAGECONFIG[ntp] = "--with-hook=ntp, , , ntp"
+> 
+> # Include the hook scripts on the system
+> EXTRA_OECONF += " \
+>                  --with-hooks \
+>                 "
+> 4. In my init-ifupdown_%.bbappend:
+> 	a. I added dhcpcd to the RDEPENDS list
+> 	b. I added a script to start dhcpcd and installed it in the
+> ${D}${sysconfdir}/network/if-up directory
+> 
+> 5. Here is the if-up script (note: I only have one Ethernet port on this device
+> which will always be eth0):
+> #!/bin/sh
+> 
+> # Only do this for eth0 and not the loopback interface
+> if [ "$IFACE" == "eth0" ]; then
+>   # Start the DHCP client
+>   dhcpcd -4 -6 -f /etc/dhcpcd.conf "$IFACE"
+> fi
+> 
+> 
+> I think I'm close, but the dhcpcd never gets called when the Ethernet
+> interface starts up.  As best I can tell from my debugging, I think $IFACE is
+> never set whenever my if-up script is called.  I'm not sure why that is,
+> because I have a pre-up script that depends on $IFACE that has been working
+> for years for me.
+
+First, I was having issue even directly calling dhcpcd from the command line with the line I had in my pre-up script.  There have been some updates to the dhcpcd recipe in master that affects the file installation locations.  I copied the dhcpcd recipe in master and put it in my custom layer.  I could then call dhcpcd directly without issue.
+
+Second, I needed to enable the CONFIG_FEATURE_IFUPDOWN_EXTERNAL_DHCP configuration parameter in busybox.  The ifup and ifdown applets from Busybox were not attempted to call dhcpcd without this set.  Once I got both of these fixes in place, I found out that I don't need the if-up script I had created.  Everything is running fine now.
+
+> 
+> Has anyone else made this transition that can offer some more support?  Are
+> there some examples floating around on how to start dhcpcd on ifup that I
+> am missing?
+> 
+> Thanks,
+> Bryan Evenson
+
+Bryan Evenson
+
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2022-01-10 21:18 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-01-06 14:32 Problems switching from busybox-udhcpc to dhcpcd Bryan Evenson
+     [not found] <16C7B4F102B4CC94.4141@lists.yoctoproject.org>
+2022-01-10 21:18 ` Bryan Evenson
+

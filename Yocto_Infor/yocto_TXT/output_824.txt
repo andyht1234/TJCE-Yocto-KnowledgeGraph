@@ -1,0 +1,75 @@
+* Enable parameterised systemd service from different package
+@ 2023-03-24  7:58 Alexander Broekhuis
+  0 siblings, 0 replies; only message in thread
+From: Alexander Broekhuis @ 2023-03-24  7:58 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1821 bytes --]
+
+Hi all,
+
+I've been struggling with this for a while now, and can't seem to find the
+proper way, so I hope someone has some hints for me.
+
+I have one package in which a parameterised systemd unit file is added.
+This package does not add the actual service, only the myservice@.service
+file.
+
+The recipe looks like:
+
+SRC_URI += " \
+    file://myservice@.service \
+ "
+
+inherit systemd
+
+do_install() {
+    install -D -m0644 ${WORKDIR}/docker-compose@.service
+${D}${systemd_system_unitdir}/docker-compose@.service
+}
+
+SYSTEMD_SERVICE:${PN} = "docker-compose@.service"
+
+FILES:${PN} += "${systemd_system_unitdir}/docker-compose@.service"
+
+Since this recipe does not create any actual service, I doubt the systemd
+and service creation is actually needed here.
+
+In 2 different packages I want to add an actual service using this unit
+file, those recipes look like:
+
+inherit systemd
+
+RDEPENDS:${PN} += "myservice"
+SYSTEMD_PACKAGES = "myservice"
+SYSTEMD_SERVICE:${PN} = "myservice@actual.service"
+
+However, the myservice@actual.service does not exist/is not created.
+
+I am not certain if I use SYSTEMD_PACKAGES correctly here and if the
+RDEPENDS is the correct way to add myservice to the dependant packages.
+
+Using a bbappend on myservice does work, however then I end up with both
+services in all images where myservice is added. Which is not what I want,
+different services end up in different images.
+
+Image A: IMAGE_INSTALL += myservice actualservice1
+Image B: IMAGE_INSTALL += myservice actualservice2
+
+I've thought about 2 workarounds:
+1) Create the symbolic link myself, which does feel like a hack
+2) Create a custom systemd preset file myself, which should trigger
+enabling of the service during the first boot
+
+However, reading the documentation of SYSTEMD_PACKAGES, I hoped/expected
+the above recipe would actually work.
+
+[-- Attachment #2: Type: text/html, Size: 4258 bytes --]
+
+^ permalink raw reply	[flat|nested] only message in thread
+only message in thread, other threads:[~2023-03-24  7:59 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-03-24  7:58 Enable parameterised systemd service from different package Alexander Broekhuis
+

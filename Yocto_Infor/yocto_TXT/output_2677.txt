@@ -1,0 +1,586 @@
+* [hardknott][yocto-autobuilder-helper][PATCH] config.json: set max load in PARALLEL_MAKE
+@ 2021-10-25 14:07 Anuj Mittal
+  2021-10-25 16:09 ` [yocto] " Khem Raj
+  0 siblings, 1 reply; 7+ messages in thread
+From: Anuj Mittal @ 2021-10-25 14:07 UTC (permalink / raw)
+  To: yocto, richard.purdie
+
+From: Trevor Gamblin <trevor.gamblin@windriver.com>
+
+Add "-l 52" to PARALLEL_MAKE in config.json to limit Make and Ninja
+builds based on the detected system load. With this option added, if
+either tool has at least one job running and detects that the system
+load exceeds the given value, it will wait until either the system load
+average drops below that limit, or until all other jobs are finished
+before starting additional jobs.
+
+Since most autobuilder machines have 56 cores, this should help keep the
+system from being overloaded during builds.
+
+Reference: https://www.gnu.org/software/make/manual/html_node/Parallel.html
+
+Signed-off-by: Trevor Gamblin <trevor.gamblin@windriver.com>
+Signed-off-by: Richard Purdie <richard.purdie@linuxfoundation.org>
+(cherry picked from commit 5c5fc7bcd221427d34bbac80c9bad315fb6de4df)
+Signed-off-by: Anuj Mittal <anuj.mittal@intel.com>
+---
+ config.json | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/config.json b/config.json
+index 33d36ad..d397365 100644
+--- a/config.json
++++ b/config.json
+@@ -43,7 +43,7 @@
+             "PREMIRRORS = ''",
+             "BB_GENERATE_MIRROR_TARBALLS = '1'",
+             "BB_NUMBER_THREADS = '16'",
+-            "PARALLEL_MAKE = '-j 16'",
++            "PARALLEL_MAKE = '-j 16 -l 52'",
+             "XZ_MEMLIMIT = '5%'",
+             "XZ_THREADS = '8'",
+             "BB_TASK_NICE_LEVEL = '5'",
+-- 
+2.31.1
+
+
+
+^ permalink raw reply related	[flat|nested] 7+ messages in thread
+* Re: [yocto] [hardknott][yocto-autobuilder-helper][PATCH] config.json: set max load in PARALLEL_MAKE
+  2021-10-25 14:07 [hardknott][yocto-autobuilder-helper][PATCH] config.json: set max load in PARALLEL_MAKE Anuj Mittal
+@ 2021-10-25 16:09 ` Khem Raj
+  2021-10-25 16:46   ` Steve Sakoman
+       [not found]   ` <16B153EAC6F6E773.9409@lists.yoctoproject.org>
+  0 siblings, 2 replies; 7+ messages in thread
+From: Khem Raj @ 2021-10-25 16:09 UTC (permalink / raw)
+  To: Anuj Mittal, yocto, richard.purdie
+
+
+
+On 10/25/21 7:07 AM, Anuj Mittal wrote:
+> From: Trevor Gamblin <trevor.gamblin@windriver.com>
+> 
+> Add "-l 52" to PARALLEL_MAKE in config.json to limit Make and Ninja
+> builds based on the detected system load. With this option added, if
+> either tool has at least one job running and detects that the system
+> load exceeds the given value, it will wait until either the system load
+> average drops below that limit, or until all other jobs are finished
+> before starting additional jobs.
+> 
+> Since most autobuilder machines have 56 cores, this should help keep the
+> system from being overloaded during builds.
+> 
+> Reference: https://www.gnu.org/software/make/manual/html_node/Parallel.html
+> 
+> Signed-off-by: Trevor Gamblin <trevor.gamblin@windriver.com>
+> Signed-off-by: Richard Purdie <richard.purdie@linuxfoundation.org>
+> (cherry picked from commit 5c5fc7bcd221427d34bbac80c9bad315fb6de4df)
+> Signed-off-by: Anuj Mittal <anuj.mittal@intel.com>
+> ---
+>   config.json | 2 +-
+>   1 file changed, 1 insertion(+), 1 deletion(-)
+> 
+> diff --git a/config.json b/config.json
+> index 33d36ad..d397365 100644
+> --- a/config.json
+> +++ b/config.json
+> @@ -43,7 +43,7 @@
+>               "PREMIRRORS = ''",
+>               "BB_GENERATE_MIRROR_TARBALLS = '1'",
+>               "BB_NUMBER_THREADS = '16'",
+> -            "PARALLEL_MAKE = '-j 16'",
+> +            "PARALLEL_MAKE = '-j 16 -l 52'",
+
+We have seen a lot of hung builds when we used this option internally on 
+builders, Additionally some packages like bison started to fail 
+intermittently which seemed like a parallel build issue but never got to 
+see why it would happen only with -l enabled.
+
+So this change would need some testing before we make it permanent into AB
+
+>               "XZ_MEMLIMIT = '5%'",
+>               "XZ_THREADS = '8'",
+>               "BB_TASK_NICE_LEVEL = '5'",
+> 
+> 
+> 
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> You automatically follow any topics you start or reply to.
+> View/Reply Online (#55144): https://lists.yoctoproject.org/g/yocto/message/55144
+> Mute This Topic: https://lists.yoctoproject.org/mt/86577772/1997914
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [raj.khem@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+> 
+
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] [hardknott][yocto-autobuilder-helper][PATCH] config.json: set max load in PARALLEL_MAKE
+  2021-10-25 16:09 ` [yocto] " Khem Raj
+@ 2021-10-25 16:46   ` Steve Sakoman
+  2021-10-25 17:00     ` Khem Raj
+       [not found]   ` <16B153EAC6F6E773.9409@lists.yoctoproject.org>
+  1 sibling, 1 reply; 7+ messages in thread
+From: Steve Sakoman @ 2021-10-25 16:46 UTC (permalink / raw)
+  To: Khem Raj; +Cc: Anuj Mittal, yocto, richard.purdie
+
+On Mon, Oct 25, 2021 at 6:09 AM Khem Raj <raj.khem@gmail.com> wrote:
+>
+>
+>
+> On 10/25/21 7:07 AM, Anuj Mittal wrote:
+> > From: Trevor Gamblin <trevor.gamblin@windriver.com>
+> >
+> > Add "-l 52" to PARALLEL_MAKE in config.json to limit Make and Ninja
+> > builds based on the detected system load. With this option added, if
+> > either tool has at least one job running and detects that the system
+> > load exceeds the given value, it will wait until either the system load
+> > average drops below that limit, or until all other jobs are finished
+> > before starting additional jobs.
+> >
+> > Since most autobuilder machines have 56 cores, this should help keep the
+> > system from being overloaded during builds.
+> >
+> > Reference: https://www.gnu.org/software/make/manual/html_node/Parallel.html
+> >
+> > Signed-off-by: Trevor Gamblin <trevor.gamblin@windriver.com>
+> > Signed-off-by: Richard Purdie <richard.purdie@linuxfoundation.org>
+> > (cherry picked from commit 5c5fc7bcd221427d34bbac80c9bad315fb6de4df)
+> > Signed-off-by: Anuj Mittal <anuj.mittal@intel.com>
+> > ---
+> >   config.json | 2 +-
+> >   1 file changed, 1 insertion(+), 1 deletion(-)
+> >
+> > diff --git a/config.json b/config.json
+> > index 33d36ad..d397365 100644
+> > --- a/config.json
+> > +++ b/config.json
+> > @@ -43,7 +43,7 @@
+> >               "PREMIRRORS = ''",
+> >               "BB_GENERATE_MIRROR_TARBALLS = '1'",
+> >               "BB_NUMBER_THREADS = '16'",
+> > -            "PARALLEL_MAKE = '-j 16'",
+> > +            "PARALLEL_MAKE = '-j 16 -l 52'",
+>
+> We have seen a lot of hung builds when we used this option internally on
+> builders, Additionally some packages like bison started to fail
+> intermittently which seemed like a parallel build issue but never got to
+> see why it would happen only with -l enabled.
+>
+> So this change would need some testing before we make it permanent into AB
+
+Which branch did you test this with?  I had some issues when I
+originally added it to dunfell but after the last patch series I am
+getting green a-full and meta-oe builds on the autobuilder.
+
+And master has been running with this for q
+Steve
+
+>
+> >               "XZ_MEMLIMIT = '5%'",
+> >               "XZ_THREADS = '8'",
+> >               "BB_TASK_NICE_LEVEL = '5'",
+> >
+> >
+> >
+> >
+> >
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#55146): https://lists.yoctoproject.org/g/yocto/message/55146
+> Mute This Topic: https://lists.yoctoproject.org/mt/86577772/3620601
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [steve@sakoman.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] [hardknott][yocto-autobuilder-helper][PATCH] config.json: set max load in PARALLEL_MAKE
+       [not found]   ` <16B153EAC6F6E773.9409@lists.yoctoproject.org>
+@ 2021-10-25 16:47     ` Steve Sakoman
+  0 siblings, 0 replies; 7+ messages in thread
+From: Steve Sakoman @ 2021-10-25 16:47 UTC (permalink / raw)
+  To: steve; +Cc: Khem Raj, Anuj Mittal, yocto, richard.purdie
+
+On Mon, Oct 25, 2021 at 6:46 AM Steve Sakoman via
+lists.yoctoproject.org <steve=sakoman.com@lists.yoctoproject.org>
+wrote:
+>
+> On Mon, Oct 25, 2021 at 6:09 AM Khem Raj <raj.khem@gmail.com> wrote:
+> >
+> >
+> >
+> > On 10/25/21 7:07 AM, Anuj Mittal wrote:
+> > > From: Trevor Gamblin <trevor.gamblin@windriver.com>
+> > >
+> > > Add "-l 52" to PARALLEL_MAKE in config.json to limit Make and Ninja
+> > > builds based on the detected system load. With this option added, if
+> > > either tool has at least one job running and detects that the system
+> > > load exceeds the given value, it will wait until either the system load
+> > > average drops below that limit, or until all other jobs are finished
+> > > before starting additional jobs.
+> > >
+> > > Since most autobuilder machines have 56 cores, this should help keep the
+> > > system from being overloaded during builds.
+> > >
+> > > Reference: https://www.gnu.org/software/make/manual/html_node/Parallel.html
+> > >
+> > > Signed-off-by: Trevor Gamblin <trevor.gamblin@windriver.com>
+> > > Signed-off-by: Richard Purdie <richard.purdie@linuxfoundation.org>
+> > > (cherry picked from commit 5c5fc7bcd221427d34bbac80c9bad315fb6de4df)
+> > > Signed-off-by: Anuj Mittal <anuj.mittal@intel.com>
+> > > ---
+> > >   config.json | 2 +-
+> > >   1 file changed, 1 insertion(+), 1 deletion(-)
+> > >
+> > > diff --git a/config.json b/config.json
+> > > index 33d36ad..d397365 100644
+> > > --- a/config.json
+> > > +++ b/config.json
+> > > @@ -43,7 +43,7 @@
+> > >               "PREMIRRORS = ''",
+> > >               "BB_GENERATE_MIRROR_TARBALLS = '1'",
+> > >               "BB_NUMBER_THREADS = '16'",
+> > > -            "PARALLEL_MAKE = '-j 16'",
+> > > +            "PARALLEL_MAKE = '-j 16 -l 52'",
+> >
+> > We have seen a lot of hung builds when we used this option internally on
+> > builders, Additionally some packages like bison started to fail
+> > intermittently which seemed like a parallel build issue but never got to
+> > see why it would happen only with -l enabled.
+> >
+> > So this change would need some testing before we make it permanent into AB
+>
+> Which branch did you test this with?  I had some issues when I
+> originally added it to dunfell but after the last patch series I am
+> getting green a-full and meta-oe builds on the autobuilder.
+>
+> And master has been running with this for q
+
+Accidentally hit send :-)
+
+I intended to say that master has been running with this for quite
+some time now.
+
+> Steve
+>
+> >
+> > >               "XZ_MEMLIMIT = '5%'",
+> > >               "XZ_THREADS = '8'",
+> > >               "BB_TASK_NICE_LEVEL = '5'",
+> > >
+> > >
+> > >
+> > >
+> > >
+> >
+> >
+> >
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#55147): https://lists.yoctoproject.org/g/yocto/message/55147
+> Mute This Topic: https://lists.yoctoproject.org/mt/86577772/3620601
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [steve@sakoman.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] [hardknott][yocto-autobuilder-helper][PATCH] config.json: set max load in PARALLEL_MAKE
+  2021-10-25 16:46   ` Steve Sakoman
+@ 2021-10-25 17:00     ` Khem Raj
+  2021-10-25 17:29       ` Steve Sakoman
+  0 siblings, 1 reply; 7+ messages in thread
+From: Khem Raj @ 2021-10-25 17:00 UTC (permalink / raw)
+  To: Steve Sakoman; +Cc: Anuj Mittal, Yocto-mailing-list, Richard Purdie
+
+On Mon, Oct 25, 2021 at 9:46 AM Steve Sakoman <steve@sakoman.com> wrote:
+>
+> On Mon, Oct 25, 2021 at 6:09 AM Khem Raj <raj.khem@gmail.com> wrote:
+> >
+> >
+> >
+> > On 10/25/21 7:07 AM, Anuj Mittal wrote:
+> > > From: Trevor Gamblin <trevor.gamblin@windriver.com>
+> > >
+> > > Add "-l 52" to PARALLEL_MAKE in config.json to limit Make and Ninja
+> > > builds based on the detected system load. With this option added, if
+> > > either tool has at least one job running and detects that the system
+> > > load exceeds the given value, it will wait until either the system load
+> > > average drops below that limit, or until all other jobs are finished
+> > > before starting additional jobs.
+> > >
+> > > Since most autobuilder machines have 56 cores, this should help keep the
+> > > system from being overloaded during builds.
+> > >
+> > > Reference: https://www.gnu.org/software/make/manual/html_node/Parallel.html
+> > >
+> > > Signed-off-by: Trevor Gamblin <trevor.gamblin@windriver.com>
+> > > Signed-off-by: Richard Purdie <richard.purdie@linuxfoundation.org>
+> > > (cherry picked from commit 5c5fc7bcd221427d34bbac80c9bad315fb6de4df)
+> > > Signed-off-by: Anuj Mittal <anuj.mittal@intel.com>
+> > > ---
+> > >   config.json | 2 +-
+> > >   1 file changed, 1 insertion(+), 1 deletion(-)
+> > >
+> > > diff --git a/config.json b/config.json
+> > > index 33d36ad..d397365 100644
+> > > --- a/config.json
+> > > +++ b/config.json
+> > > @@ -43,7 +43,7 @@
+> > >               "PREMIRRORS = ''",
+> > >               "BB_GENERATE_MIRROR_TARBALLS = '1'",
+> > >               "BB_NUMBER_THREADS = '16'",
+> > > -            "PARALLEL_MAKE = '-j 16'",
+> > > +            "PARALLEL_MAKE = '-j 16 -l 52'",
+> >
+> > We have seen a lot of hung builds when we used this option internally on
+> > builders, Additionally some packages like bison started to fail
+> > intermittently which seemed like a parallel build issue but never got to
+> > see why it would happen only with -l enabled.
+> >
+> > So this change would need some testing before we make it permanent into AB
+>
+> Which branch did you test this with?  I had some issues when I
+> originally added it to dunfell but after the last patch series I am
+> getting green a-full and meta-oe builds on the autobuilder.
+
+it was dunfell primarily
+
+>
+> And master has been running with this for q
+> Steve
+>
+> >
+> > >               "XZ_MEMLIMIT = '5%'",
+> > >               "XZ_THREADS = '8'",
+> > >               "BB_TASK_NICE_LEVEL = '5'",
+> > >
+> > >
+> > >
+> > >
+> > >
+> >
+> > -=-=-=-=-=-=-=-=-=-=-=-
+> > Links: You receive all messages sent to this group.
+> > View/Reply Online (#55146): https://lists.yoctoproject.org/g/yocto/message/55146
+> > Mute This Topic: https://lists.yoctoproject.org/mt/86577772/3620601
+> > Group Owner: yocto+owner@lists.yoctoproject.org
+> > Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [steve@sakoman.com]
+> > -=-=-=-=-=-=-=-=-=-=-=-
+> >
+
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] [hardknott][yocto-autobuilder-helper][PATCH] config.json: set max load in PARALLEL_MAKE
+  2021-10-25 17:00     ` Khem Raj
+@ 2021-10-25 17:29       ` Steve Sakoman
+  2021-10-25 17:36         ` Khem Raj
+  0 siblings, 1 reply; 7+ messages in thread
+From: Steve Sakoman @ 2021-10-25 17:29 UTC (permalink / raw)
+  To: Khem Raj; +Cc: Anuj Mittal, Yocto-mailing-list, Richard Purdie
+
+On Mon, Oct 25, 2021 at 7:00 AM Khem Raj <raj.khem@gmail.com> wrote:
+>
+> On Mon, Oct 25, 2021 at 9:46 AM Steve Sakoman <steve@sakoman.com> wrote:
+> >
+> > On Mon, Oct 25, 2021 at 6:09 AM Khem Raj <raj.khem@gmail.com> wrote:
+> > >
+> > >
+> > >
+> > > On 10/25/21 7:07 AM, Anuj Mittal wrote:
+> > > > From: Trevor Gamblin <trevor.gamblin@windriver.com>
+> > > >
+> > > > Add "-l 52" to PARALLEL_MAKE in config.json to limit Make and Ninja
+> > > > builds based on the detected system load. With this option added, if
+> > > > either tool has at least one job running and detects that the system
+> > > > load exceeds the given value, it will wait until either the system load
+> > > > average drops below that limit, or until all other jobs are finished
+> > > > before starting additional jobs.
+> > > >
+> > > > Since most autobuilder machines have 56 cores, this should help keep the
+> > > > system from being overloaded during builds.
+> > > >
+> > > > Reference: https://www.gnu.org/software/make/manual/html_node/Parallel.html
+> > > >
+> > > > Signed-off-by: Trevor Gamblin <trevor.gamblin@windriver.com>
+> > > > Signed-off-by: Richard Purdie <richard.purdie@linuxfoundation.org>
+> > > > (cherry picked from commit 5c5fc7bcd221427d34bbac80c9bad315fb6de4df)
+> > > > Signed-off-by: Anuj Mittal <anuj.mittal@intel.com>
+> > > > ---
+> > > >   config.json | 2 +-
+> > > >   1 file changed, 1 insertion(+), 1 deletion(-)
+> > > >
+> > > > diff --git a/config.json b/config.json
+> > > > index 33d36ad..d397365 100644
+> > > > --- a/config.json
+> > > > +++ b/config.json
+> > > > @@ -43,7 +43,7 @@
+> > > >               "PREMIRRORS = ''",
+> > > >               "BB_GENERATE_MIRROR_TARBALLS = '1'",
+> > > >               "BB_NUMBER_THREADS = '16'",
+> > > > -            "PARALLEL_MAKE = '-j 16'",
+> > > > +            "PARALLEL_MAKE = '-j 16 -l 52'",
+> > >
+> > > We have seen a lot of hung builds when we used this option internally on
+> > > builders, Additionally some packages like bison started to fail
+> > > intermittently which seemed like a parallel build issue but never got to
+> > > see why it would happen only with -l enabled.
+> > >
+> > > So this change would need some testing before we make it permanent into AB
+> >
+> > Which branch did you test this with?  I had some issues when I
+> > originally added it to dunfell but after the last patch series I am
+> > getting green a-full and meta-oe builds on the autobuilder.
+>
+> it was dunfell primarily
+
+In that case you might want to try again with the current dunfell
+head.  It was a couple of weeks of pain, but I think I've eliminated
+all of the issues with using this patch.
+
+Steve
+
+>
+> >
+> > And master has been running with this for q
+> > Steve
+> >
+> > >
+> > > >               "XZ_MEMLIMIT = '5%'",
+> > > >               "XZ_THREADS = '8'",
+> > > >               "BB_TASK_NICE_LEVEL = '5'",
+> > > >
+> > > >
+> > > >
+> > > >
+> > > >
+> > >
+> > > -=-=-=-=-=-=-=-=-=-=-=-
+> > > Links: You receive all messages sent to this group.
+> > > View/Reply Online (#55146): https://lists.yoctoproject.org/g/yocto/message/55146
+> > > Mute This Topic: https://lists.yoctoproject.org/mt/86577772/3620601
+> > > Group Owner: yocto+owner@lists.yoctoproject.org
+> > > Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [steve@sakoman.com]
+> > > -=-=-=-=-=-=-=-=-=-=-=-
+> > >
+
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] [hardknott][yocto-autobuilder-helper][PATCH] config.json: set max load in PARALLEL_MAKE
+  2021-10-25 17:29       ` Steve Sakoman
+@ 2021-10-25 17:36         ` Khem Raj
+  0 siblings, 0 replies; 7+ messages in thread
+From: Khem Raj @ 2021-10-25 17:36 UTC (permalink / raw)
+  To: Steve Sakoman; +Cc: Anuj Mittal, Yocto-mailing-list, Richard Purdie
+
+On Mon, Oct 25, 2021 at 10:30 AM Steve Sakoman <steve@sakoman.com> wrote:
+>
+> On Mon, Oct 25, 2021 at 7:00 AM Khem Raj <raj.khem@gmail.com> wrote:
+> >
+> > On Mon, Oct 25, 2021 at 9:46 AM Steve Sakoman <steve@sakoman.com> wrote:
+> > >
+> > > On Mon, Oct 25, 2021 at 6:09 AM Khem Raj <raj.khem@gmail.com> wrote:
+> > > >
+> > > >
+> > > >
+> > > > On 10/25/21 7:07 AM, Anuj Mittal wrote:
+> > > > > From: Trevor Gamblin <trevor.gamblin@windriver.com>
+> > > > >
+> > > > > Add "-l 52" to PARALLEL_MAKE in config.json to limit Make and Ninja
+> > > > > builds based on the detected system load. With this option added, if
+> > > > > either tool has at least one job running and detects that the system
+> > > > > load exceeds the given value, it will wait until either the system load
+> > > > > average drops below that limit, or until all other jobs are finished
+> > > > > before starting additional jobs.
+> > > > >
+> > > > > Since most autobuilder machines have 56 cores, this should help keep the
+> > > > > system from being overloaded during builds.
+> > > > >
+> > > > > Reference: https://www.gnu.org/software/make/manual/html_node/Parallel.html
+> > > > >
+> > > > > Signed-off-by: Trevor Gamblin <trevor.gamblin@windriver.com>
+> > > > > Signed-off-by: Richard Purdie <richard.purdie@linuxfoundation.org>
+> > > > > (cherry picked from commit 5c5fc7bcd221427d34bbac80c9bad315fb6de4df)
+> > > > > Signed-off-by: Anuj Mittal <anuj.mittal@intel.com>
+> > > > > ---
+> > > > >   config.json | 2 +-
+> > > > >   1 file changed, 1 insertion(+), 1 deletion(-)
+> > > > >
+> > > > > diff --git a/config.json b/config.json
+> > > > > index 33d36ad..d397365 100644
+> > > > > --- a/config.json
+> > > > > +++ b/config.json
+> > > > > @@ -43,7 +43,7 @@
+> > > > >               "PREMIRRORS = ''",
+> > > > >               "BB_GENERATE_MIRROR_TARBALLS = '1'",
+> > > > >               "BB_NUMBER_THREADS = '16'",
+> > > > > -            "PARALLEL_MAKE = '-j 16'",
+> > > > > +            "PARALLEL_MAKE = '-j 16 -l 52'",
+> > > >
+> > > > We have seen a lot of hung builds when we used this option internally on
+> > > > builders, Additionally some packages like bison started to fail
+> > > > intermittently which seemed like a parallel build issue but never got to
+> > > > see why it would happen only with -l enabled.
+> > > >
+> > > > So this change would need some testing before we make it permanent into AB
+> > >
+> > > Which branch did you test this with?  I had some issues when I
+> > > originally added it to dunfell but after the last patch series I am
+> > > getting green a-full and meta-oe builds on the autobuilder.
+> >
+> > it was dunfell primarily
+>
+> In that case you might want to try again with the current dunfell
+> head.  It was a couple of weeks of pain, but I think I've eliminated
+> all of the issues with using this patch.
+
+OK, I think it will be a while before I can get to tip if dunfell though.
+
+>
+> Steve
+>
+> >
+> > >
+> > > And master has been running with this for q
+> > > Steve
+> > >
+> > > >
+> > > > >               "XZ_MEMLIMIT = '5%'",
+> > > > >               "XZ_THREADS = '8'",
+> > > > >               "BB_TASK_NICE_LEVEL = '5'",
+> > > > >
+> > > > >
+> > > > >
+> > > > >
+> > > > >
+> > > >
+> > > > -=-=-=-=-=-=-=-=-=-=-=-
+> > > > Links: You receive all messages sent to this group.
+> > > > View/Reply Online (#55146): https://lists.yoctoproject.org/g/yocto/message/55146
+> > > > Mute This Topic: https://lists.yoctoproject.org/mt/86577772/3620601
+> > > > Group Owner: yocto+owner@lists.yoctoproject.org
+> > > > Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [steve@sakoman.com]
+> > > > -=-=-=-=-=-=-=-=-=-=-=-
+> > > >
+
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+end of thread, other threads:[~2021-10-25 17:37 UTC | newest]
+
+Thread overview: 7+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-10-25 14:07 [hardknott][yocto-autobuilder-helper][PATCH] config.json: set max load in PARALLEL_MAKE Anuj Mittal
+2021-10-25 16:09 ` [yocto] " Khem Raj
+2021-10-25 16:46   ` Steve Sakoman
+2021-10-25 17:00     ` Khem Raj
+2021-10-25 17:29       ` Steve Sakoman
+2021-10-25 17:36         ` Khem Raj
+     [not found]   ` <16B153EAC6F6E773.9409@lists.yoctoproject.org>
+2021-10-25 16:47     ` Steve Sakoman
+

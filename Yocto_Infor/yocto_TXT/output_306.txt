@@ -1,0 +1,174 @@
+* Yocto on Raspberry Pi 3: Error when building image from a machine conf in a new layer
+@ 2023-08-03  2:07 Crane
+  2023-08-03  3:31 ` [yocto] " Khem Raj
+  0 siblings, 1 reply; 3+ messages in thread
+From: Crane @ 2023-08-03  2:07 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2809 bytes --]
+
+Hello,
+
+I am using Yocto to build a image for Raspberry Pi 3. I don't see a specific group for RaspberryPi and hope to get help from here.
+
+I am using Kirkstone commit and didn't download meta-openembedded as it doesn't say it is needed in README. And it works to build a image.
+
+Now I would like to add a new machine in the my customized layer to make some changes based on the original machine configuration.
+So I copied raspberrypi3.conf from meta-raspberrypi to my new layer first.
+
+But bitbake displays errors as below:
+
+=======================================================================================================
+crane@Ubuntu2204:~/yocto-pi/build$ bitbake -k farview-image-base
+
+Loading cache: 100% |#####################################################################################| Time: 0:00:00
+
+Loaded 657 entries from dependency cache.
+
+WARNING: /home/crane/yocto-pi/sources/poky/meta/recipes-extended/images/core-image-testcontroller.bb: Exception during build_dependencies for IMAGE_BOOT_FILES
+
+WARNING: /home/crane/yocto-pi/sources/poky/meta/recipes-extended/images/core-image-testcontroller.bb: Error during finalise of /home/crane/yocto-pi/sources/poky/meta/recipes-extended/images/core-image-testcontroller.bb
+
+ERROR: ExpansionError during parsing /home/crane/yocto-pi/sources/poky/meta/recipes-extended/images/core-image-testcontroller.bb
+
+Traceback (most recent call last):
+
+File "Var <IMAGE_BOOT_FILES>", line 1, in <module>
+
+File "/home/crane/yocto-pi/sources/meta-raspberrypi/conf/machine/include/rpi-base.inc", line 134, in make_dtb_boot_files(d=<bb.data_smart.DataSmart object at 0x7f4952f3d9c0>):
+
+> return ' '.join([transform(dtb) for dtb in alldtbs.split(' ') if dtb])
+
+bb.data_smart.ExpansionError: Failure expanding variable IMAGE_BOOT_FILES, expression was bootfiles/* ${@make_dtb_boot_files(d)} ${@bb.utils.contains('RPI_USE_U_BOOT', '1', 'zImage u-boot.bin;kernel7.img boot.scr', 'zImage;kernel7.img', d)} which triggered exception TypeError: sequence item 61: expected str instance, NoneType found
+
+The variable dependency chain for the failure is: IMAGE_BOOT_FILES
+
+ERROR: Parsing halted due to errors, see error messages above
+
+Summary: There were 2 WARNING messages.
+
+Summary: There were 2 ERROR messages, returning a non-zero exit code.
+
+crane@Ubuntu2204:~/yocto-pi/build$
+
+=====================================================================================================
+
+I don't understand why it tries to parse core-image-testcontroller.bb, which I don't intentionally use at all.
+I am afraid that the process to create a new machine is not correct.
+
+Does anyone can help with understanding what is missing here? Or it is not the correct way to create a new machine for raspberrypi?
+
+Thanks!
+Crane
+
+[-- Attachment #2: Type: text/html, Size: 13049 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] Yocto on Raspberry Pi 3: Error when building image from a machine conf in a new layer
+  2023-08-03  2:07 Yocto on Raspberry Pi 3: Error when building image from a machine conf in a new layer Crane
+@ 2023-08-03  3:31 ` Khem Raj
+  2023-08-03  4:36   ` Crane
+  0 siblings, 1 reply; 3+ messages in thread
+From: Khem Raj @ 2023-08-03  3:31 UTC (permalink / raw)
+  To: Crane; +Cc: yocto
+
+On Wed, Aug 2, 2023 at 7:07 PM Crane <crane2018@gmail.com> wrote:
+>
+> Hello,
+>
+> I am using Yocto to build a image for Raspberry Pi 3. I don't see a specific group for RaspberryPi and hope to get help from here.
+>
+> I am using Kirkstone commit and didn't download meta-openembedded as it doesn't say it is needed in README. And it works to build a image.
+>
+> Now I would like to add a new machine in the my customized layer to make some changes based on the original machine configuration.
+> So I copied raspberrypi3.conf from meta-raspberrypi to my new layer first.
+>
+> But bitbake displays errors as below:
+>
+> =======================================================================================================
+> crane@Ubuntu2204:~/yocto-pi/build$ bitbake -k farview-image-base
+>
+> Loading cache: 100% |#####################################################################################| Time: 0:00:00
+>
+> Loaded 657 entries from dependency cache.
+>
+> WARNING: /home/crane/yocto-pi/sources/poky/meta/recipes-extended/images/core-image-testcontroller.bb: Exception during build_dependencies for IMAGE_BOOT_FILES
+>
+> WARNING: /home/crane/yocto-pi/sources/poky/meta/recipes-extended/images/core-image-testcontroller.bb: Error during finalise of /home/crane/yocto-pi/sources/poky/meta/recipes-extended/images/core-image-testcontroller.bb
+>
+> ERROR: ExpansionError during parsing /home/crane/yocto-pi/sources/poky/meta/recipes-extended/images/core-image-testcontroller.bb
+>
+> Traceback (most recent call last):
+>
+> File "Var <IMAGE_BOOT_FILES>", line 1, in <module>
+>
+> File "/home/crane/yocto-pi/sources/meta-raspberrypi/conf/machine/include/rpi-base.inc", line 134, in make_dtb_boot_files(d=<bb.data_smart.DataSmart object at 0x7f4952f3d9c0>):
+>
+> > return ' '.join([transform(dtb) for dtb in alldtbs.split(' ') if dtb])
+>
+> bb.data_smart.ExpansionError: Failure expanding variable IMAGE_BOOT_FILES, expression was bootfiles/* ${@make_dtb_boot_files(d)} ${@bb.utils.contains('RPI_USE_U_BOOT', '1', 'zImage u-boot.bin;kernel7.img boot.scr', 'zImage;kernel7.img', d)} which triggered exception TypeError: sequence item 61: expected str instance, NoneType found
+>
+> The variable dependency chain for the failure is: IMAGE_BOOT_FILES
+>
+> ERROR: Parsing halted due to errors, see error messages above
+>
+> Summary: There were 2 WARNING messages.
+>
+> Summary: There were 2 ERROR messages, returning a non-zero exit code.
+>
+> crane@Ubuntu2204:~/yocto-pi/build$
+>
+> =====================================================================================================
+>
+> I don't understand why it tries to parse core-image-testcontroller.bb, which I don't intentionally use at all.
+> I am afraid that the process to create a new machine is not correct.
+>
+> Does anyone can help with understanding what is missing here? Or it is not the correct way to create a new machine for raspberrypi?
+
+What does your new machine conf looks like ?
+Generally you do something like
+
+MACHINEOVERRIDES =. "raspberrypi3:"
+include conf/machine/raspberrypi3.conf
+
+>
+> Thanks!
+> Crane
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> You automatically follow any topics you start or reply to.
+> View/Reply Online (#60700): https://lists.yoctoproject.org/g/yocto/message/60700
+> Mute This Topic: https://lists.yoctoproject.org/mt/100519055/1997914
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [raj.khem@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: Yocto on Raspberry Pi 3: Error when building image from a machine conf in a new layer
+  2023-08-03  3:31 ` [yocto] " Khem Raj
+@ 2023-08-03  4:36   ` Crane
+  0 siblings, 0 replies; 3+ messages in thread
+From: Crane @ 2023-08-03  4:36 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 99 bytes --]
+
+Yes it work.
+It looks simply copying the contents to the new one doesn't work.
+
+Thanks!
+Crane
+
+[-- Attachment #2: Type: text/html, Size: 115 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2023-08-03  4:36 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-08-03  2:07 Yocto on Raspberry Pi 3: Error when building image from a machine conf in a new layer Crane
+2023-08-03  3:31 ` [yocto] " Khem Raj
+2023-08-03  4:36   ` Crane
+

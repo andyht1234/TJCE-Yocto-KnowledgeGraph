@@ -1,0 +1,196 @@
+* [meta-security][PATCH 1/2] firejail: Add new package
+@ 2022-06-18 17:54 Armin Kuster
+  2022-06-18 17:54 ` [meta-security][PATCH 2/2] oeqa: Add a very basic firejail test Armin Kuster
+  0 siblings, 1 reply; 2+ messages in thread
+From: Armin Kuster @ 2022-06-18 17:54 UTC (permalink / raw)
+  To: yocto
+
+Signed-off-by: Armin Kuster <akuster808@gmail.com>
+---
+ .../exclude_seccomp_util_compiles.patch       | 45 ++++++++++++++
+ recipes-security/Firejail/firejail_0.9.70.bb  | 61 +++++++++++++++++++
+ 2 files changed, 106 insertions(+)
+ create mode 100644 recipes-security/Firejail/firejail/exclude_seccomp_util_compiles.patch
+ create mode 100644 recipes-security/Firejail/firejail_0.9.70.bb
+
+diff --git a/recipes-security/Firejail/firejail/exclude_seccomp_util_compiles.patch b/recipes-security/Firejail/firejail/exclude_seccomp_util_compiles.patch
+new file mode 100644
+index 0000000..a32720a
+--- /dev/null
++++ b/recipes-security/Firejail/firejail/exclude_seccomp_util_compiles.patch
+@@ -0,0 +1,45 @@
++Exclude all the seccomp files to run during build.
++
++Upstream-Status: Inappropriate [embedded specific]
++There are some files that need to run to generate the appropriate files
++we are currently doing this on the target. 
++Signed-off-by: Armin Kuster <akuster808@gmail.com>
++
++Index: git/Makefile.in
++===================================================================
++--- git.orig/Makefile.in
+++++ git/Makefile.in
++@@ -34,7 +34,6 @@ MYDIRS = src/lib $(MAN_SRC) $(COMPLETION
++ MYLIBS = src/libpostexecseccomp/libpostexecseccomp.so src/libtrace/libtrace.so src/libtracelog/libtracelog.so
++ COMPLETIONS = src/zsh_completion/_firejail src/bash_completion/firejail.bash_completion
++ MANPAGES = firejail.1 firemon.1 firecfg.1 firejail-profile.5 firejail-login.5 firejail-users.5 jailcheck.1
++-SECCOMP_FILTERS = seccomp seccomp.debug seccomp.32 seccomp.block_secondary seccomp.mdwx seccomp.mdwx.32
++ ALL_ITEMS = $(APPS) $(SBOX_APPS) $(SBOX_APPS_NON_DUMPABLE) $(MYLIBS)
++ 
++ .PHONY: all_items $(ALL_ITEMS)
++@@ -52,7 +51,7 @@ $(MANPAGES): src/man
++ 
++ man: $(MANPAGES)
++ 
++-filters: $(SECCOMP_FILTERS) $(SBOX_APPS_NON_DUMPABLE)
+++filters: $(SBOX_APPS_NON_DUMPABLE)
++ seccomp: src/fseccomp/fseccomp src/fsec-optimize/fsec-optimize
++ 	src/fseccomp/fseccomp default seccomp
++ 	src/fsec-optimize/fsec-optimize seccomp
++@@ -81,7 +80,6 @@ clean:
++ 	done
++ 	$(MAKE) -C test clean
++ 	rm -f $(MANPAGES) $(MANPAGES:%=%.gz) firejail*.rpm
++-	rm -f $(SECCOMP_FILTERS)
++ 	rm -f test/utils/index.html*
++ 	rm -f test/utils/wget-log
++ 	rm -f test/utils/firejail-test-file*
++@@ -119,7 +117,7 @@ endif
++ 	# libraries and plugins
++ 	install -m 0755 -d $(DESTDIR)$(libdir)/firejail
++ 	install -m 0755 -t $(DESTDIR)$(libdir)/firejail src/firecfg/firejail-welcome.sh
++-	install -m 0644 -t $(DESTDIR)$(libdir)/firejail $(MYLIBS) $(SECCOMP_FILTERS)
+++	install -m 0644 -t $(DESTDIR)$(libdir)/firejail $(MYLIBS) 
++ 	install -m 0755 -t $(DESTDIR)$(libdir)/firejail $(SBOX_APPS)
++ 	install -m 0755 -t $(DESTDIR)$(libdir)/firejail src/profstats/profstats
++ 	# plugins w/o read permission (non-dumpable)
+diff --git a/recipes-security/Firejail/firejail_0.9.70.bb b/recipes-security/Firejail/firejail_0.9.70.bb
+new file mode 100644
+index 0000000..fc9066b
+--- /dev/null
++++ b/recipes-security/Firejail/firejail_0.9.70.bb
+@@ -0,0 +1,61 @@
++#
++# Copyright 2022 Armin Kuster <akuster808@gmail.com>
++#
++SUMMARY = "Linux namespaces and seccomp-bpf sandbox"
++DESCRIPTION = "Firejail is a SUID sandbox program that reduces the risk of security breaches \
++by restricting the running environment of untrusted applications using Linux namespaces, \
++seccomp-bpf and Linux capabilities."
++
++LIC_FILES_CHKSUM = "file://COPYING;md5=b234ee4d69f5fce4486a80fdaf4a4263"
++LICENSE = "GPL-2.0-only"
++
++SRCREV = "b4b08d21cd95725c9d55dfdb6987fcc6d7893247"
++SRC_URI = "git://github.com/netblue30/firejail.git;protocol=https;branch=master \
++           file://exclude_seccomp_util_compiles.patch \
++           "
++
++DEPENDS = "libseccomp"
++
++S = "${WORKDIR}/git"
++
++inherit autotools-brokensep pkgconfig bash-completion features_check
++
++REQUIRED_DISTRO_FEATURES = "seccomp"
++
++PACKAGECONFIG ?= ""
++PACKAGECONFIG += "${@bb.utils.contains('DISTRO_FEATURES', 'apparmor', 'apparmor', '', d)}"
++PACKAGECONFIG += "${@bb.utils.contains('DISTRO_FEATURES', 'selinux', 'selinux', '', d)}"
++PACKAGECONFIG += "${@bb.utils.contains('DISTRO_FEATURES', 'x11', 'x11', '', d)}"
++
++PACKAGECONFIG[apparmor] = "--enable-apparmor, --disable-apparmor, apparmor, apparmor"
++PACKAGECONFIG[selinux] = "--enable-selinux, --disable-selinux, libselinux"
++PACKAGECONFIG[x11] = " --enable-x11, --disable-x11, "
++PACKAGECONFIG[dbusproxy] = ", --disable-dbusproxy, "
++PACKAGECONFIG[notmpfs] = ", --disable-usertmpfs  ,"
++PACKAGECONFIG[nofiretunnel] = ", --disable-firetunnel , "
++PACKAGECONFIG[noprivatehome] = ", --disable-private-home, "
++PACKAGECONFIG[nochroot] = ", --disable-chroot, "
++PACKAGECONFIG[nonetwork] = ", --disable-network, "
++PACKAGECONFIG[nouserns] = ", --disable-userns, "
++PACKAGECONFIG[nofiletransfer] = ", --disable-file-transfer, "
++PACKAGECONFIG[nosuid] = ", --disable-suid, "
++
++EXTRA_OECONF = "--disable-man --enable-busybox-workaround"
++
++PACKAGES:append = " ${PN}-vim ${PN}-zsh"
++
++FILES:${PN}-vim = "${datadir}/vim/"
++FILES:${PN}-zsh = "${datadir}/zsh/"
++
++pkg_postinst_ontarget:${PN} () {
++    ${libdir}/${BPN}/fseccomp default ${libdir}/${BPN}/seccomp
++    ${libdir}/${BPN}/fsec-optimize ${libdir}/${BPN}/seccomp
++    ${libdir}/${BPN}/fseccomp default ${libdir}/${BPN}/seccomp.debug allow-debuggers
++    ${libdir}/${BPN}/fsec-optimize ${libdir}/${BPN}/seccomp.debug
++    ${libdir}/${BPN}/fseccomp secondary 32 ${libdir}/${BPN}/seccomp.32
++    ${libdir}/${BPN}/fsec-optimize ${libdir}/${BPN}/seccomp.32
++    ${libdir}/${BPN}/fseccomp secondary block ${libdir}/${BPN}/seccomp.block_secondary
++    ${libdir}/${BPN}/fseccomp memory-deny-write-execute ${libdir}/${BPN}/seccomp.mdwx
++}
++
++RDEPENDS:${PN} = "bash"
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 2+ messages in thread
+* [meta-security][PATCH 2/2] oeqa: Add a very basic firejail test
+  2022-06-18 17:54 [meta-security][PATCH 1/2] firejail: Add new package Armin Kuster
+@ 2022-06-18 17:54 ` Armin Kuster
+  0 siblings, 0 replies; 2+ messages in thread
+From: Armin Kuster @ 2022-06-18 17:54 UTC (permalink / raw)
+  To: yocto
+
+Currently check if --help works.
+
+RESULTS:
+RESULTS - ping.PingTest.test_ping: PASSED (0.07s)
+RESULTS - ssh.SSHTest.test_ssh: PASSED (2.41s)
+RESULTS - firejail.FirejailTest.test_firejail_basic: PASSED (1.30s)
+
+Signed-off-by: Armin Kuster <akuster808@gmail.com>
+---
+ lib/oeqa/runtime/cases/firejail.py | 18 ++++++++++++++++++
+ 1 file changed, 18 insertions(+)
+ create mode 100644 lib/oeqa/runtime/cases/firejail.py
+
+diff --git a/lib/oeqa/runtime/cases/firejail.py b/lib/oeqa/runtime/cases/firejail.py
+new file mode 100644
+index 0000000..88a8dda
+--- /dev/null
++++ b/lib/oeqa/runtime/cases/firejail.py
+@@ -0,0 +1,18 @@
++# Copyright (C) 2022 Armin Kuster <akuster808@gmail.com>
++#
++import re
++
++from oeqa.runtime.case import OERuntimeTestCase
++from oeqa.core.decorator.depends import OETestDepends
++from oeqa.runtime.decorator.package import OEHasPackage
++
++class FirejailTest(OERuntimeTestCase):
++
++    @OEHasPackage(['firejail'])
++    @OEHasPackage(['libseccomp'])
++    @OETestDepends(['ssh.SSHTest.test_ssh'])
++    def test_firejail_basic(self):
++        status, output = self.target.run('firejail --help')
++        msg = ('Firejail --help command does not work as expected. '
++               'Status and output:%s and %s' % (status, output))
++        self.assertEqual(status, 0, msg = msg)
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2022-06-18 17:54 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-06-18 17:54 [meta-security][PATCH 1/2] firejail: Add new package Armin Kuster
+2022-06-18 17:54 ` [meta-security][PATCH 2/2] oeqa: Add a very basic firejail test Armin Kuster
+

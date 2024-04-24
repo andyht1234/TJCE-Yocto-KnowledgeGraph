@@ -1,0 +1,2060 @@
+* [OE-Core][PATCH v2 0/4] recipetool: Add handler to create go recipes
+@ 2023-10-17 13:26 lukas.funke-oss
+  2023-10-17 13:26 ` [OE-Core][PATCH v2 1/4] classes: go-vendor: Add go-vendor class lukas.funke-oss
+                   ` (4 more replies)
+  0 siblings, 5 replies; 15+ messages in thread
+From: lukas.funke-oss @ 2023-10-17 13:26 UTC (permalink / raw)
+  To: openembedded-core
+  Cc: Bruce Ashfield, Vyacheslav Yurkov, Martin Jansa, Lukas Funke
+
+From: Lukas Funke <lukas.funke@weidmueller.com>
+
+This patch series adds a recipetool handler in order to create 'go' recipes.
+Each recipe contains a list of dependencies in their SRC_URI
+variable which are derived from the projects `go.mod` file. For each
+dependency the corresponding license file uri/hash is added.
+
+The recipe may not work ad-hoc, but is a good starting point to create
+a working recipe and have a working offline-build.
+
+Lukas Funke (4):
+  classes: go-vendor: Add go-vendor class
+  selftest: recipetool: Add test for go recipe handler
+  recipetool: Ignore *.go files while scanning for licenses
+  recipetool: Add handler to create go recipes
+
+ meta/classes/go-vendor.bbclass             | 135 ++++
+ meta/lib/oeqa/selftest/cases/recipetool.py | 163 +++++
+ scripts/lib/recipetool/create.py           |   2 +-
+ scripts/lib/recipetool/create_go.py        | 730 +++++++++++++++++++++
+ 4 files changed, 1029 insertions(+), 1 deletion(-)
+ create mode 100644 meta/classes/go-vendor.bbclass
+ create mode 100644 scripts/lib/recipetool/create_go.py
+
+-- 
+2.30.2
+
+
+
+^ permalink raw reply	[flat|nested] 15+ messages in thread
+* [OE-Core][PATCH v2 1/4] classes: go-vendor: Add go-vendor class
+  2023-10-17 13:26 [OE-Core][PATCH v2 0/4] recipetool: Add handler to create go recipes lukas.funke-oss
+@ 2023-10-17 13:26 ` lukas.funke-oss
+  2023-10-18  6:36   ` Ulrich Ölmann
+  2023-10-17 13:26 ` [OE-Core][PATCH v2 2/4] selftest: recipetool: Add test for go recipe handler lukas.funke-oss
+                   ` (3 subsequent siblings)
+  4 siblings, 1 reply; 15+ messages in thread
+From: lukas.funke-oss @ 2023-10-17 13:26 UTC (permalink / raw)
+  To: openembedded-core
+  Cc: Bruce Ashfield, Vyacheslav Yurkov, Martin Jansa, Lukas Funke
+
+From: Lukas Funke <lukas.funke@weidmueller.com>
+
+Signed-off-by: Lukas Funke <lukas.funke@weidmueller.com>
+---
+ meta/classes/go-vendor.bbclass | 135 +++++++++++++++++++++++++++++++++
+ 1 file changed, 135 insertions(+)
+ create mode 100644 meta/classes/go-vendor.bbclass
+
+diff --git a/meta/classes/go-vendor.bbclass b/meta/classes/go-vendor.bbclass
+new file mode 100644
+index 0000000000..13f1b8b2be
+--- /dev/null
++++ b/meta/classes/go-vendor.bbclass
+@@ -0,0 +1,135 @@
++#
++# Copyright 2023 (C) Weidmueller GmbH & Co KG
++# Author: Lukas Funke <lukas.funke@weidmueller.com>
++#
++# Handle Go vendor support for offline builds
++#
++# When importing Go modules, Go downloads the imported module using
++# a network (proxy) connection ahead of the compile stage. This contradicts 
++# the yocto build concept of fetching every source ahead of build-time
++# and supporting offline builds.
++#
++# To support offline builds, we use Go 'vendoring': module dependencies are 
++# downloaded during the fetch-phase and unpacked into the modules 'vendor'
++# folder. Additinally a manifest file is generated for the 'vendor' folder
++# 
++
++inherit go-mod
++
++def go_src_uri(repo, version, path=None, subdir=None, \
++                vcs='git', replaces=None, pathmajor=None):
++
++    destsuffix = "git/src/import/vendor.fetch"
++    go_module_path = repo if not path else path
++
++    src_uri = "{}://{}" \
++              ";name={}" \
++              "".format(vcs, repo, \
++                        go_module_path.replace('/', '.'))
++
++    src_uri += ";destsuffix={}/{}@{}".format(destsuffix, \
++                                                go_module_path, \
++                                                version)
++
++    if vcs == "git":
++        src_uri += ";nobranch=1;protocol=https"
++    if replaces:
++        src_uri += ";go_module_replacement={}".format(replaces)
++    if subdir:
++        src_uri += ";go_subdir={}".format(subdir)
++    if pathmajor:
++        src_uri += ";go_pathmajor={}".format(pathmajor)
++
++    return src_uri
++
++
++python do_go_vendor() {
++    import shutil
++
++    src_uri = (d.getVar('SRC_URI') or "").split()
++
++    if len(src_uri) == 0:
++        bb.error("SRC_URI is empty")
++        return
++
++    default_destsuffix = "git/src/import/vendor.fetch"
++    fetcher = bb.fetch2.Fetch(src_uri, d)
++    go_import = d.getVar('GO_IMPORT')
++    source_dir = d.getVar('S')
++
++    vendor_dir = os.path.join(source_dir, *['src', go_import, 'vendor'])
++    import_dir = os.path.join(source_dir, *['src', 'import', 'vendor.fetch'])
++
++    bb.utils.mkdirhier(vendor_dir)
++    modules = {}
++
++    for url in fetcher.urls:
++        srcuri = fetcher.ud[url].host + fetcher.ud[url].path
++
++        # Skip main module for which the recipe is actually created
++        if srcuri == go_import:
++            continue
++
++        # Skip local files
++        if fetcher.ud[url].type == 'file':
++            continue
++
++        destsuffix = fetcher.ud[url].parm.get('destsuffix')
++        # We derive the module path / version in the following manner (exmaple):
++        # 
++        # destsuffix = git/src/import/vendor.fetch/github.com/foo/bar@v1.2.3
++        # p = github.com/foo/bar@v1.2.3
++        # path = github.com/foo/bar
++        # version = v1.2.3
++
++        p = destsuffix[len(default_destsuffix)+1:]
++        path, version = p.split('@')
++
++        subdir = fetcher.ud[url].parm.get('go_subdir')
++        subdir = "" if not subdir else subdir
++
++        pathMajor = fetcher.ud[url].parm.get('go_pathmajor')
++        pathMajor = "" if not pathMajor else pathMajor
++
++        base = path[:-(len(subdir)+len(pathMajor))-1]
++        r = fetcher.ud[url].parm.get('go_module_replacement')
++
++        if not path in modules and not r:
++            modules[path] =   {
++                                "version": version,
++                                "src": os.path.join(import_dir, *[p, subdir]),
++                                "subdir": subdir,
++                                "pathMajor": pathMajor,
++                              }
++
++    for module_key in sorted(modules):
++
++        # only take the version which is explicitly listed
++        # as a dependency in the go.mod
++        module = modules[module_key]
++        src = module['src']
++
++        # If the module is released at major version 2 or higher, the module
++        # path must end with a major version suffix like /v2.
++        # This may or may not be part of the subdirectory name
++        #
++        # https://go.dev/ref/mod#modules-overview
++        srcMajorVersion = os.path.join(src, module['pathMajor'].strip('/'))
++        if os.path.exists(srcMajorVersion):
++            src = srcMajorVersion
++        dst = os.path.join(vendor_dir, module_key)
++        if os.path.exists(dst):
++            shutil.rmtree(dst)
++
++        bb.debug(1, "cp %s --> %s" % (src, dst))
++        shutil.copytree(src, dst, symlinks=True, \
++            ignore=shutil.ignore_patterns(".git", \
++                                            "vendor", \
++                                            "*.md", \
++                                            "*._test.go"))
++    # Copy vendor manifest
++    bb.debug(1, "cp %s --> %s" % (os.path.join(d.getVar('WORKDIR'), "modules.txt"), vendor_dir))
++    shutil.copy2(os.path.join(d.getVar('WORKDIR'), "modules.txt"), vendor_dir)
++}
++
++addtask go_vendor before do_populate_lic after do_unpack
+-- 
+2.30.2
+
+
+
+^ permalink raw reply related	[flat|nested] 15+ messages in thread
+* [OE-Core][PATCH v2 2/4] selftest: recipetool: Add test for go recipe handler
+  2023-10-17 13:26 [OE-Core][PATCH v2 0/4] recipetool: Add handler to create go recipes lukas.funke-oss
+  2023-10-17 13:26 ` [OE-Core][PATCH v2 1/4] classes: go-vendor: Add go-vendor class lukas.funke-oss
+@ 2023-10-17 13:26 ` lukas.funke-oss
+  2023-10-17 13:26 ` [OE-Core][PATCH v2 3/4] recipetool: Ignore *.go files while scanning for licenses lukas.funke-oss
+                   ` (2 subsequent siblings)
+  4 siblings, 0 replies; 15+ messages in thread
+From: lukas.funke-oss @ 2023-10-17 13:26 UTC (permalink / raw)
+  To: openembedded-core
+  Cc: Bruce Ashfield, Vyacheslav Yurkov, Martin Jansa, Lukas Funke
+
+From: Lukas Funke <lukas.funke@weidmueller.com>
+
+This commit adds a test for the go recipetool handler. The choosen go
+project to test the created recipe was picked randomly. The SRC_URIs and
+the LIC_FILES_CHKSUMs are checked against there reference values.
+
+Signed-off-by: Lukas Funke <lukas.funke@weidmueller.com>
+---
+ meta/lib/oeqa/selftest/cases/recipetool.py | 163 +++++++++++++++++++++
+ 1 file changed, 163 insertions(+)
+
+diff --git a/meta/lib/oeqa/selftest/cases/recipetool.py b/meta/lib/oeqa/selftest/cases/recipetool.py
+index 48661bee6f..6f3d5df50c 100644
+--- a/meta/lib/oeqa/selftest/cases/recipetool.py
++++ b/meta/lib/oeqa/selftest/cases/recipetool.py
+@@ -532,6 +532,169 @@ class RecipetoolTests(RecipetoolBase):
+         libpath = os.path.join(get_bb_var('COREBASE'), 'scripts', 'lib', 'recipetool')
+         sys.path.insert(0, libpath)
+ 
++    def test_recipetool_create_go(self):
++        # Basic test to check go recipe generation
++        def urifiy(url, version, modulepath = None, pathmajor = None, subdir = None):
++            modulepath = ",path='%s'" % modulepath if len(modulepath) else ''
++            pathmajor = ",pathmajor='%s'" % pathmajor if len(pathmajor) else ''
++            subdir = ",subdir='%s'" % subdir if len(subdir) else ''
++            return "${@go_src_uri('%s','%s'%s%s%s)}" % (url, version, modulepath, pathmajor, subdir)
++
++        temprecipe = os.path.join(self.tempdir, 'recipe')
++        os.makedirs(temprecipe)
++        recipefile = os.path.join(temprecipe, 'edgex-go_git.bb')
++        srcuri = 'https://github.com/edgexfoundry/edgex-go.git'
++        srcrev = "v3.0.0"
++        result = runCmd('recipetool create -o %s %s -S %s' % (temprecipe, srcuri, srcrev))
++        self.assertTrue(os.path.isfile(recipefile))
++        checkvars = {}
++        src_uri = {'git://${GO_IMPORT};destsuffix=git/src/${GO_IMPORT};nobranch=1;name=${BPN};protocol=https',
++                   'file://modules.txt'}
++        checkvars['LIC_FILES_CHKSUM'] = set(
++                ['file://src/${GO_IMPORT}/LICENSE;md5=8f8bc924cf73f6a32381e5fd4c58d603',
++                 'file://src/${GO_IMPORT}/vendor/github.com/Microsoft/go-winio/LICENSE;md5=69205ff73858f2c22b2ca135b557e8ef',
++                 'file://src/${GO_IMPORT}/vendor/github.com/armon/go-metrics/LICENSE;md5=d2d77030c0183e3d1e66d26dc1f243be',
++                 'file://src/${GO_IMPORT}/vendor/github.com/cenkalti/backoff/LICENSE;md5=1571d94433e3f3aa05267efd4dbea68b',
++                 'file://src/${GO_IMPORT}/vendor/github.com/davecgh/go-spew/LICENSE;md5=c06795ed54b2a35ebeeb543cd3a73e56',
++                 'file://src/${GO_IMPORT}/vendor/github.com/eclipse/paho.mqtt.golang/LICENSE;md5=dcdb33474b60c38efd27356d8f2edec7',
++                 'file://src/${GO_IMPORT}/vendor/github.com/eclipse/paho.mqtt.golang/edl-v10;md5=3adfcc70f5aeb7a44f3f9b495aa1fbf3',
++                 'file://src/${GO_IMPORT}/vendor/github.com/edgexfoundry/go-mod-bootstrap/v3/LICENSE;md5=0d6dae39976133b2851fba4c1e1275ff',
++                 'file://src/${GO_IMPORT}/vendor/github.com/edgexfoundry/go-mod-configuration/v3/LICENSE;md5=0d6dae39976133b2851fba4c1e1275ff',
++                 'file://src/${GO_IMPORT}/vendor/github.com/edgexfoundry/go-mod-core-contracts/v3/LICENSE;md5=0d6dae39976133b2851fba4c1e1275ff',
++                 'file://src/${GO_IMPORT}/vendor/github.com/edgexfoundry/go-mod-messaging/v3/LICENSE;md5=0d6dae39976133b2851fba4c1e1275ff',
++                 'file://src/${GO_IMPORT}/vendor/github.com/edgexfoundry/go-mod-registry/v3/LICENSE;md5=0d6dae39976133b2851fba4c1e1275ff',
++                 'file://src/${GO_IMPORT}/vendor/github.com/edgexfoundry/go-mod-secrets/v3/LICENSE;md5=f9fa2f4f8e0ef8cc7b5dd150963eb457',
++                 'file://src/${GO_IMPORT}/vendor/github.com/fatih/color/LICENSE.md;md5=316e6d590bdcde7993fb175662c0dd5a',
++                 'file://src/${GO_IMPORT}/vendor/github.com/fxamacker/cbor/v2/LICENSE;md5=827f5a2fa861382d35a3943adf9ebb86',
++                 'file://src/${GO_IMPORT}/vendor/github.com/go-jose/go-jose/v3/LICENSE;md5=3b83ef96387f14655fc854ddc3c6bd57',
++                 'file://src/${GO_IMPORT}/vendor/github.com/go-jose/go-jose/v3/json/LICENSE;md5=591778525c869cdde0ab5a1bf283cd81',
++                 'file://src/${GO_IMPORT}/vendor/github.com/go-kit/log/LICENSE;md5=5b7c15ad5fffe2ff6e9d58a6c161f082',
++                 'file://src/${GO_IMPORT}/vendor/github.com/go-logfmt/logfmt/LICENSE;md5=98e39517c38127f969de33057067091e',
++                 'file://src/${GO_IMPORT}/vendor/github.com/go-playground/locales/LICENSE;md5=3ccbda375ee345400ad1da85ba522301',
++                 'file://src/${GO_IMPORT}/vendor/github.com/go-playground/universal-translator/LICENSE;md5=2e2b21ef8f61057977d27c727c84bef1',
++                 'file://src/${GO_IMPORT}/vendor/github.com/go-playground/validator/v10/LICENSE;md5=a718a0f318d76f7c5d510cbae84f0b60',
++                 'file://src/${GO_IMPORT}/vendor/github.com/go-redis/redis/v7/LICENSE;md5=58103aa5ea1ee9b7a369c9c4a95ef9b5',
++                 'file://src/${GO_IMPORT}/vendor/github.com/golang/protobuf/LICENSE;md5=939cce1ec101726fa754e698ac871622',
++                 'file://src/${GO_IMPORT}/vendor/github.com/gomodule/redigo/LICENSE;md5=2ee41112a44fe7014dce33e26468ba93',
++                 'file://src/${GO_IMPORT}/vendor/github.com/google/uuid/LICENSE;md5=88073b6dd8ec00fe09da59e0b6dfded1',
++                 'file://src/${GO_IMPORT}/vendor/github.com/gorilla/mux/LICENSE;md5=33fa1116c45f9e8de714033f99edde13',
++                 'file://src/${GO_IMPORT}/vendor/github.com/gorilla/websocket/LICENSE;md5=c007b54a1743d596f46b2748d9f8c044',
++                 'file://src/${GO_IMPORT}/vendor/github.com/hashicorp/consul/api/LICENSE;md5=b8a277a612171b7526e9be072f405ef4',
++                 'file://src/${GO_IMPORT}/vendor/github.com/hashicorp/errwrap/LICENSE;md5=b278a92d2c1509760384428817710378',
++                 'file://src/${GO_IMPORT}/vendor/github.com/hashicorp/go-cleanhttp/LICENSE;md5=65d26fcc2f35ea6a181ac777e42db1ea',
++                 'file://src/${GO_IMPORT}/vendor/github.com/hashicorp/go-hclog/LICENSE;md5=ec7f605b74b9ad03347d0a93a5cc7eb8',
++                 'file://src/${GO_IMPORT}/vendor/github.com/hashicorp/go-immutable-radix/LICENSE;md5=65d26fcc2f35ea6a181ac777e42db1ea',
++                 'file://src/${GO_IMPORT}/vendor/github.com/hashicorp/go-multierror/LICENSE;md5=d44fdeb607e2d2614db9464dbedd4094',
++                 'file://src/${GO_IMPORT}/vendor/github.com/hashicorp/go-rootcerts/LICENSE;md5=65d26fcc2f35ea6a181ac777e42db1ea',
++                 'file://src/${GO_IMPORT}/vendor/github.com/hashicorp/golang-lru/LICENSE;md5=f27a50d2e878867827842f2c60e30bfc',
++                 'file://src/${GO_IMPORT}/vendor/github.com/hashicorp/serf/LICENSE;md5=b278a92d2c1509760384428817710378',
++                 'file://src/${GO_IMPORT}/vendor/github.com/leodido/go-urn/LICENSE;md5=8f50db5538ec1148a9b3d14ed96c3418',
++                 'file://src/${GO_IMPORT}/vendor/github.com/mattn/go-colorable/LICENSE;md5=24ce168f90aec2456a73de1839037245',
++                 'file://src/${GO_IMPORT}/vendor/github.com/mattn/go-isatty/LICENSE;md5=f509beadd5a11227c27b5d2ad6c9f2c6',
++                 'file://src/${GO_IMPORT}/vendor/github.com/mitchellh/consulstructure/LICENSE;md5=96ada10a9e51c98c4656f2cede08c673',
++                 'file://src/${GO_IMPORT}/vendor/github.com/mitchellh/copystructure/LICENSE;md5=56da355a12d4821cda57b8f23ec34bc4',
++                 'file://src/${GO_IMPORT}/vendor/github.com/mitchellh/go-homedir/LICENSE;md5=3f7765c3d4f58e1f84c4313cecf0f5bd',
++                 'file://src/${GO_IMPORT}/vendor/github.com/mitchellh/mapstructure/LICENSE;md5=3f7765c3d4f58e1f84c4313cecf0f5bd',
++                 'file://src/${GO_IMPORT}/vendor/github.com/mitchellh/reflectwalk/LICENSE;md5=3f7765c3d4f58e1f84c4313cecf0f5bd',
++                 'file://src/${GO_IMPORT}/vendor/github.com/nats-io/nats.go/LICENSE;md5=86d3f3a95c324c9479bd8986968f4327',
++                 'file://src/${GO_IMPORT}/vendor/github.com/nats-io/nkeys/LICENSE;md5=86d3f3a95c324c9479bd8986968f4327',
++                 'file://src/${GO_IMPORT}/vendor/github.com/nats-io/nuid/LICENSE;md5=86d3f3a95c324c9479bd8986968f4327',
++                 'file://src/${GO_IMPORT}/vendor/github.com/pmezard/go-difflib/LICENSE;md5=e9a2ebb8de779a07500ddecca806145e',
++                 'file://src/${GO_IMPORT}/vendor/github.com/rcrowley/go-metrics/LICENSE;md5=1bdf5d819f50f141366dabce3be1460f',
++                 'file://src/${GO_IMPORT}/vendor/github.com/spiffe/go-spiffe/v2/LICENSE;md5=86d3f3a95c324c9479bd8986968f4327',
++                 'file://src/${GO_IMPORT}/vendor/github.com/stretchr/objx/LICENSE;md5=d023fd31d3ca39ec61eec65a91732735',
++                 'file://src/${GO_IMPORT}/vendor/github.com/stretchr/testify/LICENSE;md5=188f01994659f3c0d310612333d2a26f',
++                 'file://src/${GO_IMPORT}/vendor/github.com/x448/float16/LICENSE;md5=de8f8e025d57fe7ee0b67f30d571323b',
++                 'file://src/${GO_IMPORT}/vendor/github.com/zeebo/errs/LICENSE;md5=84914ab36fc0eb48edbaa53e66e8d326',
++                 'file://src/${GO_IMPORT}/vendor/golang.org/x/crypto/LICENSE;md5=5d4950ecb7b26d2c5e4e7b4e0dd74707',
++                 'file://src/${GO_IMPORT}/vendor/golang.org/x/mod/LICENSE;md5=5d4950ecb7b26d2c5e4e7b4e0dd74707',
++                 'file://src/${GO_IMPORT}/vendor/golang.org/x/net/LICENSE;md5=5d4950ecb7b26d2c5e4e7b4e0dd74707',
++                 'file://src/${GO_IMPORT}/vendor/golang.org/x/sync/LICENSE;md5=5d4950ecb7b26d2c5e4e7b4e0dd74707',
++                 'file://src/${GO_IMPORT}/vendor/golang.org/x/sys/LICENSE;md5=5d4950ecb7b26d2c5e4e7b4e0dd74707',
++                 'file://src/${GO_IMPORT}/vendor/golang.org/x/text/LICENSE;md5=5d4950ecb7b26d2c5e4e7b4e0dd74707',
++                 'file://src/${GO_IMPORT}/vendor/golang.org/x/tools/LICENSE;md5=5d4950ecb7b26d2c5e4e7b4e0dd74707',
++                 'file://src/${GO_IMPORT}/vendor/google.golang.org/genproto/LICENSE;md5=3b83ef96387f14655fc854ddc3c6bd57',
++                 'file://src/${GO_IMPORT}/vendor/google.golang.org/grpc/LICENSE;md5=3b83ef96387f14655fc854ddc3c6bd57',
++                 'file://src/${GO_IMPORT}/vendor/google.golang.org/protobuf/LICENSE;md5=02d4002e9171d41a8fad93aa7faf3956',
++                 'file://src/${GO_IMPORT}/vendor/gopkg.in/eapache/queue.v1/LICENSE;md5=1bfd4408d3de090ef6b908b0cc45a316',
++                 'file://src/${GO_IMPORT}/vendor/gopkg.in/yaml.v3/LICENSE;md5=3c91c17266710e16afdbb2b6d15c761c'])
++        checkvars['GO_IMPORT'] = "github.com/edgexfoundry/edgex-go"
++        inherits = ['go-vendor']
++        dependencies = \
++            [
++                ('github.com/eclipse/paho.mqtt.golang','v1.4.2', '', '', ''),
++                ('github.com/edgexfoundry/go-mod-bootstrap','v3.0.1','github.com/edgexfoundry/go-mod-bootstrap/v3','/v3', ''),
++                ('github.com/edgexfoundry/go-mod-configuration','v3.0.0','github.com/edgexfoundry/go-mod-configuration/v3','/v3', ''),
++                ('github.com/edgexfoundry/go-mod-core-contracts','v3.0.0','github.com/edgexfoundry/go-mod-core-contracts/v3','/v3', ''),
++                ('github.com/edgexfoundry/go-mod-messaging','v3.0.0','github.com/edgexfoundry/go-mod-messaging/v3','/v3', ''),
++                ('github.com/edgexfoundry/go-mod-secrets','v3.0.1','github.com/edgexfoundry/go-mod-secrets/v3','/v3', ''),
++                ('github.com/fxamacker/cbor','v2.4.0','github.com/fxamacker/cbor/v2','/v2', ''),
++                ('github.com/gomodule/redigo','v1.8.9', '', '', ''),
++                ('github.com/google/uuid','v1.3.0', '', '', ''),
++                ('github.com/gorilla/mux','v1.8.0', '', '', ''),
++                ('github.com/rcrowley/go-metrics','v0.0.0-20201227073835-cf1acfcdf475', '', '', ''),
++                ('github.com/spiffe/go-spiffe','v2.1.4','github.com/spiffe/go-spiffe/v2','/v2', ''),
++                ('github.com/stretchr/testify','v1.8.2', '', '', ''),
++                ('go.googlesource.com/crypto','v0.8.0','golang.org/x/crypto', '', ''),
++                ('gopkg.in/eapache/queue.v1','v1.1.0', '', '', ''),
++                ('gopkg.in/yaml.v3','v3.0.1', '', '', ''),
++                ('github.com/microsoft/go-winio','v0.6.0','github.com/Microsoft/go-winio', '', ''),
++                ('github.com/hashicorp/go-metrics','v0.3.10','github.com/armon/go-metrics', '', ''),
++                ('github.com/cenkalti/backoff','v2.2.1+incompatible', '', '', ''),
++                ('github.com/davecgh/go-spew','v1.1.1', '', '', ''),
++                ('github.com/edgexfoundry/go-mod-registry','v3.0.0','github.com/edgexfoundry/go-mod-registry/v3','/v3', ''),
++                ('github.com/fatih/color','v1.9.0', '', '', ''),
++                ('github.com/go-jose/go-jose','v3.0.0','github.com/go-jose/go-jose/v3','/v3', ''),
++                ('github.com/go-kit/log','v0.2.1', '', '', ''),
++                ('github.com/go-logfmt/logfmt','v0.5.1', '', '', ''),
++                ('github.com/go-playground/locales','v0.14.1', '', '', ''),
++                ('github.com/go-playground/universal-translator','v0.18.1', '', '', ''),
++                ('github.com/go-playground/validator','v10.13.0','github.com/go-playground/validator/v10','/v10', ''),
++                ('github.com/go-redis/redis','v7.3.0','github.com/go-redis/redis/v7','/v7', ''),
++                ('github.com/golang/protobuf','v1.5.2', '', '', ''),
++                ('github.com/gorilla/websocket','v1.4.2', '', '', ''),
++                ('github.com/hashicorp/consul','v1.20.0','github.com/hashicorp/consul/api', '', 'api'),
++                ('github.com/hashicorp/errwrap','v1.0.0', '', '', ''),
++                ('github.com/hashicorp/go-cleanhttp','v0.5.1', '', '', ''),
++                ('github.com/hashicorp/go-hclog','v0.14.1', '', '', ''),
++                ('github.com/hashicorp/go-immutable-radix','v1.3.0', '', '', ''),
++                ('github.com/hashicorp/go-multierror','v1.1.1', '', '', ''),
++                ('github.com/hashicorp/go-rootcerts','v1.0.2', '', '', ''),
++                ('github.com/hashicorp/golang-lru','v0.5.4', '', '', ''),
++                ('github.com/hashicorp/serf','v0.10.1', '', '', ''),
++                ('github.com/leodido/go-urn','v1.2.3', '', '', ''),
++                ('github.com/mattn/go-colorable','v0.1.12', '', '', ''),
++                ('github.com/mattn/go-isatty','v0.0.14', '', '', ''),
++                ('github.com/mitchellh/consulstructure','v0.0.0-20190329231841-56fdc4d2da54', '', '', ''),
++                ('github.com/mitchellh/copystructure','v1.2.0', '', '', ''),
++                ('github.com/mitchellh/go-homedir','v1.1.0', '', '', ''),
++                ('github.com/mitchellh/mapstructure','v1.5.0', '', '', ''),
++                ('github.com/mitchellh/reflectwalk','v1.0.2', '', '', ''),
++                ('github.com/nats-io/nats.go','v1.25.0', '', '', ''),
++                ('github.com/nats-io/nkeys','v0.4.4', '', '', ''),
++                ('github.com/nats-io/nuid','v1.0.1', '', '', ''),
++                ('github.com/pmezard/go-difflib','v1.0.0', '', '', ''),
++                ('github.com/stretchr/objx','v0.5.0', '', '', ''),
++                ('github.com/x448/float16','v0.8.4', '', '', ''),
++                ('github.com/zeebo/errs','v1.3.0', '', '', ''),
++                ('go.googlesource.com/mod','v0.8.0','golang.org/x/mod', '', ''),
++                ('go.googlesource.com/net','v0.9.0','golang.org/x/net', '', ''),
++                ('go.googlesource.com/sync','v0.1.0','golang.org/x/sync', '', ''),
++                ('go.googlesource.com/sys','v0.7.0','golang.org/x/sys', '', ''),
++                ('go.googlesource.com/text','v0.9.0','golang.org/x/text', '', ''),
++                ('go.googlesource.com/tools','v0.6.0','golang.org/x/tools', '', ''),
++                ('github.com/googleapis/go-genproto','v0.0.0-20230223222841-637eb2293923','google.golang.org/genproto', '', ''),
++                ('github.com/grpc/grpc-go','v1.53.0','google.golang.org/grpc', '', ''),
++                ('go.googlesource.com/protobuf','v1.28.1','google.golang.org/protobuf', '', ''),
++            ]
++
++        for d in dependencies:
++            src_uri.add(urifiy(*d))
++
++        checkvars['SRC_URI'] = src_uri
++        self.maxDiff = None
++        self._test_recipe_contents(recipefile, checkvars, inherits)
++        
+     def _copy_file_with_cleanup(self, srcfile, basedstdir, *paths):
+         dstdir = basedstdir
+         self.assertTrue(os.path.exists(dstdir))
+-- 
+2.30.2
+
+
+
+^ permalink raw reply related	[flat|nested] 15+ messages in thread
+* [OE-Core][PATCH v2 3/4] recipetool: Ignore *.go files while scanning for licenses
+  2023-10-17 13:26 [OE-Core][PATCH v2 0/4] recipetool: Add handler to create go recipes lukas.funke-oss
+  2023-10-17 13:26 ` [OE-Core][PATCH v2 1/4] classes: go-vendor: Add go-vendor class lukas.funke-oss
+  2023-10-17 13:26 ` [OE-Core][PATCH v2 2/4] selftest: recipetool: Add test for go recipe handler lukas.funke-oss
+@ 2023-10-17 13:26 ` lukas.funke-oss
+  2023-10-17 13:26 ` [OE-Core][PATCH v2 4/4] recipetool: Add handler to create go recipes lukas.funke-oss
+  2023-10-22 18:34 ` [OE-Core][PATCH v2 0/4] " Vyacheslav Yurkov
+  4 siblings, 0 replies; 15+ messages in thread
+From: lukas.funke-oss @ 2023-10-17 13:26 UTC (permalink / raw)
+  To: openembedded-core
+  Cc: Bruce Ashfield, Vyacheslav Yurkov, Martin Jansa, Lukas Funke
+
+From: Lukas Funke <lukas.funke@weidmueller.com>
+
+Signed-off-by: Lukas Funke <lukas.funke@weidmueller.com>
+---
+ scripts/lib/recipetool/create.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/scripts/lib/recipetool/create.py b/scripts/lib/recipetool/create.py
+index 143bc63e9d..293198d1c8 100644
+--- a/scripts/lib/recipetool/create.py
++++ b/scripts/lib/recipetool/create.py
+@@ -1212,7 +1212,7 @@ def guess_license(srctree, d):
+ 
+     licenses = []
+     licspecs = ['*LICEN[CS]E*', 'COPYING*', '*[Ll]icense*', 'LEGAL*', '[Ll]egal*', '*GPL*', 'README.lic*', 'COPYRIGHT*', '[Cc]opyright*', 'e[dp]l-v10']
+-    skip_extensions = (".html", ".js", ".json", ".svg", ".ts")
++    skip_extensions = (".html", ".js", ".json", ".svg", ".ts", ".go")
+     licfiles = []
+     for root, dirs, files in os.walk(srctree):
+         for fn in files:
+-- 
+2.30.2
+
+
+
+^ permalink raw reply related	[flat|nested] 15+ messages in thread
+* [OE-Core][PATCH v2 4/4] recipetool: Add handler to create go recipes
+  2023-10-17 13:26 [OE-Core][PATCH v2 0/4] recipetool: Add handler to create go recipes lukas.funke-oss
+                   ` (2 preceding siblings ...)
+  2023-10-17 13:26 ` [OE-Core][PATCH v2 3/4] recipetool: Ignore *.go files while scanning for licenses lukas.funke-oss
+@ 2023-10-17 13:26 ` lukas.funke-oss
+  2023-10-17 13:53   ` Richard Purdie
+  2023-10-22 18:34 ` [OE-Core][PATCH v2 0/4] " Vyacheslav Yurkov
+  4 siblings, 1 reply; 15+ messages in thread
+From: lukas.funke-oss @ 2023-10-17 13:26 UTC (permalink / raw)
+  To: openembedded-core
+  Cc: Bruce Ashfield, Vyacheslav Yurkov, Martin Jansa, Lukas Funke
+
+From: Lukas Funke <lukas.funke@weidmueller.com>
+
+Signed-off-by: Lukas Funke <lukas.funke@weidmueller.com>
+---
+ scripts/lib/recipetool/create_go.py | 730 ++++++++++++++++++++++++++++
+ 1 file changed, 730 insertions(+)
+ create mode 100644 scripts/lib/recipetool/create_go.py
+
+diff --git a/scripts/lib/recipetool/create_go.py b/scripts/lib/recipetool/create_go.py
+new file mode 100644
+index 0000000000..e0254f111b
+--- /dev/null
++++ b/scripts/lib/recipetool/create_go.py
+@@ -0,0 +1,730 @@
++# Recipe creation tool - go support plugin
++#
++# Copyright (C) 2023 Weidmueller GmbH & Co KG
++# Author: Lukas Funke <lukas.funke@weidmueller.com>
++#
++# SPDX-License-Identifier: GPL-2.0-only
++#
++# Copyright (c) 2009 The Go Authors. All rights reserved.
++#
++#  SPDX-License-Identifier: BSD-3-Clause
++#
++
++
++from collections import namedtuple
++from enum import Enum
++from html.parser import HTMLParser
++from recipetool.create import RecipeHandler, handle_license_vars
++from recipetool.create import guess_license, tidy_licenses, fixup_license
++from urllib.error import URLError
++
++import bb.utils
++import json
++import logging
++import os
++import re
++import subprocess
++import sys
++import shutil
++import tempfile
++import urllib.parse
++import urllib.request
++
++
++GoImport = namedtuple('GoImport', 'root vcs url suffix')
++logger = logging.getLogger('recipetool')
++CodeRepo = namedtuple(
++    'CodeRepo', 'path codeRoot codeDir pathMajor pathPrefix pseudoMajor')
++
++tinfoil = None
++
++# Regular expression to parse pseudo semantic version
++# see https://go.dev/ref/mod#pseudo-versions
++re_pseudo_semver = re.compile(
++    r"^v[0-9]+\.(0\.0-|\d+\.\d+-([^+]*\.)?0\.)(?P<utc>\d{14})-(?P<commithash>[A-Za-z0-9]+)(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$")
++# Regular expression to parse semantic version
++re_semver = re.compile(
++    r"^v(?P<major>0|[1-9]\d*)\.(?P<minor>0|[1-9]\d*)\.(?P<patch>0|[1-9]\d*)(?:-(?P<prerelease>(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+(?P<buildmetadata>[0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$")
++
++
++def tinfoil_init(instance):
++    global tinfoil
++    tinfoil = instance
++
++
++class GoRecipeHandler(RecipeHandler):
++    """Class to handle the go recipe creation"""
++
++    @staticmethod
++    def __ensure_go():
++        """Check if the 'go' command is available in the recipes"""
++        recipe = "go-native"
++        if not tinfoil.recipes_parsed:
++            tinfoil.parse_recipes()
++        try:
++            rd = tinfoil.parse_recipe(recipe)
++        except bb.providers.NoProvider:
++            bb.error(
++                "Nothing provides '%s' which is required for the build" % (recipe))
++            bb.note(
++                "You will likely need to add a layer that provides '%s'" % (recipe))
++            return None
++
++        bindir = rd.getVar('STAGING_BINDIR_NATIVE')
++        gopath = os.path.join(bindir, 'go')
++
++        if not os.path.exists(gopath):
++            tinfoil.build_targets(recipe, 'addto_recipe_sysroot')
++
++            if not os.path.exists(gopath):
++                logger.error(
++                    '%s required to process specified source, but %s did not seem to populate it' % 'go', recipe)
++                return None
++
++        return bindir
++
++    def __resolve_repository_static(self, modulepath):
++        """Resolve the repository in a static manner
++
++            The method is based on the go implementation of
++            `repoRootFromVCSPaths` in
++            https://github.com/golang/go/blob/master/src/cmd/go/internal/vcs/vcs.go
++        """
++
++        url = urllib.parse.urlparse("https://" + modulepath)
++        req = urllib.request.Request(url.geturl())
++
++        try:
++            resp = urllib.request.urlopen(req)
++            # Some modulepath are just redirects to github (or some other vcs
++            # hoster). Therefore, we check if this modulepath redirects to
++            # somewhere else
++            if resp.geturl() != url.geturl():
++                bb.debug(1, "%s is redirectred to %s" %
++                         (url.geturl(), resp.geturl()))
++                url = urllib.parse.urlparse(resp.geturl())
++                modulepath = url.netloc + url.path
++
++        except URLError as url_err:
++            # This is probably because the module path
++            # contains the subdir and major path. Thus,
++            # we ignore this error for now
++            logger.debug(
++                1, "Failed to fetch page from [%s]: %s" % (url, str(url_err)))
++
++        host, _, _ = modulepath.partition('/')
++
++        class vcs(Enum):
++            pathprefix = "pathprefix"
++            regexp = "regexp"
++            type = "type"
++            repo = "repo"
++            check = "check"
++            schemelessRepo = "schemelessRepo"
++
++        # GitHub
++        vcsGitHub = {}
++        vcsGitHub[vcs.pathprefix] = "github.com"
++        vcsGitHub[vcs.regexp] = re.compile(
++            r'^(?P<root>github\.com/[A-Za-z0-9_.\-]+/[A-Za-z0-9_.\-]+)(/(?P<suffix>[A-Za-z0-9_.\-]+))*$')
++        vcsGitHub[vcs.type] = "git"
++        vcsGitHub[vcs.repo] = "https://\\g<root>"
++
++        # Bitbucket
++        vcsBitbucket = {}
++        vcsBitbucket[vcs.pathprefix] = "bitbucket.org"
++        vcsBitbucket[vcs.regexp] = re.compile(
++            r'^(?P<root>bitbucket\.org/(?P<bitname>[A-Za-z0-9_.\-]+/[A-Za-z0-9_.\-]+))(/(?P<suffix>[A-Za-z0-9_.\-]+))*$')
++        vcsBitbucket[vcs.type] = "git"
++        vcsBitbucket[vcs.repo] = "https://\\g<root>"
++
++        # IBM DevOps Services (JazzHub)
++        vcsIBMDevOps = {}
++        vcsIBMDevOps[vcs.pathprefix] = "hub.jazz.net/git"
++        vcsIBMDevOps[vcs.regexp] = re.compile(
++            r'^(?P<root>hub\.jazz\.net/git/[a-z0-9]+/[A-Za-z0-9_.\-]+)(/(?P<suffix>[A-Za-z0-9_.\-]+))*$')
++        vcsIBMDevOps[vcs.type] = "git"
++        vcsIBMDevOps[vcs.repo] = "https://\\g<root>"
++
++        # Git at Apache
++        vcsApacheGit = {}
++        vcsApacheGit[vcs.pathprefix] = "git.apache.org"
++        vcsApacheGit[vcs.regexp] = re.compile(
++            r'^(?P<root>git\.apache\.org/[a-z0-9_.\-]+\.git)(/(?P<suffix>[A-Za-z0-9_.\-]+))*$')
++        vcsApacheGit[vcs.type] = "git"
++        vcsApacheGit[vcs.repo] = "https://\\g<root>"
++
++        # Git at OpenStack
++        vcsOpenStackGit = {}
++        vcsOpenStackGit[vcs.pathprefix] = "git.openstack.org"
++        vcsOpenStackGit[vcs.regexp] = re.compile(
++            r'^(?P<root>git\.openstack\.org/[A-Za-z0-9_.\-]+/[A-Za-z0-9_.\-]+)(\.git)?(/(?P<suffix>[A-Za-z0-9_.\-]+))*$')
++        vcsOpenStackGit[vcs.type] = "git"
++        vcsOpenStackGit[vcs.repo] = "https://\\g<root>"
++
++        # chiselapp.com for fossil
++        vcsChiselapp = {}
++        vcsChiselapp[vcs.pathprefix] = "chiselapp.com"
++        vcsChiselapp[vcs.regexp] = re.compile(
++            r'^(?P<root>chiselapp\.com/user/[A-Za-z0-9]+/repository/[A-Za-z0-9_.\-]+)$')
++        vcsChiselapp[vcs.type] = "fossil"
++        vcsChiselapp[vcs.repo] = "https://\\g<root>"
++
++        # General syntax for any server.
++        # Must be last.
++        vcsGeneralServer = {}
++        vcsGeneralServer[vcs.regexp] = re.compile(
++            "(?P<root>(?P<repo>([a-z0-9.\\-]+\\.)+[a-z0-9.\\-]+(:[0-9]+)?(/~?[A-Za-z0-9_.\\-]+)+?)\\.(?P<vcs>bzr|fossil|git|hg|svn))(/~?(?P<suffix>[A-Za-z0-9_.\\-]+))*$")
++        vcsGeneralServer[vcs.schemelessRepo] = True
++
++        vcsPaths = [vcsGitHub, vcsBitbucket, vcsIBMDevOps,
++                    vcsApacheGit, vcsOpenStackGit, vcsChiselapp,
++                    vcsGeneralServer]
++
++        if modulepath.startswith("example.net") or modulepath == "rsc.io":
++            logger.warning("Suspicious module path %s" % modulepath)
++            return None
++        if modulepath.startswith("http:") or modulepath.startswith("https:"):
++            logger.warning("Import path should not start with %s %s" %
++                           ("http", "https"))
++            return None
++
++        rootpath = None
++        vcstype = None
++        repourl = None
++        suffix = None
++
++        for srv in vcsPaths:
++            m = srv[vcs.regexp].match(modulepath)
++            if vcs.pathprefix in srv:
++                if host == srv[vcs.pathprefix]:
++                    rootpath = m.group('root')
++                    vcstype = srv[vcs.type]
++                    repourl = m.expand(srv[vcs.repo])
++                    suffix = m.group('suffix')
++                    break
++            elif m and srv[vcs.schemelessRepo]:
++                rootpath = m.group('root')
++                vcstype = m[vcs.type]
++                repourl = m[vcs.repo]
++                suffix = m.group('suffix')
++                break
++
++        return GoImport(rootpath, vcstype, repourl, suffix)
++
++    def __resolve_repository_dynamic(self, modulepath):
++        """Resolve the repository root in a dynamic manner.
++
++            The method is based on the go implementation of
++            `repoRootForImportDynamic` in
++            https://github.com/golang/go/blob/master/src/cmd/go/internal/vcs/vcs.go
++        """
++        url = urllib.parse.urlparse("https://" + modulepath)
++
++        class GoImportHTMLParser(HTMLParser):
++
++            def __init__(self):
++                super().__init__()
++                self.__srv = []
++
++            def handle_starttag(self, tag, attrs):
++                if tag == 'meta' and list(
++                        filter(lambda a: (a[0] == 'name' and a[1] == 'go-import'), attrs)):
++                    content = list(
++                        filter(lambda a: (a[0] == 'content'), attrs))
++                    if content:
++                        self.__srv = content[0][1].split()
++
++            @property
++            def import_prefix(self):
++                return self.__srv[0] if len(self.__srv) else None
++
++            @property
++            def vcs(self):
++                return self.__srv[1] if len(self.__srv) else None
++
++            @property
++            def repourl(self):
++                return self.__srv[2] if len(self.__srv) else None
++
++        url = url.geturl() + "?go-get=1"
++        req = urllib.request.Request(url)
++
++        try:
++            resp = urllib.request.urlopen(req)
++
++        except URLError as url_err:
++            logger.warning(
++                "Failed to fetch page from [%s]: %s", url, str(url_err))
++            return None
++
++        parser = GoImportHTMLParser()
++        parser.feed(resp.read().decode('utf-8'))
++        parser.close()
++
++        return GoImport(parser.import_prefix, parser.vcs, parser.repourl, None)
++
++    def __resolve_from_golang_proxy(self, modulepath, version):
++        """
++        Resolves repository data from golang proxy
++        """
++        url = urllib.parse.urlparse("https://proxy.golang.org/"
++                                    + modulepath
++                                    + "/@v/"
++                                    + version
++                                    + ".info")
++
++        # Transform url to lower case, golang proxy doesn't like mixed case
++        req = urllib.request.Request(url.geturl().lower())
++
++        try:
++            resp = urllib.request.urlopen(req)
++        except URLError as url_err:
++            logger.warning(
++                "Failed to fetch page from [%s]: %s", url, str(url_err))
++            return None
++
++        golang_proxy_res = resp.read().decode('utf-8')
++        modinfo = json.loads(golang_proxy_res)
++
++        if modinfo and 'Origin' in modinfo:
++            origin = modinfo['Origin']
++            _root_url = urllib.parse.urlparse(origin['URL'])
++
++            # We normalize the repo URL since we don't want the scheme in it
++            _subdir = origin['Subdir'] if 'Subdir' in origin else None
++            _root, _, _ = self.__split_path_version(modulepath)
++            if _subdir:
++                _root = _root[:-len(_subdir)].strip('/')
++
++            _commit = origin['Hash']
++            _vcs = origin['VCS']
++            return (GoImport(_root, _vcs, _root_url.geturl(), None), _commit)
++
++        return None
++
++    def __resolve_repository(self, modulepath):
++        """
++        Resolves src uri from go module-path
++        """
++        repodata = self.__resolve_repository_static(modulepath)
++        if not repodata or not repodata.url:
++            repodata = self.__resolve_repository_dynamic(modulepath)
++            if not repodata or not repodata.url:
++                logger.error(
++                    "Could not resolve repository for module path '%s'" % modulepath)
++                # There is no way to recover from this
++                sys.exit(14)
++        if repodata:
++            logger.debug(1, "Resolved download path for import '%s' => %s" % (
++                modulepath, repodata.url))
++        return repodata
++
++    def __split_path_version(self, path):
++        i = len(path)
++        dot = False
++        for j in range(i, 0, -1):
++            if path[j - 1] < '0' or path[j - 1] > '9':
++                break
++            if path[j - 1] == '.':
++                dot = True
++                break
++            i = j - 1
++
++        if i <= 1 or i == len(
++                path) or path[i - 1] != 'v' or path[i - 2] != '/':
++            return path, "", True
++
++        prefix, pathMajor = path[:i - 2], path[i - 2:]
++        if dot or len(
++                pathMajor) <= 2 or pathMajor[2] == '0' or pathMajor == "/v1":
++            return path, "", False
++
++        return prefix, pathMajor, True
++
++    def __get_path_major(self, pathMajor):
++        if not pathMajor:
++            return ""
++
++        if pathMajor[0] != '/' and pathMajor[0] != '.':
++            logger.error(
++                "pathMajor suffix %s passed to PathMajorPrefix lacks separator", pathMajor)
++
++        if pathMajor.startswith(".v") and pathMajor.endswith("-unstable"):
++            pathMajor = pathMajor[:len("-unstable") - 2]
++
++        return pathMajor[1:]
++
++    def __build_coderepo(self, repo, path):
++        codedir = ""
++        pathprefix, pathMajor, _ = self.__split_path_version(path)
++        if repo.root == path:
++            pathprefix = path
++        elif path.startswith(repo.root):
++            codedir = pathprefix[len(repo.root):].strip('/')
++
++        pseudoMajor = self.__get_path_major(pathMajor)
++
++        logger.debug("root='%s', codedir='%s', prefix='%s', pathMajor='%s', pseudoMajor='%s'",
++                     repo.root, codedir, pathprefix, pathMajor, pseudoMajor)
++
++        return CodeRepo(path, repo.root, codedir,
++                        pathMajor, pathprefix, pseudoMajor)
++
++    def __resolve_version(self, repo, path, version):
++        hash = None
++        coderoot = self.__build_coderepo(repo, path)
++
++        def vcs_fetch_all():
++            tmpdir = tempfile.mkdtemp()
++            clone_cmd = "%s clone --bare %s %s" % ('git', repo.url, tmpdir)
++            bb.process.run(clone_cmd)
++            log_cmd = "git log --all --pretty='%H %d' --decorate=short"
++            output, _ = bb.process.run(
++                log_cmd, shell=True, stderr=subprocess.PIPE, cwd=tmpdir)
++            bb.utils.prunedir(tmpdir)
++            return output.strip().split('\n')
++
++        def vcs_fetch_remote(tag):
++            # add * to grab ^{}
++            refs = {}
++            ls_remote_cmd = "git ls-remote -q --tags {} {}*".format(
++                repo.url, tag)
++            output, _ = bb.process.run(ls_remote_cmd)
++            output = output.strip().split('\n')
++            for line in output:
++                f = line.split(maxsplit=1)
++                if len(f) != 2:
++                    continue
++
++                for prefix in ["HEAD", "refs/heads/", "refs/tags/"]:
++                    if f[1].startswith(prefix):
++                        refs[f[1].removeprefix(prefix)] = f[0]
++
++            for key, hash in refs.items():
++                if key.endswith(r"^{}"):
++                    refs[key.strip(r"^{}")] = hash
++
++            return refs[tag]
++
++        m_pseudo_semver = re_pseudo_semver.match(version)
++
++        if m_pseudo_semver:
++            remote_refs = vcs_fetch_all()
++            short_commit = m_pseudo_semver.group('commithash')
++            for l in remote_refs:
++                r = l.split(maxsplit=1)
++                sha1 = r[0] if len(r) else None
++                if not sha1:
++                    logger.error(
++                        "Ups: could not resolve abbref commit for %s" % short_commit)
++
++                elif sha1.startswith(short_commit):
++                    hash = sha1
++                    break
++        else:
++            m_semver = re_semver.match(version)
++            if m_semver:
++
++                def get_sha1_remote(re):
++                    rsha1 = None
++                    for line in remote_refs:
++                        # Split lines of the following format:
++                        # 22e90d9b964610628c10f673ca5f85b8c2a2ca9a  (tag: sometag)
++                        lineparts = line.split(maxsplit=1)
++                        sha1 = lineparts[0] if len(lineparts) else None
++                        refstring = lineparts[1] if len(
++                            lineparts) == 2 else None
++                        if refstring:
++                            # Normalize tag string and split in case of multiple
++                            # regs e.g. (tag: speech/v1.10.0, tag: orchestration/v1.5.0 ...)
++                            refs = refstring.strip('(), ').split(',')
++                            for ref in refs:
++                                if re.match(ref.strip()):
++                                    rsha1 = sha1
++                    return rsha1
++
++                semver = "v" + m_semver.group('major') + "."\
++                             + m_semver.group('minor') + "."\
++                             + m_semver.group('patch') \
++                             + (("-" + m_semver.group('prerelease'))
++                                if m_semver.group('prerelease') else "")
++
++                tag = os.path.join(
++                    coderoot.codeDir, semver) if coderoot.codeDir else semver
++
++                # probe tag using 'ls-remote', which is faster than fetching
++                # complete history
++                hash = vcs_fetch_remote(tag)
++                if not hash:
++                    # backup: fetch complete history
++                    remote_refs = vcs_fetch_all()
++                    hash = get_sha1_remote(
++                        re.compile(fr"(tag:|HEAD ->) ({tag})"))
++
++                logger.debug(
++                    "Resolving commit for tag '%s' -> '%s'", tag, hash)
++        return hash
++
++    def __generate_srcuri_inline_fcn(self, path, version, replaces=None):
++        """Generate SRC_URI functions for go imports"""
++
++        logger.info("Resolving repository for module %s", path)
++        # First try to resolve repo and commit from golang proxy
++        # Most info is already there and we don't have to go through the
++        # repository or even perform the version resolve magic
++        golang_proxy_info = self.__resolve_from_golang_proxy(path, version)
++        if golang_proxy_info:
++            repo = golang_proxy_info[0]
++            commit = golang_proxy_info[1]
++        else:
++            # Fallback
++            # Resolve repository by 'hand'
++            repo = self.__resolve_repository(path)
++            commit = self.__resolve_version(repo, path, version)
++
++        url = urllib.parse.urlparse(repo.url)
++        repo_url = url.netloc + url.path
++
++        coderoot = self.__build_coderepo(repo, path)
++
++        inline_fcn = "${@go_src_uri("
++        inline_fcn += f"'{repo_url}','{version}'"
++        if repo_url != path:
++            inline_fcn += f",path='{path}'"
++        if coderoot.codeDir:
++            inline_fcn += f",subdir='{coderoot.codeDir}'"
++        if repo.vcs != 'git':
++            inline_fcn += f",vcs='{repo.vcs}'"
++        if replaces:
++            inline_fcn += f",replaces='{replaces}'"
++        if coderoot.pathMajor:
++            inline_fcn += f",pathmajor='{coderoot.pathMajor}'"
++        inline_fcn += ")}"
++
++        return inline_fcn, commit
++
++    def __handle_dependencies(self, go_mod):
++
++        src_uris = []
++        src_revs = []
++
++        def generate_src_rev(path, version, commithash):
++            src_rev = f"# {path}@{version} => {commithash}\n"
++            # Ups...maybe someone manipulated the source repository and the
++            # version or commit could not be resolved. This is a sign of
++            # a) the supply chain was manipulated (bad)
++            # b) the implementation for the version resolving didn't work
++            #    anymore (less bad)
++            if not commithash:
++                src_rev += f"#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
++                src_rev += f"#!!!   Could not resolve version  !!!\n"
++                src_rev += f"#!!! Possible supply chain attack !!!\n"
++                src_rev += f"#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
++            src_rev += f"SRCREV_{path.replace('/', '.')} = \"{commithash}\""
++
++            return src_rev
++
++        for require in go_mod['Require']:
++            path = require['Path']
++            version = require['Version']
++
++            inline_fcn, commithash = self.__generate_srcuri_inline_fcn(
++                path, version)
++            src_uris.append(inline_fcn)
++            src_revs.append(generate_src_rev(path, version, commithash))
++
++        if go_mod['Replace']:
++            for replacement in go_mod['Replace']:
++                oldpath = replacement['Old']['Path']
++                path = replacement['New']['Path']
++                version = replacement['New']['Version']
++
++                inline_fcn, commithash = self.__generate_srcuri_inline_fcn(
++                    path, version, oldpath)
++                src_uris.append(inline_fcn)
++                src_revs.append(generate_src_rev(path, version, commithash))
++
++        return src_uris, src_revs
++
++    def __go_run_cmd(self, cmd, cwd, d):
++        return bb.process.run(cmd, env=dict(os.environ, PATH=d.getVar('PATH')),
++                              shell=True, cwd=cwd)
++
++    def __go_native_version(self, d):
++        stdout, _ = self.__go_run_cmd("go version", None, d)
++        m = re.match(r".*\sgo((\d+).(\d+).(\d+))\s([\w\/]*)", stdout)
++        major = int(m.group(2))
++        minor = int(m.group(3))
++        patch = int(m.group(4))
++
++        return major, minor, patch
++
++    def __go_mod_patch(self, srctree, localfilesdir, extravalues, d):
++
++        patchfilename = "go.mod.patch"
++        go_native_version_major, go_native_version_minor, _ = self.__go_native_version(
++            d)
++        self.__go_run_cmd("go mod tidy -go=%d.%d" %
++                          (go_native_version_major, go_native_version_minor), srctree, d)
++        stdout, _ = self.__go_run_cmd("go mod edit -json", srctree, d)
++
++        # Create patch in order to upgrade go version
++        self.__go_run_cmd("git diff go.mod > %s" % (patchfilename), srctree, d)
++        # Restore original state
++        self.__go_run_cmd("git checkout HEAD go.mod go.sum", srctree, d)
++
++        go_mod = json.loads(stdout)
++        tmpfile = os.path.join(localfilesdir, patchfilename)
++        shutil.move(os.path.join(srctree, patchfilename), tmpfile)
++
++        extravalues['extrafiles'][patchfilename] = tmpfile
++
++        return go_mod, patchfilename
++
++    def __go_mod_vendor(self, srctree, localfilesdir, extravalues, d):
++        # Perform vendoring to retrieve the correct modules.txt
++        tmp_vendor_dir = tempfile.mkdtemp()
++
++        # -v causes to go to print modules.txt to stderr
++        _, stderr = self.__go_run_cmd(
++            "go mod vendor -v -o %s" % (tmp_vendor_dir), srctree, d)
++
++        modules_txt_filename = os.path.join(localfilesdir, "modules.txt")
++        with open(modules_txt_filename, "w") as f:
++            f.write(stderr)
++
++        extravalues['extrafiles']["modules.txt"] = modules_txt_filename
++
++        licenses = []
++        lic_files_chksum = []
++        licvalues = guess_license(tmp_vendor_dir, d)
++
++        if licvalues:
++            for licvalue in licvalues:
++                license = licvalue[0]
++                lics = tidy_licenses(fixup_license(license))
++                lics = [lic for lic in lics if lic not in licenses]
++                if len(lics):
++                    licenses.extend(lics)
++                lic_files_chksum.append(
++                    'file://vendor/%s;md5=%s' % (licvalue[1], licvalue[2]))
++
++        extravalues['LICENSE'] = licenses
++        extravalues['LIC_FILES_CHKSUM'] = lic_files_chksum
++
++        shutil.rmtree(tmp_vendor_dir)
++
++        return licenses
++
++    def process(self, srctree, classes, lines_before,
++                lines_after, handled, extravalues):
++
++        if 'buildsystem' in handled:
++            return False
++
++        files = RecipeHandler.checkfiles(srctree, ['go.mod'])
++        if not files:
++            return False
++
++        d = bb.data.createCopy(tinfoil.config_data)
++        go_bindir = self.__ensure_go()
++        if not go_bindir:
++            sys.exit(14)
++
++        d.prependVar('PATH', '%s:' % go_bindir)
++        handled.append('buildsystem')
++        classes.append("go-vendor")
++
++        stdout, _ = self.__go_run_cmd("go mod edit -json", srctree, d)
++
++        go_mod = json.loads(stdout)
++        go_import = go_mod['Module']['Path']
++        go_version_match = re.match("([0-9]+).([0-9]+)", go_mod['Go'])
++        go_version_major = int(go_version_match.group(1))
++        go_version_minor = int(go_version_match.group(2))
++        src_uris = []
++
++        localfilesdir = tempfile.mkdtemp(prefix='recipetool-go-')
++        extravalues.setdefault('extrafiles', {})
++        # go.mod files with version < 1.17 may not include all indirect
++        # dependencies. Thus, we have to upgrade the go version.
++        if go_version_major == 1 and go_version_minor < 17:
++            logger.warning(
++                "go.mod files generated by Go < 1.17 might have incomplete indirect dependencies.")
++            go_mod, patchfilename = self.__go_mod_patch(srctree, localfilesdir,
++                                                        extravalues, d)
++            src_uris.append(
++                "file://%s;patchdir=src/${GO_IMPORT}" % (patchfilename))
++
++        # Check whether the module is vendored. If so, we have nothing to do.
++        # Otherwise we gather all dependencies and add them to the recipe
++        if not os.path.exists(os.path.join(srctree, "vendor")):
++
++            self.__go_mod_vendor(srctree, localfilesdir, extravalues, d)
++            src_uris.append("file://modules.txt")
++
++            dep_src_uris, src_revs = self.__handle_dependencies(go_mod)
++            src_uris.extend(dep_src_uris)
++
++            for src_rev in src_revs:
++                lines_after.append(src_rev)
++
++        self.__rewrite_src_uri(src_uris, lines_before)
++
++        # Do generic license handling
++        handle_license_vars(srctree, lines_before, handled, extravalues, d)
++        self.__rewrite_lic_uri(lines_before)
++
++        lines_before.append("GO_IMPORT = \"{}\"".format(go_import))
++        lines_before.append("SRCREV_FORMAT = \"${BPN}\"")
++
++    def __update_lines_before(self, updated, newlines, lines_before):
++        if updated:
++            del lines_before[:]
++            for line in newlines:
++                # Hack to avoid newlines that edit_metadata inserts
++                if line.endswith('\n'):
++                    line = line[:-1]
++                lines_before.append(line)
++        return updated
++
++    def __rewrite_lic_uri(self, lines_before):
++
++        def varfunc(varname, origvalue, op, newlines):
++            if varname == 'LIC_FILES_CHKSUM':
++                new_licenses = []
++                licenses = origvalue.split('\\')
++                for license in licenses:
++                    license = license.strip()
++                    uri, chksum = license.split(';', 1)
++                    url = urllib.parse.urlparse(uri)
++                    new_uri = os.path.join(
++                        url.scheme + "://", "src", "${GO_IMPORT}", url.netloc + url.path) + ";" + chksum
++                    new_licenses.append(new_uri)
++
++                return new_licenses, None, -1, True
++            return origvalue, None, 0, True
++
++        updated, newlines = bb.utils.edit_metadata(
++            lines_before, ['LIC_FILES_CHKSUM'], varfunc)
++        return self.__update_lines_before(updated, newlines, lines_before)
++
++    def __rewrite_src_uri(self, src_uris_deps, lines_before):
++
++        def varfunc(varname, origvalue, op, newlines):
++            if varname == 'SRC_URI':
++                src_uri = []
++                src_uri.append(
++                    "git://${GO_IMPORT};destsuffix=git/src/${GO_IMPORT};nobranch=1;name=${BPN};protocol=https")
++                src_uri.extend(src_uris_deps)
++                return src_uri, None, -1, True
++            return origvalue, None, 0, True
++
++        updated, newlines = bb.utils.edit_metadata(
++            lines_before, ['SRC_URI'], varfunc)
++        return self.__update_lines_before(updated, newlines, lines_before)
++
++
++def register_recipe_handlers(handlers):
++    handlers.append((GoRecipeHandler(), 60))
+-- 
+2.30.2
+
+
+
+^ permalink raw reply related	[flat|nested] 15+ messages in thread
+* Re: [OE-Core][PATCH v2 4/4] recipetool: Add handler to create go recipes
+  2023-10-17 13:26 ` [OE-Core][PATCH v2 4/4] recipetool: Add handler to create go recipes lukas.funke-oss
+@ 2023-10-17 13:53   ` Richard Purdie
+  2023-10-17 14:00     ` Lukas Funke
+  0 siblings, 1 reply; 15+ messages in thread
+From: Richard Purdie @ 2023-10-17 13:53 UTC (permalink / raw)
+  To: Lukas Funke, openembedded-core
+  Cc: Bruce Ashfield, Vyacheslav Yurkov, Martin Jansa, Lukas Funke
+
+On Tue, 2023-10-17 at 15:26 +0200, Lukas Funke wrote:
+> From: Lukas Funke <lukas.funke@weidmueller.com>
+> 
+> Signed-off-by: Lukas Funke <lukas.funke@weidmueller.com>
+> ---
+>  scripts/lib/recipetool/create_go.py | 730 ++++++++++++++++++++++++++++
+>  1 file changed, 730 insertions(+)
+>  create mode 100644 scripts/lib/recipetool/create_go.py
+> 
+> diff --git a/scripts/lib/recipetool/create_go.py b/scripts/lib/recipetool/create_go.py
+> new file mode 100644
+> index 0000000000..e0254f111b
+> --- /dev/null
+> +++ b/scripts/lib/recipetool/create_go.py
+> @@ -0,0 +1,730 @@
+> +# Recipe creation tool - go support plugin
+> +#
+> +# Copyright (C) 2023 Weidmueller GmbH & Co KG
+> +# Author: Lukas Funke <lukas.funke@weidmueller.com>
+> +#
+> +# SPDX-License-Identifier: GPL-2.0-only
+> +#
+> +# Copyright (c) 2009 The Go Authors. All rights reserved.
+> +#
+> +#  SPDX-License-Identifier: BSD-3-Clause
+> +#
+
+Can you clarify what this license information means please? Two
+different license identifier lines seems rather confusing and
+problematic.
+
+I've not looked into the rest of the patches yet, this just caught my
+eye.
+
+Cheers,
+
+Richard
+
+
+
+^ permalink raw reply	[flat|nested] 15+ messages in thread
+* Re: [OE-Core][PATCH v2 4/4] recipetool: Add handler to create go recipes
+  2023-10-17 13:53   ` Richard Purdie
+@ 2023-10-17 14:00     ` Lukas Funke
+  2023-10-17 22:23       ` Richard Purdie
+  0 siblings, 1 reply; 15+ messages in thread
+From: Lukas Funke @ 2023-10-17 14:00 UTC (permalink / raw)
+  To: Richard Purdie, openembedded-core
+  Cc: Bruce Ashfield, Vyacheslav Yurkov, Martin Jansa, Lukas Funke
+
+Hi Richard,
+
+On 17.10.2023 15:53, Richard Purdie wrote:
+> On Tue, 2023-10-17 at 15:26 +0200, Lukas Funke wrote:
+>> From: Lukas Funke <lukas.funke@weidmueller.com>
+>>
+>> Signed-off-by: Lukas Funke <lukas.funke@weidmueller.com>
+>> ---
+>>   scripts/lib/recipetool/create_go.py | 730 ++++++++++++++++++++++++++++
+>>   1 file changed, 730 insertions(+)
+>>   create mode 100644 scripts/lib/recipetool/create_go.py
+>>
+>> diff --git a/scripts/lib/recipetool/create_go.py b/scripts/lib/recipetool/create_go.py
+>> new file mode 100644
+>> index 0000000000..e0254f111b
+>> --- /dev/null
+>> +++ b/scripts/lib/recipetool/create_go.py
+>> @@ -0,0 +1,730 @@
+>> +# Recipe creation tool - go support plugin
+>> +#
+>> +# Copyright (C) 2023 Weidmueller GmbH & Co KG
+>> +# Author: Lukas Funke <lukas.funke@weidmueller.com>
+>> +#
+>> +# SPDX-License-Identifier: GPL-2.0-only
+>> +#
+>> +# Copyright (c) 2009 The Go Authors. All rights reserved.
+>> +#
+>> +#  SPDX-License-Identifier: BSD-3-Clause
+>> +#
+> 
+> Can you clarify what this license information means please? Two
+> different license identifier lines seems rather confusing and
+> problematic.
+> 
+> I've not looked into the rest of the patches yet, this just caught my
+> eye.
+
+Some of the ideas/code was ported from the original golang code to 
+python here. Thus, I had to copy the license information as well (I 
+guess?). If this is wrong or could be written in another way please 
+provide an example how it's done.
+
+Best regards,
+Lukas
+
+> 
+> Cheers,
+> 
+> Richard
+> 
+
+
+
+^ permalink raw reply	[flat|nested] 15+ messages in thread
+* Re: [OE-Core][PATCH v2 4/4] recipetool: Add handler to create go recipes
+  2023-10-17 14:00     ` Lukas Funke
+@ 2023-10-17 22:23       ` Richard Purdie
+  0 siblings, 0 replies; 15+ messages in thread
+From: Richard Purdie @ 2023-10-17 22:23 UTC (permalink / raw)
+  To: Lukas Funke, openembedded-core
+  Cc: Bruce Ashfield, Vyacheslav Yurkov, Martin Jansa, Lukas Funke
+
+On Tue, 2023-10-17 at 16:00 +0200, Lukas Funke wrote:
+> Hi Richard,
+> 
+> On 17.10.2023 15:53, Richard Purdie wrote:
+> > On Tue, 2023-10-17 at 15:26 +0200, Lukas Funke wrote:
+> > > From: Lukas Funke <lukas.funke@weidmueller.com>
+> > > 
+> > > Signed-off-by: Lukas Funke <lukas.funke@weidmueller.com>
+> > > ---
+> > >   scripts/lib/recipetool/create_go.py | 730 ++++++++++++++++++++++++++++
+> > >   1 file changed, 730 insertions(+)
+> > >   create mode 100644 scripts/lib/recipetool/create_go.py
+> > > 
+> > > diff --git a/scripts/lib/recipetool/create_go.py b/scripts/lib/recipetool/create_go.py
+> > > new file mode 100644
+> > > index 0000000000..e0254f111b
+> > > --- /dev/null
+> > > +++ b/scripts/lib/recipetool/create_go.py
+> > > @@ -0,0 +1,730 @@
+> > > +# Recipe creation tool - go support plugin
+> > > +#
+> > > +# Copyright (C) 2023 Weidmueller GmbH & Co KG
+> > > +# Author: Lukas Funke <lukas.funke@weidmueller.com>
+> > > +#
+> > > +# SPDX-License-Identifier: GPL-2.0-only
+> > > +#
+> > > +# Copyright (c) 2009 The Go Authors. All rights reserved.
+> > > +#
+> > > +#  SPDX-License-Identifier: BSD-3-Clause
+> > > +#
+> > 
+> > Can you clarify what this license information means please? Two
+> > different license identifier lines seems rather confusing and
+> > problematic.
+> > 
+> > I've not looked into the rest of the patches yet, this just caught my
+> > eye.
+> 
+> Some of the ideas/code was ported from the original golang code to 
+> python here. Thus, I had to copy the license information as well (I 
+> guess?). If this is wrong or could be written in another way please 
+> provide an example how it's done.
+
+If the code is close enough to the original to be based off it, the new
+code would be under the same license? We can't tell which is the old
+code and which is the new code so the license header is rather
+problematic and confusing so this does need to be fixed.
+
+Perhaps this means it is all under BSD-3-Clause? That sounds easier but
+we don't don't have a top level LICENSE.BSD-3-Clause to match this and
+I'd prefer to keep the code under MIT/GPL-2.0 and not add another
+license to the mix if we can help it.
+
+Or is the code sufficiently different that you can say you took
+inspiration from that code but the result is under GPL-2.0 as it was
+different enough you can license it as you wish, the original license
+becoming not relevant?
+
+Either way the header needs some explanation of where this other
+copyright comes from too. I would probably just credit it as a source
+of inspiration but I don't know how similar it is/isn't.
+
+Cheers,
+
+Richard
+
+
+
+
+
+
+
+
+
+
+^ permalink raw reply	[flat|nested] 15+ messages in thread
+* Re: [OE-Core][PATCH v2 1/4] classes: go-vendor: Add go-vendor class
+  2023-10-17 13:26 ` [OE-Core][PATCH v2 1/4] classes: go-vendor: Add go-vendor class lukas.funke-oss
+@ 2023-10-18  6:36   ` Ulrich Ölmann
+  0 siblings, 0 replies; 15+ messages in thread
+From: Ulrich Ölmann @ 2023-10-18  6:36 UTC (permalink / raw)
+  To: Lukas Funke
+  Cc: Bruce Ashfield, Vyacheslav Yurkov, Martin Jansa, Lukas Funke,
+	openembedded-core
+
+Hi Lukas,
+
+just two small typos I stumbled over.
+
+On Tue, Oct 17 2023 at 15:26 +0200, "Lukas Funke" <lukas.funke-oss@weidmueller.com> wrote:
+> From: Lukas Funke <lukas.funke@weidmueller.com>
+>
+> Signed-off-by: Lukas Funke <lukas.funke@weidmueller.com>
+> ---
+>  meta/classes/go-vendor.bbclass | 135 +++++++++++++++++++++++++++++++++
+>  1 file changed, 135 insertions(+)
+>  create mode 100644 meta/classes/go-vendor.bbclass
+>
+> diff --git a/meta/classes/go-vendor.bbclass b/meta/classes/go-vendor.bbclass
+> new file mode 100644
+> index 0000000000..13f1b8b2be
+> --- /dev/null
+> +++ b/meta/classes/go-vendor.bbclass
+> @@ -0,0 +1,135 @@
+> +#
+> +# Copyright 2023 (C) Weidmueller GmbH & Co KG
+> +# Author: Lukas Funke <lukas.funke@weidmueller.com>
+> +#
+> +# Handle Go vendor support for offline builds
+> +#
+> +# When importing Go modules, Go downloads the imported module using
+
+s/imported module/imported modules/
+
+> +# a network (proxy) connection ahead of the compile stage. This contradicts
+> +# the yocto build concept of fetching every source ahead of build-time
+> +# and supporting offline builds.
+> +#
+> +# To support offline builds, we use Go 'vendoring': module dependencies are
+> +# downloaded during the fetch-phase and unpacked into the modules 'vendor'
+> +# folder. Additinally a manifest file is generated for the 'vendor' folder
+
+s/Additinally/Additionally/
+
+Best regards
+Ulrich
+
+
+> +#
+> +
+> +inherit go-mod
+> +
+> +def go_src_uri(repo, version, path=None, subdir=None, \
+> +                vcs='git', replaces=None, pathmajor=None):
+> +
+> +    destsuffix = "git/src/import/vendor.fetch"
+> +    go_module_path = repo if not path else path
+> +
+> +    src_uri = "{}://{}" \
+> +              ";name={}" \
+> +              "".format(vcs, repo, \
+> +                        go_module_path.replace('/', '.'))
+> +
+> +    src_uri += ";destsuffix={}/{}@{}".format(destsuffix, \
+> +                                                go_module_path, \
+> +                                                version)
+> +
+> +    if vcs == "git":
+> +        src_uri += ";nobranch=1;protocol=https"
+> +    if replaces:
+> +        src_uri += ";go_module_replacement={}".format(replaces)
+> +    if subdir:
+> +        src_uri += ";go_subdir={}".format(subdir)
+> +    if pathmajor:
+> +        src_uri += ";go_pathmajor={}".format(pathmajor)
+> +
+> +    return src_uri
+> +
+> +
+> +python do_go_vendor() {
+> +    import shutil
+> +
+> +    src_uri = (d.getVar('SRC_URI') or "").split()
+> +
+> +    if len(src_uri) == 0:
+> +        bb.error("SRC_URI is empty")
+> +        return
+> +
+> +    default_destsuffix = "git/src/import/vendor.fetch"
+> +    fetcher = bb.fetch2.Fetch(src_uri, d)
+> +    go_import = d.getVar('GO_IMPORT')
+> +    source_dir = d.getVar('S')
+> +
+> +    vendor_dir = os.path.join(source_dir, *['src', go_import, 'vendor'])
+> +    import_dir = os.path.join(source_dir, *['src', 'import', 'vendor.fetch'])
+> +
+> +    bb.utils.mkdirhier(vendor_dir)
+> +    modules = {}
+> +
+> +    for url in fetcher.urls:
+> +        srcuri = fetcher.ud[url].host + fetcher.ud[url].path
+> +
+> +        # Skip main module for which the recipe is actually created
+> +        if srcuri == go_import:
+> +            continue
+> +
+> +        # Skip local files
+> +        if fetcher.ud[url].type == 'file':
+> +            continue
+> +
+> +        destsuffix = fetcher.ud[url].parm.get('destsuffix')
+> +        # We derive the module path / version in the following manner (exmaple):
+> +        #
+> +        # destsuffix = git/src/import/vendor.fetch/github.com/foo/bar@v1.2.3
+> +        # p = github.com/foo/bar@v1.2.3
+> +        # path = github.com/foo/bar
+> +        # version = v1.2.3
+> +
+> +        p = destsuffix[len(default_destsuffix)+1:]
+> +        path, version = p.split('@')
+> +
+> +        subdir = fetcher.ud[url].parm.get('go_subdir')
+> +        subdir = "" if not subdir else subdir
+> +
+> +        pathMajor = fetcher.ud[url].parm.get('go_pathmajor')
+> +        pathMajor = "" if not pathMajor else pathMajor
+> +
+> +        base = path[:-(len(subdir)+len(pathMajor))-1]
+> +        r = fetcher.ud[url].parm.get('go_module_replacement')
+> +
+> +        if not path in modules and not r:
+> +            modules[path] =   {
+> +                                "version": version,
+> +                                "src": os.path.join(import_dir, *[p, subdir]),
+> +                                "subdir": subdir,
+> +                                "pathMajor": pathMajor,
+> +                              }
+> +
+> +    for module_key in sorted(modules):
+> +
+> +        # only take the version which is explicitly listed
+> +        # as a dependency in the go.mod
+> +        module = modules[module_key]
+> +        src = module['src']
+> +
+> +        # If the module is released at major version 2 or higher, the module
+> +        # path must end with a major version suffix like /v2.
+> +        # This may or may not be part of the subdirectory name
+> +        #
+> +        # https://go.dev/ref/mod#modules-overview
+> +        srcMajorVersion = os.path.join(src, module['pathMajor'].strip('/'))
+> +        if os.path.exists(srcMajorVersion):
+> +            src = srcMajorVersion
+> +        dst = os.path.join(vendor_dir, module_key)
+> +        if os.path.exists(dst):
+> +            shutil.rmtree(dst)
+> +
+> +        bb.debug(1, "cp %s --> %s" % (src, dst))
+> +        shutil.copytree(src, dst, symlinks=True, \
+> +            ignore=shutil.ignore_patterns(".git", \
+> +                                            "vendor", \
+> +                                            "*.md", \
+> +                                            "*._test.go"))
+> +    # Copy vendor manifest
+> +    bb.debug(1, "cp %s --> %s" % (os.path.join(d.getVar('WORKDIR'), "modules.txt"), vendor_dir))
+> +    shutil.copy2(os.path.join(d.getVar('WORKDIR'), "modules.txt"), vendor_dir)
+> +}
+> +
+> +addtask go_vendor before do_populate_lic after do_unpack
+-- 
+Pengutronix e.K.                           | Ulrich Ölmann               |
+Industrial Linux Solutions                 | http://www.pengutronix.de/  |
+Peiner Str. 6-8, 31137 Hildesheim, Germany | Phone: +49-5121-206917-0    |
+Amtsgericht Hildesheim, HRA 2686           | Fax:   +49-5121-206917-5555 |
+
+
+^ permalink raw reply	[flat|nested] 15+ messages in thread
+* Re: [OE-Core][PATCH v2 0/4] recipetool: Add handler to create go recipes
+  2023-10-17 13:26 [OE-Core][PATCH v2 0/4] recipetool: Add handler to create go recipes lukas.funke-oss
+                   ` (3 preceding siblings ...)
+  2023-10-17 13:26 ` [OE-Core][PATCH v2 4/4] recipetool: Add handler to create go recipes lukas.funke-oss
+@ 2023-10-22 18:34 ` Vyacheslav Yurkov
+  2023-10-23 12:18   ` Lukas Funke
+  4 siblings, 1 reply; 15+ messages in thread
+From: Vyacheslav Yurkov @ 2023-10-22 18:34 UTC (permalink / raw)
+  To: lukas.funke-oss, openembedded-core
+  Cc: Bruce Ashfield, Martin Jansa, Lukas Funke
+
+Hey Lukas,
+Thanks a lot for the patch. A few questions/comments from my initial 
+test below.
+
+- I tried it with a go-based backend I have by providing ssh URL to 
+github. It seems like the GO_IMPORT is set to a module name from go.mod 
+of my project, which of course fails to fetch it like that, because it's 
+not a valid URL. How is it supposed to be used?
+- I've got about 20 lines like:
+INFO: Please add the following line for 
+'vendor/google.golang.org/protobuf/LICENSE' to a 
+'lib/recipetool/licenses.csv' and replace `Unknown` with the license:
+02d4002e9171d41a8fad93aa7faf3956,Unknown
+INFO: Please add the following line for 
+'vendor/gopkg.in/yaml.v3/LICENSE' to a 'lib/recipetool/licenses.csv' and 
+replace `Unknown` with the license:
+3c91c17266710e16afdbb2b6d15c761c,Unknown
+
+I believe I have to go through all of them manually and set a proper 
+license in the recipe. Still the questions arises, what should be a 
+better way to reduce amount of this work? Adding more hashes/licenses to 
+lib/recipetool/licenses.csv would be a way to go? I'm just afraid that 
+file might explode if we use it like that...
+
+- Could please clarify where does the version from go.mod hide? Is it 
+taken directly from go.mod? I'm trying to understand what should be the 
+workflow when a module version should be bumped up in the go.mod. Will 
+that be reflected in the recipe in any way?
+
+Thanks,
+Slava
+
+On 17.10.2023 15:26, lukas.funke-oss@weidmueller.com wrote:
+> From: Lukas Funke <lukas.funke@weidmueller.com>
+>
+> This patch series adds a recipetool handler in order to create 'go' recipes.
+> Each recipe contains a list of dependencies in their SRC_URI
+> variable which are derived from the projects `go.mod` file. For each
+> dependency the corresponding license file uri/hash is added.
+>
+> The recipe may not work ad-hoc, but is a good starting point to create
+> a working recipe and have a working offline-build.
+>
+> Lukas Funke (4):
+>    classes: go-vendor: Add go-vendor class
+>    selftest: recipetool: Add test for go recipe handler
+>    recipetool: Ignore *.go files while scanning for licenses
+>    recipetool: Add handler to create go recipes
+>
+>   meta/classes/go-vendor.bbclass             | 135 ++++
+>   meta/lib/oeqa/selftest/cases/recipetool.py | 163 +++++
+>   scripts/lib/recipetool/create.py           |   2 +-
+>   scripts/lib/recipetool/create_go.py        | 730 +++++++++++++++++++++
+>   4 files changed, 1029 insertions(+), 1 deletion(-)
+>   create mode 100644 meta/classes/go-vendor.bbclass
+>   create mode 100644 scripts/lib/recipetool/create_go.py
+>
+
+
+
+^ permalink raw reply	[flat|nested] 15+ messages in thread
+* Re: [OE-Core][PATCH v2 0/4] recipetool: Add handler to create go recipes
+  2023-10-22 18:34 ` [OE-Core][PATCH v2 0/4] " Vyacheslav Yurkov
+@ 2023-10-23 12:18   ` Lukas Funke
+  2023-10-23 17:05     ` Vyacheslav Yurkov
+  2023-10-23 18:06     ` Vyacheslav Yurkov
+  0 siblings, 2 replies; 15+ messages in thread
+From: Lukas Funke @ 2023-10-23 12:18 UTC (permalink / raw)
+  To: Vyacheslav Yurkov, openembedded-core
+  Cc: Bruce Ashfield, Martin Jansa, Lukas Funke
+
+Hi Slava,
+
+On 22.10.2023 20:34, Vyacheslav Yurkov wrote:
+> Hey Lukas,
+> Thanks a lot for the patch. A few questions/comments from my initial 
+> test below.
+> 
+> - I tried it with a go-based backend I have by providing ssh URL to 
+> github. It seems like the GO_IMPORT is set to a module name from go.mod 
+> of my project, which of course fails to fetch it like that, because it's 
+> not a valid URL. How is it supposed to be used?
+
+Your assumption is correct: the GO_IMPORT is taken from the go.mod file.
+
+I've not considered the case where the repo URL is unequal to the module 
+path. This may require manual rework of the recipe. Another solution 
+would be to take the source URL from the recipetool. I think there is no 
+correct solution to this problem, because probably most people might 
+want to have the original solution, since they are creating recipes from 
+oss components (i.e. from github).
+
+> - I've got about 20 lines like:
+> INFO: Please add the following line for 
+> 'vendor/google.golang.org/protobuf/LICENSE' to a 
+> 'lib/recipetool/licenses.csv' and replace `Unknown` with the license:
+> 02d4002e9171d41a8fad93aa7faf3956,Unknown
+> INFO: Please add the following line for 
+> 'vendor/gopkg.in/yaml.v3/LICENSE' to a 'lib/recipetool/licenses.csv' and 
+> replace `Unknown` with the license:
+> 3c91c17266710e16afdbb2b6d15c761c,Unknown
+> 
+> I believe I have to go through all of them manually and set a proper 
+> license in the recipe. Still the questions arises, what should be a 
+> better way to reduce amount of this work? Adding more hashes/licenses to 
+> lib/recipetool/licenses.csv would be a way to go? I'm just afraid that 
+> file might explode if we use it like that...
+
+The file will explode anyway. Thanks 'go'.
+
+Adding more intelligence to the underlying license detection could be an 
+idea: in your first example, the license file contains actually two 
+licenses: MIT and Apache. Yocto has no way to detect those cases.
+
+> 
+> - Could please clarify where does the version from go.mod hide? Is it 
+> taken directly from go.mod? I'm trying to understand what should be the 
+> workflow when a module version should be bumped up in the go.mod. Will 
+> that be reflected in the recipe in any way?
+
+No, currently the go-version doesn't play a role ATM. Except one case 
+when you have a go.mod file with go < 1.17. These go.mod files don't 
+include indirect dependencies.
+
+I hope you might find this helpful and thanks for testing!
+
+Cheers,
+Lukas
+
+> 
+> Thanks,
+> Slava
+> 
+> On 17.10.2023 15:26, lukas.funke-oss@weidmueller.com wrote:
+>> From: Lukas Funke <lukas.funke@weidmueller.com>
+>>
+>> This patch series adds a recipetool handler in order to create 'go' 
+>> recipes.
+>> Each recipe contains a list of dependencies in their SRC_URI
+>> variable which are derived from the projects `go.mod` file. For each
+>> dependency the corresponding license file uri/hash is added.
+>>
+>> The recipe may not work ad-hoc, but is a good starting point to create
+>> a working recipe and have a working offline-build.
+>>
+>> Lukas Funke (4):
+>>    classes: go-vendor: Add go-vendor class
+>>    selftest: recipetool: Add test for go recipe handler
+>>    recipetool: Ignore *.go files while scanning for licenses
+>>    recipetool: Add handler to create go recipes
+>>
+>>   meta/classes/go-vendor.bbclass             | 135 ++++
+>>   meta/lib/oeqa/selftest/cases/recipetool.py | 163 +++++
+>>   scripts/lib/recipetool/create.py           |   2 +-
+>>   scripts/lib/recipetool/create_go.py        | 730 +++++++++++++++++++++
+>>   4 files changed, 1029 insertions(+), 1 deletion(-)
+>>   create mode 100644 meta/classes/go-vendor.bbclass
+>>   create mode 100644 scripts/lib/recipetool/create_go.py
+>>
+> 
+
+
+
+^ permalink raw reply	[flat|nested] 15+ messages in thread
+* Re: [OE-Core][PATCH v2 0/4] recipetool: Add handler to create go recipes
+  2023-10-23 12:18   ` Lukas Funke
+@ 2023-10-23 17:05     ` Vyacheslav Yurkov
+  2023-10-24  6:19       ` Lukas Funke
+  2023-10-23 18:06     ` Vyacheslav Yurkov
+  1 sibling, 1 reply; 15+ messages in thread
+From: Vyacheslav Yurkov @ 2023-10-23 17:05 UTC (permalink / raw)
+  To: Lukas Funke, openembedded-core; +Cc: Bruce Ashfield, Martin Jansa, Lukas Funke
+
+On 23.10.2023 14:18, Lukas Funke wrote:
+> Hi Slava,
+>
+> On 22.10.2023 20:34, Vyacheslav Yurkov wrote:
+>> Hey Lukas,
+>> Thanks a lot for the patch. A few questions/comments from my initial 
+>> test below.
+>>
+>> - I tried it with a go-based backend I have by providing ssh URL to 
+>> github. It seems like the GO_IMPORT is set to a module name from 
+>> go.mod of my project, which of course fails to fetch it like that, 
+>> because it's not a valid URL. How is it supposed to be used?
+>
+> Your assumption is correct: the GO_IMPORT is taken from the go.mod file.
+>
+> I've not considered the case where the repo URL is unequal to the 
+> module path. This may require manual rework of the recipe. Another 
+> solution would be to take the source URL from the recipetool. I think 
+> there is no correct solution to this problem, because probably most 
+> people might want to have the original solution, since they are 
+> creating recipes from oss components (i.e. from github).
+
+Ah, it could be that module name is not used correctly in our backend. 
+I'll try to put a proper URL there, thanks.
+
+>
+>
+> The file will explode anyway. Thanks 'go'.
+>
+> Adding more intelligence to the underlying license detection could be 
+> an idea: in your first example, the license file contains actually two 
+> licenses: MIT and Apache. Yocto has no way to detect those cases.
+
+Yeah, I only mentioned 2 out of 20 in my email to not make it huge ;) 
+There are indeed around 20. I'll try to prepare the list and send the 
+patch to include them.
+
+>
+>>
+>> - Could please clarify where does the version from go.mod hide? Is it 
+>> taken directly from go.mod? I'm trying to understand what should be 
+>> the workflow when a module version should be bumped up in the go.mod. 
+>> Will that be reflected in the recipe in any way?
+>
+> No, currently the go-version doesn't play a role ATM. Except one case 
+> when you have a go.mod file with go < 1.17. These go.mod files don't 
+> include indirect dependencies.
+>
+
+Still trying to wrap my head around... When there's no version at 
+parsing stage, how this will affect reproducibility? If it's not known, 
+then whenever the version is bumped up in go.mod, a manual 'clean all' 
+will be required? (It's probably the same as now though).
+
+Thanks,
+Slava
+
+
+^ permalink raw reply	[flat|nested] 15+ messages in thread
+* Re: [OE-Core][PATCH v2 0/4] recipetool: Add handler to create go recipes
+  2023-10-23 12:18   ` Lukas Funke
+  2023-10-23 17:05     ` Vyacheslav Yurkov
+@ 2023-10-23 18:06     ` Vyacheslav Yurkov
+  2023-10-24  6:33       ` Lukas Funke
+  1 sibling, 1 reply; 15+ messages in thread
+From: Vyacheslav Yurkov @ 2023-10-23 18:06 UTC (permalink / raw)
+  To: Lukas Funke, openembedded-core; +Cc: Bruce Ashfield, Martin Jansa, Lukas Funke
+
+On 23.10.2023 14:18, Lukas Funke wrote:
+> Hi Slava,
+>
+> On 22.10.2023 20:34, Vyacheslav Yurkov wrote:
+>> Hey Lukas,
+>> Thanks a lot for the patch. A few questions/comments from my initial 
+>> test below.
+>>
+>> - I tried it with a go-based backend I have by providing ssh URL to 
+>> github. It seems like the GO_IMPORT is set to a module name from 
+>> go.mod of my project, which of course fails to fetch it like that, 
+>> because it's not a valid URL. How is it supposed to be used?
+>
+> Your assumption is correct: the GO_IMPORT is taken from the go.mod file.
+>
+> I've not considered the case where the repo URL is unequal to the 
+> module path. This may require manual rework of the recipe. Another 
+> solution would be to take the source URL from the recipetool. I think 
+> there is no correct solution to this problem, because probably most 
+> people might want to have the original solution, since they are 
+> creating recipes from oss components (i.e. from github).
+
+Some more results from my tests.
+
+- I refactored module name to contain a valid URL... It seems though 
+that current version of go_src_uri does not handle ssh URLs, and all 
+required info from URL was lost (git@ component, ssh protocol, .git suffix).
+
+- I placed the correct URL into SRC_URI, but do_go_vendor still failed 
+with following stacktrace:
+
+File: 
+'/home/uvv/projects/yocto-lorch-mapro/openembedded-core/meta/classes/go-vendor.bbclass', 
+lineno: 86, function: do_go_vendor
+      0082:        # path = github.com/foo/bar
+      0083:        # version = v1.2.3
+      0084:
+      0085:        p = destsuffix[len(default_destsuffix)+1:]
+  *** 0086:        path, version = p.split('@')
+      0087:
+      0088:        subdir = fetcher.ud[url].parm.get('go_subdir')
+      0089:        subdir = "" if not subdir else subdir
+      0090:
+Exception: ValueError: not enough values to unpack (expected 2, got 1)
+
+The reason is that my go.mod name does not have a version component. If 
+I understood the convention https://go.dev/ref/mod#introduction, it's 
+not a required component, so this should be taken into account.
+
+Thanks,
+Slava
+
+
+^ permalink raw reply	[flat|nested] 15+ messages in thread
+* Re: [OE-Core][PATCH v2 0/4] recipetool: Add handler to create go recipes
+  2023-10-23 17:05     ` Vyacheslav Yurkov
+@ 2023-10-24  6:19       ` Lukas Funke
+  0 siblings, 0 replies; 15+ messages in thread
+From: Lukas Funke @ 2023-10-24  6:19 UTC (permalink / raw)
+  To: Vyacheslav Yurkov, openembedded-core
+  Cc: Bruce Ashfield, Martin Jansa, Lukas Funke
+
+Hi Slava,
+
+On 23.10.2023 19:05, Vyacheslav Yurkov wrote:
+> On 23.10.2023 14:18, Lukas Funke wrote:
+>> Hi Slava,
+>>
+>> On 22.10.2023 20:34, Vyacheslav Yurkov wrote:
+>>> Hey Lukas,
+>>> Thanks a lot for the patch. A few questions/comments from my initial 
+>>> test below.
+>>>
+>>> - I tried it with a go-based backend I have by providing ssh URL to 
+>>> github. It seems like the GO_IMPORT is set to a module name from 
+>>> go.mod of my project, which of course fails to fetch it like that, 
+>>> because it's not a valid URL. How is it supposed to be used?
+>>
+>> Your assumption is correct: the GO_IMPORT is taken from the go.mod file.
+>>
+>> I've not considered the case where the repo URL is unequal to the 
+>> module path. This may require manual rework of the recipe. Another 
+>> solution would be to take the source URL from the recipetool. I think 
+>> there is no correct solution to this problem, because probably most 
+>> people might want to have the original solution, since they are 
+>> creating recipes from oss components (i.e. from github).
+> 
+> Ah, it could be that module name is not used correctly in our backend. 
+> I'll try to put a proper URL there, thanks.
+> 
+>>
+>>
+>> The file will explode anyway. Thanks 'go'.
+>>
+>> Adding more intelligence to the underlying license detection could be 
+>> an idea: in your first example, the license file contains actually two 
+>> licenses: MIT and Apache. Yocto has no way to detect those cases.
+> 
+> Yeah, I only mentioned 2 out of 20 in my email to not make it huge ;) 
+> There are indeed around 20. I'll try to prepare the list and send the 
+> patch to include them.
+> 
+>>
+>>>
+>>> - Could please clarify where does the version from go.mod hide? Is it 
+>>> taken directly from go.mod? I'm trying to understand what should be 
+>>> the workflow when a module version should be bumped up in the go.mod. 
+>>> Will that be reflected in the recipe in any way?
+>>
+>> No, currently the go-version doesn't play a role ATM. Except one case 
+>> when you have a go.mod file with go < 1.17. These go.mod files don't 
+>> include indirect dependencies.
+>>
+> 
+> Still trying to wrap my head around... When there's no version at 
+> parsing stage, how this will affect reproducibility? If it's not known, 
+> then whenever the version is bumped up in go.mod, a manual 'clean all' 
+> will be required? (It's probably the same as now though).
+
+Maybe I don't understand the problem: Is it required for the go module 
+to have the *same* version as the golang package in yocto? In my 
+understanding, when the golang version is greater-equal to the go.mod 
+version we're good?
+
+> 
+> Thanks,
+> Slava
+
+
+
+^ permalink raw reply	[flat|nested] 15+ messages in thread
+* Re: [OE-Core][PATCH v2 0/4] recipetool: Add handler to create go recipes
+  2023-10-23 18:06     ` Vyacheslav Yurkov
+@ 2023-10-24  6:33       ` Lukas Funke
+  0 siblings, 0 replies; 15+ messages in thread
+From: Lukas Funke @ 2023-10-24  6:33 UTC (permalink / raw)
+  To: Vyacheslav Yurkov, openembedded-core
+  Cc: Bruce Ashfield, Martin Jansa, Lukas Funke
+
+On 23.10.2023 20:06, Vyacheslav Yurkov wrote:
+> On 23.10.2023 14:18, Lukas Funke wrote:
+>> Hi Slava,
+>>
+>> On 22.10.2023 20:34, Vyacheslav Yurkov wrote:
+>>> Hey Lukas,
+>>> Thanks a lot for the patch. A few questions/comments from my initial 
+>>> test below.
+>>>
+>>> - I tried it with a go-based backend I have by providing ssh URL to 
+>>> github. It seems like the GO_IMPORT is set to a module name from 
+>>> go.mod of my project, which of course fails to fetch it like that, 
+>>> because it's not a valid URL. How is it supposed to be used?
+>>
+>> Your assumption is correct: the GO_IMPORT is taken from the go.mod file.
+>>
+>> I've not considered the case where the repo URL is unequal to the 
+>> module path. This may require manual rework of the recipe. Another 
+>> solution would be to take the source URL from the recipetool. I think 
+>> there is no correct solution to this problem, because probably most 
+>> people might want to have the original solution, since they are 
+>> creating recipes from oss components (i.e. from github).
+> 
+> Some more results from my tests.
+> 
+> - I refactored module name to contain a valid URL... It seems though 
+> that current version of go_src_uri does not handle ssh URLs, and all 
+> required info from URL was lost (git@ component, ssh protocol, .git 
+> suffix).
+
+Currently only https is handled.
+
+> 
+> - I placed the correct URL into SRC_URI, but do_go_vendor still failed 
+> with following stacktrace:
+> 
+> File: 
+> '/home/uvv/projects/yocto-lorch-mapro/openembedded-core/meta/classes/go-vendor.bbclass', lineno: 86, function: do_go_vendor
+>       0082:        # path = github.com/foo/bar
+>       0083:        # version = v1.2.3
+>       0084:
+>       0085:        p = destsuffix[len(default_destsuffix)+1:]
+>   *** 0086:        path, version = p.split('@')
+>       0087:
+>       0088:        subdir = fetcher.ud[url].parm.get('go_subdir')
+>       0089:        subdir = "" if not subdir else subdir
+>       0090:
+> Exception: ValueError: not enough values to unpack (expected 2, got 1)
+> 
+> The reason is that my go.mod name does not have a version component. If 
+> I understood the convention https://go.dev/ref/mod#introduction, it's 
+> not a required component, so this should be taken into account.
+
+This error could happen if your dependencies don't have a version. I've 
+never seen this in my experiments. Maybe check your go.mod file for the 
+missing version info.
+
+> 
+> Thanks,
+> Slava
+
+
+
+^ permalink raw reply	[flat|nested] 15+ messages in thread
+end of thread, other threads:[~2023-10-24  6:33 UTC | newest]
+
+Thread overview: 15+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-10-17 13:26 [OE-Core][PATCH v2 0/4] recipetool: Add handler to create go recipes lukas.funke-oss
+2023-10-17 13:26 ` [OE-Core][PATCH v2 1/4] classes: go-vendor: Add go-vendor class lukas.funke-oss
+2023-10-18  6:36   ` Ulrich Ölmann
+2023-10-17 13:26 ` [OE-Core][PATCH v2 2/4] selftest: recipetool: Add test for go recipe handler lukas.funke-oss
+2023-10-17 13:26 ` [OE-Core][PATCH v2 3/4] recipetool: Ignore *.go files while scanning for licenses lukas.funke-oss
+2023-10-17 13:26 ` [OE-Core][PATCH v2 4/4] recipetool: Add handler to create go recipes lukas.funke-oss
+2023-10-17 13:53   ` Richard Purdie
+2023-10-17 14:00     ` Lukas Funke
+2023-10-17 22:23       ` Richard Purdie
+2023-10-22 18:34 ` [OE-Core][PATCH v2 0/4] " Vyacheslav Yurkov
+2023-10-23 12:18   ` Lukas Funke
+2023-10-23 17:05     ` Vyacheslav Yurkov
+2023-10-24  6:19       ` Lukas Funke
+2023-10-23 18:06     ` Vyacheslav Yurkov
+2023-10-24  6:33       ` Lukas Funke
+

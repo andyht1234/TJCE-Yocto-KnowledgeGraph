@@ -1,0 +1,195 @@
+* util-linux and --enable-raw with recent kernels
+@ 2021-10-12 16:27 Federico Pellegrin
+  2021-10-12 16:55 ` [yocto] " Khem Raj
+  0 siblings, 1 reply; 3+ messages in thread
+From: Federico Pellegrin @ 2021-10-12 16:27 UTC (permalink / raw)
+  To: Yocto-mailing-list
+
+[-- Attachment #1: Type: text/plain, Size: 1267 bytes --]
+
+Hello,
+Running on a quite recent kernel (5.14.10 from Fedora 34) I've came across
+a problem when building util-linux (2.35.2) native, namely in the configure
+phase:
+
+configure: error: raw selected, but required raw.h header file not available
+
+After a bit or research I believe it is due to:
+https://www.mail-archive.com/debian-bugs-dist@lists.debian.org/msg1820154.html
+
+Which is related to the change in the recent kernels here:
+https://github.com/torvalds/linux/commit/603e4922f1c81fc2ed3a87b4f91a8d3aafc7e093#diff-10d697dff14540ee1eb6539dcc53b2b88844b6187c1995c0698ba0936754304a
+where the raw.h file was indeed removed.
+
+As per first link it may not be obvious to fix, and don't see an upstream
+fix for it, but from the Yocto perspective my current workaround is
+basically just to remove "--enable-raw" from the EXTRA_OECONF to disable
+the raw feature.
+
+While the whole image seemed to build fine with this, I'm not very sure if
+that configuration option had a precise use (which maybe it's being
+skipping in my specific build) or not, so I wanted to ask the experts if
+there is any opinion on this and/or should I do a merge request that
+removes it to handle this problem, at least until there is a better
+solution upstream in util-linux?
+
+Many thanks,
+Federico
+
+[-- Attachment #2: Type: text/html, Size: 1802 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] util-linux and --enable-raw with recent kernels
+  2021-10-12 16:27 util-linux and --enable-raw with recent kernels Federico Pellegrin
+@ 2021-10-12 16:55 ` Khem Raj
+  2021-10-13  3:01   ` Federico Pellegrin
+  0 siblings, 1 reply; 3+ messages in thread
+From: Khem Raj @ 2021-10-12 16:55 UTC (permalink / raw)
+  To: Federico Pellegrin, Yocto-mailing-list
+
+
+
+On 10/12/21 9:27 AM, Federico Pellegrin wrote:
+> 
+> Hello,
+> Running on a quite recent kernel (5.14.10 from Fedora 34) I've came 
+> across a problem when building util-linux (2.35.2) native, namely in the 
+> configure phase:
+> 
+> configure: error: raw selected, but required raw.h header file not available
+> 
+
+you might want to use latest master, fix that you might find useful is
+
+https://git.openembedded.org/openembedded-core/commit/?id=7f577c10913104860121f682b9b3754870c4db23
+
+> After a bit or research I believe it is due to:
+> https://www.mail-archive.com/debian-bugs-dist@lists.debian.org/msg1820154.html 
+> <https://www.mail-archive.com/debian-bugs-dist@lists.debian.org/msg1820154.html>
+> 
+> Which is related to the change in the recent kernels here:
+> https://github.com/torvalds/linux/commit/603e4922f1c81fc2ed3a87b4f91a8d3aafc7e093#diff-10d697dff14540ee1eb6539dcc53b2b88844b6187c1995c0698ba0936754304a 
+> <https://github.com/torvalds/linux/commit/603e4922f1c81fc2ed3a87b4f91a8d3aafc7e093#diff-10d697dff14540ee1eb6539dcc53b2b88844b6187c1995c0698ba0936754304a>
+> where the raw.h file was indeed removed.
+> 
+> As per first link it may not be obvious to fix, and don't see an 
+> upstream fix for it, but from the Yocto perspective my current 
+> workaround is basically just to remove "--enable-raw" from the 
+> EXTRA_OECONF to disable the raw feature.
+> 
+> While the whole image seemed to build fine with this, I'm not very sure 
+> if that configuration option had a precise use (which maybe it's being 
+> skipping in my specific build) or not, so I wanted to ask the experts if 
+> there is any opinion on this and/or should I do a merge request that 
+> removes it to handle this problem, at least until there is a better 
+> solution upstream in util-linux?
+> 
+> Many thanks,
+> Federico
+> 
+> 
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> You automatically follow any topics you start or reply to.
+> View/Reply Online (#55041): https://lists.yoctoproject.org/g/yocto/message/55041
+> Mute This Topic: https://lists.yoctoproject.org/mt/86266370/1997914
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [raj.khem@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+> 
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] util-linux and --enable-raw with recent kernels
+  2021-10-12 16:55 ` [yocto] " Khem Raj
+@ 2021-10-13  3:01   ` Federico Pellegrin
+  0 siblings, 0 replies; 3+ messages in thread
+From: Federico Pellegrin @ 2021-10-13  3:01 UTC (permalink / raw)
+  To: Khem Raj; +Cc: Yocto-mailing-list
+
+[-- Attachment #1: Type: text/plain, Size: 2645 bytes --]
+
+Thanks Khem!
+Indeed I checked on master but got cheated by the web git interface and I
+was looking at an older commit :-/
+Glad it is the right way to go and already solved on master!
+
+Cheers,
+Federico
+
+Il giorno mar 12 ott 2021 alle ore 18:55 Khem Raj <raj.khem@gmail.com> ha
+scritto:
+
+>
+>
+> On 10/12/21 9:27 AM, Federico Pellegrin wrote:
+> >
+> > Hello,
+> > Running on a quite recent kernel (5.14.10 from Fedora 34) I've came
+> > across a problem when building util-linux (2.35.2) native, namely in the
+> > configure phase:
+> >
+> > configure: error: raw selected, but required raw.h header file not
+> available
+> >
+>
+> you might want to use latest master, fix that you might find useful is
+>
+>
+> https://git.openembedded.org/openembedded-core/commit/?id=7f577c10913104860121f682b9b3754870c4db23
+>
+> > After a bit or research I believe it is due to:
+> >
+> https://www.mail-archive.com/debian-bugs-dist@lists.debian.org/msg1820154.html
+> > <
+> https://www.mail-archive.com/debian-bugs-dist@lists.debian.org/msg1820154.html
+> >
+> >
+> > Which is related to the change in the recent kernels here:
+> >
+> https://github.com/torvalds/linux/commit/603e4922f1c81fc2ed3a87b4f91a8d3aafc7e093#diff-10d697dff14540ee1eb6539dcc53b2b88844b6187c1995c0698ba0936754304a
+> > <
+> https://github.com/torvalds/linux/commit/603e4922f1c81fc2ed3a87b4f91a8d3aafc7e093#diff-10d697dff14540ee1eb6539dcc53b2b88844b6187c1995c0698ba0936754304a
+> >
+> > where the raw.h file was indeed removed.
+> >
+> > As per first link it may not be obvious to fix, and don't see an
+> > upstream fix for it, but from the Yocto perspective my current
+> > workaround is basically just to remove "--enable-raw" from the
+> > EXTRA_OECONF to disable the raw feature.
+> >
+> > While the whole image seemed to build fine with this, I'm not very sure
+> > if that configuration option had a precise use (which maybe it's being
+> > skipping in my specific build) or not, so I wanted to ask the experts if
+> > there is any opinion on this and/or should I do a merge request that
+> > removes it to handle this problem, at least until there is a better
+> > solution upstream in util-linux?
+> >
+> > Many thanks,
+> > Federico
+> >
+> >
+> > -=-=-=-=-=-=-=-=-=-=-=-
+> > Links: You receive all messages sent to this group.
+> > You automatically follow any topics you start or reply to.
+> > View/Reply Online (#55041):
+> https://lists.yoctoproject.org/g/yocto/message/55041
+> > Mute This Topic: https://lists.yoctoproject.org/mt/86266370/1997914
+> > Group Owner: yocto+owner@lists.yoctoproject.org
+> > Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> raj.khem@gmail.com]
+> > -=-=-=-=-=-=-=-=-=-=-=-
+> >
+>
+
+[-- Attachment #2: Type: text/html, Size: 4542 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2021-10-13  3:01 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-10-12 16:27 util-linux and --enable-raw with recent kernels Federico Pellegrin
+2021-10-12 16:55 ` [yocto] " Khem Raj
+2021-10-13  3:01   ` Federico Pellegrin
+

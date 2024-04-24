@@ -1,0 +1,463 @@
+* [meta-rockchip] [PATCH v2] rock-3a add
+@ 2023-10-06 23:26 anthony.t.davies
+  2023-10-09  8:25 ` [yocto] " Quentin Schulz
+  0 siblings, 1 reply; 3+ messages in thread
+From: anthony.t.davies @ 2023-10-06 23:26 UTC (permalink / raw)
+  To: yocto; +Cc: twoerner, Anthony Davies
+
+From: Anthony Davies <anthony.t.davies@gmail.com>
+
+Add support for the Radxa Rock 3A
+https://wiki.radxa.com/Rock3/3a
+
+The TF-A project does not currently have support for
+the rk3568. Therefore, for the time-being, the only way to supply a
+TPL/DDR-init for the rk3568 is to use the closed-source rkbin binaries
+from Rockchip. If/when TF-A adds support for the rk3588 we can investigate
+switching.
+
+recipes-bsp/rkbin/rockchip-rkbin_git.bb was modified to allow a machine
+override to allow both rk3568 and rk3588s to use differnet binary blobs
+
+Signed-off-by: Anthony Davies <anthony.t.davies@gmail.com>
+---
+ README                                  |  1 +
+ conf/machine/include/rk3568.inc         | 17 +++++++++++++++++
+ conf/machine/rock-3a.conf               | 12 ++++++++++++
+ recipes-bsp/rkbin/rockchip-rkbin_git.bb | 16 +++++++++++++++-
+ recipes-bsp/u-boot/u-boot%.bbappend     |  5 +++++
+ 5 files changed, 50 insertions(+), 1 deletion(-)
+ create mode 100644 conf/machine/include/rk3568.inc
+ create mode 100644 conf/machine/rock-3a.conf
+
+diff --git a/README b/README
+index 8104474..3357b47 100644
+--- a/README
++++ b/README
+@@ -32,6 +32,7 @@ Status of supported boards:
+ 		nanopi-r4s
+ 		rock-5b
+ 		nanopi-r2s
++    rock-3a
+ 	builds:
+ 		marsboard-rk3066
+ 		radxarock
+diff --git a/conf/machine/include/rk3568.inc b/conf/machine/include/rk3568.inc
+new file mode 100644
+index 0000000..5382b58
+--- /dev/null
++++ b/conf/machine/include/rk3568.inc
+@@ -0,0 +1,17 @@
++MACHINEOVERRIDES =. "rk3568:"
++DEFAULTTUNE ?= "cortexa55"
++
++require conf/machine/include/arm/armv8-2a/tune-cortexa55.inc
++require conf/machine/include/rockchip-defaults.inc
++require conf/machine/include/rockchip-wic.inc
++
++KBUILD_DEFCONFIG ?= "defconfig"
++KERNEL_FEATURES:append:rk3568 = " bsp/rockchip/remove-non-rockchip-arch-arm64.scc"
++KERNEL_CLASSES ??= "kernel-fitimage"
++KERNEL_IMAGETYPE ??= "fitImage"
++
++PREFERRED_PROVIDER_trusted-firmware-a = "rockchip-rkbin"
++PREFERRED_PROVIDER_optee-os = "rockchip-rkbin"
++
++UBOOT_SUFFIX ?= "itb"
++UBOOT_ENTRYPOINT ?= "0x06000000"
+diff --git a/conf/machine/rock-3a.conf b/conf/machine/rock-3a.conf
+new file mode 100644
+index 0000000..2ed83a3
+--- /dev/null
++++ b/conf/machine/rock-3a.conf
+@@ -0,0 +1,12 @@
++#@TYPE: Machine
++#@NAME: Radxa Rock 3a
++#@DESCRIPTION: ROCK3 is a series of Rockchip RK3566/RK3568 based
++#SBC(Single Board Computer) and Compute Module by Radxa.
++#https://wiki.radxa.com/Rock3
++
++require conf/machine/include/rk3568.inc
++
++KERNEL_DEVICETREE = "rockchip/rk3568-rock-3a.dtb"
++MACHINE_EXTRA_RRECOMMENDS += "kernel-modules"
++
++UBOOT_MACHINE = "rock-3a-rk3568_defconfig"
+diff --git a/recipes-bsp/rkbin/rockchip-rkbin_git.bb b/recipes-bsp/rkbin/rockchip-rkbin_git.bb
+index 7fefb01..273f394 100644
+--- a/recipes-bsp/rkbin/rockchip-rkbin_git.bb
++++ b/recipes-bsp/rkbin/rockchip-rkbin_git.bb
+@@ -14,6 +14,7 @@ S = "${WORKDIR}/git"
+ 
+ COMPATIBLE_MACHINE = ""
+ COMPATIBLE_MACHINE:rk3588s = "rk3588s"
++COMPATIBLE_MACHINE:rk3568 = "rk3568"
+ 
+ PACKAGE_ARCH = "${MACHINE_ARCH}"
+ 
+@@ -25,7 +26,16 @@ do_install() {
+ PACKAGES = "${PN}"
+ ALLOW_EMPTY:${PN} = "1"
+ 
+-do_deploy() {
++do_deploy:rk3568() {
++	# Prebuilt TF-A
++	install -m 644 ${S}/bin/rk35/rk3568_bl31_v*.elf ${DEPLOYDIR}/bl31-rk3568.elf
++	# Prebuilt OPTEE-OS
++	install -m 644 ${S}/bin/rk35/rk3568_bl32_v*.bin ${DEPLOYDIR}/tee-rk3568.bin
++	# Prebuilt U-Boot TPL (DDR init)
++	install -m 644 ${S}/bin/rk35/rk3568_ddr_1560MHz_v1.18.bin ${DEPLOYDIR}/ddr-rk3568.bin
++}
++
++do_deploy:rk3588s() {
+ 	# Prebuilt TF-A
+ 	install -m 644 ${S}/bin/rk35/rk3588_bl31_v*.elf ${DEPLOYDIR}/bl31-rk3588.elf
+ 	# Prebuilt OPTEE-OS
+@@ -34,4 +44,8 @@ do_deploy() {
+ 	install -m 644 ${S}/bin/rk35/rk3588_ddr_lp4_2112MHz_lp5_2736MHz_v*.bin ${DEPLOYDIR}/ddr-rk3588.bin
+ }
+ 
++do_deploy() {
++# Needed as a default perhaps a bb.fatal with a message saying an override needs to be set
++}
++
+ addtask deploy after do_install
+diff --git a/recipes-bsp/u-boot/u-boot%.bbappend b/recipes-bsp/u-boot/u-boot%.bbappend
+index e79c471..66c81da 100644
+--- a/recipes-bsp/u-boot/u-boot%.bbappend
++++ b/recipes-bsp/u-boot/u-boot%.bbappend
+@@ -9,12 +9,17 @@ EXTRA_OEMAKE:append:rk3588s = " \
+ 	BL31=${DEPLOY_DIR_IMAGE}/bl31-rk3588.elf \
+ 	ROCKCHIP_TPL=${DEPLOY_DIR_IMAGE}/ddr-rk3588.bin \
+ 	"
++EXTRA_OEMAKE:append:rk3568 = " \
++	BL31=${DEPLOY_DIR_IMAGE}/bl31-rk3568.elf \
++	ROCKCHIP_TPL=${DEPLOY_DIR_IMAGE}/ddr-rk3568.bin \
++	"
+ 
+ INIT_FIRMWARE_DEPENDS ??= ""
+ INIT_FIRMWARE_DEPENDS:px30 = " trusted-firmware-a:do_deploy"
+ INIT_FIRMWARE_DEPENDS:rk3328 = " trusted-firmware-a:do_deploy"
+ INIT_FIRMWARE_DEPENDS:rk3399 = " trusted-firmware-a:do_deploy"
+ INIT_FIRMWARE_DEPENDS:rk3588s = " rockchip-rkbin:do_deploy"
++INIT_FIRMWARE_DEPENDS:rk3568 = " rockchip-rkbin:do_deploy"
+ do_compile[depends] .= "${INIT_FIRMWARE_DEPENDS}"
+ 
+ do_compile:append:rock2-square () {
+-- 
+2.34.1
+
+
+
+^ permalink raw reply related	[flat|nested] 3+ messages in thread
+* Re: [yocto] [meta-rockchip] [PATCH v2] rock-3a add
+  2023-10-06 23:26 [meta-rockchip] [PATCH v2] rock-3a add anthony.t.davies
+@ 2023-10-09  8:25 ` Quentin Schulz
+  2023-10-09  8:48   ` Anthony Davies
+  0 siblings, 1 reply; 3+ messages in thread
+From: Quentin Schulz @ 2023-10-09  8:25 UTC (permalink / raw)
+  To: anthony.t.davies, yocto; +Cc: twoerner
+
+Hi Anthony,
+
+On 10/7/23 01:26, Anthony Davies via lists.yoctoproject.org wrote:
+> From: Anthony Davies <anthony.t.davies@gmail.com>
+> 
+> Add support for the Radxa Rock 3A
+> https://wiki.radxa.com/Rock3/3a
+> 
+> The TF-A project does not currently have support for
+> the rk3568. Therefore, for the time-being, the only way to supply a
+> TPL/DDR-init for the rk3568 is to use the closed-source rkbin binaries
+> from Rockchip. If/when TF-A adds support for the rk3588 we can investigate
+> switching.
+> 
+> recipes-bsp/rkbin/rockchip-rkbin_git.bb was modified to allow a machine
+> override to allow both rk3568 and rk3588s to use differnet binary blobs
+> 
+> Signed-off-by: Anthony Davies <anthony.t.davies@gmail.com>
+> ---
+>   README                                  |  1 +
+>   conf/machine/include/rk3568.inc         | 17 +++++++++++++++++
+>   conf/machine/rock-3a.conf               | 12 ++++++++++++
+>   recipes-bsp/rkbin/rockchip-rkbin_git.bb | 16 +++++++++++++++-
+>   recipes-bsp/u-boot/u-boot%.bbappend     |  5 +++++
+>   5 files changed, 50 insertions(+), 1 deletion(-)
+>   create mode 100644 conf/machine/include/rk3568.inc
+>   create mode 100644 conf/machine/rock-3a.conf
+> 
+> diff --git a/README b/README
+> index 8104474..3357b47 100644
+> --- a/README
+> +++ b/README
+> @@ -32,6 +32,7 @@ Status of supported boards:
+>   		nanopi-r4s
+>   		rock-5b
+>   		nanopi-r2s
+> +    rock-3a
+
+Please use the same indentation here so it's aligned with the other boards.
+
+It's 2 tabs for the indentation there it seems.
+
+>   	builds:
+>   		marsboard-rk3066
+>   		radxarock
+> diff --git a/conf/machine/include/rk3568.inc b/conf/machine/include/rk3568.inc
+> new file mode 100644
+> index 0000000..5382b58
+> --- /dev/null
+> +++ b/conf/machine/include/rk3568.inc
+> @@ -0,0 +1,17 @@
+> +MACHINEOVERRIDES =. "rk3568:"
+> +DEFAULTTUNE ?= "cortexa55"
+> +
+> +require conf/machine/include/arm/armv8-2a/tune-cortexa55.inc
+> +require conf/machine/include/rockchip-defaults.inc
+> +require conf/machine/include/rockchip-wic.inc
+> +
+> +KBUILD_DEFCONFIG ?= "defconfig"
+> +KERNEL_FEATURES:append:rk3568 = " bsp/rockchip/remove-non-rockchip-arch-arm64.scc"
+> +KERNEL_CLASSES ??= "kernel-fitimage"
+> +KERNEL_IMAGETYPE ??= "fitImage"
+> +
+> +PREFERRED_PROVIDER_trusted-firmware-a = "rockchip-rkbin"
+> +PREFERRED_PROVIDER_optee-os = "rockchip-rkbin"
+> +
+> +UBOOT_SUFFIX ?= "itb"
+> +UBOOT_ENTRYPOINT ?= "0x06000000"
+> diff --git a/conf/machine/rock-3a.conf b/conf/machine/rock-3a.conf
+> new file mode 100644
+> index 0000000..2ed83a3
+> --- /dev/null
+> +++ b/conf/machine/rock-3a.conf
+> @@ -0,0 +1,12 @@
+> +#@TYPE: Machine
+> +#@NAME: Radxa Rock 3a
+> +#@DESCRIPTION: ROCK3 is a series of Rockchip RK3566/RK3568 based
+> +#SBC(Single Board Computer) and Compute Module by Radxa.
+> +#https://wiki.radxa.com/Rock3
+> +
+> +require conf/machine/include/rk3568.inc
+> +
+> +KERNEL_DEVICETREE = "rockchip/rk3568-rock-3a.dtb"
+> +MACHINE_EXTRA_RRECOMMENDS += "kernel-modules"
+> +
+> +UBOOT_MACHINE = "rock-3a-rk3568_defconfig"
+> diff --git a/recipes-bsp/rkbin/rockchip-rkbin_git.bb b/recipes-bsp/rkbin/rockchip-rkbin_git.bb
+> index 7fefb01..273f394 100644
+> --- a/recipes-bsp/rkbin/rockchip-rkbin_git.bb
+> +++ b/recipes-bsp/rkbin/rockchip-rkbin_git.bb
+> @@ -14,6 +14,7 @@ S = "${WORKDIR}/git"
+>   
+>   COMPATIBLE_MACHINE = ""
+>   COMPATIBLE_MACHINE:rk3588s = "rk3588s"
+> +COMPATIBLE_MACHINE:rk3568 = "rk3568"
+>   
+>   PACKAGE_ARCH = "${MACHINE_ARCH}"
+>   
+> @@ -25,7 +26,16 @@ do_install() {
+>   PACKAGES = "${PN}"
+>   ALLOW_EMPTY:${PN} = "1"
+>   
+> -do_deploy() {
+> +do_deploy:rk3568() {
+> +	# Prebuilt TF-A
+> +	install -m 644 ${S}/bin/rk35/rk3568_bl31_v*.elf ${DEPLOYDIR}/bl31-rk3568.elf
+> +	# Prebuilt OPTEE-OS
+> +	install -m 644 ${S}/bin/rk35/rk3568_bl32_v*.bin ${DEPLOYDIR}/tee-rk3568.bin
+> +	# Prebuilt U-Boot TPL (DDR init)
+> +	install -m 644 ${S}/bin/rk35/rk3568_ddr_1560MHz_v1.18.bin ${DEPLOYDIR}/ddr-rk3568.bin
+> +}
+> +
+> +do_deploy:rk3588s() {
+>   	# Prebuilt TF-A
+>   	install -m 644 ${S}/bin/rk35/rk3588_bl31_v*.elf ${DEPLOYDIR}/bl31-rk3588.elf
+>   	# Prebuilt OPTEE-OS
+> @@ -34,4 +44,8 @@ do_deploy() {
+>   	install -m 644 ${S}/bin/rk35/rk3588_ddr_lp4_2112MHz_lp5_2736MHz_v*.bin ${DEPLOYDIR}/ddr-rk3588.bin
+>   }
+>   
+> +do_deploy() {
+> +# Needed as a default perhaps a bb.fatal with a message saying an override needs to be set
+> +}
+> +
+
+Well, we could, but also... the recipe won't be used until you add to 
+COMPATIBLE_MACHINE, which means the recipe should have been working by 
+the time you add it. Not entirely sure how much we want to prevent users 
+to shoot their own foot honestly. But I guess it's such a small change 
+that adding it is probably better than just arguing whether we need it 
+or not, so maybe send another patch to add the bb.fatal :) ?
+
+Cheers,
+Quentin
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] [meta-rockchip] [PATCH v2] rock-3a add
+  2023-10-09  8:25 ` [yocto] " Quentin Schulz
+@ 2023-10-09  8:48   ` Anthony Davies
+  0 siblings, 0 replies; 3+ messages in thread
+From: Anthony Davies @ 2023-10-09  8:48 UTC (permalink / raw)
+  To: Quentin Schulz; +Cc: yocto, twoerner
+
+Hi Quentin,
+
+On Mon, 9 Oct 2023 at 19:25, Quentin Schulz
+<quentin.schulz@theobroma-systems.com> wrote:
+>
+> Hi Anthony,
+>
+> On 10/7/23 01:26, Anthony Davies via lists.yoctoproject.org wrote:
+> > From: Anthony Davies <anthony.t.davies@gmail.com>
+> >
+> > Add support for the Radxa Rock 3A
+> > https://wiki.radxa.com/Rock3/3a
+> >
+> > The TF-A project does not currently have support for
+> > the rk3568. Therefore, for the time-being, the only way to supply a
+> > TPL/DDR-init for the rk3568 is to use the closed-source rkbin binaries
+> > from Rockchip. If/when TF-A adds support for the rk3588 we can investigate
+> > switching.
+> >
+> > recipes-bsp/rkbin/rockchip-rkbin_git.bb was modified to allow a machine
+> > override to allow both rk3568 and rk3588s to use differnet binary blobs
+> >
+> > Signed-off-by: Anthony Davies <anthony.t.davies@gmail.com>
+> > ---
+> >   README                                  |  1 +
+> >   conf/machine/include/rk3568.inc         | 17 +++++++++++++++++
+> >   conf/machine/rock-3a.conf               | 12 ++++++++++++
+> >   recipes-bsp/rkbin/rockchip-rkbin_git.bb | 16 +++++++++++++++-
+> >   recipes-bsp/u-boot/u-boot%.bbappend     |  5 +++++
+> >   5 files changed, 50 insertions(+), 1 deletion(-)
+> >   create mode 100644 conf/machine/include/rk3568.inc
+> >   create mode 100644 conf/machine/rock-3a.conf
+> >
+> > diff --git a/README b/README
+> > index 8104474..3357b47 100644
+> > --- a/README
+> > +++ b/README
+> > @@ -32,6 +32,7 @@ Status of supported boards:
+> >               nanopi-r4s
+> >               rock-5b
+> >               nanopi-r2s
+> > +    rock-3a
+>
+> Please use the same indentation here so it's aligned with the other boards.
+>
+> It's 2 tabs for the indentation there it seems.
+
+This would be my vim converting my \t to spaces. I will update and resend.
+
+>
+> >       builds:
+> >               marsboard-rk3066
+> >               radxarock
+> > diff --git a/conf/machine/include/rk3568.inc b/conf/machine/include/rk3568.inc
+> > new file mode 100644
+> > index 0000000..5382b58
+> > --- /dev/null
+> > +++ b/conf/machine/include/rk3568.inc
+> > @@ -0,0 +1,17 @@
+> > +MACHINEOVERRIDES =. "rk3568:"
+> > +DEFAULTTUNE ?= "cortexa55"
+> > +
+> > +require conf/machine/include/arm/armv8-2a/tune-cortexa55.inc
+> > +require conf/machine/include/rockchip-defaults.inc
+> > +require conf/machine/include/rockchip-wic.inc
+> > +
+> > +KBUILD_DEFCONFIG ?= "defconfig"
+> > +KERNEL_FEATURES:append:rk3568 = " bsp/rockchip/remove-non-rockchip-arch-arm64.scc"
+> > +KERNEL_CLASSES ??= "kernel-fitimage"
+> > +KERNEL_IMAGETYPE ??= "fitImage"
+> > +
+> > +PREFERRED_PROVIDER_trusted-firmware-a = "rockchip-rkbin"
+> > +PREFERRED_PROVIDER_optee-os = "rockchip-rkbin"
+> > +
+> > +UBOOT_SUFFIX ?= "itb"
+> > +UBOOT_ENTRYPOINT ?= "0x06000000"
+> > diff --git a/conf/machine/rock-3a.conf b/conf/machine/rock-3a.conf
+> > new file mode 100644
+> > index 0000000..2ed83a3
+> > --- /dev/null
+> > +++ b/conf/machine/rock-3a.conf
+> > @@ -0,0 +1,12 @@
+> > +#@TYPE: Machine
+> > +#@NAME: Radxa Rock 3a
+> > +#@DESCRIPTION: ROCK3 is a series of Rockchip RK3566/RK3568 based
+> > +#SBC(Single Board Computer) and Compute Module by Radxa.
+> > +#https://wiki.radxa.com/Rock3
+> > +
+> > +require conf/machine/include/rk3568.inc
+> > +
+> > +KERNEL_DEVICETREE = "rockchip/rk3568-rock-3a.dtb"
+> > +MACHINE_EXTRA_RRECOMMENDS += "kernel-modules"
+> > +
+> > +UBOOT_MACHINE = "rock-3a-rk3568_defconfig"
+> > diff --git a/recipes-bsp/rkbin/rockchip-rkbin_git.bb b/recipes-bsp/rkbin/rockchip-rkbin_git.bb
+> > index 7fefb01..273f394 100644
+> > --- a/recipes-bsp/rkbin/rockchip-rkbin_git.bb
+> > +++ b/recipes-bsp/rkbin/rockchip-rkbin_git.bb
+> > @@ -14,6 +14,7 @@ S = "${WORKDIR}/git"
+> >
+> >   COMPATIBLE_MACHINE = ""
+> >   COMPATIBLE_MACHINE:rk3588s = "rk3588s"
+> > +COMPATIBLE_MACHINE:rk3568 = "rk3568"
+> >
+> >   PACKAGE_ARCH = "${MACHINE_ARCH}"
+> >
+> > @@ -25,7 +26,16 @@ do_install() {
+> >   PACKAGES = "${PN}"
+> >   ALLOW_EMPTY:${PN} = "1"
+> >
+> > -do_deploy() {
+> > +do_deploy:rk3568() {
+> > +     # Prebuilt TF-A
+> > +     install -m 644 ${S}/bin/rk35/rk3568_bl31_v*.elf ${DEPLOYDIR}/bl31-rk3568.elf
+> > +     # Prebuilt OPTEE-OS
+> > +     install -m 644 ${S}/bin/rk35/rk3568_bl32_v*.bin ${DEPLOYDIR}/tee-rk3568.bin
+> > +     # Prebuilt U-Boot TPL (DDR init)
+> > +     install -m 644 ${S}/bin/rk35/rk3568_ddr_1560MHz_v1.18.bin ${DEPLOYDIR}/ddr-rk3568.bin
+> > +}
+> > +
+> > +do_deploy:rk3588s() {
+> >       # Prebuilt TF-A
+> >       install -m 644 ${S}/bin/rk35/rk3588_bl31_v*.elf ${DEPLOYDIR}/bl31-rk3588.elf
+> >       # Prebuilt OPTEE-OS
+> > @@ -34,4 +44,8 @@ do_deploy() {
+> >       install -m 644 ${S}/bin/rk35/rk3588_ddr_lp4_2112MHz_lp5_2736MHz_v*.bin ${DEPLOYDIR}/ddr-rk3588.bin
+> >   }
+> >
+> > +do_deploy() {
+> > +# Needed as a default perhaps a bb.fatal with a message saying an override needs to be set
+> > +}
+> > +
+>
+> Well, we could, but also... the recipe won't be used until you add to
+> COMPATIBLE_MACHINE, which means the recipe should have been working by
+> the time you add it. Not entirely sure how much we want to prevent users
+> to shoot their own foot honestly. But I guess it's such a small change
+> that adding it is probably better than just arguing whether we need it
+> or not, so maybe send another patch to add the bb.fatal :) ?
+
+If I am updating the other I will just add this to the existing patch.
+I was tempted to add the obligatory "Don't know how I got here" but
+didnt seem very useful and I had similar thoughts to you around if a
+bb.fatal was actually required.
+
+>
+> Cheers,
+> Quentin
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2023-10-09  8:48 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-10-06 23:26 [meta-rockchip] [PATCH v2] rock-3a add anthony.t.davies
+2023-10-09  8:25 ` [yocto] " Quentin Schulz
+2023-10-09  8:48   ` Anthony Davies
+

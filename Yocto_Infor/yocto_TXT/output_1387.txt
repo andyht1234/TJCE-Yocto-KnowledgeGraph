@@ -1,0 +1,1099 @@
+* [meta-zephyr][PATCH 0/4] Add script for version upgrades
+@ 2022-09-16  9:03 Peter Hoyes
+  2022-09-16  9:03 ` [meta-zephyr][PATCH 1/4] zephyr-core/scripts: Introduce script to generate new versions Peter Hoyes
+                   ` (4 more replies)
+  0 siblings, 5 replies; 7+ messages in thread
+From: Peter Hoyes @ 2022-09-16  9:03 UTC (permalink / raw)
+  To: yocto; +Cc: diego.sueiro, Peter Hoyes
+
+From: Peter Hoyes <Peter.Hoyes@arm.com>
+
+This patch chain has been developed on top of the 2.7.3 upgrade patch.
+
+Add a script, generate-version.py, which can be used to automatically 
+generate configuration for new Zephyr versions. Regenerate
+configuration for 2.7.3 and 3.1.0 using this script.
+
+This script includes a constant version-specific declaration of
+ZEPHYR_MODULES, so the build-time logic to extract ZEPHYR_MODULES is no
+longer required. Remove the do_get_zmods task and the West recipe.
+
+Peter Hoyes (4):
+  zephyr-core/scripts: Introduce script to generate new versions
+  zephyr-core/zephyr-kernel: Migrate to script-driven version files
+  zephyr-core/classes: Remove West-based logic from zephyr.bbclass
+  zephyr-core/zephyr-kernel: Update dtc.patch Upstream-Status
+
+ README.txt                                    |  17 ++
+ meta-zephyr-core/classes/zephyr.bbclass       |  32 +--
+ .../recipes-devtools/west/west_0.12.99.bb     |  22 --
+ ...y-generation-issue-in-cross-compila.patch} |   0
+ .../zephyr-kernel/files/dtc.patch             |   2 +-
+ .../zephyr-kernel/zephyr-kernel-src-2.7.3.inc | 202 +++++++++++++---
+ .../zephyr-kernel/zephyr-kernel-src-3.1.0.inc | 220 +++++++++++++++---
+ .../zephyr-kernel/zephyr-kernel-src.inc       |  43 ----
+ meta-zephyr-core/scripts/generate-version.py  |  73 ++++++
+ .../scripts/zephyr-kernel-src.inc.jinja       |  35 +++
+ 10 files changed, 474 insertions(+), 172 deletions(-)
+ delete mode 100644 meta-zephyr-core/recipes-devtools/west/west_0.12.99.bb
+ rename meta-zephyr-core/recipes-kernel/zephyr-kernel/files/{0001-x86-fix-efi-binary-generation-issue-in-cross-compila.patch => 0001-2.7-x86-fix-efi-binary-generation-issue-in-cross-compila.patch} (100%)
+ create mode 100755 meta-zephyr-core/scripts/generate-version.py
+ create mode 100644 meta-zephyr-core/scripts/zephyr-kernel-src.inc.jinja
+
+-- 
+2.25.1
+
+
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* [meta-zephyr][PATCH 1/4] zephyr-core/scripts: Introduce script to generate new versions
+  2022-09-16  9:03 [meta-zephyr][PATCH 0/4] Add script for version upgrades Peter Hoyes
+@ 2022-09-16  9:03 ` Peter Hoyes
+  2022-09-16  9:03 ` [meta-zephyr][PATCH 2/4] zephyr-core/zephyr-kernel: Migrate to script-driven version files Peter Hoyes
+                   ` (3 subsequent siblings)
+  4 siblings, 0 replies; 7+ messages in thread
+From: Peter Hoyes @ 2022-09-16  9:03 UTC (permalink / raw)
+  To: yocto; +Cc: diego.sueiro, Peter Hoyes
+
+From: Peter Hoyes <Peter.Hoyes@arm.com>
+
+Add a Python script which can be used to automatically generate
+configuration for new Zephyr versions. This script:
+ * Takes the Zephyr version as a single argument
+ * Uses the Github API to find the version tag's SHA1
+ * Uses West as a library to parse the version's manifest file
+ * Uses a Jinja template to generate a .inc file for the version
+ * Outputs the .inc file directly into the zephyr-kernel directory
+
+The generated .inc file includes:
+ * SRCREVs for all modules
+ * Separate SRC_URI_x variables for each module, to make it easier to
+   swap out a specific URL for a fork or mirror
+ * A version-specific SRC_URI, containing only the modules defined in
+   the release
+ * A list of the ZEPHYR_MODULES
+
+Signed-off-by: Peter Hoyes <Peter.Hoyes@arm.com>
+---
+ README.txt                                    | 17 +++++
+ meta-zephyr-core/scripts/generate-version.py  | 73 +++++++++++++++++++
+ .../scripts/zephyr-kernel-src.inc.jinja       | 35 +++++++++
+ 3 files changed, 125 insertions(+)
+ create mode 100755 meta-zephyr-core/scripts/generate-version.py
+ create mode 100644 meta-zephyr-core/scripts/zephyr-kernel-src.inc.jinja
+
+diff --git a/README.txt b/README.txt
+index 4776a8a..ea129ba 100644
+--- a/README.txt
++++ b/README.txt
+@@ -125,6 +125,23 @@ you will need to run the above, copy the conf files from the deploy dir to the
+ machine conf directory and then run your build. This shouldn't need to happen 
+ often.
+ 
++Generating new Zephyr recipe versions
++=====================================
++The script meta-zephyr-core/scripts/generate-version.py is used to generate
++Yocto configuration for a Zephyr version from the West configuration in the
++Zephyr repository. It requires the west and jinja2 Python packages to be
++installed on the host. Run it as follows:
++
++    $ ./meta-zephyr-core/scripts/generate-version.py x.x.x
++
++where x.x.x is the Zephyr version.
++
++The patch files added to SRC_URI in the generated file should be validated and
++modified if required.
++
++The new version should be committed and submitted to the mailing list as
++described in "Contributing".
++
+ Contributing
+ ============
+ 
+diff --git a/meta-zephyr-core/scripts/generate-version.py b/meta-zephyr-core/scripts/generate-version.py
+new file mode 100755
+index 0000000..550f8df
+--- /dev/null
++++ b/meta-zephyr-core/scripts/generate-version.py
+@@ -0,0 +1,73 @@
++#!/usr/bin/env python3
++
++import json
++import pathlib
++import re
++import sys
++import urllib.parse
++import urllib.request
++
++# These non-standard modules must be installed on the host
++import jinja2
++import west.manifest
++
++# This script takes one argument - the Zephyr version in the form x.y.z
++version = sys.argv[1]
++if not re.match(r'\d+.\d+.\d+', version):
++    raise ValueError("Please provide a valid Zephyr version")
++
++# Convert the version (x.y.z) into the Git commit SHA using the Github API
++# This is a two-step process - first obtain the tag SHA
++ref_url = f'https://api.github.com/repos/zephyrproject-rtos/zephyr/git/refs/tags/v{version}'
++with urllib.request.urlopen(ref_url) as f:
++    ref_data = json.load(f)
++    ref_sha = ref_data['object']['sha']
++
++# Secondly, obtain the commit SHA of the tag SHA
++tag_url = f'https://api.github.com/repos/zephyrproject-rtos/zephyr/git/tags/{ref_sha}'
++with urllib.request.urlopen(tag_url) as f:
++    tag_data = json.load(f)
++    tag_sha = tag_data['object']['sha']
++
++# Obtain the West manifest and decode using west as a library
++manifest_url = f'https://raw.githubusercontent.com/zephyrproject-rtos/zephyr/v{version}/west.yml'
++with urllib.request.urlopen(manifest_url) as f:
++    source_data = f.read().decode()
++    manifest = west.manifest.Manifest(source_data=source_data,
++        import_flags=west.manifest.ImportFlag.IGNORE)
++    projects = manifest.get_projects([])
++
++# projects contains a 'manifest' project for 'self' which we don't want to use
++projects = list(filter(lambda project: project.name != 'manifest', projects))
++template_params = dict(version=version, tag_sha=tag_sha, projects=projects)
++
++def git_url_to_bitbake(url):
++    """
++    A template helper function which converts an URL for a Git repository into
++    a Bitbake-style URL with a 'protocol' suffix
++    """
++    parts = urllib.parse.urlparse(url)
++    original_sceme = parts.scheme
++    parts = parts._replace(scheme='git')
++    return parts.geturl() + ';protocol=' + original_sceme
++
++def bitbake_var(name):
++    """
++    Returns a string suitable for use in a Bitbake variable name
++    """
++    return name.upper().replace('-', '_')
++
++# Set up the Jinja environment
++template_dir = pathlib.Path(__file__).parent
++env = jinja2.Environment(loader=jinja2.FileSystemLoader(template_dir))
++env.filters['git_url_to_bitbake'] = git_url_to_bitbake
++env.filters['bitbake_var'] = bitbake_var
++template = env.get_template('zephyr-kernel-src.inc.jinja')
++
++# Output directly to the zephyr-kernel directory
++dest_path = pathlib.Path(__file__).parents[1] / 'recipes-kernel' /\
++    'zephyr-kernel' / f'zephyr-kernel-src-{version}.inc'
++
++# Generate the Bitbake include file
++with open(dest_path, 'w') as f:
++    f.write(template.render(**template_params))
+diff --git a/meta-zephyr-core/scripts/zephyr-kernel-src.inc.jinja b/meta-zephyr-core/scripts/zephyr-kernel-src.inc.jinja
+new file mode 100644
+index 0000000..e7981ed
+--- /dev/null
++++ b/meta-zephyr-core/scripts/zephyr-kernel-src.inc.jinja
+@@ -0,0 +1,35 @@
++# Auto-generated from zephyr-kernel-src.inc.jinja
++{%- set short_version = '.'.join(version.split('.')[0:2]) %}
++
++SRCREV_FORMAT = "default"
++
++SRCREV_default = "{{ tag_sha }}"
++{% for project in projects -%}
++SRCREV_{{ project.name }} = "{{ project.revision }}"
++{% endfor %}
++SRC_URI_ZEPHYR ?= "git://github.com/zephyrproject-rtos/zephyr.git;protocol=https"
++{%- for project in projects %}
++SRC_URI_{{ project.name | bitbake_var }} ?= "{{ project.url | git_url_to_bitbake }}"
++{%- endfor %}
++
++SRC_URI_PATCHES ?= "\
++    file://0001-{{ short_version }}-cmake-add-yocto-toolchain.patch;patchdir=zephyr \
++    file://0001-{{ short_version }}-x86-fix-efi-binary-generation-issue-in-cross-compila.patch;patchdir=zephyr \
++"
++
++SRC_URI = "\
++    ${SRC_URI_ZEPHYR};branch=${ZEPHYR_BRANCH};name=default;destsuffix=git/zephyr \
++{%- for project in projects %}
++    ${SRC_URI_{{ project.name | bitbake_var }}};name={{ project.name }};nobranch=1;destsuffix=git/{{ project.path }} \
++{%- endfor %}
++    ${SRC_URI_PATCHES} \
++"
++
++ZEPHYR_MODULES = "\{% for project in projects %}
++${S}/{{ project.path }}\;\
++{%- endfor %}
++"
++
++ZEPHYR_BRANCH = "v{{ short_version }}-branch"
++PV = "{{ version }}+git${SRCPV}"
++
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 7+ messages in thread
+* [meta-zephyr][PATCH 2/4] zephyr-core/zephyr-kernel: Migrate to script-driven version files
+  2022-09-16  9:03 [meta-zephyr][PATCH 0/4] Add script for version upgrades Peter Hoyes
+  2022-09-16  9:03 ` [meta-zephyr][PATCH 1/4] zephyr-core/scripts: Introduce script to generate new versions Peter Hoyes
+@ 2022-09-16  9:03 ` Peter Hoyes
+  2022-09-16  9:03 ` [meta-zephyr][PATCH 3/4] zephyr-core/classes: Remove West-based logic from zephyr.bbclass Peter Hoyes
+                   ` (2 subsequent siblings)
+  4 siblings, 0 replies; 7+ messages in thread
+From: Peter Hoyes @ 2022-09-16  9:03 UTC (permalink / raw)
+  To: yocto; +Cc: diego.sueiro, Peter Hoyes
+
+From: Peter Hoyes <Peter.Hoyes@arm.com>
+
+This commit uses the output of
+meta-zephyr-core/scripts/generate-version.py for both the 2.7.3 and
+3.1.0 versions.
+
+Rename a patch for for v2.7.3 to match the filename expected by the
+generated configuration.
+
+Signed-off-by: Peter Hoyes <Peter.Hoyes@arm.com>
+---
+ ...y-generation-issue-in-cross-compila.patch} |   0
+ .../zephyr-kernel/zephyr-kernel-src-2.7.3.inc | 202 +++++++++++++---
+ .../zephyr-kernel/zephyr-kernel-src-3.1.0.inc | 220 +++++++++++++++---
+ .../zephyr-kernel/zephyr-kernel-src.inc       |  43 ----
+ 4 files changed, 347 insertions(+), 118 deletions(-)
+ rename meta-zephyr-core/recipes-kernel/zephyr-kernel/files/{0001-x86-fix-efi-binary-generation-issue-in-cross-compila.patch => 0001-2.7-x86-fix-efi-binary-generation-issue-in-cross-compila.patch} (100%)
+
+diff --git a/meta-zephyr-core/recipes-kernel/zephyr-kernel/files/0001-x86-fix-efi-binary-generation-issue-in-cross-compila.patch b/meta-zephyr-core/recipes-kernel/zephyr-kernel/files/0001-2.7-x86-fix-efi-binary-generation-issue-in-cross-compila.patch
+similarity index 100%
+rename from meta-zephyr-core/recipes-kernel/zephyr-kernel/files/0001-x86-fix-efi-binary-generation-issue-in-cross-compila.patch
+rename to meta-zephyr-core/recipes-kernel/zephyr-kernel/files/0001-2.7-x86-fix-efi-binary-generation-issue-in-cross-compila.patch
+diff --git a/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-kernel-src-2.7.3.inc b/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-kernel-src-2.7.3.inc
+index 1c53748..2d20888 100644
+--- a/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-kernel-src-2.7.3.inc
++++ b/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-kernel-src-2.7.3.inc
+@@ -1,18 +1,6 @@
+-SRCREV_FORMAT = "default_cmsis"
++# Auto-generated from zephyr-kernel-src.inc.jinja
+ 
+-# These repositories are specific to post-2.6 branches
+-
+-SRC_URI += " \
+-    git://github.com/zephyrproject-rtos/mcumgr.git;protocol=https;nobranch=1;destsuffix=git/modules/lib/mcumgr;name=mcumgr \
+-    git://github.com/zephyrproject-rtos/TraceRecorderSource.git;protocol=https;nobranch=1;destsuffix=git/modules/debug/TraceRecorder;name=TraceRecorder \
+-    git://github.com/zephyrproject-rtos/trusted-firmware-m.git;protocol=https;nobranch=1;destsuffix=git/modules/tee/tfm;name=tfm \
+-"
+-
+-#
+-# Generated from:
+-# west forall -c 'x=$(filename `pwd`); rev=$(git rev-parse HEAD); \
+-#      echo SRCREV_$x = \"$rev\"'
+-#
++SRCREV_FORMAT = "default"
+ 
+ SRCREV_default = "003de78ce0dd213a1c7b3d159b967fb19a12aa45"
+ SRCREV_canopennode = "f167efe85c8c7de886f1bc47f9173cfb8a346bb5"
+@@ -20,23 +8,23 @@ SRCREV_civetweb = "094aeb41bb93e9199d24d665ee43e9e05d6d7b1c"
+ SRCREV_cmsis = "b0612c97c1401feeb4160add6462c3627fe90fc7"
+ SRCREV_edtt = "31badfbbd04f2948e3df6ebf329f930317550961"
+ SRCREV_fatfs = "94fcd6bfb3801ac0a5e12ea2f52187e0a688b90e"
+-SRCREV_altera = "23c1c1dd7a0c1cc9a399509d1819375847c95b97"
+-SRCREV_atmel = "9f78f520f6cbb997e5b44fe8ab17dd5bf2448095"
+-SRCREV_cypress = "81a059f21435bc7e315bccd720da5a9b615bbb50"
+-SRCREV_espressif = "3400257534944d3a6a4194d1dbf8f0cd1670d64e"
+-SRCREV_infineon = "f1fa8241f8786198ba41155413243de36ed878a5"
+-SRCREV_microchip = "870d05e6a64ea9548da6b907058b03c8c9420826"
+-SRCREV_nordic = "a6e5299041f152da5ae0ab17b2e44e088bb96d6d"
+-SRCREV_nuvoton = "b4d31f33238713a568e23618845702fadd67386f"
+-SRCREV_nxp = "78efc4ba7c1057c1cf2bf06e3e27ed7cc33e1da7"
+-SRCREV_openisa = "40d049f69c50b58ea20473bee14cf93f518bf262"
+-SRCREV_quicklogic = "b3a66fe6d04d87fd1533a5c8de51d0599fcd08d0"
+-SRCREV_silabs = "be39d4eebeddac6e18e9c0c3ba1b31ad1e82eaed"
+-SRCREV_st = "575de9d461aa6f430cf62c58a053675377e700f3"
+-SRCREV_stm32 = "5c8275071ec1cf160bfe8c18bbd9330a7d714dc8"
+-SRCREV_telink = "ffcfd6282aa213f1dc0848dbca6279b098f6b143"
+-SRCREV_ti = "1992a4c536554c4f409c36896eda6abdc414d277"
+-SRCREV_xtensa = "6e1cf3c483e87df4888e87c5396b4534570f01af"
++SRCREV_hal_altera = "23c1c1dd7a0c1cc9a399509d1819375847c95b97"
++SRCREV_hal_atmel = "9f78f520f6cbb997e5b44fe8ab17dd5bf2448095"
++SRCREV_hal_cypress = "81a059f21435bc7e315bccd720da5a9b615bbb50"
++SRCREV_hal_espressif = "3400257534944d3a6a4194d1dbf8f0cd1670d64e"
++SRCREV_hal_infineon = "f1fa8241f8786198ba41155413243de36ed878a5"
++SRCREV_hal_microchip = "870d05e6a64ea9548da6b907058b03c8c9420826"
++SRCREV_hal_nordic = "a6e5299041f152da5ae0ab17b2e44e088bb96d6d"
++SRCREV_hal_nuvoton = "b4d31f33238713a568e23618845702fadd67386f"
++SRCREV_hal_nxp = "78efc4ba7c1057c1cf2bf06e3e27ed7cc33e1da7"
++SRCREV_hal_openisa = "40d049f69c50b58ea20473bee14cf93f518bf262"
++SRCREV_hal_quicklogic = "b3a66fe6d04d87fd1533a5c8de51d0599fcd08d0"
++SRCREV_hal_silabs = "be39d4eebeddac6e18e9c0c3ba1b31ad1e82eaed"
++SRCREV_hal_st = "575de9d461aa6f430cf62c58a053675377e700f3"
++SRCREV_hal_stm32 = "5c8275071ec1cf160bfe8c18bbd9330a7d714dc8"
++SRCREV_hal_telink = "ffcfd6282aa213f1dc0848dbca6279b098f6b143"
++SRCREV_hal_ti = "1992a4c536554c4f409c36896eda6abdc414d277"
++SRCREV_hal_xtensa = "6e1cf3c483e87df4888e87c5396b4534570f01af"
+ SRCREV_libmetal = "39d049d4ae68e6f6d595fce7de1dcfc1024fb4eb"
+ SRCREV_littlefs = "9e4498d1c73009acd84bb36036ee5e2869112a6c"
+ SRCREV_loramac-node = "12019623bbad9eb54fe51066847a7cbd4b4eac57"
+@@ -56,15 +44,153 @@ SRCREV_sof = "76feb11d1b8f425021b5691668af2250fee444ac"
+ SRCREV_tflite-micro = "9156d050927012da87079064db59d07f03b8baf6"
+ SRCREV_tinycbor = "40daca97b478989884bffb5226e9ab73ca54b8c4"
+ SRCREV_tinycrypt = "3e9a49d2672ec01435ffbf0d788db6d95ef28de0"
+-SRCREV_TraceRecorder = "36c577727642457b0db7274298a4b96558374832"
+-SRCREV_tfm = "c74be3890c9d975976fde1b1a3b2f5742bec34c0"
++SRCREV_TraceRecorderSource = "36c577727642457b0db7274298a4b96558374832"
++SRCREV_trusted-firmware-m = "c74be3890c9d975976fde1b1a3b2f5742bec34c0"
+ 
+-ZEPHYR_BRANCH = "v2.7-branch"
+-PV = "2.7.3+git${SRCPV}"
++SRC_URI_ZEPHYR ?= "git://github.com/zephyrproject-rtos/zephyr.git;protocol=https"
++SRC_URI_CANOPENNODE ?= "git://github.com/zephyrproject-rtos/canopennode;protocol=https"
++SRC_URI_CIVETWEB ?= "git://github.com/zephyrproject-rtos/civetweb;protocol=https"
++SRC_URI_CMSIS ?= "git://github.com/zephyrproject-rtos/cmsis;protocol=https"
++SRC_URI_EDTT ?= "git://github.com/zephyrproject-rtos/edtt;protocol=https"
++SRC_URI_FATFS ?= "git://github.com/zephyrproject-rtos/fatfs;protocol=https"
++SRC_URI_HAL_ALTERA ?= "git://github.com/zephyrproject-rtos/hal_altera;protocol=https"
++SRC_URI_HAL_ATMEL ?= "git://github.com/zephyrproject-rtos/hal_atmel;protocol=https"
++SRC_URI_HAL_CYPRESS ?= "git://github.com/zephyrproject-rtos/hal_cypress;protocol=https"
++SRC_URI_HAL_ESPRESSIF ?= "git://github.com/zephyrproject-rtos/hal_espressif;protocol=https"
++SRC_URI_HAL_INFINEON ?= "git://github.com/zephyrproject-rtos/hal_infineon;protocol=https"
++SRC_URI_HAL_MICROCHIP ?= "git://github.com/zephyrproject-rtos/hal_microchip;protocol=https"
++SRC_URI_HAL_NORDIC ?= "git://github.com/zephyrproject-rtos/hal_nordic;protocol=https"
++SRC_URI_HAL_NUVOTON ?= "git://github.com/zephyrproject-rtos/hal_nuvoton;protocol=https"
++SRC_URI_HAL_NXP ?= "git://github.com/zephyrproject-rtos/hal_nxp;protocol=https"
++SRC_URI_HAL_OPENISA ?= "git://github.com/zephyrproject-rtos/hal_openisa;protocol=https"
++SRC_URI_HAL_QUICKLOGIC ?= "git://github.com/zephyrproject-rtos/hal_quicklogic;protocol=https"
++SRC_URI_HAL_SILABS ?= "git://github.com/zephyrproject-rtos/hal_silabs;protocol=https"
++SRC_URI_HAL_ST ?= "git://github.com/zephyrproject-rtos/hal_st;protocol=https"
++SRC_URI_HAL_STM32 ?= "git://github.com/zephyrproject-rtos/hal_stm32;protocol=https"
++SRC_URI_HAL_TELINK ?= "git://github.com/zephyrproject-rtos/hal_telink;protocol=https"
++SRC_URI_HAL_TI ?= "git://github.com/zephyrproject-rtos/hal_ti;protocol=https"
++SRC_URI_HAL_XTENSA ?= "git://github.com/zephyrproject-rtos/hal_xtensa;protocol=https"
++SRC_URI_LIBMETAL ?= "git://github.com/zephyrproject-rtos/libmetal;protocol=https"
++SRC_URI_LITTLEFS ?= "git://github.com/zephyrproject-rtos/littlefs;protocol=https"
++SRC_URI_LORAMAC_NODE ?= "git://github.com/zephyrproject-rtos/loramac-node;protocol=https"
++SRC_URI_LVGL ?= "git://github.com/zephyrproject-rtos/lvgl;protocol=https"
++SRC_URI_LZ4 ?= "git://github.com/zephyrproject-rtos/lz4;protocol=https"
++SRC_URI_MBEDTLS ?= "git://github.com/zephyrproject-rtos/mbedtls;protocol=https"
++SRC_URI_MCUBOOT ?= "git://github.com/zephyrproject-rtos/mcuboot;protocol=https"
++SRC_URI_MCUMGR ?= "git://github.com/zephyrproject-rtos/mcumgr;protocol=https"
++SRC_URI_MIPI_SYS_T ?= "git://github.com/zephyrproject-rtos/mipi-sys-t;protocol=https"
++SRC_URI_NANOPB ?= "git://github.com/zephyrproject-rtos/nanopb;protocol=https"
++SRC_URI_NET_TOOLS ?= "git://github.com/zephyrproject-rtos/net-tools;protocol=https"
++SRC_URI_NRF_HW_MODELS ?= "git://github.com/zephyrproject-rtos/nrf_hw_models;protocol=https"
++SRC_URI_OPEN_AMP ?= "git://github.com/zephyrproject-rtos/open-amp;protocol=https"
++SRC_URI_OPENTHREAD ?= "git://github.com/zephyrproject-rtos/openthread;protocol=https"
++SRC_URI_SEGGER ?= "git://github.com/zephyrproject-rtos/segger;protocol=https"
++SRC_URI_SOF ?= "git://github.com/zephyrproject-rtos/sof;protocol=https"
++SRC_URI_TFLITE_MICRO ?= "git://github.com/zephyrproject-rtos/tflite-micro;protocol=https"
++SRC_URI_TINYCBOR ?= "git://github.com/zephyrproject-rtos/tinycbor;protocol=https"
++SRC_URI_TINYCRYPT ?= "git://github.com/zephyrproject-rtos/tinycrypt;protocol=https"
++SRC_URI_TRACERECORDERSOURCE ?= "git://github.com/zephyrproject-rtos/TraceRecorderSource;protocol=https"
++SRC_URI_TRUSTED_FIRMWARE_M ?= "git://github.com/zephyrproject-rtos/trusted-firmware-m;protocol=https"
+ 
+-SRC_URI:append = " \
++SRC_URI_PATCHES ?= "\
+     file://dtc.patch;patchdir=zephyr \
+-    file://0001-x86-fix-efi-binary-generation-issue-in-cross-compila.patch;patchdir=zephyr \
+     file://0001-2.7-cmake-add-yocto-toolchain.patch;patchdir=zephyr \
+-    git://github.com/zephyrproject-rtos/hal_cypress.git;protocol=https;nobranch=1;destsuffix=git/modules/hal/cypress;name=cypress \
++    file://0001-2.7-x86-fix-efi-binary-generation-issue-in-cross-compila.patch;patchdir=zephyr \
++"
++
++SRC_URI = "\
++    ${SRC_URI_ZEPHYR};branch=${ZEPHYR_BRANCH};name=default;destsuffix=git/zephyr \
++    ${SRC_URI_CANOPENNODE};name=canopennode;nobranch=1;destsuffix=git/modules/lib/canopennode \
++    ${SRC_URI_CIVETWEB};name=civetweb;nobranch=1;destsuffix=git/modules/lib/civetweb \
++    ${SRC_URI_CMSIS};name=cmsis;nobranch=1;destsuffix=git/modules/hal/cmsis \
++    ${SRC_URI_EDTT};name=edtt;nobranch=1;destsuffix=git/tools/edtt \
++    ${SRC_URI_FATFS};name=fatfs;nobranch=1;destsuffix=git/modules/fs/fatfs \
++    ${SRC_URI_HAL_ALTERA};name=hal_altera;nobranch=1;destsuffix=git/modules/hal/altera \
++    ${SRC_URI_HAL_ATMEL};name=hal_atmel;nobranch=1;destsuffix=git/modules/hal/atmel \
++    ${SRC_URI_HAL_CYPRESS};name=hal_cypress;nobranch=1;destsuffix=git/modules/hal/cypress \
++    ${SRC_URI_HAL_ESPRESSIF};name=hal_espressif;nobranch=1;destsuffix=git/modules/hal/espressif \
++    ${SRC_URI_HAL_INFINEON};name=hal_infineon;nobranch=1;destsuffix=git/modules/hal/infineon \
++    ${SRC_URI_HAL_MICROCHIP};name=hal_microchip;nobranch=1;destsuffix=git/modules/hal/microchip \
++    ${SRC_URI_HAL_NORDIC};name=hal_nordic;nobranch=1;destsuffix=git/modules/hal/nordic \
++    ${SRC_URI_HAL_NUVOTON};name=hal_nuvoton;nobranch=1;destsuffix=git/modules/hal/nuvoton \
++    ${SRC_URI_HAL_NXP};name=hal_nxp;nobranch=1;destsuffix=git/modules/hal/nxp \
++    ${SRC_URI_HAL_OPENISA};name=hal_openisa;nobranch=1;destsuffix=git/modules/hal/openisa \
++    ${SRC_URI_HAL_QUICKLOGIC};name=hal_quicklogic;nobranch=1;destsuffix=git/modules/hal/quicklogic \
++    ${SRC_URI_HAL_SILABS};name=hal_silabs;nobranch=1;destsuffix=git/modules/hal/silabs \
++    ${SRC_URI_HAL_ST};name=hal_st;nobranch=1;destsuffix=git/modules/hal/st \
++    ${SRC_URI_HAL_STM32};name=hal_stm32;nobranch=1;destsuffix=git/modules/hal/stm32 \
++    ${SRC_URI_HAL_TELINK};name=hal_telink;nobranch=1;destsuffix=git/modules/hal/telink \
++    ${SRC_URI_HAL_TI};name=hal_ti;nobranch=1;destsuffix=git/modules/hal/ti \
++    ${SRC_URI_HAL_XTENSA};name=hal_xtensa;nobranch=1;destsuffix=git/modules/hal/xtensa \
++    ${SRC_URI_LIBMETAL};name=libmetal;nobranch=1;destsuffix=git/modules/hal/libmetal \
++    ${SRC_URI_LITTLEFS};name=littlefs;nobranch=1;destsuffix=git/modules/fs/littlefs \
++    ${SRC_URI_LORAMAC_NODE};name=loramac-node;nobranch=1;destsuffix=git/modules/lib/loramac-node \
++    ${SRC_URI_LVGL};name=lvgl;nobranch=1;destsuffix=git/modules/lib/gui/lvgl \
++    ${SRC_URI_LZ4};name=lz4;nobranch=1;destsuffix=git/modules/lib/lz4 \
++    ${SRC_URI_MBEDTLS};name=mbedtls;nobranch=1;destsuffix=git/modules/crypto/mbedtls \
++    ${SRC_URI_MCUBOOT};name=mcuboot;nobranch=1;destsuffix=git/bootloader/mcuboot \
++    ${SRC_URI_MCUMGR};name=mcumgr;nobranch=1;destsuffix=git/modules/lib/mcumgr \
++    ${SRC_URI_MIPI_SYS_T};name=mipi-sys-t;nobranch=1;destsuffix=git/modules/debug/mipi-sys-t \
++    ${SRC_URI_NANOPB};name=nanopb;nobranch=1;destsuffix=git/modules/lib/nanopb \
++    ${SRC_URI_NET_TOOLS};name=net-tools;nobranch=1;destsuffix=git/tools/net-tools \
++    ${SRC_URI_NRF_HW_MODELS};name=nrf_hw_models;nobranch=1;destsuffix=git/modules/bsim_hw_models/nrf_hw_models \
++    ${SRC_URI_OPEN_AMP};name=open-amp;nobranch=1;destsuffix=git/modules/lib/open-amp \
++    ${SRC_URI_OPENTHREAD};name=openthread;nobranch=1;destsuffix=git/modules/lib/openthread \
++    ${SRC_URI_SEGGER};name=segger;nobranch=1;destsuffix=git/modules/debug/segger \
++    ${SRC_URI_SOF};name=sof;nobranch=1;destsuffix=git/modules/audio/sof \
++    ${SRC_URI_TFLITE_MICRO};name=tflite-micro;nobranch=1;destsuffix=git/modules/lib/tflite-micro \
++    ${SRC_URI_TINYCBOR};name=tinycbor;nobranch=1;destsuffix=git/modules/lib/tinycbor \
++    ${SRC_URI_TINYCRYPT};name=tinycrypt;nobranch=1;destsuffix=git/modules/crypto/tinycrypt \
++    ${SRC_URI_TRACERECORDERSOURCE};name=TraceRecorderSource;nobranch=1;destsuffix=git/modules/debug/TraceRecorder \
++    ${SRC_URI_TRUSTED_FIRMWARE_M};name=trusted-firmware-m;nobranch=1;destsuffix=git/modules/tee/tfm \
++    ${SRC_URI_PATCHES} \
++"
++
++ZEPHYR_MODULES = "\
++${S}/modules/lib/canopennode\;\
++${S}/modules/lib/civetweb\;\
++${S}/modules/hal/cmsis\;\
++${S}/tools/edtt\;\
++${S}/modules/fs/fatfs\;\
++${S}/modules/hal/altera\;\
++${S}/modules/hal/atmel\;\
++${S}/modules/hal/cypress\;\
++${S}/modules/hal/espressif\;\
++${S}/modules/hal/infineon\;\
++${S}/modules/hal/microchip\;\
++${S}/modules/hal/nordic\;\
++${S}/modules/hal/nuvoton\;\
++${S}/modules/hal/nxp\;\
++${S}/modules/hal/openisa\;\
++${S}/modules/hal/quicklogic\;\
++${S}/modules/hal/silabs\;\
++${S}/modules/hal/st\;\
++${S}/modules/hal/stm32\;\
++${S}/modules/hal/telink\;\
++${S}/modules/hal/ti\;\
++${S}/modules/hal/xtensa\;\
++${S}/modules/hal/libmetal\;\
++${S}/modules/fs/littlefs\;\
++${S}/modules/lib/loramac-node\;\
++${S}/modules/lib/gui/lvgl\;\
++${S}/modules/lib/lz4\;\
++${S}/modules/crypto/mbedtls\;\
++${S}/bootloader/mcuboot\;\
++${S}/modules/lib/mcumgr\;\
++${S}/modules/debug/mipi-sys-t\;\
++${S}/modules/lib/nanopb\;\
++${S}/tools/net-tools\;\
++${S}/modules/bsim_hw_models/nrf_hw_models\;\
++${S}/modules/lib/open-amp\;\
++${S}/modules/lib/openthread\;\
++${S}/modules/debug/segger\;\
++${S}/modules/audio/sof\;\
++${S}/modules/lib/tflite-micro\;\
++${S}/modules/lib/tinycbor\;\
++${S}/modules/crypto/tinycrypt\;\
++${S}/modules/debug/TraceRecorder\;\
++${S}/modules/tee/tfm\;\
+ "
++
++ZEPHYR_BRANCH = "v2.7-branch"
++PV = "2.7.3+git${SRCPV}"
+diff --git a/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-kernel-src-3.1.0.inc b/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-kernel-src-3.1.0.inc
+index c0fe5f2..68016e4 100644
+--- a/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-kernel-src-3.1.0.inc
++++ b/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-kernel-src-3.1.0.inc
+@@ -1,20 +1,6 @@
+-SRCREV_FORMAT = "default_cmsis"
++# Auto-generated from zephyr-kernel-src.inc.jinja
+ 
+-#
+-# Generated with:
+-#
+-# #!/usr/bin/python3
+-#
+-# import yaml
+-# import sys
+-#
+-# if __name__ == "__main__":
+-#     with open(sys.argv[1], "r") as fd:
+-#         data = yaml.safe_load(fd)
+-#
+-#         for project in data["manifest"]["projects"]:
+-#             print("SRCREV_{} = \"{}\"".format(project["name"], project["revision"]))
+-#
++SRCREV_FORMAT = "default"
+ 
+ SRCREV_default = "2ddd73feafd3316af2c547c34d6969bea637d5c6"
+ SRCREV_canopennode = "53d3415c14d60f8f4bfca54bfbc5d5a667d7e724"
+@@ -24,24 +10,24 @@ SRCREV_cmsis = "5f86244bad4ad5a590e084f0e72ba7a1416c2edf"
+ SRCREV_edtt = "1ea61a390d2bfcf3b2ecdba8f8b0b98dfdffbd11"
+ SRCREV_fatfs = "a30531af3a95a9a3ea7d771ea8a578ebfed45514"
+ SRCREV_fff = "6ce5ba26486e93d5b7696a3e23f0585932c14b16"
+-SRCREV_altera = "0d225ddd314379b32355a00fb669eacf911e750d"
+-SRCREV_atmel = "78c5567c05b6b434dd7d98f49156319df4217bac"
+-SRCREV_espressif = "df85671c5d0405c0747c2939c8dfe808b7e4cf38"
+-SRCREV_gigadevice = "63a72ca90b7e0d7257211ddc5c79e8c0b940371b"
+-SRCREV_infineon = "4af06965f57ba1e7d170e6a97d24c33785543a8c"
+-SRCREV_microchip = "5d079f1683a00b801373bbbbf5d181d4e33b30d5"
+-SRCREV_nordic = "a85bb3676d61d1ae202088e0d3fec556056b2c9e"
+-SRCREV_nuvoton = "b4d31f33238713a568e23618845702fadd67386f"
+-SRCREV_nxp = "2302a1e94f5bc00ce59db4e249b688ad2e959f58"
+-SRCREV_openisa = "40d049f69c50b58ea20473bee14cf93f518bf262"
+-SRCREV_quicklogic = "b3a66fe6d04d87fd1533a5c8de51d0599fcd08d0"
+-SRCREV_rpi_pico = "191f5ba46fda49523cdaaef27583d1c875ba2c36"
+-SRCREV_silabs = "be39d4eebeddac6e18e9c0c3ba1b31ad1e82eaed"
+-SRCREV_st = "52a522ca4a8a9ec1e9bb5bb514e1ab6f102863fe"
+-SRCREV_stm32 = "51b373cd3455b8c2b9babbf6ff41918116a442ac"
+-SRCREV_telink = "ffcfd6282aa213f1dc0848dbca6279b098f6b143"
+-SRCREV_ti = "905a5d4134899630071f9383aadaaf266e8f8cd2"
+-SRCREV_xtensa = "0e577021bb66e644afd067cd9f7c71ab11b62b3d"
++SRCREV_hal_altera = "0d225ddd314379b32355a00fb669eacf911e750d"
++SRCREV_hal_atmel = "78c5567c05b6b434dd7d98f49156319df4217bac"
++SRCREV_hal_espressif = "df85671c5d0405c0747c2939c8dfe808b7e4cf38"
++SRCREV_hal_gigadevice = "63a72ca90b7e0d7257211ddc5c79e8c0b940371b"
++SRCREV_hal_infineon = "4af06965f57ba1e7d170e6a97d24c33785543a8c"
++SRCREV_hal_microchip = "5d079f1683a00b801373bbbbf5d181d4e33b30d5"
++SRCREV_hal_nordic = "a85bb3676d61d1ae202088e0d3fec556056b2c9e"
++SRCREV_hal_nuvoton = "b4d31f33238713a568e23618845702fadd67386f"
++SRCREV_hal_nxp = "2302a1e94f5bc00ce59db4e249b688ad2e959f58"
++SRCREV_hal_openisa = "40d049f69c50b58ea20473bee14cf93f518bf262"
++SRCREV_hal_quicklogic = "b3a66fe6d04d87fd1533a5c8de51d0599fcd08d0"
++SRCREV_hal_rpi_pico = "191f5ba46fda49523cdaaef27583d1c875ba2c36"
++SRCREV_hal_silabs = "be39d4eebeddac6e18e9c0c3ba1b31ad1e82eaed"
++SRCREV_hal_st = "52a522ca4a8a9ec1e9bb5bb514e1ab6f102863fe"
++SRCREV_hal_stm32 = "51b373cd3455b8c2b9babbf6ff41918116a442ac"
++SRCREV_hal_telink = "ffcfd6282aa213f1dc0848dbca6279b098f6b143"
++SRCREV_hal_ti = "905a5d4134899630071f9383aadaaf266e8f8cd2"
++SRCREV_hal_xtensa = "0e577021bb66e644afd067cd9f7c71ab11b62b3d"
+ SRCREV_libmetal = "850a3c3fd5bc655987021dc9106d8e8cd0f7e061"
+ SRCREV_liblc3codec = "3951cf1b71ff3be086c9b9b595e473e12301337c"
+ SRCREV_littlefs = "652f2c5646e79b881e6f3099686ad3b7af9e216c"
+@@ -68,10 +54,170 @@ SRCREV_psa-arch-tests = "a81f9da287569f169d60026916952641b233faa8"
+ SRCREV_zcbor = "882c489a7d9fdfff31d27666914a78a9eb6976d7"
+ SRCREV_zscilib = "fc979a8dcb74169c69b02835927bff8f070d6325"
+ 
+-ZEPHYR_BRANCH = "v3.1-branch"
+-PV = "3.1.0+git${SRCPV}"
++SRC_URI_ZEPHYR ?= "git://github.com/zephyrproject-rtos/zephyr.git;protocol=https"
++SRC_URI_CANOPENNODE ?= "git://github.com/zephyrproject-rtos/canopennode;protocol=https"
++SRC_URI_CHRE ?= "git://github.com/zephyrproject-rtos/chre;protocol=https"
++SRC_URI_CIVETWEB ?= "git://github.com/zephyrproject-rtos/civetweb;protocol=https"
++SRC_URI_CMSIS ?= "git://github.com/zephyrproject-rtos/cmsis;protocol=https"
++SRC_URI_EDTT ?= "git://github.com/zephyrproject-rtos/edtt;protocol=https"
++SRC_URI_FATFS ?= "git://github.com/zephyrproject-rtos/fatfs;protocol=https"
++SRC_URI_FFF ?= "git://github.com/zephyrproject-rtos/fff;protocol=https"
++SRC_URI_HAL_ALTERA ?= "git://github.com/zephyrproject-rtos/hal_altera;protocol=https"
++SRC_URI_HAL_ATMEL ?= "git://github.com/zephyrproject-rtos/hal_atmel;protocol=https"
++SRC_URI_HAL_ESPRESSIF ?= "git://github.com/zephyrproject-rtos/hal_espressif;protocol=https"
++SRC_URI_HAL_GIGADEVICE ?= "git://github.com/zephyrproject-rtos/hal_gigadevice;protocol=https"
++SRC_URI_HAL_INFINEON ?= "git://github.com/zephyrproject-rtos/hal_infineon;protocol=https"
++SRC_URI_HAL_MICROCHIP ?= "git://github.com/zephyrproject-rtos/hal_microchip;protocol=https"
++SRC_URI_HAL_NORDIC ?= "git://github.com/zephyrproject-rtos/hal_nordic;protocol=https"
++SRC_URI_HAL_NUVOTON ?= "git://github.com/zephyrproject-rtos/hal_nuvoton;protocol=https"
++SRC_URI_HAL_NXP ?= "git://github.com/zephyrproject-rtos/hal_nxp;protocol=https"
++SRC_URI_HAL_OPENISA ?= "git://github.com/zephyrproject-rtos/hal_openisa;protocol=https"
++SRC_URI_HAL_QUICKLOGIC ?= "git://github.com/zephyrproject-rtos/hal_quicklogic;protocol=https"
++SRC_URI_HAL_RPI_PICO ?= "git://github.com/zephyrproject-rtos/hal_rpi_pico;protocol=https"
++SRC_URI_HAL_SILABS ?= "git://github.com/zephyrproject-rtos/hal_silabs;protocol=https"
++SRC_URI_HAL_ST ?= "git://github.com/zephyrproject-rtos/hal_st;protocol=https"
++SRC_URI_HAL_STM32 ?= "git://github.com/zephyrproject-rtos/hal_stm32;protocol=https"
++SRC_URI_HAL_TELINK ?= "git://github.com/zephyrproject-rtos/hal_telink;protocol=https"
++SRC_URI_HAL_TI ?= "git://github.com/zephyrproject-rtos/hal_ti;protocol=https"
++SRC_URI_HAL_XTENSA ?= "git://github.com/zephyrproject-rtos/hal_xtensa;protocol=https"
++SRC_URI_LIBMETAL ?= "git://github.com/zephyrproject-rtos/libmetal;protocol=https"
++SRC_URI_LIBLC3CODEC ?= "git://github.com/zephyrproject-rtos/liblc3codec;protocol=https"
++SRC_URI_LITTLEFS ?= "git://github.com/zephyrproject-rtos/littlefs;protocol=https"
++SRC_URI_LORAMAC_NODE ?= "git://github.com/zephyrproject-rtos/loramac-node;protocol=https"
++SRC_URI_LVGL ?= "git://github.com/zephyrproject-rtos/lvgl;protocol=https"
++SRC_URI_LZ4 ?= "git://github.com/zephyrproject-rtos/lz4;protocol=https"
++SRC_URI_MBEDTLS ?= "git://github.com/zephyrproject-rtos/mbedtls;protocol=https"
++SRC_URI_MCUBOOT ?= "git://github.com/zephyrproject-rtos/mcuboot;protocol=https"
++SRC_URI_MIPI_SYS_T ?= "git://github.com/zephyrproject-rtos/mipi-sys-t;protocol=https"
++SRC_URI_NANOPB ?= "git://github.com/zephyrproject-rtos/nanopb;protocol=https"
++SRC_URI_NET_TOOLS ?= "git://github.com/zephyrproject-rtos/net-tools;protocol=https"
++SRC_URI_NRF_HW_MODELS ?= "git://github.com/zephyrproject-rtos/nrf_hw_models;protocol=https"
++SRC_URI_OPEN_AMP ?= "git://github.com/zephyrproject-rtos/open-amp;protocol=https"
++SRC_URI_OPENTHREAD ?= "git://github.com/zephyrproject-rtos/openthread;protocol=https"
++SRC_URI_SEGGER ?= "git://github.com/zephyrproject-rtos/segger;protocol=https"
++SRC_URI_SOF ?= "git://github.com/zephyrproject-rtos/sof;protocol=https"
++SRC_URI_TFLITE_MICRO ?= "git://github.com/zephyrproject-rtos/tflite-micro;protocol=https"
++SRC_URI_TINYCBOR ?= "git://github.com/zephyrproject-rtos/tinycbor;protocol=https"
++SRC_URI_TINYCRYPT ?= "git://github.com/zephyrproject-rtos/tinycrypt;protocol=https"
++SRC_URI_TRACERECORDERSOURCE ?= "git://github.com/zephyrproject-rtos/TraceRecorderSource;protocol=https"
++SRC_URI_TRUSTED_FIRMWARE_M ?= "git://github.com/zephyrproject-rtos/trusted-firmware-m;protocol=https"
++SRC_URI_TF_M_TESTS ?= "git://github.com/zephyrproject-rtos/tf-m-tests;protocol=https"
++SRC_URI_PSA_ARCH_TESTS ?= "git://github.com/zephyrproject-rtos/psa-arch-tests;protocol=https"
++SRC_URI_ZCBOR ?= "git://github.com/zephyrproject-rtos/zcbor;protocol=https"
++SRC_URI_ZSCILIB ?= "git://github.com/zephyrproject-rtos/zscilib;protocol=https"
+ 
+-SRC_URI += " \
++SRC_URI_PATCHES ?= "\
+     file://0001-3.1-cmake-add-yocto-toolchain.patch;patchdir=zephyr \
+     file://0001-3.1-x86-fix-efi-binary-generation-issue-in-cross-compila.patch;patchdir=zephyr \
+ "
++
++SRC_URI = "\
++    ${SRC_URI_ZEPHYR};branch=${ZEPHYR_BRANCH};name=default;destsuffix=git/zephyr \
++    ${SRC_URI_CANOPENNODE};name=canopennode;nobranch=1;destsuffix=git/modules/lib/canopennode \
++    ${SRC_URI_CHRE};name=chre;nobranch=1;destsuffix=git/modules/lib/chre \
++    ${SRC_URI_CIVETWEB};name=civetweb;nobranch=1;destsuffix=git/modules/lib/civetweb \
++    ${SRC_URI_CMSIS};name=cmsis;nobranch=1;destsuffix=git/modules/hal/cmsis \
++    ${SRC_URI_EDTT};name=edtt;nobranch=1;destsuffix=git/tools/edtt \
++    ${SRC_URI_FATFS};name=fatfs;nobranch=1;destsuffix=git/modules/fs/fatfs \
++    ${SRC_URI_FFF};name=fff;nobranch=1;destsuffix=git/modules/lib/fff \
++    ${SRC_URI_HAL_ALTERA};name=hal_altera;nobranch=1;destsuffix=git/modules/hal/altera \
++    ${SRC_URI_HAL_ATMEL};name=hal_atmel;nobranch=1;destsuffix=git/modules/hal/atmel \
++    ${SRC_URI_HAL_ESPRESSIF};name=hal_espressif;nobranch=1;destsuffix=git/modules/hal/espressif \
++    ${SRC_URI_HAL_GIGADEVICE};name=hal_gigadevice;nobranch=1;destsuffix=git/modules/hal/gigadevice \
++    ${SRC_URI_HAL_INFINEON};name=hal_infineon;nobranch=1;destsuffix=git/modules/hal/infineon \
++    ${SRC_URI_HAL_MICROCHIP};name=hal_microchip;nobranch=1;destsuffix=git/modules/hal/microchip \
++    ${SRC_URI_HAL_NORDIC};name=hal_nordic;nobranch=1;destsuffix=git/modules/hal/nordic \
++    ${SRC_URI_HAL_NUVOTON};name=hal_nuvoton;nobranch=1;destsuffix=git/modules/hal/nuvoton \
++    ${SRC_URI_HAL_NXP};name=hal_nxp;nobranch=1;destsuffix=git/modules/hal/nxp \
++    ${SRC_URI_HAL_OPENISA};name=hal_openisa;nobranch=1;destsuffix=git/modules/hal/openisa \
++    ${SRC_URI_HAL_QUICKLOGIC};name=hal_quicklogic;nobranch=1;destsuffix=git/modules/hal/quicklogic \
++    ${SRC_URI_HAL_RPI_PICO};name=hal_rpi_pico;nobranch=1;destsuffix=git/modules/hal/rpi_pico \
++    ${SRC_URI_HAL_SILABS};name=hal_silabs;nobranch=1;destsuffix=git/modules/hal/silabs \
++    ${SRC_URI_HAL_ST};name=hal_st;nobranch=1;destsuffix=git/modules/hal/st \
++    ${SRC_URI_HAL_STM32};name=hal_stm32;nobranch=1;destsuffix=git/modules/hal/stm32 \
++    ${SRC_URI_HAL_TELINK};name=hal_telink;nobranch=1;destsuffix=git/modules/hal/telink \
++    ${SRC_URI_HAL_TI};name=hal_ti;nobranch=1;destsuffix=git/modules/hal/ti \
++    ${SRC_URI_HAL_XTENSA};name=hal_xtensa;nobranch=1;destsuffix=git/modules/hal/xtensa \
++    ${SRC_URI_LIBMETAL};name=libmetal;nobranch=1;destsuffix=git/modules/hal/libmetal \
++    ${SRC_URI_LIBLC3CODEC};name=liblc3codec;nobranch=1;destsuffix=git/modules/lib/liblc3codec \
++    ${SRC_URI_LITTLEFS};name=littlefs;nobranch=1;destsuffix=git/modules/fs/littlefs \
++    ${SRC_URI_LORAMAC_NODE};name=loramac-node;nobranch=1;destsuffix=git/modules/lib/loramac-node \
++    ${SRC_URI_LVGL};name=lvgl;nobranch=1;destsuffix=git/modules/lib/gui/lvgl \
++    ${SRC_URI_LZ4};name=lz4;nobranch=1;destsuffix=git/modules/lib/lz4 \
++    ${SRC_URI_MBEDTLS};name=mbedtls;nobranch=1;destsuffix=git/modules/crypto/mbedtls \
++    ${SRC_URI_MCUBOOT};name=mcuboot;nobranch=1;destsuffix=git/bootloader/mcuboot \
++    ${SRC_URI_MIPI_SYS_T};name=mipi-sys-t;nobranch=1;destsuffix=git/modules/debug/mipi-sys-t \
++    ${SRC_URI_NANOPB};name=nanopb;nobranch=1;destsuffix=git/modules/lib/nanopb \
++    ${SRC_URI_NET_TOOLS};name=net-tools;nobranch=1;destsuffix=git/tools/net-tools \
++    ${SRC_URI_NRF_HW_MODELS};name=nrf_hw_models;nobranch=1;destsuffix=git/modules/bsim_hw_models/nrf_hw_models \
++    ${SRC_URI_OPEN_AMP};name=open-amp;nobranch=1;destsuffix=git/modules/lib/open-amp \
++    ${SRC_URI_OPENTHREAD};name=openthread;nobranch=1;destsuffix=git/modules/lib/openthread \
++    ${SRC_URI_SEGGER};name=segger;nobranch=1;destsuffix=git/modules/debug/segger \
++    ${SRC_URI_SOF};name=sof;nobranch=1;destsuffix=git/modules/audio/sof \
++    ${SRC_URI_TFLITE_MICRO};name=tflite-micro;nobranch=1;destsuffix=git/modules/lib/tflite-micro \
++    ${SRC_URI_TINYCBOR};name=tinycbor;nobranch=1;destsuffix=git/modules/lib/tinycbor \
++    ${SRC_URI_TINYCRYPT};name=tinycrypt;nobranch=1;destsuffix=git/modules/crypto/tinycrypt \
++    ${SRC_URI_TRACERECORDERSOURCE};name=TraceRecorderSource;nobranch=1;destsuffix=git/modules/debug/TraceRecorder \
++    ${SRC_URI_TRUSTED_FIRMWARE_M};name=trusted-firmware-m;nobranch=1;destsuffix=git/modules/tee/tf-m/trusted-firmware-m \
++    ${SRC_URI_TF_M_TESTS};name=tf-m-tests;nobranch=1;destsuffix=git/modules/tee/tf-m/tf-m-tests \
++    ${SRC_URI_PSA_ARCH_TESTS};name=psa-arch-tests;nobranch=1;destsuffix=git/modules/tee/tf-m/psa-arch-tests \
++    ${SRC_URI_ZCBOR};name=zcbor;nobranch=1;destsuffix=git/modules/lib/zcbor \
++    ${SRC_URI_ZSCILIB};name=zscilib;nobranch=1;destsuffix=git/modules/lib/zscilib \
++    ${SRC_URI_PATCHES} \
++"
++
++ZEPHYR_MODULES = "\
++${S}/modules/lib/canopennode\;\
++${S}/modules/lib/chre\;\
++${S}/modules/lib/civetweb\;\
++${S}/modules/hal/cmsis\;\
++${S}/tools/edtt\;\
++${S}/modules/fs/fatfs\;\
++${S}/modules/lib/fff\;\
++${S}/modules/hal/altera\;\
++${S}/modules/hal/atmel\;\
++${S}/modules/hal/espressif\;\
++${S}/modules/hal/gigadevice\;\
++${S}/modules/hal/infineon\;\
++${S}/modules/hal/microchip\;\
++${S}/modules/hal/nordic\;\
++${S}/modules/hal/nuvoton\;\
++${S}/modules/hal/nxp\;\
++${S}/modules/hal/openisa\;\
++${S}/modules/hal/quicklogic\;\
++${S}/modules/hal/rpi_pico\;\
++${S}/modules/hal/silabs\;\
++${S}/modules/hal/st\;\
++${S}/modules/hal/stm32\;\
++${S}/modules/hal/telink\;\
++${S}/modules/hal/ti\;\
++${S}/modules/hal/xtensa\;\
++${S}/modules/hal/libmetal\;\
++${S}/modules/lib/liblc3codec\;\
++${S}/modules/fs/littlefs\;\
++${S}/modules/lib/loramac-node\;\
++${S}/modules/lib/gui/lvgl\;\
++${S}/modules/lib/lz4\;\
++${S}/modules/crypto/mbedtls\;\
++${S}/bootloader/mcuboot\;\
++${S}/modules/debug/mipi-sys-t\;\
++${S}/modules/lib/nanopb\;\
++${S}/tools/net-tools\;\
++${S}/modules/bsim_hw_models/nrf_hw_models\;\
++${S}/modules/lib/open-amp\;\
++${S}/modules/lib/openthread\;\
++${S}/modules/debug/segger\;\
++${S}/modules/audio/sof\;\
++${S}/modules/lib/tflite-micro\;\
++${S}/modules/lib/tinycbor\;\
++${S}/modules/crypto/tinycrypt\;\
++${S}/modules/debug/TraceRecorder\;\
++${S}/modules/tee/tf-m/trusted-firmware-m\;\
++${S}/modules/tee/tf-m/tf-m-tests\;\
++${S}/modules/tee/tf-m/psa-arch-tests\;\
++${S}/modules/lib/zcbor\;\
++${S}/modules/lib/zscilib\;\
++"
++
++ZEPHYR_BRANCH = "v3.1-branch"
++PV = "3.1.0+git${SRCPV}"
+diff --git a/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-kernel-src.inc b/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-kernel-src.inc
+index a4bab22..f28d1d4 100644
+--- a/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-kernel-src.inc
++++ b/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-kernel-src.inc
+@@ -9,49 +9,6 @@ inherit cmake
+ # having an explicit path to the patches directory, will make bitbake fail to
+ # find the patch(es) in SRC_URI.
+ FILESEXTRAPATHS:prepend := "${THISDIR}/files:"
+-
+-SRC_URI = "\
+-    git://github.com/zephyrproject-rtos/zephyr.git;protocol=https;branch=${ZEPHYR_BRANCH};name=default;destsuffix=git/zephyr \
+-    git://github.com/zephyrproject-rtos/canopennode.git;protocol=https;nobranch=1;destsuffix=git/modules/lib/canopennode;name=canopennode \
+-    git://github.com/zephyrproject-rtos/civetweb.git;protocol=https;nobranch=1;destsuffix=git/modules/lib/civetweb;name=civetweb \
+-    git://github.com/zephyrproject-rtos/cmsis.git;protocol=https;nobranch=1;destsuffix=git/modules/hal/cmsis;name=cmsis \
+-    git://github.com/zephyrproject-rtos/edtt.git;protocol=https;nobranch=1;destsuffix=git/tools/edtt;name=edtt \
+-    git://github.com/zephyrproject-rtos/fatfs.git;protocol=https;nobranch=1;destsuffix=git/modules/fs/fatfs;name=fatfs \
+-    git://github.com/zephyrproject-rtos/hal_altera.git;protocol=https;nobranch=1;destsuffix=git/modules/hal/altera;name=altera \
+-    git://github.com/zephyrproject-rtos/hal_atmel.git;protocol=https;nobranch=1;destsuffix=git/modules/hal/atmel;name=atmel \
+-    git://github.com/zephyrproject-rtos/hal_espressif.git;protocol=https;nobranch=1;destsuffix=git/modules/hal/espressif;name=espressif \
+-    git://github.com/zephyrproject-rtos/hal_infineon.git;protocol=https;nobranch=1;destsuffix=git/modules/hal/infineon;name=infineon \
+-    git://github.com/zephyrproject-rtos/hal_microchip.git;protocol=https;nobranch=1;destsuffix=git/modules/hal/microchip;name=microchip \
+-    git://github.com/zephyrproject-rtos/hal_nordic.git;protocol=https;nobranch=1;destsuffix=git/modules/hal/nordic;name=nordic \
+-    git://github.com/zephyrproject-rtos/hal_nuvoton.git;protocol=https;nobranch=1;destsuffix=git/modules/hal/nuvoton;name=nuvoton \
+-    git://github.com/zephyrproject-rtos/hal_nxp.git;protocol=https;nobranch=1;destsuffix=git/modules/hal/nxp;name=nxp \
+-    git://github.com/zephyrproject-rtos/hal_openisa.git;protocol=https;nobranch=1;destsuffix=git/modules/hal/openisa;name=openisa \
+-    git://github.com/zephyrproject-rtos/hal_quicklogic.git;protocol=https;nobranch=1;destsuffix=git/modules/hal/quicklogic;name=quicklogic \
+-    git://github.com/zephyrproject-rtos/hal_silabs.git;protocol=https;nobranch=1;destsuffix=git/modules/hal/silabs;name=silabs \
+-    git://github.com/zephyrproject-rtos/hal_st.git;protocol=https;nobranch=1;destsuffix=git/modules/hal/st;name=st \
+-    git://github.com/zephyrproject-rtos/hal_stm32.git;protocol=https;nobranch=1;destsuffix=git/modules/hal/stm32;name=stm32 \
+-    git://github.com/zephyrproject-rtos/hal_ti.git;protocol=https;nobranch=1;destsuffix=git/modules/hal/ti;name=ti \
+-    git://github.com/zephyrproject-rtos/hal_xtensa.git;protocol=https;nobranch=1;destsuffix=git/modules/hal/xtensa;name=xtensa \
+-    git://github.com/zephyrproject-rtos/libmetal.git;protocol=https;nobranch=1;destsuffix=git/modules/hal/libmetal;name=libmetal \
+-    git://github.com/zephyrproject-rtos/littlefs.git;protocol=https;nobranch=1;destsuffix=git/modules/fs/littlefs;name=littlefs \
+-    git://github.com/zephyrproject-rtos/loramac-node.git;protocol=https;nobranch=1;destsuffix=git/modules/lib/loramac-node;name=loramac-node \
+-    git://github.com/zephyrproject-rtos/lvgl.git;protocol=https;nobranch=1;destsuffix=git/modules/lib/gui/lvgl;name=lvgl \
+-    git://github.com/zephyrproject-rtos/mbedtls.git;protocol=https;nobranch=1;destsuffix=git/modules/crypto/mbedtls;name=mbedtls \
+-    git://github.com/zephyrproject-rtos/mcuboot.git;protocol=https;nobranch=1;destsuffix=git/bootloader/mcuboot;name=mcuboot \
+-    git://github.com/zephyrproject-rtos/mipi-sys-t.git;protocol=https;nobranch=1;destsuffix=git/modules/debug/mipi-sys-t;name=mipi-sys-t \
+-    git://github.com/zephyrproject-rtos/nanopb.git;protocol=https;nobranch=1;destsuffix=git/modules/lib/nanopb;name=nanopb \
+-    git://github.com/zephyrproject-rtos/net-tools.git;protocol=https;nobranch=1;destsuffix=git/tools/net-tools;name=net-tools \
+-    git://github.com/zephyrproject-rtos/nrf_hw_models.git;protocol=https;nobranch=1;destsuffix=git/modules/bsim_hw_models/nrf_hw_models;name=nrf_hw_models \
+-    git://github.com/zephyrproject-rtos/open-amp.git;protocol=https;nobranch=1;destsuffix=git/modules/lib/open-amp;name=open-amp \
+-    git://github.com/zephyrproject-rtos/openthread.git;protocol=https;nobranch=1;destsuffix=git/modules/lib/openthread;name=openthread \
+-    git://github.com/zephyrproject-rtos/segger.git;protocol=https;nobranch=1;destsuffix=git/modules/debug/segger;name=segger \
+-    git://github.com/zephyrproject-rtos/sof.git;protocol=https;nobranch=1;destsuffix=git/modules/audio/sof;name=sof \
+-    git://github.com/zephyrproject-rtos/tinycbor.git;protocol=https;nobranch=1;destsuffix=git/modules/lib/tinycbor;name=tinycbor \
+-    git://github.com/zephyrproject-rtos/tinycrypt.git;protocol=https;nobranch=1;destsuffix=git/modules/crypto/tinycrypt;name=tinycrypt \
+-    git://github.com/zephyrproject-rtos/hal_telink.git;protocol=https;nobranch=1;destsuffix=git/modules/hal/telink;name=telink \
+-    git://github.com/zephyrproject-rtos/lz4.git;protocol=https;nobranch=1;destsuffix=git/modules/lib/lz4;name=lz4 \
+-    git://github.com/zephyrproject-rtos/tflite-micro.git;protocol=https;nobranch=1;destsuffix=git/modules/lib/tflite-micro;name=tflite-micro \
+-"
+ S = "${WORKDIR}/git"
+ 
+ # Default to a stable version
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 7+ messages in thread
+* [meta-zephyr][PATCH 3/4] zephyr-core/classes: Remove West-based logic from zephyr.bbclass
+  2022-09-16  9:03 [meta-zephyr][PATCH 0/4] Add script for version upgrades Peter Hoyes
+  2022-09-16  9:03 ` [meta-zephyr][PATCH 1/4] zephyr-core/scripts: Introduce script to generate new versions Peter Hoyes
+  2022-09-16  9:03 ` [meta-zephyr][PATCH 2/4] zephyr-core/zephyr-kernel: Migrate to script-driven version files Peter Hoyes
+@ 2022-09-16  9:03 ` Peter Hoyes
+  2022-09-16  9:03 ` [meta-zephyr][PATCH 4/4] zephyr-core/zephyr-kernel: Update dtc.patch Upstream-Status Peter Hoyes
+  2022-09-20 22:33 ` [meta-zephyr][PATCH 0/4] Add script for version upgrades Jon Mason
+  4 siblings, 0 replies; 7+ messages in thread
+From: Peter Hoyes @ 2022-09-16  9:03 UTC (permalink / raw)
+  To: yocto; +Cc: diego.sueiro, Peter Hoyes
+
+From: Peter Hoyes <Peter.Hoyes@arm.com>
+
+For a given release tag, ZEPHYR_MODULES is constant. It is therefore now
+populated by the generate-version.py script, the output of which is
+stored in the repository, so the build-time logic to populate
+ZEPHYR_MODULES is no longer needed.
+
+Remove the do_get_zmods task, but retain the Python dependencies which
+are still required by Python scripts in the Zephyr repository that are
+trigerred by CMake.
+
+The above means that West is now only required as a host dependency to
+run generate-version.py, so remove the West Yocto recipe.
+
+Signed-off-by: Peter Hoyes <Peter.Hoyes@arm.com>
+---
+ meta-zephyr-core/classes/zephyr.bbclass       | 32 +------------------
+ .../recipes-devtools/west/west_0.12.99.bb     | 22 -------------
+ 2 files changed, 1 insertion(+), 53 deletions(-)
+ delete mode 100644 meta-zephyr-core/recipes-devtools/west/west_0.12.99.bb
+
+diff --git a/meta-zephyr-core/classes/zephyr.bbclass b/meta-zephyr-core/classes/zephyr.bbclass
+index 8030456..5b71bda 100644
+--- a/meta-zephyr-core/classes/zephyr.bbclass
++++ b/meta-zephyr-core/classes/zephyr.bbclass
+@@ -2,6 +2,7 @@ inherit terminal
+ inherit python3native
+ 
+ PYTHONPATH="${STAGING_DIR_HOST}${libdir}/${PYTHON_DIR}/site-packages"
++DEPENDS += "python3-pyelftools-native python3-pyyaml-native python3-pykwalify-native"
+ 
+ OE_TERMINAL_EXPORTS += "HOST_EXTRACFLAGS HOSTLDFLAGS TERMINFO CROSS_CURSES_LIB CROSS_CURSES_INC"
+ HOST_EXTRACFLAGS = "${BUILD_CFLAGS} ${BUILD_LDFLAGS}"
+@@ -24,39 +25,8 @@ python () {
+     d.setVar('BOARD',board)
+ }
+ 
+-do_get_zmods() {
+-
+-    export PYTHONPATH="${RECIPE_SYSROOT_NATIVE}/${libdir}/${PYTHON_DIR}/site-packages:${RECIPE_SYSROOT_NATIVE}/${libdir}/${PYTHON_DIR}"
+-    cd ${S}
+-    
+-    # I really dislike how tied in this is to west, but without reimplementing their script, this seems to be the
+-    # easiest way to do this
+-    rm -rf .west; mkdir .west
+-    cat << EOF >> ${S}/.west/config
+-[manifest]
+-path = zephyr
+-file = west.yml
+-EOF
+-
+-    # Get all available modules and add them to ZEPHYR_MODULES
+-    for i in $(west list|awk 'NR>1 {print $2}'); do
+-        ZEPHYR_MODULES="${S}/$i\;${ZEPHYR_MODULES}"
+-    done
+-    export ZEPHYR_MODULES
+-}
+-
+-do_get_zmods[nostamp] = "1"
+-do_get_zmods[dirs] = "${B}"
+-
+ EXTRA_OECMAKE:append = " -DZEPHYR_MODULES=${ZEPHYR_MODULES}"
+ 
+-addtask get_zmods after do_patch before do_configure
+-do_get_zmods[depends] += "west-native:do_populate_sysroot"
+-do_get_zmods[depends] += "python3-pyyaml-native:do_populate_sysroot"
+-do_get_zmods[depends] += "python3-pykwalify-native:do_populate_sysroot"
+-do_get_zmods[depends] += "python3-colorama-native:do_populate_sysroot"
+-do_get_zmods[depends] += "python3-pyelftools-native:do_populate_sysroot"
+-
+ python do_menuconfig() {
+     os.chdir(d.getVar('ZEPHYR_SRC_DIR', True))
+     configdir = d.getVar('ZEPHYR_SRC_DIR', True) + '/outdir/' + d.getVar('BOARD', True)
+diff --git a/meta-zephyr-core/recipes-devtools/west/west_0.12.99.bb b/meta-zephyr-core/recipes-devtools/west/west_0.12.99.bb
+deleted file mode 100644
+index 6a9f8bc..0000000
+--- a/meta-zephyr-core/recipes-devtools/west/west_0.12.99.bb
++++ /dev/null
+@@ -1,22 +0,0 @@
+-# SPDX-FileCopyrightText: Huawei Inc.
+-# SPDX-License-Identifier: Apache-2.0
+-
+-SUMMARY = "Zephyr RTOS Project meta-tool"
+-HOMEPAGE = "https://github.com/zephyrproject-rtos/west"
+-LICENSE = "Apache-2.0"
+-LIC_FILES_CHKSUM = "file://LICENSE;md5=e3fc50a88d0a364313df4b21ef20c29e"
+-
+-SRC_URI = "git://github.com/zephyrproject-rtos/west;protocol=https;branch=main"
+-
+-PV = "0.12.99"
+-SRCREV = "38e656b05ea8f4c8d80b953f6d88b1ed604d11f8"
+-PROVIDES = "virtual/west"
+-
+-S = "${WORKDIR}/git"
+-
+-inherit setuptools3 python3native
+-
+-DEPENDS_${PN} += "python3-pyyaml python3-core python3-packaging python3-colorama python3-pyparsing"
+-RDEPENDS_${PN} += "python3-pyyaml python3-core python3-packaging python3-colorama python3-pyparsing"
+-BBCLASSEXTEND = "native nativesdk"
+-TOOLCHAIN_HOST_TASK:append = " nativesdk-west"
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 7+ messages in thread
+* [meta-zephyr][PATCH 4/4] zephyr-core/zephyr-kernel: Update dtc.patch Upstream-Status
+  2022-09-16  9:03 [meta-zephyr][PATCH 0/4] Add script for version upgrades Peter Hoyes
+                   ` (2 preceding siblings ...)
+  2022-09-16  9:03 ` [meta-zephyr][PATCH 3/4] zephyr-core/classes: Remove West-based logic from zephyr.bbclass Peter Hoyes
+@ 2022-09-16  9:03 ` Peter Hoyes
+  2022-09-20 22:33 ` [meta-zephyr][PATCH 0/4] Add script for version upgrades Jon Mason
+  4 siblings, 0 replies; 7+ messages in thread
+From: Peter Hoyes @ 2022-09-16  9:03 UTC (permalink / raw)
+  To: yocto; +Cc: diego.sueiro, Peter Hoyes
+
+From: Peter Hoyes <Peter.Hoyes@arm.com>
+
+The patch dtc.patch used by 2.7.3 has been accepted upstream, so it is
+now a Backport.
+
+Signed-off-by: Peter Hoyes <Peter.Hoyes@arm.com>
+---
+ meta-zephyr-core/recipes-kernel/zephyr-kernel/files/dtc.patch | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/meta-zephyr-core/recipes-kernel/zephyr-kernel/files/dtc.patch b/meta-zephyr-core/recipes-kernel/zephyr-kernel/files/dtc.patch
+index f23a438..971995b 100644
+--- a/meta-zephyr-core/recipes-kernel/zephyr-kernel/files/dtc.patch
++++ b/meta-zephyr-core/recipes-kernel/zephyr-kernel/files/dtc.patch
+@@ -1,4 +1,4 @@
+-Upstream-Status: Submitted [https://github.com/zephyrproject-rtos/zephyr/pull/40364]
++Upstream-Status: Backport [https://github.com/zephyrproject-rtos/zephyr/commit/a4da64033dac55108215857659831b7d027513de]
+ Signed-off-by: Ross Burton <ross.burton@arm.com>
+ 
+ From deb6e9b29d77f0d86eb188fb3c5fc6f470277d3d Mon Sep 17 00:00:00 2001
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 7+ messages in thread
+* Re: [meta-zephyr][PATCH 0/4] Add script for version upgrades
+  2022-09-16  9:03 [meta-zephyr][PATCH 0/4] Add script for version upgrades Peter Hoyes
+                   ` (3 preceding siblings ...)
+  2022-09-16  9:03 ` [meta-zephyr][PATCH 4/4] zephyr-core/zephyr-kernel: Update dtc.patch Upstream-Status Peter Hoyes
+@ 2022-09-20 22:33 ` Jon Mason
+  2022-09-21  8:49   ` [yocto] " Saini, Naveen Kumar
+  4 siblings, 1 reply; 7+ messages in thread
+From: Jon Mason @ 2022-09-20 22:33 UTC (permalink / raw)
+  To: Peter Hoyes; +Cc: yocto, diego.sueiro
+
+On Fri, Sep 16, 2022 at 10:03:14AM +0100, Peter Hoyes wrote:
+> From: Peter Hoyes <Peter.Hoyes@arm.com>
+> 
+> This patch chain has been developed on top of the 2.7.3 upgrade patch.
+> 
+> Add a script, generate-version.py, which can be used to automatically 
+> generate configuration for new Zephyr versions. Regenerate
+> configuration for 2.7.3 and 3.1.0 using this script.
+> 
+> This script includes a constant version-specific declaration of
+> ZEPHYR_MODULES, so the build-time logic to extract ZEPHYR_MODULES is no
+> longer required. Remove the do_get_zmods task and the West recipe.
+> 
+> Peter Hoyes (4):
+>   zephyr-core/scripts: Introduce script to generate new versions
+>   zephyr-core/zephyr-kernel: Migrate to script-driven version files
+>   zephyr-core/classes: Remove West-based logic from zephyr.bbclass
+>   zephyr-core/zephyr-kernel: Update dtc.patch Upstream-Status
+
+Series passes CI (on top of the v2.7.3 patch).  See
+https://gitlab.com/jonmason00/meta-zephyr/-/pipelines/645914527
+
+Tested-by: Jon Mason <jon.mason@arm.com>
+
+> 
+>  README.txt                                    |  17 ++
+>  meta-zephyr-core/classes/zephyr.bbclass       |  32 +--
+>  .../recipes-devtools/west/west_0.12.99.bb     |  22 --
+>  ...y-generation-issue-in-cross-compila.patch} |   0
+>  .../zephyr-kernel/files/dtc.patch             |   2 +-
+>  .../zephyr-kernel/zephyr-kernel-src-2.7.3.inc | 202 +++++++++++++---
+>  .../zephyr-kernel/zephyr-kernel-src-3.1.0.inc | 220 +++++++++++++++---
+>  .../zephyr-kernel/zephyr-kernel-src.inc       |  43 ----
+>  meta-zephyr-core/scripts/generate-version.py  |  73 ++++++
+>  .../scripts/zephyr-kernel-src.inc.jinja       |  35 +++
+>  10 files changed, 474 insertions(+), 172 deletions(-)
+>  delete mode 100644 meta-zephyr-core/recipes-devtools/west/west_0.12.99.bb
+>  rename meta-zephyr-core/recipes-kernel/zephyr-kernel/files/{0001-x86-fix-efi-binary-generation-issue-in-cross-compila.patch => 0001-2.7-x86-fix-efi-binary-generation-issue-in-cross-compila.patch} (100%)
+>  create mode 100755 meta-zephyr-core/scripts/generate-version.py
+>  create mode 100644 meta-zephyr-core/scripts/zephyr-kernel-src.inc.jinja
+> 
+> -- 
+> 2.25.1
+> 
+> 
+
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* RE: [yocto] [meta-zephyr][PATCH 0/4] Add script for version upgrades
+  2022-09-20 22:33 ` [meta-zephyr][PATCH 0/4] Add script for version upgrades Jon Mason
+@ 2022-09-21  8:49   ` Saini, Naveen Kumar
+  0 siblings, 0 replies; 7+ messages in thread
+From: Saini, Naveen Kumar @ 2022-09-21  8:49 UTC (permalink / raw)
+  To: Jon Mason, Peter Hoyes; +Cc: yocto, diego.sueiro
+
+Thanks Jon. Merged.
+
+Regards,
+Naveen
+
+> -----Original Message-----
+> From: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org> On
+> Behalf Of Jon Mason
+> Sent: Wednesday, September 21, 2022 6:34 AM
+> To: Peter Hoyes <peter.hoyes@arm.com>
+> Cc: yocto@lists.yoctoproject.org; diego.sueiro@arm.com
+> Subject: Re: [yocto] [meta-zephyr][PATCH 0/4] Add script for version
+> upgrades
+> 
+> On Fri, Sep 16, 2022 at 10:03:14AM +0100, Peter Hoyes wrote:
+> > From: Peter Hoyes <Peter.Hoyes@arm.com>
+> >
+> > This patch chain has been developed on top of the 2.7.3 upgrade patch.
+> >
+> > Add a script, generate-version.py, which can be used to automatically
+> > generate configuration for new Zephyr versions. Regenerate
+> > configuration for 2.7.3 and 3.1.0 using this script.
+> >
+> > This script includes a constant version-specific declaration of
+> > ZEPHYR_MODULES, so the build-time logic to extract ZEPHYR_MODULES is
+> > no longer required. Remove the do_get_zmods task and the West recipe.
+> >
+> > Peter Hoyes (4):
+> >   zephyr-core/scripts: Introduce script to generate new versions
+> >   zephyr-core/zephyr-kernel: Migrate to script-driven version files
+> >   zephyr-core/classes: Remove West-based logic from zephyr.bbclass
+> >   zephyr-core/zephyr-kernel: Update dtc.patch Upstream-Status
+> 
+> Series passes CI (on top of the v2.7.3 patch).  See
+> https://gitlab.com/jonmason00/meta-zephyr/-/pipelines/645914527
+> 
+> Tested-by: Jon Mason <jon.mason@arm.com>
+> 
+> >
+> >  README.txt                                    |  17 ++
+> >  meta-zephyr-core/classes/zephyr.bbclass       |  32 +--
+> >  .../recipes-devtools/west/west_0.12.99.bb     |  22 --
+> >  ...y-generation-issue-in-cross-compila.patch} |   0
+> >  .../zephyr-kernel/files/dtc.patch             |   2 +-
+> >  .../zephyr-kernel/zephyr-kernel-src-2.7.3.inc | 202 +++++++++++++---
+> > .../zephyr-kernel/zephyr-kernel-src-3.1.0.inc | 220 +++++++++++++++---
+> >  .../zephyr-kernel/zephyr-kernel-src.inc       |  43 ----
+> >  meta-zephyr-core/scripts/generate-version.py  |  73 ++++++
+> >  .../scripts/zephyr-kernel-src.inc.jinja       |  35 +++
+> >  10 files changed, 474 insertions(+), 172 deletions(-)  delete mode
+> > 100644 meta-zephyr-core/recipes-devtools/west/west_0.12.99.bb
+> >  rename
+> > meta-zephyr-core/recipes-kernel/zephyr-kernel/files/{0001-x86-fix-efi-
+> > binary-generation-issue-in-cross-compila.patch =>
+> > 0001-2.7-x86-fix-efi-binary-generation-issue-in-cross-compila.patch}
+> > (100%)  create mode 100755
+> > meta-zephyr-core/scripts/generate-version.py
+> >  create mode 100644
+> > meta-zephyr-core/scripts/zephyr-kernel-src.inc.jinja
+> >
+> > --
+> > 2.25.1
+> >
+> >
+
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+end of thread, other threads:[~2022-09-21  8:49 UTC | newest]
+
+Thread overview: 7+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-09-16  9:03 [meta-zephyr][PATCH 0/4] Add script for version upgrades Peter Hoyes
+2022-09-16  9:03 ` [meta-zephyr][PATCH 1/4] zephyr-core/scripts: Introduce script to generate new versions Peter Hoyes
+2022-09-16  9:03 ` [meta-zephyr][PATCH 2/4] zephyr-core/zephyr-kernel: Migrate to script-driven version files Peter Hoyes
+2022-09-16  9:03 ` [meta-zephyr][PATCH 3/4] zephyr-core/classes: Remove West-based logic from zephyr.bbclass Peter Hoyes
+2022-09-16  9:03 ` [meta-zephyr][PATCH 4/4] zephyr-core/zephyr-kernel: Update dtc.patch Upstream-Status Peter Hoyes
+2022-09-20 22:33 ` [meta-zephyr][PATCH 0/4] Add script for version upgrades Jon Mason
+2022-09-21  8:49   ` [yocto] " Saini, Naveen Kumar
+

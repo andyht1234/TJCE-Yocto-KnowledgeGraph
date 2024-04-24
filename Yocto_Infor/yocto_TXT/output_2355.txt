@@ -1,0 +1,171 @@
+* problem with interpreter
+@ 2022-01-12 18:34 swhite
+  2022-01-12 21:52 ` [yocto] " Ross Burton
+  0 siblings, 1 reply; 3+ messages in thread
+From: swhite @ 2022-01-12 18:34 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1735 bytes --]
+
+I need to include an old open source project named judy for a legacy
+utility dependency. The recipe I have so far is listed at the end of this email. The
+build host is 64bit linux, I'm using dunfell and the MACHINE I'm build for is "genericx86-64".
+The issue I'm seeing is when compiling judy, it builds and then executes a
+binary named "JudyLTablesGen" as part of the process. However the execution
+fails with:
+
+/bin/sh: ./JudyLTablesGen: No such file or directory
+
+The interpreter for JudyLTablesGen is set as: /lib/ld-linux-x86-64.so.2. On
+the build host the library doesn't exist under /lib, but does exist as
+/lib64/ld-linux-x86-64.so.2. When I run ldd on JudyLTablesGen I see ld-linux-x86-64.so.2
+as:
+
+/lib/ld-linux-x86-64.so.2 => /lib64/ld-linux-x86-64.so.2 (0x00007f58fa839000).
+
+A potential workaround to compile it is:
+
+ln -s /lib64/ld-linux-x86-64.so.2 /lib/ld-linux-x86-64.so.2'
+
+But I'd like to find a way to fix this in the recipe and not have to modify the build host file system. Any advice?
+
+================================================================================
+
+inherit pkgconfig
+
+LICENSE = "LGPLv2.1"
+LIC_FILES_CHKSUM = "file://COPYING;md5=a2f59868b389d66faed0cf18e0caa486"
+
+FILESEXTRAPATHS_prepend := "${THISDIR}/files:"
+SRC_URI = "\
+https://sourceforge.net/projects/judy/files/judy/Judy-1.0.5/Judy-1.0.5.tar.gz \
+file://judy-1.0.5_bootstrap_automake1.16.patch \
+"
+SRC_URI[sha256sum] = "d2704089f85fdb6f2cd7e77be21170ced4b4375c03ef1ad4cf1075bd414a63eb"
+
+PARALLEL_MAKE = ""
+
+do_configure() {
+./bootstrap
+./configure -prefix=${D}/usr/local/ --host=${TARGET_SYS} --enable-64-bit
+}
+
+================================================================================
+
+[-- Attachment #2: Type: text/html, Size: 2372 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] problem with interpreter
+  2022-01-12 18:34 problem with interpreter swhite
+@ 2022-01-12 21:52 ` Ross Burton
+  2022-01-13 20:15   ` Spencer White
+  0 siblings, 1 reply; 3+ messages in thread
+From: Ross Burton @ 2022-01-12 21:52 UTC (permalink / raw)
+  To: swhite; +Cc: yocto
+
+On Wed, 12 Jan 2022 at 18:34, swhite <r.spencer.white@gmail.com> wrote:
+> I need to include an old open source project named judy for a legacy
+> utility dependency. The recipe I have so far is listed at the end of this email. The
+> build host is 64bit linux, I'm using dunfell and the MACHINE I'm build for is "genericx86-64".
+> The issue I'm seeing is when compiling judy, it builds and then executes a
+> binary named "JudyLTablesGen" as part of the process. However the execution
+> fails with:
+>
+>     /bin/sh: ./JudyLTablesGen: No such file or directory
+
+This is a classic problem with software that doesn't consider
+cross-compilation (and even when building for a similar architecture,
+like genericx86-64 on an x86 host, you're cross-compiling in Yocto).
+
+The makefiles generate a binary that it expects to be able to run.
+This is a bad assumption as you're cross-compiling: that binary needs
+to be built with the host compiler (BUILD_CC) instead.  However, the
+Makefile.am does this:
+
+JudyLTables.c: JudyLTablesGen.c
+        $(CC) $(INCLUDES) $(AM_CFLAGS) @CFLAGS@ -o JudyLTablesGen
+JudyLTablesGen.c; ./JudyLTablesGen
+
+A non-upstreamable fix would be to simply change that line to
+$(BUILD_CC) $(BUILD_CFLAGS) $(BUILD_LDFLAGS) -o JudyLTablesGen [...].
+As the project is dead, an upstreamable fix isn't useful.
+
+Whilst I'm here that FILESEXTRAPATHS_prepend is redundant, and the
+source of Judy looks like fairly typical autoconf so you can remove
+your do_configure and just 'inherit autotools', this will also pass
+the correct host/build/target flags and so on.
+
+Also note that a more recently maintained fork appears to be at
+https://github.com/netdata/libjudy.
+
+Ross
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] problem with interpreter
+  2022-01-12 21:52 ` [yocto] " Ross Burton
+@ 2022-01-13 20:15   ` Spencer White
+  0 siblings, 0 replies; 3+ messages in thread
+From: Spencer White @ 2022-01-13 20:15 UTC (permalink / raw)
+  To: Ross Burton; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1958 bytes --]
+
+Thanks man, I appreciate it. After reading your response, I understood the
+issue and was able to create a bunch of patches to mak it work.
+
+On Wed, Jan 12, 2022, 3:52 PM Ross Burton <ross@burtonini.com> wrote:
+
+> On Wed, 12 Jan 2022 at 18:34, swhite <r.spencer.white@gmail.com> wrote:
+> > I need to include an old open source project named judy for a legacy
+> > utility dependency. The recipe I have so far is listed at the end of
+> this email. The
+> > build host is 64bit linux, I'm using dunfell and the MACHINE I'm build
+> for is "genericx86-64".
+> > The issue I'm seeing is when compiling judy, it builds and then executes
+> a
+> > binary named "JudyLTablesGen" as part of the process. However the
+> execution
+> > fails with:
+> >
+> >     /bin/sh: ./JudyLTablesGen: No such file or directory
+>
+> This is a classic problem with software that doesn't consider
+> cross-compilation (and even when building for a similar architecture,
+> like genericx86-64 on an x86 host, you're cross-compiling in Yocto).
+>
+> The makefiles generate a binary that it expects to be able to run.
+> This is a bad assumption as you're cross-compiling: that binary needs
+> to be built with the host compiler (BUILD_CC) instead.  However, the
+> Makefile.am does this:
+>
+> JudyLTables.c: JudyLTablesGen.c
+>         $(CC) $(INCLUDES) $(AM_CFLAGS) @CFLAGS@ -o JudyLTablesGen
+> JudyLTablesGen.c; ./JudyLTablesGen
+>
+> A non-upstreamable fix would be to simply change that line to
+> $(BUILD_CC) $(BUILD_CFLAGS) $(BUILD_LDFLAGS) -o JudyLTablesGen [...].
+> As the project is dead, an upstreamable fix isn't useful.
+>
+> Whilst I'm here that FILESEXTRAPATHS_prepend is redundant, and the
+> source of Judy looks like fairly typical autoconf so you can remove
+> your do_configure and just 'inherit autotools', this will also pass
+> the correct host/build/target flags and so on.
+>
+> Also note that a more recently maintained fork appears to be at
+> https://github.com/netdata/libjudy.
+>
+> Ross
+>
+
+[-- Attachment #2: Type: text/html, Size: 2594 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2022-01-13 20:15 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-01-12 18:34 problem with interpreter swhite
+2022-01-12 21:52 ` [yocto] " Ross Burton
+2022-01-13 20:15   ` Spencer White
+

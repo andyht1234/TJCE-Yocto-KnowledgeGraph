@@ -1,0 +1,253 @@
+* [meta-security][kirkstone][PATCH v2] tpm2-tss: upgrade to 3.2.2 to fix CVE-2023-22745
+@ 2023-05-08 14:50 Peter Marko
+  2023-05-09  7:53 ` [yocto] " Michael Opdenacker
+  0 siblings, 1 reply; 4+ messages in thread
+From: Peter Marko @ 2023-05-08 14:50 UTC (permalink / raw)
+  To: yocto; +Cc: Peter Marko
+
+Changelog:
+  3.2.2
+    A buffer overflow in tss2-rc as CVE-2023-22745.
+    The drv layer in tss2-rc should have been the policy layer.
+    Spec deviation in Fapi_GetDescription caused description to be NULL when it should be empty string.
+    This is API breaking but considered a bug since it deviated from the FAPI spec.
+    FAPI: undefined reference to curl_url_strerror when using curl less than 7.80.0.
+  3.2.1
+    Makefile.am: make all EXTRA_DIST includes unconditional to fix pristine tars
+    Fix usage of NULL pointer if Esys_TR_SetAuth is calles with ESYS_TR_NONE.
+    Store VERSION into the release tarball.
+    fapi: fix usage of policy_nv with a TPM nv index.
+    Tss2_Sys_Flushcontext: flushHandle was encoded as a handleArea handle and not as parameter one, this affected the contents of cpHash.
+    linking tcti for libtpms against tss2-tctildr. It should be linked against tss2-mu.
+    build: Remove erroneous trailing comma in linker option. Bug #2391.
+    esys: fix allow usage of HMAC sessions for Esys_TR_FromTPMPublic.
+    test: build with opaque FILE structure like in musl libc.
+    Usage of a second profile in a path was not possible because the default profile was always used.
+    FAPI: Fix provisioning if auth value for storage hierarchy was set.
+    FAPI: Fix recreation of EK.
+    FAPI: Fix usage of lockout auth value in Fapi_Provison.
+    FAPI: Fix loading of key in policy execution.
+    FAPI: Fix Fapi_ChangeAuth updates on hierarchy objects not being reflected across profiles.
+    Esys_PCR_SetAuthValue: remembers the auth like other SetAutg ESAPI functions.
+    tests: esys-pcr-auth-value.int moved to destructive tests.
+    FAPI: Fix double free if keystore is corrupted.
+    Spec deviation in Fapi_GetDescription caused description to be NULL when it should be empty string.
+        This is API breaking but considered a bug since it deviated from the FAPI spec.
+
+Signed-off-by: Peter Marko <peter.marko@siemens.com>
+---
+ .../tpm2-tss/{tpm2-tss_3.2.0.bb => tpm2-tss_3.2.2.bb}  | 10 ++++------
+ 1 file changed, 4 insertions(+), 6 deletions(-)
+ rename meta-tpm/recipes-tpm2/tpm2-tss/{tpm2-tss_3.2.0.bb => tpm2-tss_3.2.2.bb} (91%)
+
+diff --git a/meta-tpm/recipes-tpm2/tpm2-tss/tpm2-tss_3.2.0.bb b/meta-tpm/recipes-tpm2/tpm2-tss/tpm2-tss_3.2.2.bb
+similarity index 91%
+rename from meta-tpm/recipes-tpm2/tpm2-tss/tpm2-tss_3.2.0.bb
+rename to meta-tpm/recipes-tpm2/tpm2-tss/tpm2-tss_3.2.2.bb
+index 8440bb9..bb48ea0 100644
+--- a/meta-tpm/recipes-tpm2/tpm2-tss/tpm2-tss_3.2.0.bb
++++ b/meta-tpm/recipes-tpm2/tpm2-tss/tpm2-tss_3.2.2.bb
+@@ -10,7 +10,7 @@ SRC_URI = "https://github.com/tpm2-software/${BPN}/releases/download/${PV}/${BPN
+            file://fixup_hosttools.patch \
+            "
+ 
+-SRC_URI[sha256sum] = "48305e4144dcf6d10f3b25b7bccf0189fd2d1186feafd8cd68c6b17ecf0d7912"
++SRC_URI[sha256sum] = "ba9e52117f254f357ff502e7d60fce652b3bfb26327d236bbf5ab634235e40f1"
+ 
+ inherit autotools pkgconfig systemd useradd
+ 
+@@ -26,11 +26,6 @@ USERADD_PACKAGES = "${PN}"
+ GROUPADD_PARAM:${PN} = "--system tss"
+ USERADD_PARAM:${PN} = "--system -M -d /var/lib/tpm -s /bin/false -g tss tss"
+ 
+-do_configure:prepend() {
+-    # do not extract the version number from git
+-    sed -i -e 's/m4_esyscmd_s(\[git describe --tags --always --dirty\])/${PV}/' ${S}/configure.ac
+-}
+-
+ do_install:append() {
+     # Remove /run as it is created on startup
+     rm -rf ${D}/run
+@@ -93,3 +88,6 @@ FILES:${PN} = "\
+     ${sysconfdir}/sysusers.d"
+ 
+ RDEPENDS:libtss2 = "libgcrypt"
++
++# This is patched in 3.2.2 although NVD DB says "Up to (including) 4.0.0"
++CVE_CHECK_IGNORE += "CVE-2023-22745"
+-- 
+2.30.2
+
+
+
+^ permalink raw reply related	[flat|nested] 4+ messages in thread
+* Re: [yocto] [meta-security][kirkstone][PATCH v2] tpm2-tss: upgrade to 3.2.2 to fix CVE-2023-22745
+  2023-05-08 14:50 [meta-security][kirkstone][PATCH v2] tpm2-tss: upgrade to 3.2.2 to fix CVE-2023-22745 Peter Marko
+@ 2023-05-09  7:53 ` Michael Opdenacker
+  2023-05-09  8:33   ` Marko, Peter
+  0 siblings, 1 reply; 4+ messages in thread
+From: Michael Opdenacker @ 2023-05-09  7:53 UTC (permalink / raw)
+  To: peter.marko; +Cc: yocto
+
+Hi Peter
+
+On 08.05.23 at 16:50, Peter Marko via lists.yoctoproject.org wrote:
+> Changelog:
+>    3.2.2
+>      A buffer overflow in tss2-rc as CVE-2023-22745.
+>      The drv layer in tss2-rc should have been the policy layer.
+>      Spec deviation in Fapi_GetDescription caused description to be NULL when it should be empty string.
+>      This is API breaking but considered a bug since it deviated from the FAPI spec.
+>      FAPI: undefined reference to curl_url_strerror when using curl less than 7.80.0.
+>    3.2.1
+>      Makefile.am: make all EXTRA_DIST includes unconditional to fix pristine tars
+>      Fix usage of NULL pointer if Esys_TR_SetAuth is calles with ESYS_TR_NONE.
+>      Store VERSION into the release tarball.
+>      fapi: fix usage of policy_nv with a TPM nv index.
+>      Tss2_Sys_Flushcontext: flushHandle was encoded as a handleArea handle and not as parameter one, this affected the contents of cpHash.
+>      linking tcti for libtpms against tss2-tctildr. It should be linked against tss2-mu.
+>      build: Remove erroneous trailing comma in linker option. Bug #2391.
+>      esys: fix allow usage of HMAC sessions for Esys_TR_FromTPMPublic.
+>      test: build with opaque FILE structure like in musl libc.
+>      Usage of a second profile in a path was not possible because the default profile was always used.
+>      FAPI: Fix provisioning if auth value for storage hierarchy was set.
+>      FAPI: Fix recreation of EK.
+>      FAPI: Fix usage of lockout auth value in Fapi_Provison.
+>      FAPI: Fix loading of key in policy execution.
+>      FAPI: Fix Fapi_ChangeAuth updates on hierarchy objects not being reflected across profiles.
+>      Esys_PCR_SetAuthValue: remembers the auth like other SetAutg ESAPI functions.
+>      tests: esys-pcr-auth-value.int moved to destructive tests.
+>      FAPI: Fix double free if keystore is corrupted.
+>      Spec deviation in Fapi_GetDescription caused description to be NULL when it should be empty string.
+>          This is API breaking but considered a bug since it deviated from the FAPI spec.
+>
+> Signed-off-by: Peter Marko <peter.marko@siemens.com>
+
+
+Thanks for the patch!
+However, we'd need you to add one thing to your git configuration, so 
+that your patches are given an "Author" field which matches your 
+"Signed-off-by" information. See 
+https://www.openembedded.org/wiki/How_to_submit_a_patch_to_OpenEmbedded#Fixing_your_From_identity 
+for details.
+
+Don't hesitate to send a patch test directly to me, if you wish.
+Thanks again,
+Michael.
+
+-- 
+Michael Opdenacker, Bootlin
+Embedded Linux and Kernel engineering
+https://bootlin.com
+
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* RE: [yocto] [meta-security][kirkstone][PATCH v2] tpm2-tss: upgrade to 3.2.2 to fix CVE-2023-22745
+  2023-05-09  7:53 ` [yocto] " Michael Opdenacker
+@ 2023-05-09  8:33   ` Marko, Peter
+  2023-05-09  8:52     ` Michael Opdenacker
+  0 siblings, 1 reply; 4+ messages in thread
+From: Marko, Peter @ 2023-05-09  8:33 UTC (permalink / raw)
+  To: Michael Opdenacker; +Cc: yocto, Valek, Andrej
+
+Hi Michael,
+
+Unfortunately, my corporate email server does not support me in this.
+I have sent you a test email after explicitly configuring this in git, but I think it won't do anything better.
+Last patch to yocto mailing list had to be sent by my colleague as the server has bounced it.
+https://lists.yoctoproject.org/g/yocto/message/59488
+Now it seems to accepts it with wrong "From:" field, not sure what has changed meanwhile.
+
+Very interesting is that I have sent dozens of patches to meta-oe or oe-core without issue, just the yocto mailing list is broken for me.
+I'm hoping you can accept the patch also like this, otherwise I can again ask Andrej to send it for me.
+
+Sorry for the trouble,
+  Peter
+
+-----Original Message-----
+From: Michael Opdenacker <michael.opdenacker@bootlin.com> 
+Sent: Tuesday, May 9, 2023 9:53
+To: Marko, Peter (ADV D EU SK BFS1) <Peter.Marko@siemens.com>
+Cc: yocto@lists.yoctoproject.org
+Subject: Re: [yocto] [meta-security][kirkstone][PATCH v2] tpm2-tss: upgrade to 3.2.2 to fix CVE-2023-22745
+
+> Thanks for the patch!
+> However, we'd need you to add one thing to your git configuration, so that your patches are given an "Author" field which matches your "Signed-off-by" information. See https://www.openembedded.org/wiki/How_to_submit_a_patch_to_OpenEmbedded#Fixing_your_From_identity
+for details.
+>
+> Don't hesitate to send a patch test directly to me, if you wish.
+> Thanks again,
+> Michael.
+>
+> --
+> Michael Opdenacker, Bootlin
+> Embedded Linux and Kernel engineering
+> https://bootlin.com
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] [meta-security][kirkstone][PATCH v2] tpm2-tss: upgrade to 3.2.2 to fix CVE-2023-22745
+  2023-05-09  8:33   ` Marko, Peter
+@ 2023-05-09  8:52     ` Michael Opdenacker
+  0 siblings, 0 replies; 4+ messages in thread
+From: Michael Opdenacker @ 2023-05-09  8:52 UTC (permalink / raw)
+  To: Marko, Peter; +Cc: yocto, Valek, Andrej
+
+Hi Peter,
+
+Thanks for your efforts.
+
+On 09.05.23 at 10:33, Marko, Peter wrote:
+> Hi Michael,
+>
+> Unfortunately, my corporate email server does not support me in this.
+> I have sent you a test email after explicitly configuring this in git, but I think it won't do anything better.
+> Last patch to yocto mailing list had to be sent by my colleague as the server has bounced it.
+> https://lists.yoctoproject.org/g/yocto/message/59488
+> Now it seems to accepts it with wrong "From:" field, not sure what has changed meanwhile.
+
+
+Oops, that's bad if your server refuses a custom "From:" field, because 
+that's the workaround we're using.
+
+The test message you sent to me didn't have an additional "From:" field 
+at the beginning of the body, which is what git can use to get a correct 
+"Author" field.
+
+>
+> Very interesting is that I have sent dozens of patches to meta-oe or oe-core without issue, just the yocto mailing list is broken for me.
+
+
+I see this. Previously, your message didn't have "via 
+lists.yoctoproject.org". It could be that your corporate server turned 
+on DMARC recently.
+
+> I'm hoping you can accept the patch also like this, otherwise I can again ask Andrej to send it for me.
+
+
+Well, Andrej seems to have the same problem too :}
+I guess that's it's more important to let you send your own patches. 
+It's just that our busy maintainer will have to manually edit the author 
+field in your commits.
+
+Cheers
+Michael.
+
+-- 
+Michael Opdenacker, Bootlin
+Embedded Linux and Kernel engineering
+https://bootlin.com
+
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+end of thread, other threads:[~2023-05-09  8:52 UTC | newest]
+
+Thread overview: 4+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-05-08 14:50 [meta-security][kirkstone][PATCH v2] tpm2-tss: upgrade to 3.2.2 to fix CVE-2023-22745 Peter Marko
+2023-05-09  7:53 ` [yocto] " Michael Opdenacker
+2023-05-09  8:33   ` Marko, Peter
+2023-05-09  8:52     ` Michael Opdenacker
+

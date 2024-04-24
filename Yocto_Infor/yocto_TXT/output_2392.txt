@@ -1,0 +1,665 @@
+* building image for Realtek RTS3916N mips SoC using vendor provided prebuilt external uClibc toolchain
+@ 2021-12-28 22:53 Davis Roman
+  2021-12-29  3:09 ` [yocto] " Khem Raj
+  0 siblings, 1 reply; 9+ messages in thread
+From: Davis Roman @ 2021-12-28 22:53 UTC (permalink / raw)
+  To: yocto; +Cc: song li
+
+Hi all,
+
+I'm working on a project utilizing a Realtek RTS3916N mips SoC and as
+part of Realtek's bsp offering, they provide their own fork of
+buildroot packaged with their prebuilt binary toolchain.
+I would much rather use yocto instead however Realtek made it clear
+that no yocto support is available from their end and they have no
+plans to provide it in the future.
+
+In theory, I have Realtek's u-boot and kernel source so it should be
+possible to build an image so long as poky is instructed to use an
+external toolchain. This is where I hit my first road block because
+Realtek only supports uClibc and I know the yocto community moved way
+from uClibc, in favor of musl, since the Morty release. As a result, I
+decided to use Krogoth-15.0.0 (knowing it's EOL) only because it
+supports uClibc.
+
+Now that I had picked a specific version of poky, I continued forward
+with the EXTERNAL_TOOLCHAIN feature. The documentation references the
+meta-sourcery layer as the typical use case. Using a sourcery
+toolchain tarball ( 2014.05) I was able to build qemuarm/glibc
+therefore as far as I can tell the EXTERNAL_TOOLCHAIN feature works as
+documented.
+
+Unfortunately, the issue I have now arises when I use the Realtek
+toolchain.  meta-sourcery informs me that building against uClibc is
+not allowed as it has been blacklisted. Only glibc appears to be
+supported.
+
+I have looked around to see what other projects are similar and the
+closest I can find is the creator CI20 however due to the Realtek
+toolchain being based on uClibc, I haven't been able to find anything
+suitable for my usecase.
+
+I would greatly appreciate any suggestions regarding how to proceed
+forward with yocto integration, using a mips uClibc based toolchain.
+
+Is there any other course of action that I can try?
+
+Thank you,
+
+Davis
+
+
+^ permalink raw reply	[flat|nested] 9+ messages in thread
+* Re: [yocto] building image for Realtek RTS3916N mips SoC using vendor provided prebuilt external uClibc toolchain
+  2021-12-28 22:53 building image for Realtek RTS3916N mips SoC using vendor provided prebuilt external uClibc toolchain Davis Roman
+@ 2021-12-29  3:09 ` Khem Raj
+  2021-12-29  7:53   ` Davis Roman
+  0 siblings, 1 reply; 9+ messages in thread
+From: Khem Raj @ 2021-12-29  3:09 UTC (permalink / raw)
+  To: davis roman, yocto; +Cc: song li
+
+
+
+On 12/28/21 2:53 PM, davis roman wrote:
+> Hi all,
+> 
+> I'm working on a project utilizing a Realtek RTS3916N mips SoC and as
+> part of Realtek's bsp offering, they provide their own fork of
+> buildroot packaged with their prebuilt binary toolchain.
+> I would much rather use yocto instead however Realtek made it clear
+> that no yocto support is available from their end and they have no
+> plans to provide it in the future.
+> 
+> In theory, I have Realtek's u-boot and kernel source so it should be
+> possible to build an image so long as poky is instructed to use an
+> external toolchain. This is where I hit my first road block because
+> Realtek only supports uClibc and I know the yocto community moved way
+> from uClibc, in favor of musl, since the Morty release. As a result, I
+> decided to use Krogoth-15.0.0 (knowing it's EOL) only because it
+> supports uClibc.
+> 
+> Now that I had picked a specific version of poky, I continued forward
+> with the EXTERNAL_TOOLCHAIN feature. The documentation references the
+> meta-sourcery layer as the typical use case. Using a sourcery
+> toolchain tarball ( 2014.05) I was able to build qemuarm/glibc
+> therefore as far as I can tell the EXTERNAL_TOOLCHAIN feature works as
+> documented.
+> 
+> Unfortunately, the issue I have now arises when I use the Realtek
+> toolchain.  meta-sourcery informs me that building against uClibc is
+> not allowed as it has been blacklisted. Only glibc appears to be
+> supported.
+> 
+> I have looked around to see what other projects are similar and the
+> closest I can find is the creator CI20 however due to the Realtek
+> toolchain being based on uClibc, I haven't been able to find anything
+> suitable for my usecase.
+> 
+> I would greatly appreciate any suggestions regarding how to proceed
+> forward with yocto integration, using a mips uClibc based toolchain.
+
+We have dropped uclibc support long time ago so any effort to support 
+uClibc based system will be a bit of work and we have also dropped stale 
+patches from metadata so even if you are able to get external toolchain 
+bolted in, you will unfurl next set of problems for yourself So I don't 
+have a better answer for you here, other than drop the idea of using 
+uclibc if you want to use modern yocto baseline. We did support it long 
+time ago so if you like you can use thise EOLed releases but there wont 
+be much support for it here on community mailing lists.
+
+> 
+> Is there any other course of action that I can try?
+
+Since you have bootloader and kernel available to you, it might be less 
+work to put together a BSP layer and machine definition for this SOC 
+easily and it could be forward looking but there could be some 
+portability issues w.r.t. toolchain etc. which are manageable
+here you will use internal mips toolchain to build your system and you 
+can use musl instead of uclibc to build the system or glibc is other 
+supported option.
+
+> 
+> Thank you,
+> 
+> Davis
+> 
+> 
+> 
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> You automatically follow any topics you start or reply to.
+> View/Reply Online (#55680): https://lists.yoctoproject.org/g/yocto/message/55680
+> Mute This Topic: https://lists.yoctoproject.org/mt/88005049/1997914
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [raj.khem@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+> 
+
+
+^ permalink raw reply	[flat|nested] 9+ messages in thread
+* Re: [yocto] building image for Realtek RTS3916N mips SoC using vendor provided prebuilt external uClibc toolchain
+  2021-12-29  3:09 ` [yocto] " Khem Raj
+@ 2021-12-29  7:53   ` Davis Roman
+  2021-12-29 19:21     ` Anders Montonen
+  0 siblings, 1 reply; 9+ messages in thread
+From: Davis Roman @ 2021-12-29  7:53 UTC (permalink / raw)
+  To: Khem Raj, yocto; +Cc: song li
+
+On Tue, Dec 28, 2021 at 10:09 PM Khem Raj <raj.khem@gmail.com> wrote:
+>
+>
+>
+> On 12/28/21 2:53 PM, davis roman wrote:
+> > Hi all,
+> >
+> > I'm working on a project utilizing a Realtek RTS3916N mips SoC and as
+> > part of Realtek's bsp offering, they provide their own fork of
+> > buildroot packaged with their prebuilt binary toolchain.
+> > I would much rather use yocto instead however Realtek made it clear
+> > that no yocto support is available from their end and they have no
+> > plans to provide it in the future.
+> >
+> > In theory, I have Realtek's u-boot and kernel source so it should be
+> > possible to build an image so long as poky is instructed to use an
+> > external toolchain. This is where I hit my first road block because
+> > Realtek only supports uClibc and I know the yocto community moved way
+> > from uClibc, in favor of musl, since the Morty release. As a result, I
+> > decided to use Krogoth-15.0.0 (knowing it's EOL) only because it
+> > supports uClibc.
+> >
+> > Now that I had picked a specific version of poky, I continued forward
+> > with the EXTERNAL_TOOLCHAIN feature. The documentation references the
+> > meta-sourcery layer as the typical use case. Using a sourcery
+> > toolchain tarball ( 2014.05) I was able to build qemuarm/glibc
+> > therefore as far as I can tell the EXTERNAL_TOOLCHAIN feature works as
+> > documented.
+> >
+> > Unfortunately, the issue I have now arises when I use the Realtek
+> > toolchain.  meta-sourcery informs me that building against uClibc is
+> > not allowed as it has been blacklisted. Only glibc appears to be
+> > supported.
+> >
+> > I have looked around to see what other projects are similar and the
+> > closest I can find is the creator CI20 however due to the Realtek
+> > toolchain being based on uClibc, I haven't been able to find anything
+> > suitable for my usecase.
+> >
+> > I would greatly appreciate any suggestions regarding how to proceed
+> > forward with yocto integration, using a mips uClibc based toolchain.
+>
+> We have dropped uclibc support long time ago so any effort to support
+> uClibc based system will be a bit of work and we have also dropped stale
+> patches from metadata so even if you are able to get external toolchain
+> bolted in, you will unfurl next set of problems for yourself So I don't
+> have a better answer for you here, other than drop the idea of using
+> uclibc if you want to use modern yocto baseline. We did support it long
+> time ago so if you like you can use thise EOLed releases but there wont
+> be much support for it here on community mailing lists.
+>
+Thanks Khem for confirming my suspicions.
+> >
+> > Is there any other course of action that I can try?
+>
+> Since you have bootloader and kernel available to you, it might be less
+> work to put together a BSP layer and machine definition for this SOC
+> easily and it could be forward looking but there could be some
+> portability issues w.r.t. toolchain etc. which are manageable
+> here you will use internal mips toolchain to build your system and you
+> can use musl instead of uclibc to build the system or glibc is other
+> supported option.
+>
+I generated an internal mips toolchain built against musl and I tried
+to compile u-boot but unfortunately, I'm getting "opcode not
+supported" error messages. https://pastebin.com/QdcLxy69
+If instead I use the realtek provided prebuilt toolchain then u-boot
+compiles successfully. https://pastebin.com/zcQ5kc20
+
+I'm thinking that Realtek's toolchain has patches specific to their
+SoC that have not been pushed upstream. Could this be the reason I'm
+unable to compile uboot?
+
+> >
+> > Thank you,
+> >
+> > Davis
+> >
+> >
+> >
+> > -=-=-=-=-=-=-=-=-=-=-=-
+> > Links: You receive all messages sent to this group.
+> > You automatically follow any topics you start or reply to.
+> > View/Reply Online (#55680): https://lists.yoctoproject.org/g/yocto/message/55680
+> > Mute This Topic: https://lists.yoctoproject.org/mt/88005049/1997914
+> > Group Owner: yocto+owner@lists.yoctoproject.org
+> > Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [raj.khem@gmail.com]
+> > -=-=-=-=-=-=-=-=-=-=-=-
+> >
+
+
+^ permalink raw reply	[flat|nested] 9+ messages in thread
+* Re: [yocto] building image for Realtek RTS3916N mips SoC using vendor provided prebuilt external uClibc toolchain
+  2021-12-29  7:53   ` Davis Roman
+@ 2021-12-29 19:21     ` Anders Montonen
+  2021-12-29 22:19       ` Davis Roman
+  0 siblings, 1 reply; 9+ messages in thread
+From: Anders Montonen @ 2021-12-29 19:21 UTC (permalink / raw)
+  To: davis roman; +Cc: yocto, song li
+
+Hi,
+
+> On 29 Dec 2021, at 9:53, davis roman <davis.roman84@gmail.com> wrote:
+> 
+> I generated an internal mips toolchain built against musl and I tried
+> to compile u-boot but unfortunately, I'm getting "opcode not
+> supported" error messages. https://pastebin.com/QdcLxy69
+> If instead I use the realtek provided prebuilt toolchain then u-boot
+> compiles successfully. https://pastebin.com/zcQ5kc20
+> 
+> I'm thinking that Realtek's toolchain has patches specific to their
+> SoC that have not been pushed upstream. Could this be the reason I'm
+> unable to compile uboot?
+
+I’m guessing that your U-Boot config doesn’t set the correct MIPS architecture revision. The compiler error shows that you’re trying to assemble a MIPS32r1 instruction, but the compiler is targeting the original MIPS1 architecture. The Realtek toolchain may have set the default architecture to match the SoC, but the fix is to update the config to match the hardware.
+
+Regards,
+Anders Montonen
+
+^ permalink raw reply	[flat|nested] 9+ messages in thread
+* Re: [yocto] building image for Realtek RTS3916N mips SoC using vendor provided prebuilt external uClibc toolchain
+  2021-12-29 19:21     ` Anders Montonen
+@ 2021-12-29 22:19       ` Davis Roman
+  2021-12-29 22:30         ` Khem Raj
+  0 siblings, 1 reply; 9+ messages in thread
+From: Davis Roman @ 2021-12-29 22:19 UTC (permalink / raw)
+  To: Anders Montonen, Khem Raj; +Cc: yocto, song li
+
+On Wed, Dec 29, 2021 at 2:21 PM Anders Montonen <Anders.Montonen@iki.fi> wrote:
+>
+> Hi,
+>
+> > On 29 Dec 2021, at 9:53, davis roman <davis.roman84@gmail.com> wrote:
+> >
+> > I generated an internal mips toolchain built against musl and I tried
+> > to compile u-boot but unfortunately, I'm getting "opcode not
+> > supported" error messages. https://pastebin.com/QdcLxy69
+> > If instead I use the realtek provided prebuilt toolchain then u-boot
+> > compiles successfully. https://pastebin.com/zcQ5kc20
+> >
+> > I'm thinking that Realtek's toolchain has patches specific to their
+> > SoC that have not been pushed upstream. Could this be the reason I'm
+> > unable to compile uboot?
+>
+> I’m guessing that your U-Boot config doesn’t set the correct MIPS architecture revision. The compiler error shows that you’re trying to assemble a MIPS32r1 instruction, but the compiler is targeting the original MIPS1 architecture. The Realtek toolchain may have set the default architecture to match the SoC, but the fix is to update the config to match the hardware.
+
+You're right. I didn't realize the RX5281 core on the RTS3916N only
+supports mips1 or mips16 (https://pasteboard.co/IpsqN6GkBYAs.png).
+
+I happened to have a mips sourcery toolchain installed on my machine
+(https://sourcery.sw.siemens.com/GNUToolchain/package12797/public/mips-linux-gnu/mips-2014.05-27-mips-linux-gnu-i686-pc-linux-gnu.tar.bz2)
+so I pointed that to u-boot without modifying anything else and it was
+able to compile u-boot successfully. Woot!
+https://pastebin.com/ySPFae5u
+
+I suppose the next step would be to generate a mips1 yocto toolchain
+however according to the available tune values it appears only mips32
+or mips64 is available
+
+Any suggestions on how to generate a mips1 yocto toolchain or if
+that's even supported?
+
+>
+> Regards,
+> Anders Montonen
+
+
+^ permalink raw reply	[flat|nested] 9+ messages in thread
+* Re: [yocto] building image for Realtek RTS3916N mips SoC using vendor provided prebuilt external uClibc toolchain
+  2021-12-29 22:19       ` Davis Roman
+@ 2021-12-29 22:30         ` Khem Raj
+  2021-12-29 23:15           ` Davis Roman
+  0 siblings, 1 reply; 9+ messages in thread
+From: Khem Raj @ 2021-12-29 22:30 UTC (permalink / raw)
+  To: Davis Roman; +Cc: Anders Montonen, song li, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2222 bytes --]
+
+On Wed, Dec 29, 2021 at 2:20 PM Davis Roman <davis.roman84@gmail.com> wrote:
+
+> On Wed, Dec 29, 2021 at 2:21 PM Anders Montonen <Anders.Montonen@iki.fi>
+> wrote:
+> >
+> > Hi,
+> >
+> > > On 29 Dec 2021, at 9:53, davis roman <davis.roman84@gmail.com> wrote:
+> > >
+> > > I generated an internal mips toolchain built against musl and I tried
+> > > to compile u-boot but unfortunately, I'm getting "opcode not
+> > > supported" error messages. https://pastebin.com/QdcLxy69
+> > > If instead I use the realtek provided prebuilt toolchain then u-boot
+> > > compiles successfully. https://pastebin.com/zcQ5kc20
+> > >
+> > > I'm thinking that Realtek's toolchain has patches specific to their
+> > > SoC that have not been pushed upstream. Could this be the reason I'm
+> > > unable to compile uboot?
+> >
+> > I’m guessing that your U-Boot config doesn’t set the correct MIPS
+> architecture revision. The compiler error shows that you’re trying to
+> assemble a MIPS32r1 instruction, but the compiler is targeting the original
+> MIPS1 architecture. The Realtek toolchain may have set the default
+> architecture to match the SoC, but the fix is to update the config to match
+> the hardware.
+>
+> You're right. I didn't realize the RX5281 core on the RTS3916N only
+> supports mips1 or mips16 (https://pasteboard.co/IpsqN6GkBYAs.png).
+>
+> I happened to have a mips sourcery toolchain installed on my machine
+> (
+> https://sourcery.sw.siemens.com/GNUToolchain/package12797/public/mips-linux-gnu/mips-2014.05-27-mips-linux-gnu-i686-pc-linux-gnu.tar.bz2
+> )
+> so I pointed that to u-boot without modifying anything else and it was
+> able to compile u-boot successfully. Woot!
+> https://pastebin.com/ySPFae5u
+>
+> I suppose the next step would be to generate a mips1 yocto toolchain
+> however according to the available tune values it appears only mips32
+> or mips64 is available
+>
+> Any suggestions on how to generate a mips1 yocto toolchain or if
+> that's even supported?
+
+
+Yes it’s supported although it’s not default for qemumips so the simple
+trick you can do is change the DEFAULTTUNE setting in the qemumips.conf
+away from mips32r2
+
+>
+>
+> >
+> > Regards,
+> > Anders Montonen
+>
+
+[-- Attachment #2: Type: text/html, Size: 3464 bytes --]
+
+^ permalink raw reply	[flat|nested] 9+ messages in thread
+* Re: [yocto] building image for Realtek RTS3916N mips SoC using vendor provided prebuilt external uClibc toolchain
+  2021-12-29 22:30         ` Khem Raj
+@ 2021-12-29 23:15           ` Davis Roman
+  2021-12-30  0:40             ` Davis Roman
+  0 siblings, 1 reply; 9+ messages in thread
+From: Davis Roman @ 2021-12-29 23:15 UTC (permalink / raw)
+  To: Khem Raj; +Cc: Anders Montonen, song li, yocto
+
+On Wed, Dec 29, 2021 at 5:30 PM Khem Raj <raj.khem@gmail.com> wrote:
+>
+>
+>
+> On Wed, Dec 29, 2021 at 2:20 PM Davis Roman <davis.roman84@gmail.com> wrote:
+>>
+>> On Wed, Dec 29, 2021 at 2:21 PM Anders Montonen <Anders.Montonen@iki.fi> wrote:
+>> >
+>> > Hi,
+>> >
+>> > > On 29 Dec 2021, at 9:53, davis roman <davis.roman84@gmail.com> wrote:
+>> > >
+>> > > I generated an internal mips toolchain built against musl and I tried
+>> > > to compile u-boot but unfortunately, I'm getting "opcode not
+>> > > supported" error messages. https://pastebin.com/QdcLxy69
+>> > > If instead I use the realtek provided prebuilt toolchain then u-boot
+>> > > compiles successfully. https://pastebin.com/zcQ5kc20
+>> > >
+>> > > I'm thinking that Realtek's toolchain has patches specific to their
+>> > > SoC that have not been pushed upstream. Could this be the reason I'm
+>> > > unable to compile uboot?
+>> >
+>> > I’m guessing that your U-Boot config doesn’t set the correct MIPS architecture revision. The compiler error shows that you’re trying to assemble a MIPS32r1 instruction, but the compiler is targeting the original MIPS1 architecture. The Realtek toolchain may have set the default architecture to match the SoC, but the fix is to update the config to match the hardware.
+>>
+>> You're right. I didn't realize the RX5281 core on the RTS3916N only
+>> supports mips1 or mips16 (https://pasteboard.co/IpsqN6GkBYAs.png).
+>>
+>> I happened to have a mips sourcery toolchain installed on my machine
+>> (https://sourcery.sw.siemens.com/GNUToolchain/package12797/public/mips-linux-gnu/mips-2014.05-27-mips-linux-gnu-i686-pc-linux-gnu.tar.bz2)
+>> so I pointed that to u-boot without modifying anything else and it was
+>> able to compile u-boot successfully. Woot!
+>> https://pastebin.com/ySPFae5u
+>>
+>> I suppose the next step would be to generate a mips1 yocto toolchain
+>> however according to the available tune values it appears only mips32
+>> or mips64 is available
+>>
+>> Any suggestions on how to generate a mips1 yocto toolchain or if
+>> that's even supported?
+>
+>
+> Yes it’s supported although it’s not default for qemumips so the simple trick you can do is change the DEFAULTTUNE setting in the qemumips.conf away from mips32r2
+
+Sorry Khem, I'm not quite following you. I tried the following patch
+(https://pastebin.com/rkmQ3t6P) thinking perhaps this is what you
+meant however my build configuration still shows the tune set to
+mips32r2 https://pastebin.com/izP9thVW
+
+What am I missing?
+
+>>
+>>
+>>
+>> >
+>> > Regards,
+>> > Anders Montonen
+
+
+^ permalink raw reply	[flat|nested] 9+ messages in thread
+* Re: [yocto] building image for Realtek RTS3916N mips SoC using vendor provided prebuilt external uClibc toolchain
+  2021-12-29 23:15           ` Davis Roman
+@ 2021-12-30  0:40             ` Davis Roman
+  2022-01-04 23:01               ` Davis Roman
+  0 siblings, 1 reply; 9+ messages in thread
+From: Davis Roman @ 2021-12-30  0:40 UTC (permalink / raw)
+  To: Khem Raj; +Cc: Anders Montonen, song li, yocto
+
+On Wed, Dec 29, 2021 at 6:15 PM Davis Roman <davis.roman84@gmail.com> wrote:
+>
+> On Wed, Dec 29, 2021 at 5:30 PM Khem Raj <raj.khem@gmail.com> wrote:
+> >
+> >
+> >
+> > On Wed, Dec 29, 2021 at 2:20 PM Davis Roman <davis.roman84@gmail.com> wrote:
+> >>
+> >> On Wed, Dec 29, 2021 at 2:21 PM Anders Montonen <Anders.Montonen@iki.fi> wrote:
+> >> >
+> >> > Hi,
+> >> >
+> >> > > On 29 Dec 2021, at 9:53, davis roman <davis.roman84@gmail.com> wrote:
+> >> > >
+> >> > > I generated an internal mips toolchain built against musl and I tried
+> >> > > to compile u-boot but unfortunately, I'm getting "opcode not
+> >> > > supported" error messages. https://pastebin.com/QdcLxy69
+> >> > > If instead I use the realtek provided prebuilt toolchain then u-boot
+> >> > > compiles successfully. https://pastebin.com/zcQ5kc20
+> >> > >
+> >> > > I'm thinking that Realtek's toolchain has patches specific to their
+> >> > > SoC that have not been pushed upstream. Could this be the reason I'm
+> >> > > unable to compile uboot?
+> >> >
+> >> > I’m guessing that your U-Boot config doesn’t set the correct MIPS architecture revision. The compiler error shows that you’re trying to assemble a MIPS32r1 instruction, but the compiler is targeting the original MIPS1 architecture. The Realtek toolchain may have set the default architecture to match the SoC, but the fix is to update the config to match the hardware.
+> >>
+> >> You're right. I didn't realize the RX5281 core on the RTS3916N only
+> >> supports mips1 or mips16 (https://pasteboard.co/IpsqN6GkBYAs.png).
+> >>
+> >> I happened to have a mips sourcery toolchain installed on my machine
+> >> (https://sourcery.sw.siemens.com/GNUToolchain/package12797/public/mips-linux-gnu/mips-2014.05-27-mips-linux-gnu-i686-pc-linux-gnu.tar.bz2)
+> >> so I pointed that to u-boot without modifying anything else and it was
+> >> able to compile u-boot successfully. Woot!
+> >> https://pastebin.com/ySPFae5u
+> >>
+> >> I suppose the next step would be to generate a mips1 yocto toolchain
+> >> however according to the available tune values it appears only mips32
+> >> or mips64 is available
+> >>
+> >> Any suggestions on how to generate a mips1 yocto toolchain or if
+> >> that's even supported?
+> >
+> >
+> > Yes it’s supported although it’s not default for qemumips so the simple trick you can do is change the DEFAULTTUNE setting in the qemumips.conf away from mips32r2
+>
+> Sorry Khem, I'm not quite following you. I tried the following patch
+> (https://pastebin.com/rkmQ3t6P) thinking perhaps this is what you
+> meant however my build configuration still shows the tune set to
+> mips32r2 https://pastebin.com/izP9thVW
+>
+> What am I missing?
+>
+
+Nevermind, I scraped the last patch, recreated my BUILD_DIR, set
+MACHINE = "qemumips" and added DEFAULTTUNE = "mips" in my local.conf.
+Now the build configuration correct https://pastebin.com/pkkRVL58 and
+I'm now waiting for the toolchain to finish so I can attempt to build
+realtek's u-boot.
+
+> >>
+> >>
+> >>
+> >> >
+> >> > Regards,
+> >> > Anders Montonen
+
+
+^ permalink raw reply	[flat|nested] 9+ messages in thread
+* Re: [yocto] building image for Realtek RTS3916N mips SoC using vendor provided prebuilt external uClibc toolchain
+  2021-12-30  0:40             ` Davis Roman
+@ 2022-01-04 23:01               ` Davis Roman
+  0 siblings, 0 replies; 9+ messages in thread
+From: Davis Roman @ 2022-01-04 23:01 UTC (permalink / raw)
+  To: Khem Raj; +Cc: Anders Montonen, song li, yocto
+
+On Wed, Dec 29, 2021 at 7:40 PM Davis Roman <davis.roman84@gmail.com> wrote:
+>
+> On Wed, Dec 29, 2021 at 6:15 PM Davis Roman <davis.roman84@gmail.com> wrote:
+> >
+> > On Wed, Dec 29, 2021 at 5:30 PM Khem Raj <raj.khem@gmail.com> wrote:
+> > >
+> > >
+> > >
+> > > On Wed, Dec 29, 2021 at 2:20 PM Davis Roman <davis.roman84@gmail.com> wrote:
+> > >>
+> > >> On Wed, Dec 29, 2021 at 2:21 PM Anders Montonen <Anders.Montonen@iki.fi> wrote:
+> > >> >
+> > >> > Hi,
+> > >> >
+> > >> > > On 29 Dec 2021, at 9:53, davis roman <davis.roman84@gmail.com> wrote:
+> > >> > >
+> > >> > > I generated an internal mips toolchain built against musl and I tried
+> > >> > > to compile u-boot but unfortunately, I'm getting "opcode not
+> > >> > > supported" error messages. https://pastebin.com/QdcLxy69
+> > >> > > If instead I use the realtek provided prebuilt toolchain then u-boot
+> > >> > > compiles successfully. https://pastebin.com/zcQ5kc20
+> > >> > >
+> > >> > > I'm thinking that Realtek's toolchain has patches specific to their
+> > >> > > SoC that have not been pushed upstream. Could this be the reason I'm
+> > >> > > unable to compile uboot?
+> > >> >
+> > >> > I’m guessing that your U-Boot config doesn’t set the correct MIPS architecture revision. The compiler error shows that you’re trying to assemble a MIPS32r1 instruction, but the compiler is targeting the original MIPS1 architecture. The Realtek toolchain may have set the default architecture to match the SoC, but the fix is to update the config to match the hardware.
+> > >>
+> > >> You're right. I didn't realize the RX5281 core on the RTS3916N only
+> > >> supports mips1 or mips16 (https://pasteboard.co/IpsqN6GkBYAs.png).
+> > >>
+> > >> I happened to have a mips sourcery toolchain installed on my machine
+> > >> (https://sourcery.sw.siemens.com/GNUToolchain/package12797/public/mips-linux-gnu/mips-2014.05-27-mips-linux-gnu-i686-pc-linux-gnu.tar.bz2)
+> > >> so I pointed that to u-boot without modifying anything else and it was
+> > >> able to compile u-boot successfully. Woot!
+> > >> https://pastebin.com/ySPFae5u
+> > >>
+> > >> I suppose the next step would be to generate a mips1 yocto toolchain
+> > >> however according to the available tune values it appears only mips32
+> > >> or mips64 is available
+> > >>
+> > >> Any suggestions on how to generate a mips1 yocto toolchain or if
+> > >> that's even supported?
+> > >
+> > >
+> > > Yes it’s supported although it’s not default for qemumips so the simple trick you can do is change the DEFAULTTUNE setting in the qemumips.conf away from mips32r2
+> >
+> > Sorry Khem, I'm not quite following you. I tried the following patch
+> > (https://pastebin.com/rkmQ3t6P) thinking perhaps this is what you
+> > meant however my build configuration still shows the tune set to
+> > mips32r2 https://pastebin.com/izP9thVW
+> >
+> > What am I missing?
+> >
+>
+> Nevermind, I scraped the last patch, recreated my BUILD_DIR, set
+> MACHINE = "qemumips" and added DEFAULTTUNE = "mips" in my local.conf.
+> Now the build configuration correct https://pastebin.com/pkkRVL58 and
+> I'm now waiting for the toolchain to finish so I can attempt to build
+> realtek's u-boot.
+
+Unfortunately, I still get the original u-boot error
+(https://pastebin.com/8eKzFWQh) even after creating a toolchain using
+DEFAULTTUNE=mips.
+
+Later I re-read what Anders Montonen had mentioned regarding the arch
+needs to be set in the u-boot source itself (since the yocto toolchain
+does not contain the same defaults as the realtek toolchain) so I
+decided to tweak arch/mips/Makefile to set the arch to mips32 ( it
+should be backwards compatible with mips1)
+
+------------------------------------------
+diff --git a/arch/mips/Makefile b/arch/mips/Makefile
+index efe7e44..0c0f0c2 100644
+--- a/arch/mips/Makefile
++++ b/arch/mips/Makefile
+@@ -29,6 +29,7 @@ arch-$(CONFIG_CPU_MIPS32_R6) += -march=mips32r6 -Wa,-mips32r6
+ arch-$(CONFIG_CPU_MIPS64_R1) += -march=mips64 -Wa,-mips64
+ arch-$(CONFIG_CPU_MIPS64_R2) += -march=mips64r2 -Wa,-mips64r2
+ arch-$(CONFIG_CPU_MIPS64_R6) += -march=mips64r6 -Wa,-mips64r6
++arch-$(CONFIG_CPU_TAROKO)    += -march=mips32 -Wa,-mips32
+
+ # Allow extra optimization for specific CPUs/SoCs
+ tune-$(CONFIG_MIPS_TUNE_4KC) += -mtune=4kc
+------------------------------------------
+
+With this patch, my build was able to get a little farther
+(https://pastebin.com/BkC2NY1Y) however I got the following linker
+error:
+
+mipsel-poky-linux-ld.bfd: u-boot: error: PHDR segment not covered by
+LOAD segment
+Makefile:1214: recipe for target 'u-boot' failed
+make: *** [u-boot] Error 1
+
+Any idea what this could be about? or thoughts in general?
+
+
+I'm not sure if the gcc dumpspecs for each toolchain would be useful
+but here they are just in case.
+yocto toolchain - https://pastebin.com/BLRveGWD ( not able to compile
+realtek u-boot)
+realtek toolchain - https://pastebin.com/cPwRa9jf ( able to compile
+realtek u-boot)
+code sourcery mips 2016.05 - https://pastebin.com/RXbf9Q50 ( able to
+compile realtek u-boot)
+
+>
+> > >>
+> > >>
+> > >>
+> > >> >
+> > >> > Regards,
+> > >> > Anders Montonen
+
+
+^ permalink raw reply related	[flat|nested] 9+ messages in thread
+end of thread, other threads:[~2022-01-04 23:01 UTC | newest]
+
+Thread overview: 9+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-12-28 22:53 building image for Realtek RTS3916N mips SoC using vendor provided prebuilt external uClibc toolchain Davis Roman
+2021-12-29  3:09 ` [yocto] " Khem Raj
+2021-12-29  7:53   ` Davis Roman
+2021-12-29 19:21     ` Anders Montonen
+2021-12-29 22:19       ` Davis Roman
+2021-12-29 22:30         ` Khem Raj
+2021-12-29 23:15           ` Davis Roman
+2021-12-30  0:40             ` Davis Roman
+2022-01-04 23:01               ` Davis Roman
+

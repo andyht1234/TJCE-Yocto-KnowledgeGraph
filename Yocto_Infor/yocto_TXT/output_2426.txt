@@ -1,0 +1,111 @@
+* [auto-upgrade-helper][PATCH] bitbake: consider both stdout and stderr when checking or logging output
+@ 2021-12-23 20:21 Alexander Kanavin
+  0 siblings, 0 replies; only message in thread
+From: Alexander Kanavin @ 2021-12-23 20:21 UTC (permalink / raw)
+  To: yocto; +Cc: Alexander Kanavin
+
+Signed-off-by: Alexander Kanavin <alex.kanavin@gmail.com>
+---
+ modules/buildhistory.py  | 2 +-
+ modules/steps.py         | 4 ++--
+ modules/testimage.py     | 4 ++--
+ modules/utils/bitbake.py | 2 +-
+ upgrade-helper.py        | 4 ++--
+ 5 files changed, 8 insertions(+), 8 deletions(-)
+
+diff --git a/modules/buildhistory.py b/modules/buildhistory.py
+index 6649023..e0f7191 100644
+--- a/modules/buildhistory.py
++++ b/modules/buildhistory.py
+@@ -43,7 +43,7 @@ class BuildHistory(object):
+             try:
+                 self.bb.complete(self.pn, machine)
+             except Error as e:
+-                for line in e.stdout.split("\n"):
++                for line in e.stdout.split("\n") + e.stderr.split("\n"):
+                     # version going backwards is not a real error
+                     if re.match(".* went backwards which would break package feeds .*", line):
+                         break
+diff --git a/modules/steps.py b/modules/steps.py
+index 811b88d..bde72db 100644
+--- a/modules/steps.py
++++ b/modules/steps.py
+@@ -107,8 +107,8 @@ def _compile(bb, pkg, machine, workdir):
+             bb.complete(pkg, machine)
+         except Error as e:
+             with open("{}/bitbake-output-{}.txt".format(workdir, machine), 'w') as f:
+-                f.write(e.stdout)
+-            for line in e.stdout.split("\n"):
++                f.write(e.stdout + e.stderr)
++            for line in e.stdout.split("\n") + e.stderr.split("\n"):
+                 # version going backwards is not a real error
+                 if re.match(".* went backwards which would break package feeds .*", line):
+                     break
+diff --git a/modules/testimage.py b/modules/testimage.py
+index 4272c84..0fc1adb 100644
+--- a/modules/testimage.py
++++ b/modules/testimage.py
+@@ -85,14 +85,14 @@ class TestImage():
+             bitbake_create_output = self.bb.complete(image, machine)
+         except Error as e:
+             I( "   building the testimage failed! Collecting logs...")
+-            bitbake_create_output = e.stdout
++            bitbake_create_output = e.stdout + e.stderr
+         else:
+             I( "   running %s/testimage for %s ..." % (image, machine))
+             try:
+                 bitbake_run_output = self.bb.complete("%s -c testimage" % image, machine)
+             except Error as e:
+                 I( "   running the testimage failed! Collecting logs...")
+-                bitbake_run_output = e.stdout
++                bitbake_run_output = e.stdout + e.stderr
+ 
+         if bitbake_create_output:
+             with open(os.path.join(self.logdir, "bitbake-create-testimage.log"), 'w') as f:
+diff --git a/modules/utils/bitbake.py b/modules/utils/bitbake.py
+index 4835ca6..a5fc6fa 100644
+--- a/modules/utils/bitbake.py
++++ b/modules/utils/bitbake.py
+@@ -73,7 +73,7 @@ class Bitbake(object):
+ 
+             if self.log_dir is not None and os.path.exists(self.log_dir):
+                 with open(os.path.join(self.log_dir, BITBAKE_ERROR_LOG), "a+") as log:
+-                    log.write(e.stdout)
++                    log.write(e.stdout + e.stderr)
+ 
+             raise Error("\'" + cmd + "\' failed", e.stdout, e.stderr)
+ 
+diff --git a/upgrade-helper.py b/upgrade-helper.py
+index eb3935e..ecdabb0 100755
+--- a/upgrade-helper.py
++++ b/upgrade-helper.py
+@@ -153,7 +153,7 @@ class Updater(object):
+         except EmptyEnvError as e:
+             import traceback
+             E( " %s\n%s" % (e.message, traceback.format_exc()))
+-            E( " Bitbake output:\n%s" % (e.stdout))
++            E( " Bitbake output:\n%s" % (e.stdout + e.stderr))
+             exit(1)
+ 
+         self._set_options()
+@@ -459,7 +459,7 @@ class Updater(object):
+                     E(" Can't build gcc-runtime for %s." % machine)
+ 
+                     if isinstance(e, Error):
+-                        E(e.stdout)
++                        E(e.stdout + e.stderr)
+                     else:
+                         import traceback
+                         traceback.print_exc(file=sys.stdout)
+-- 
+2.33.1
+
+
+
+^ permalink raw reply related	[flat|nested] only message in thread
+only message in thread, other threads:[~2021-12-23 20:21 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-12-23 20:21 [auto-upgrade-helper][PATCH] bitbake: consider both stdout and stderr when checking or logging output Alexander Kanavin
+

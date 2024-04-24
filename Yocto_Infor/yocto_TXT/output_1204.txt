@@ -1,0 +1,72 @@
+* #kirkstone: boot script section not added in the fitimage
+@ 2022-11-14 13:50 sebastien.fabre31
+  2022-11-21 17:39 ` [yocto] " Quentin Schulz
+  0 siblings, 1 reply; 2+ messages in thread
+From: sebastien.fabre31 @ 2022-11-14 13:50 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 593 bytes --]
+
+Hello,
+
+I am working on kirkstone. If UBOOT_ENV is specified and kernel-fitimage is in KERNEL_CLASSES, boot script section is not added in the fitimage.
+
+In fitimage_assemble (kernel-fitimage.bbclass), the 3 rd step is not performed because boot directory is not in STAGING_DIR_HOST. Indeed, u-boot.inc installs UBOOT_ENV_BINARY in boot directory but boot is not in SYSROOT_DIRS so it is not present in kernel STAGING_DIR_HOST.
+
+Should we add the following line in u-boot.inc ?
+
+SYSROOT_DIRS:append = "${@' /boot' if d.getVar('UBOOT_ENV') else ''}"
+
+Best regards,
+Sébastien Fabre
+
+[-- Attachment #2: Type: text/html, Size: 1316 bytes --]
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+* Re: [yocto] #kirkstone: boot script section not added in the fitimage
+  2022-11-14 13:50 #kirkstone: boot script section not added in the fitimage sebastien.fabre31
+@ 2022-11-21 17:39 ` Quentin Schulz
+  0 siblings, 0 replies; 2+ messages in thread
+From: Quentin Schulz @ 2022-11-21 17:39 UTC (permalink / raw)
+  To: sebastien.fabre31, yocto
+
+Hi Sébastien,
+
+On 11/14/22 14:50, sebastien.fabre31@gmail.com wrote:
+> Hello,
+> 
+> I am working on kirkstone. If UBOOT_ENV is specified and kernel-fitimage is in KERNEL_CLASSES, boot script section is not added in the fitimage.
+> 
+> In fitimage_assemble (kernel-fitimage.bbclass), the 3 rd step is not performed because boot directory is not in STAGING_DIR_HOST. Indeed, u-boot.inc installs UBOOT_ENV_BINARY in boot directory but boot is not in SYSROOT_DIRS so it is not present in kernel STAGING_DIR_HOST.
+> 
+> Should we add the following line in u-boot.inc ?
+> 
+> SYSROOT_DIRS:append = "${@' /boot' if d.getVar('UBOOT_ENV') else ''}"
+> 
+
+The logic seems reasonable to me, yes. We could have used the deploy 
+directory instead and depend on the do_deploy task instead of the 
+do_populate_sysroot but I think it is actually safer to use the sysroot 
+(because it is cleaned if a dependency changes, as opposed to the deploy 
+directory that might be providing an old version, e.g. think one build 
+with UBOOT_ENV set followed by one it isn't, the deployed artifact will 
+still be present).
+
+Though, please use += instead of :append.
+
+I'm wondering also if we cannot just always have /boot in SYSROOT_DIRS 
+for U-Boot recipe? I guess it's fine like this :)
+
+Please send a patch,
+Cheers,
+Quentin
+
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2022-11-21 17:39 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-11-14 13:50 #kirkstone: boot script section not added in the fitimage sebastien.fabre31
+2022-11-21 17:39 ` [yocto] " Quentin Schulz
+

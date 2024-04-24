@@ -1,0 +1,315 @@
+* [patchtest][PATCH 0/7] patchtest: update to work with latest Yocto changes
+@ 2023-04-28 13:32 Trevor Gamblin
+  2023-04-28 13:32 ` [patchtest][PATCH 1/7] python3-pylint: update to use new override syntax Trevor Gamblin
+                   ` (6 more replies)
+  0 siblings, 7 replies; 8+ messages in thread
+From: Trevor Gamblin @ 2023-04-28 13:32 UTC (permalink / raw)
+  To: yocto
+
+This is the first series of patches intended to help get patchtest up
+and running again. Specifically, these make core-image-patchtest 
+build and run again (although one of the initscripts still shuts the 
+image down shortly after boot, so testing it may seem confusing). 
+In the longer-term, patchtest may be moved to oe-core, so right now the
+focus for this repo is to make sure it's in a working state so that it
+can be cleaned up and prepared for that change.There are some other 
+additions that will be coming soon, namely updates to the pylint 
+version and some updated documentation. 
+
+In order to start core-image-patchtest with runqemu, I had to invoke it
+like so:
+
+runqemu kvm nographic qemuparams="-snapshot \
+-fsdev local,id=test_dev,path=/workspace/yocto/manual/openembedded-core/build/test_share,security_model=mapped \
+-device virtio-9p-pci,fsdev=test_dev,mount_tag=test_mount -m 2048"
+
+which is similar to the contents of the patchtest/scripts/guest script
+(but in this case I created the share directory "test_share" inside my
+build directory). The PACKAGECONFIG for qemu-system-native wasn't being 
+set to properly support the required virtio-9p-pci device, hence the 
+addition of the .bbappend file for that recipe. I've left the 
+corresponding qemu .bbappend in place for now, but it might be removable 
+after more testing.
+
+Trevor Gamblin (7):
+  python3-pylint: update to use new override syntax
+  qemu: update to use new override syntax
+  initscripts: update to use new override syntax
+  initscripts: use mkdir before mv with patchtest initscript
+  linux-yocto: update version, fix override syntax
+  qemu-system-native: add virtfs to PACKAGECONFIG
+  README: Update maintainer list
+
+ README                                                    | 1 +
+ .../recipes-core/initscripts/initscripts/patchtest        | 1 +
+ .../recipes-core/initscripts/initscripts_1.0.bbappend     | 8 ++++----
+ .../recipes-devtools/python/python3-pylint_1.6.5.bb       | 2 +-
+ .../recipes-devtools/qemu/qemu-system-native_%.bbappend   | 1 +
+ meta-patchtest/recipes-devtools/qemu/qemu_%.bbappend      | 2 +-
+ .../recipes-kernel/linux/linux-yocto_4.%.bbappend         | 2 --
+ .../recipes-kernel/linux/linux-yocto_6.%.bbappend         | 2 ++
+ 8 files changed, 11 insertions(+), 8 deletions(-)
+ create mode 100644 meta-patchtest/recipes-devtools/qemu/qemu-system-native_%.bbappend
+ delete mode 100644 meta-patchtest/recipes-kernel/linux/linux-yocto_4.%.bbappend
+ create mode 100644 meta-patchtest/recipes-kernel/linux/linux-yocto_6.%.bbappend
+
+-- 
+2.40.0
+
+
+
+^ permalink raw reply	[flat|nested] 8+ messages in thread
+* [patchtest][PATCH 1/7] python3-pylint: update to use new override syntax
+  2023-04-28 13:32 [patchtest][PATCH 0/7] patchtest: update to work with latest Yocto changes Trevor Gamblin
+@ 2023-04-28 13:32 ` Trevor Gamblin
+  2023-04-28 13:32 ` [patchtest][PATCH 2/7] qemu: " Trevor Gamblin
+                   ` (5 subsequent siblings)
+  6 siblings, 0 replies; 8+ messages in thread
+From: Trevor Gamblin @ 2023-04-28 13:32 UTC (permalink / raw)
+  To: yocto
+
+Signed-off-by: Trevor Gamblin <tgamblin@baylibre.com>
+---
+ meta-patchtest/recipes-devtools/python/python3-pylint_1.6.5.bb | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/meta-patchtest/recipes-devtools/python/python3-pylint_1.6.5.bb b/meta-patchtest/recipes-devtools/python/python3-pylint_1.6.5.bb
+index 269983b..0bb9e3f 100644
+--- a/meta-patchtest/recipes-devtools/python/python3-pylint_1.6.5.bb
++++ b/meta-patchtest/recipes-devtools/python/python3-pylint_1.6.5.bb
+@@ -22,7 +22,7 @@ RDEPENDS_${PN} += "${PYTHON_PN}-astroid \
+                    ${PYTHON_PN}-netserver \
+                   "
+ 
+-do_install_append(){
++do_install:append(){
+     rm ${D}${bindir}/pylint
+     cat >> ${D}${bindir}/pylint <<EOF
+ #!/usr/bin/env ${PYTHON_PN}
+-- 
+2.40.0
+
+
+
+^ permalink raw reply related	[flat|nested] 8+ messages in thread
+* [patchtest][PATCH 2/7] qemu: update to use new override syntax
+  2023-04-28 13:32 [patchtest][PATCH 0/7] patchtest: update to work with latest Yocto changes Trevor Gamblin
+  2023-04-28 13:32 ` [patchtest][PATCH 1/7] python3-pylint: update to use new override syntax Trevor Gamblin
+@ 2023-04-28 13:32 ` Trevor Gamblin
+  2023-04-28 13:32 ` [patchtest][PATCH 3/7] initscripts: " Trevor Gamblin
+                   ` (4 subsequent siblings)
+  6 siblings, 0 replies; 8+ messages in thread
+From: Trevor Gamblin @ 2023-04-28 13:32 UTC (permalink / raw)
+  To: yocto
+
+Signed-off-by: Trevor Gamblin <tgamblin@baylibre.com>
+---
+ meta-patchtest/recipes-devtools/qemu/qemu_%.bbappend | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/meta-patchtest/recipes-devtools/qemu/qemu_%.bbappend b/meta-patchtest/recipes-devtools/qemu/qemu_%.bbappend
+index 3ad9f03..4e5918b 100644
+--- a/meta-patchtest/recipes-devtools/qemu/qemu_%.bbappend
++++ b/meta-patchtest/recipes-devtools/qemu/qemu_%.bbappend
+@@ -1 +1 @@
+-PACKAGECONFIG_append_pn-qemu-native = " virtfs"
++PACKAGECONFIG:append:class-native = " virtfs"
+-- 
+2.40.0
+
+
+
+^ permalink raw reply related	[flat|nested] 8+ messages in thread
+* [patchtest][PATCH 3/7] initscripts: update to use new override syntax
+  2023-04-28 13:32 [patchtest][PATCH 0/7] patchtest: update to work with latest Yocto changes Trevor Gamblin
+  2023-04-28 13:32 ` [patchtest][PATCH 1/7] python3-pylint: update to use new override syntax Trevor Gamblin
+  2023-04-28 13:32 ` [patchtest][PATCH 2/7] qemu: " Trevor Gamblin
+@ 2023-04-28 13:32 ` Trevor Gamblin
+  2023-04-28 13:32 ` [patchtest][PATCH 4/7] initscripts: use mkdir before mv with patchtest initscript Trevor Gamblin
+                   ` (3 subsequent siblings)
+  6 siblings, 0 replies; 8+ messages in thread
+From: Trevor Gamblin @ 2023-04-28 13:32 UTC (permalink / raw)
+  To: yocto
+
+Signed-off-by: Trevor Gamblin <tgamblin@baylibre.com>
+---
+ .../recipes-core/initscripts/initscripts_1.0.bbappend     | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/meta-patchtest/recipes-core/initscripts/initscripts_1.0.bbappend b/meta-patchtest/recipes-core/initscripts/initscripts_1.0.bbappend
+index d239865..057921f 100644
+--- a/meta-patchtest/recipes-core/initscripts/initscripts_1.0.bbappend
++++ b/meta-patchtest/recipes-core/initscripts/initscripts_1.0.bbappend
+@@ -1,13 +1,13 @@
+-FILESEXTRAPATHS_prepend := "${THISDIR}/${PN}:"
++FILESEXTRAPATHS:prepend := "${THISDIR}/${PN}:"
+ 
+-SRC_URI_append =" file://patchtest"
++SRC_URI:append =" file://patchtest"
+ 
+ inherit useradd
+ 
+ USERADD_PACKAGES = "${PN}"
+-USERADD_PARAM_${PN} = "-u 1200 -r -m -s /bin/sh patchtest"
++USERADD_PARAM:${PN} = "-u 1200 -r -m -s /bin/sh patchtest"
+ 
+-do_install_append () {
++do_install:append () {
+ 	install -m 0755 ${WORKDIR}/patchtest ${D}${sysconfdir}/init.d
+ 	update-rc.d -r ${D} patchtest start 99 3 5 .
+ }
+-- 
+2.40.0
+
+
+
+^ permalink raw reply related	[flat|nested] 8+ messages in thread
+* [patchtest][PATCH 4/7] initscripts: use mkdir before mv with patchtest initscript
+  2023-04-28 13:32 [patchtest][PATCH 0/7] patchtest: update to work with latest Yocto changes Trevor Gamblin
+                   ` (2 preceding siblings ...)
+  2023-04-28 13:32 ` [patchtest][PATCH 3/7] initscripts: " Trevor Gamblin
+@ 2023-04-28 13:32 ` Trevor Gamblin
+  2023-04-28 13:32 ` [patchtest][PATCH 5/7] linux-yocto: update version, fix override syntax Trevor Gamblin
+                   ` (2 subsequent siblings)
+  6 siblings, 0 replies; 8+ messages in thread
+From: Trevor Gamblin @ 2023-04-28 13:32 UTC (permalink / raw)
+  To: yocto
+
+Signed-off-by: Trevor Gamblin <tgamblin@baylibre.com>
+---
+ meta-patchtest/recipes-core/initscripts/initscripts/patchtest | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/meta-patchtest/recipes-core/initscripts/initscripts/patchtest b/meta-patchtest/recipes-core/initscripts/initscripts/patchtest
+index 3b075af..1dc434f 100755
+--- a/meta-patchtest/recipes-core/initscripts/initscripts/patchtest
++++ b/meta-patchtest/recipes-core/initscripts/initscripts/patchtest
+@@ -53,6 +53,7 @@ if [ -d $REPO ]; then
+ fi
+ 
+ # Move results dir to MP as root
++mkdir -p $RESULTS
+ mv $RESULTS $MP/results
+ 
+ # Poweroff machine
+-- 
+2.40.0
+
+
+
+^ permalink raw reply related	[flat|nested] 8+ messages in thread
+* [patchtest][PATCH 5/7] linux-yocto: update version, fix override syntax
+  2023-04-28 13:32 [patchtest][PATCH 0/7] patchtest: update to work with latest Yocto changes Trevor Gamblin
+                   ` (3 preceding siblings ...)
+  2023-04-28 13:32 ` [patchtest][PATCH 4/7] initscripts: use mkdir before mv with patchtest initscript Trevor Gamblin
+@ 2023-04-28 13:32 ` Trevor Gamblin
+  2023-04-28 13:32 ` [patchtest][PATCH 6/7] qemu-system-native: add virtfs to PACKAGECONFIG Trevor Gamblin
+  2023-04-28 13:32 ` [patchtest][PATCH 7/7] README: Update maintainer list Trevor Gamblin
+  6 siblings, 0 replies; 8+ messages in thread
+From: Trevor Gamblin @ 2023-04-28 13:32 UTC (permalink / raw)
+  To: yocto
+
+Signed-off-by: Trevor Gamblin <tgamblin@baylibre.com>
+---
+ meta-patchtest/recipes-kernel/linux/linux-yocto_4.%.bbappend | 2 --
+ meta-patchtest/recipes-kernel/linux/linux-yocto_6.%.bbappend | 2 ++
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+ delete mode 100644 meta-patchtest/recipes-kernel/linux/linux-yocto_4.%.bbappend
+ create mode 100644 meta-patchtest/recipes-kernel/linux/linux-yocto_6.%.bbappend
+
+diff --git a/meta-patchtest/recipes-kernel/linux/linux-yocto_4.%.bbappend b/meta-patchtest/recipes-kernel/linux/linux-yocto_4.%.bbappend
+deleted file mode 100644
+index 7a718f6..0000000
+--- a/meta-patchtest/recipes-kernel/linux/linux-yocto_4.%.bbappend
++++ /dev/null
+@@ -1,2 +0,0 @@
+-FILESEXTRAPATHS_prepend := "${THISDIR}/${PN}:"
+-SRC_URI += "file://virtio.cfg"
+diff --git a/meta-patchtest/recipes-kernel/linux/linux-yocto_6.%.bbappend b/meta-patchtest/recipes-kernel/linux/linux-yocto_6.%.bbappend
+new file mode 100644
+index 0000000..3a69acb
+--- /dev/null
++++ b/meta-patchtest/recipes-kernel/linux/linux-yocto_6.%.bbappend
+@@ -0,0 +1,2 @@
++FILESEXTRAPATHS:prepend := "${THISDIR}/${PN}:"
++SRC_URI += "file://virtio.cfg"
+-- 
+2.40.0
+
+
+
+^ permalink raw reply related	[flat|nested] 8+ messages in thread
+* [patchtest][PATCH 6/7] qemu-system-native: add virtfs to PACKAGECONFIG
+  2023-04-28 13:32 [patchtest][PATCH 0/7] patchtest: update to work with latest Yocto changes Trevor Gamblin
+                   ` (4 preceding siblings ...)
+  2023-04-28 13:32 ` [patchtest][PATCH 5/7] linux-yocto: update version, fix override syntax Trevor Gamblin
+@ 2023-04-28 13:32 ` Trevor Gamblin
+  2023-04-28 13:32 ` [patchtest][PATCH 7/7] README: Update maintainer list Trevor Gamblin
+  6 siblings, 0 replies; 8+ messages in thread
+From: Trevor Gamblin @ 2023-04-28 13:32 UTC (permalink / raw)
+  To: yocto
+
+Signed-off-by: Trevor Gamblin <tgamblin@baylibre.com>
+---
+ .../recipes-devtools/qemu/qemu-system-native_%.bbappend          | 1 +
+ 1 file changed, 1 insertion(+)
+ create mode 100644 meta-patchtest/recipes-devtools/qemu/qemu-system-native_%.bbappend
+
+diff --git a/meta-patchtest/recipes-devtools/qemu/qemu-system-native_%.bbappend b/meta-patchtest/recipes-devtools/qemu/qemu-system-native_%.bbappend
+new file mode 100644
+index 0000000..4e5918b
+--- /dev/null
++++ b/meta-patchtest/recipes-devtools/qemu/qemu-system-native_%.bbappend
+@@ -0,0 +1 @@
++PACKAGECONFIG:append:class-native = " virtfs"
+-- 
+2.40.0
+
+
+
+^ permalink raw reply related	[flat|nested] 8+ messages in thread
+* [patchtest][PATCH 7/7] README: Update maintainer list
+  2023-04-28 13:32 [patchtest][PATCH 0/7] patchtest: update to work with latest Yocto changes Trevor Gamblin
+                   ` (5 preceding siblings ...)
+  2023-04-28 13:32 ` [patchtest][PATCH 6/7] qemu-system-native: add virtfs to PACKAGECONFIG Trevor Gamblin
+@ 2023-04-28 13:32 ` Trevor Gamblin
+  6 siblings, 0 replies; 8+ messages in thread
+From: Trevor Gamblin @ 2023-04-28 13:32 UTC (permalink / raw)
+  To: yocto
+
+Signed-off-by: Trevor Gamblin <tgamblin@baylibre.com>
+---
+ README | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/README b/README
+index 8e0ae71..b978855 100644
+--- a/README
++++ b/README
+@@ -44,6 +44,7 @@ Maintenance
+ 
+ Maintainers:
+     Paul Barker <pbarker@konsulko.com>
++    Trevor Gamblin <tgamblin@baylibre.com>
+ 
+ Links
+ -----
+-- 
+2.40.0
+
+
+
+^ permalink raw reply related	[flat|nested] 8+ messages in thread
+end of thread, other threads:[~2023-04-28 13:32 UTC | newest]
+
+Thread overview: 8+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-04-28 13:32 [patchtest][PATCH 0/7] patchtest: update to work with latest Yocto changes Trevor Gamblin
+2023-04-28 13:32 ` [patchtest][PATCH 1/7] python3-pylint: update to use new override syntax Trevor Gamblin
+2023-04-28 13:32 ` [patchtest][PATCH 2/7] qemu: " Trevor Gamblin
+2023-04-28 13:32 ` [patchtest][PATCH 3/7] initscripts: " Trevor Gamblin
+2023-04-28 13:32 ` [patchtest][PATCH 4/7] initscripts: use mkdir before mv with patchtest initscript Trevor Gamblin
+2023-04-28 13:32 ` [patchtest][PATCH 5/7] linux-yocto: update version, fix override syntax Trevor Gamblin
+2023-04-28 13:32 ` [patchtest][PATCH 6/7] qemu-system-native: add virtfs to PACKAGECONFIG Trevor Gamblin
+2023-04-28 13:32 ` [patchtest][PATCH 7/7] README: Update maintainer list Trevor Gamblin
+

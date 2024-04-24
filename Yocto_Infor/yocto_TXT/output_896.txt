@@ -1,0 +1,579 @@
+* [meta-raspberrypi] Is Preempt-rt still supported in master / latest releases? #raspberrypi
+@ 2023-01-23  9:57 Carles Sole
+  2023-01-23 10:47 ` [yocto] " Alexander Kanavin
+  0 siblings, 1 reply; 16+ messages in thread
+From: Carles Sole @ 2023-01-23  9:57 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 826 bytes --]
+
+Hello all,
+
+I would like to understand if it is still possible to build an image for raspberrypi4-64 where the preempt-rt patch is applied to the kernel, e.g. by adding " PREFERRED_PROVIDER_virtual/kernel" to local.conf.
+
+I could see that in older branches of [meta-raspberrypi] there was a specific recipe for the preempt-rt patch, e.g. linux-raspberrypi-rt_4.19.bb ( https://github.com/agherzan/meta-raspberrypi/blob/warrior/recipes-kernel/linux/linux-raspberrypi-rt_4.19.bb ). This recipe was using the specific raspberrypi branch rpi-4.19.y-rt.
+
+I see that in newer branches this rt branch disappeared but I was not able to understand the history and what is the current method to implement this patch, assuming is still supported.
+
+Any hints on how to do this would be much appreciated.
+
+Best Regards,
+Carles
+
+[-- Attachment #2: Type: text/html, Size: 1407 bytes --]
+
+^ permalink raw reply	[flat|nested] 16+ messages in thread
+* Re: [yocto] [meta-raspberrypi] Is Preempt-rt still supported in master / latest releases? #raspberrypi
+  2023-01-23  9:57 [meta-raspberrypi] Is Preempt-rt still supported in master / latest releases? #raspberrypi Carles Sole
+@ 2023-01-23 10:47 ` Alexander Kanavin
+  2023-01-23 16:03   ` Andrei Gherzan
+  0 siblings, 1 reply; 16+ messages in thread
+From: Alexander Kanavin @ 2023-01-23 10:47 UTC (permalink / raw)
+  To: Carles.SoleMendi; +Cc: yocto
+
+meta-raspberrypi kernel comes from
+https://github.com/raspberrypi/linux and they stopped providing -rt
+options some time ago.
+
+Your options are to apply the -rt patchset to regular rpi kernel and
+enable needed options via custom .bbappend, or take linux-yocto-rt and
+see how far you get.
+
+Alex
+
+On Mon, 23 Jan 2023 at 10:57, Carles Sole via lists.yoctoproject.org
+<Carles.SoleMendi=de.bosch.com@lists.yoctoproject.org> wrote:
+>
+> Hello all,
+>
+> I would like to understand if it is still possible to build an image for raspberrypi4-64 where the preempt-rt patch is applied to the kernel, e.g. by adding "PREFERRED_PROVIDER_virtual/kernel" to local.conf.
+>
+> I could see that in older branches of [meta-raspberrypi] there was a specific recipe for the preempt-rt patch, e.g. linux-raspberrypi-rt_4.19.bb. This recipe was using the specific raspberrypi branch rpi-4.19.y-rt.
+>
+> I see that in newer branches this rt branch disappeared but I was not able to understand the history and what is the current method to implement this patch, assuming is still supported.
+>
+> Any hints on how to do this would be much appreciated.
+>
+> Best Regards,
+> Carles
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#59028): https://lists.yoctoproject.org/g/yocto/message/59028
+> Mute This Topic: https://lists.yoctoproject.org/mt/96470693/1686489
+> Mute #raspberrypi:https://lists.yoctoproject.org/g/yocto/mutehashtag/raspberrypi
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 16+ messages in thread
+* Re: [yocto] [meta-raspberrypi] Is Preempt-rt still supported in master / latest releases? #raspberrypi
+  2023-01-23 10:47 ` [yocto] " Alexander Kanavin
+@ 2023-01-23 16:03   ` Andrei Gherzan
+  2023-01-25 12:49     ` [meta-raspberrypi] Is Preempt-rt still supported in master / latest releases? Carles Sole
+  0 siblings, 1 reply; 16+ messages in thread
+From: Andrei Gherzan @ 2023-01-23 16:03 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: Carles.SoleMendi, yocto
+
+On Mon, Jan 23, 2023 at 11:47:59AM +0100, Alexander Kanavin wrote:
+> meta-raspberrypi kernel comes from
+> https://github.com/raspberrypi/linux and they stopped providing -rt
+> options some time ago.
+> 
+> Your options are to apply the -rt patchset to regular rpi kernel and
+> enable needed options via custom .bbappend, or take linux-yocto-rt and
+> see how far you get.
+
+That would be correct. There is no support out of the box in the BSP layer and
+I am not aware of any layers providing that. If we find a person who wants to
+maintain a fork with the RT patches, I'm happy to bring it as an optional
+kernel provider in the layer.
+
+-- 
+Andrei Gherzan
+
+
+^ permalink raw reply	[flat|nested] 16+ messages in thread
+* Re: [meta-raspberrypi] Is Preempt-rt still supported in master / latest releases?
+  2023-01-23 16:03   ` Andrei Gherzan
+@ 2023-01-25 12:49     ` Carles Sole
+  2023-01-30 22:59       ` [yocto] " Lukasz Majewski
+  2023-01-31  6:57       ` Kuzemko Aleksandr
+  0 siblings, 2 replies; 16+ messages in thread
+From: Carles Sole @ 2023-01-25 12:49 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1855 bytes --]
+
+Hi Alex, Andrei,
+
+thanks for your reply. Based on your feedback I've tried the following:
+- I have downloaded the patch patch-5.15.86-rt56.patch from https://cdn.kernel.org/pub/linux/kernel/projects/rt/5.15/ and stored in ./meta-raspberrypi/recipes-kernel/linux/files
+- I have created a file linux-raspberrypi_%.bbappend in ./meta-raspberrypi/recipes-kernel/linux
+- I have created a .cfg file with CONFIG_PREEMPT_RT_FULL = y in ./meta-raspberrypi/recipes-kernel/linux/files
+- I have added both patch and cfg file in bbappend using SRC_URI:append:rpi.
+
+I can observe the following:
+- patch and cfg files are available in ./build/tmp/work/raspberrypi4_64-agl-linux/linux-raspberrypi/1_5.15.34+gitAUTOINC+e1b976ee4f_0086da6acd-r0
+- new folder linux-raspberrypi4_64-preempt-rt-build is available inside the folder above. But the problem seems to be that CONFIG_PREEMPT_RT = y is not applied to the .config file. So it seems the preempt-rt kernel is built but without the full preempt-rt support.
+- When I do bitbake linux-raspberrypi -c menuconfig I cannot select the full real time preempt kernel, only preemptible option available is --> Preemptible Kernel (Low-Latency Desktop). Fully Preemptible Kernel (Real-Time) is not available.
+- When I flash the image in the Rpi4 and run uname -r I see that the rt kernel has been built --> 5.15.34.rt56.v8
+- but only with PREEMPT option but without RT when I do uname -v --> #1 SMP PREEMPT Tue Aug 9 21:20:00 UTC 2022 (without RT).
+
+I have tried building linux-yocto-rt for qemu and there I see that CONFIG_PREEMP_RT = y is available in the .config file. Also if I open menuconfig I have the option to select in General setup --> Preemption Model --> Fully Preemptible Kernel (Real-Time)
+
+If you can provide any hints on what am I missing it would be highly appreciated.
+
+Best Regards,
+Carles
+
+[-- Attachment #2: Type: text/html, Size: 1952 bytes --]
+
+^ permalink raw reply	[flat|nested] 16+ messages in thread
+* Re: [yocto] [meta-raspberrypi] Is Preempt-rt still supported in master / latest releases?
+  2023-01-25 12:49     ` [meta-raspberrypi] Is Preempt-rt still supported in master / latest releases? Carles Sole
+@ 2023-01-30 22:59       ` Lukasz Majewski
+  2023-01-31  6:57       ` Kuzemko Aleksandr
+  1 sibling, 0 replies; 16+ messages in thread
+From: Lukasz Majewski @ 2023-01-30 22:59 UTC (permalink / raw)
+  To: Carles Sole via lists.yoctoproject.org; +Cc: Carles.SoleMendi, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2332 bytes --]
+
+Hi Carles
+
+> Hi Alex, Andrei,
+> 
+> thanks for your reply. Based on your feedback I've tried the
+> following:
+> - I have downloaded the patch patch-5.15.86-rt56.patch from
+> https://cdn.kernel.org/pub/linux/kernel/projects/rt/5.15/ and stored
+> in ./meta-raspberrypi/recipes-kernel/linux/files
+> - I have created a file linux-raspberrypi_%.bbappend in
+> ./meta-raspberrypi/recipes-kernel/linux
+> - I have created a .cfg file with CONFIG_PREEMPT_RT_FULL = y in
+> ./meta-raspberrypi/recipes-kernel/linux/files
+> - I have added both patch and cfg file in bbappend using
+> SRC_URI:append:rpi.
+> 
+> I can observe the following:
+> - patch and cfg files are available in
+> ./build/tmp/work/raspberrypi4_64-agl-linux/linux-raspberrypi/1_5.15.34+gitAUTOINC+e1b976ee4f_0086da6acd-r0
+> - new folder linux-raspberrypi4_64-preempt-rt-build is available
+> inside the folder above. But the problem seems to be that
+> CONFIG_PREEMPT_RT = y is not applied to the .config file. So it seems
+> the preempt-rt kernel is built but without the full preempt-rt
+> support.
+> - When I do bitbake linux-raspberrypi -c menuconfig I cannot select
+> the full real time preempt kernel, only preemptible option available
+> is --> Preemptible Kernel (Low-Latency Desktop). Fully Preemptible
+> Kernel (Real-Time) is not available.
+> - When I flash the image in the Rpi4 and run uname -r I see that the
+> rt kernel has been built --> 5.15.34.rt56.v8
+> - but only with PREEMPT option but without RT when I do uname -v -->
+> #1 SMP PREEMPT Tue Aug 9 21:20:00 UTC 2022 (without RT).
+> 
+> I have tried building linux-yocto-rt for qemu and there I see that
+> CONFIG_PREEMP_RT = y is available in the .config file. Also if I open
+> menuconfig I have the option to select in General setup -->
+> Preemption Model --> Fully Preemptible Kernel (Real-Time)
+> 
+> If you can provide any hints on what am I missing it would be highly
+> appreciated.
+> 
+
+Have you managed to go any further with your investigation regarding
+PREEMPT-RT on RPi4-64?
+
+> Best Regards,
+> Carles
+
+
+
+
+Best regards,
+
+Lukasz Majewski
+
+--
+
+DENX Software Engineering GmbH,      Managing Director: Erika Unter
+HRB 165235 Munich, Office: Kirchenstr.5, D-82194 Groebenzell, Germany
+Phone: (+49)-8142-66989-59 Fax: (+49)-8142-66989-80 Email: lukma@denx.de
+
+[-- Attachment #2: OpenPGP digital signature --]
+[-- Type: application/pgp-signature, Size: 488 bytes --]
+
+^ permalink raw reply	[flat|nested] 16+ messages in thread
+* Re: [meta-raspberrypi] Is Preempt-rt still supported in master / latest releases?
+  2023-01-25 12:49     ` [meta-raspberrypi] Is Preempt-rt still supported in master / latest releases? Carles Sole
+  2023-01-30 22:59       ` [yocto] " Lukasz Majewski
+@ 2023-01-31  6:57       ` Kuzemko Aleksandr
+  2023-01-31 20:43         ` Carles Sole
+  1 sibling, 1 reply; 16+ messages in thread
+From: Kuzemko Aleksandr @ 2023-01-31  6:57 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 338 bytes --]
+
+My results: (32bit CM4 system)
+uname -a
+Linux b2qt-raspberrypi4 5.15.56-rt56-v7l #1 SMP PREEMPT_RT Fri Jul 22 13:23:23 UTC 2022 armv7l GNU/Linux
+
+I create linux-raspberrypi_5.15.bbappend and add
+SRC_URI += " \
+file://patch-5.15.86-rt56.patch \
+file://rt.cfg \
+"
+in rt.cfg I put
+CONFIG_PREEMPT_RT=y
+
+with new line at the end.
+
+[-- Attachment #2: Type: text/html, Size: 1026 bytes --]
+
+^ permalink raw reply	[flat|nested] 16+ messages in thread
+* Re: [meta-raspberrypi] Is Preempt-rt still supported in master / latest releases?
+  2023-01-31  6:57       ` Kuzemko Aleksandr
+@ 2023-01-31 20:43         ` Carles Sole
+  2023-02-01 13:26           ` [yocto] " Joel Winarske
+  0 siblings, 1 reply; 16+ messages in thread
+From: Carles Sole @ 2023-01-31 20:43 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1114 bytes --]
+
+Hello Lukasz, Aleksandr,
+
+I have not managed to build it for Rpi4-64. I followed the same approach as Aleksandr but it does not work for 64bit system.
+
+Doing exactly the same changes as Aleksandr if I build for MACHINE = "raspberrypi4-64" in local.conf, the .config file has following configs:
+CONFIG_HAVE_PREEMPT_LAZY=y
+CONFIG_PREEMPT_NONE=y
+# CONFIG_PREEMPT_VOLUNTARY is not set
+# CONFIG_PREEMPT is not set
+
+If in the local.conf I replace the machine to MACHINE = "raspberrypi4" and I bitbake again, the .config file looks as follow:
+CONFIG_HAVE_PREEMPT_LAZY=y
+CONFIG_PREEMPT_LAZY=y
+# CONFIG_PREEMPT_NONE is not set
+# CONFIG_PREEMPT_VOLUNTARY is not set
+# CONFIG_PREEMPT is not set
+CONFIG_PREEMPT_RT=y
+CONFIG_PREEMPT_COUNT=y
+CONFIG_PREEMPTION=y
+
+So for raspberrypi4 the RT kernel is built whereas for raspberrypi4-64 a non preemptive kernel is built (without adding rt.cfg or the patch a PREEMPTIVE kernel will be built, i.e. CONFIG_PREEMPT=y is set in the .config file).
+
+Once I figure out why this happens I will post it here. Any further hints are appreciated.
+
+Best Regards,
+Carles
+
+[-- Attachment #2: Type: text/html, Size: 1215 bytes --]
+
+^ permalink raw reply	[flat|nested] 16+ messages in thread
+* Re: [yocto] [meta-raspberrypi] Is Preempt-rt still supported in master / latest releases?
+  2023-01-31 20:43         ` Carles Sole
+@ 2023-02-01 13:26           ` Joel Winarske
+  2023-02-02 10:24             ` Carles Sole
+  0 siblings, 1 reply; 16+ messages in thread
+From: Joel Winarske @ 2023-02-01 13:26 UTC (permalink / raw)
+  To: Carles.SoleMendi; +Cc: Yocto-mailing-list
+
+[-- Attachment #1: Type: text/plain, Size: 141 bytes --]
+
+In kirkstone for example, you build preempt-rt variant by adding to
+local.conf:
+
+LINUX_KERNEL_TYPE = "preempt-rt"
+
+Does this no longer work?
+
+[-- Attachment #2: Type: text/html, Size: 288 bytes --]
+
+^ permalink raw reply	[flat|nested] 16+ messages in thread
+* Re: [meta-raspberrypi] Is Preempt-rt still supported in master / latest releases?
+  2023-02-01 13:26           ` [yocto] " Joel Winarske
+@ 2023-02-02 10:24             ` Carles Sole
+  2023-02-03  0:00               ` [yocto] " Joel Winarske
+  0 siblings, 1 reply; 16+ messages in thread
+From: Carles Sole @ 2023-02-02 10:24 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 524 bytes --]
+
+Hello Joel,
+
+thanks for your reply. I was not aware about this possibility. I have tried it and the preemptive rt kernel is built instead of standard ("linux-raspberrypi4_64-preempt-rt-build" is available in build/work/linux-raspberrypi/...) but still the configuration file does not set the CONFIG_PREEMPT_RT=y for raspberrypi4-64, even if a .cfg is added using a .bbappend file. So in the end the RT option is not enabled.
+
+Any idea why it works for raspberrypi4 but not for raspberrypi4-64?
+
+Best Regards,
+Carles
+
+[-- Attachment #2: Type: text/html, Size: 552 bytes --]
+
+^ permalink raw reply	[flat|nested] 16+ messages in thread
+* Re: [yocto] [meta-raspberrypi] Is Preempt-rt still supported in master / latest releases?
+  2023-02-02 10:24             ` Carles Sole
+@ 2023-02-03  0:00               ` Joel Winarske
+  2023-02-03  7:18                 ` Carles Sole
+  0 siblings, 1 reply; 16+ messages in thread
+From: Joel Winarske @ 2023-02-03  0:00 UTC (permalink / raw)
+  To: Carles.SoleMendi; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2093 bytes --]
+
+In the case of kirkstone, this is what I get using `LINUX_KERNEL_TYPE =
+"preempt-rt"`:
+
+    Linux raspberrypi4-64 5.15.34-v8 #1 SMP PREEMPT Tue Apr 19 19:21:26 UTC
+2022 aarch64 aarch64 aarch64 GNU/Linux
+
+I've experienced KERNEL_FEATURE conflicts using meta-virtualization with
+DISTRO_FEATURES += "virtualization kvm" with meta-raspberrypi.  Where the
+fragment applied is not compatible with Aarch64, and it just disables the
+linux-raspberrypi default config.  It's quite possible you are also
+experiencing something similar.  I would check the kernel build logs and
+see what fragments are being applied, and if there are any complaints with
+any of them.  The error may be a single line in a log file, and not
+entirely descriptive.  More context here:
+https://github.com/agherzan/meta-raspberrypi/pull/1141
+
+Working CI job:
+https://github.com/meta-flutter/meta-flutter/blob/kirkstone/.github/workflows/kirkstone-rpi4-64-vulkan.yml
+
+On Thu, Feb 2, 2023 at 2:24 AM Carles Sole via lists.yoctoproject.org
+<Carles.SoleMendi=de.bosch.com@lists.yoctoproject.org> wrote:
+
+> Hello Joel,
+>
+> thanks for your reply. I was not aware about this possibility. I have
+> tried it and the preemptive rt kernel is built instead of standard
+> ("linux-raspberrypi4_64-preempt-rt-build" is available in
+> build/work/linux-raspberrypi/...) but still the configuration file does not
+> set the CONFIG_PREEMPT_RT=y for raspberrypi4-64, even if a .cfg is added
+> using a .bbappend file. So in the end the RT option is not enabled.
+>
+> Any idea why it works for raspberrypi4 but not for raspberrypi4-64?
+>
+> Best Regards,
+> Carles
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#59145):
+> https://lists.yoctoproject.org/g/yocto/message/59145
+> Mute This Topic: https://lists.yoctoproject.org/mt/96470693/2167248
+> Mute #raspberrypi:
+> https://lists.yoctoproject.org/g/yocto/mutehashtag/raspberrypi
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> joel.winarske@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 3318 bytes --]
+
+^ permalink raw reply	[flat|nested] 16+ messages in thread
+* Re: [meta-raspberrypi] Is Preempt-rt still supported in master / latest releases?
+  2023-02-03  0:00               ` [yocto] " Joel Winarske
+@ 2023-02-03  7:18                 ` Carles Sole
+  2023-02-03 13:18                   ` [yocto] " Joel Winarske
+       [not found]                   ` <174052FEBB286E1B.4349@lists.yoctoproject.org>
+  0 siblings, 2 replies; 16+ messages in thread
+From: Carles Sole @ 2023-02-03  7:18 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 470 bytes --]
+
+Hello Joel,
+
+I do get the same, but my understanding is that the RT features are not enabled. I would expect to get:
+
+Linux raspberrypi4-64 5.15.34-v8 #1 SMP PREEMPT *RT* Tue Apr 19 19:21:26 UTC 2022 aarch64 aarch64 aarch64 GNU/Linux
+
+When I check the .config file in the work folder CONFIG_PREEMPT=y is set but I would expect to see CONFIG_PREEMPT_RT=y instead.
+
+That is what you get for rpi4 32 bit as mentioned by Aleksandr above. Is my understanding wrong?
+
+[-- Attachment #2: Type: text/html, Size: 525 bytes --]
+
+^ permalink raw reply	[flat|nested] 16+ messages in thread
+* Re: [yocto] [meta-raspberrypi] Is Preempt-rt still supported in master / latest releases?
+  2023-02-03  7:18                 ` Carles Sole
+@ 2023-02-03 13:18                   ` Joel Winarske
+       [not found]                   ` <174052FEBB286E1B.4349@lists.yoctoproject.org>
+  1 sibling, 0 replies; 16+ messages in thread
+From: Joel Winarske @ 2023-02-03 13:18 UTC (permalink / raw)
+  To: Carles.SoleMendi; +Cc: Yocto-mailing-list
+
+[-- Attachment #1: Type: text/plain, Size: 1235 bytes --]
+
+Hi,
+
+You should open issue with the upstream layer referencing this dialog:
+https://github.com/agherzan/meta-raspberrypi
+
+Joel
+
+On Thu, Feb 2, 2023, 11:18 PM Carles Sole via lists.yoctoproject.org
+<Carles.SoleMendi=de.bosch.com@lists.yoctoproject.org> wrote:
+
+> Hello Joel,
+>
+> I do get the same, but my understanding is that the RT features are not
+> enabled. I would expect to get:
+>
+>   Linux raspberrypi4-64 5.15.34-v8 #1 SMP PREEMPT *RT* Tue Apr 19
+> 19:21:26 UTC 2022 aarch64 aarch64 aarch64 GNU/Linux
+>
+> When I check the .config file in the work folder CONFIG_PREEMPT=y is set
+> but I would expect to see CONFIG_PREEMPT_RT=y instead.
+>
+> That is what you get for rpi4 32 bit as mentioned by Aleksandr above. Is
+> my understanding wrong?
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#59154):
+> https://lists.yoctoproject.org/g/yocto/message/59154
+> Mute This Topic: https://lists.yoctoproject.org/mt/96470693/2167248
+> Mute #raspberrypi:
+> https://lists.yoctoproject.org/g/yocto/mutehashtag/raspberrypi
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> joel.winarske@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 2389 bytes --]
+
+^ permalink raw reply	[flat|nested] 16+ messages in thread
+* Re: [yocto] [meta-raspberrypi] Is Preempt-rt still supported in master / latest releases?
+       [not found]                   ` <174052FEBB286E1B.4349@lists.yoctoproject.org>
+@ 2023-02-03 16:40                     ` Joel Winarske
+  2023-02-06  7:38                       ` Carles Sole
+  0 siblings, 1 reply; 16+ messages in thread
+From: Joel Winarske @ 2023-02-03 16:40 UTC (permalink / raw)
+  To: joel.winarske; +Cc: Carles.SoleMendi, Yocto-mailing-list
+
+[-- Attachment #1: Type: text/plain, Size: 175 bytes --]
+
+I created an issue:
+https://github.com/agherzan/meta-raspberrypi/issues/1147
+
+I would use Kuzemko Aleksandr's solution in bbappend until there is support
+in meta-raspberrypi.
+
+[-- Attachment #2: Type: text/html, Size: 628 bytes --]
+
+^ permalink raw reply	[flat|nested] 16+ messages in thread
+* Re: [meta-raspberrypi] Is Preempt-rt still supported in master / latest releases?
+  2023-02-03 16:40                     ` Joel Winarske
+@ 2023-02-06  7:38                       ` Carles Sole
+  2023-03-06 18:53                         ` Carles Sole
+  0 siblings, 1 reply; 16+ messages in thread
+From: Carles Sole @ 2023-02-06  7:38 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 993 bytes --]
+
+Hi Joel,
+
+thanks for creating the issue.
+
+Does the solution from Aleksandr work for you with raspberrypi4-64? The funny thing is for me it doesn't. As I mentioned above if I use his solution:
+
+for MACHINE = "raspberrypi4-64" in local.conf, the .config file has following configs:
+CONFIG_HAVE_PREEMPT_LAZY=y
+CONFIG_PREEMPT_NONE=y
+# CONFIG_PREEMPT_VOLUNTARY is not set
+# CONFIG_PREEMPT is not set
+
+If in the local.conf I replace the machine to MACHINE = "raspberrypi4" and I bitbake again, the .config file looks as follow:
+CONFIG_HAVE_PREEMPT_LAZY=y
+CONFIG_PREEMPT_LAZY=y
+# CONFIG_PREEMPT_NONE is not set
+# CONFIG_PREEMPT_VOLUNTARY is not set
+# CONFIG_PREEMPT is not set
+CONFIG_PREEMPT_RT=y
+CONFIG_PREEMPT_COUNT=y
+CONFIG_PREEMPTION=y
+
+Meaning when the machine is set to raspberrypi4-64 and CONFIG_PREEMPT_RT is requested via the .cfg file in the file .config in work directory CONFIG_PREEMPT_NONE=y is getting set. Whereas with Machine raspberrypi4 it works as expected.
+
+[-- Attachment #2: Type: text/html, Size: 1082 bytes --]
+
+^ permalink raw reply	[flat|nested] 16+ messages in thread
+* Re: [meta-raspberrypi] Is Preempt-rt still supported in master / latest releases?
+  2023-02-06  7:38                       ` Carles Sole
+@ 2023-03-06 18:53                         ` Carles Sole
+  0 siblings, 0 replies; 16+ messages in thread
+From: Carles Sole @ 2023-03-06 18:53 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 281 bytes --]
+
+Hello all,
+
+in case it helps someone else I found the dependency that was avoiding the RT patch to be applied to raspberrypi4-64 build.
+
+In bcm2711_defconfig for arm64 KVM is enabled. If KVM is disabled then the patch is applied.
+
+So in .cfg file you can add:
+CONFIG_KVM=n
+
+[-- Attachment #2: Type: text/html, Size: 309 bytes --]
+
+^ permalink raw reply	[flat|nested] 16+ messages in thread
+* [meta-raspberrypi] Is Preempt-rt still supported in master / latest releases?
+@ 2023-01-19 13:00 Carles Sole
+  0 siblings, 0 replies; 16+ messages in thread
+From: Carles Sole @ 2023-01-19 13:00 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 866 bytes --]
+
+Hello all,
+
+I am trying to use the preempt-rt patches while building my image for raspberrypi4-64 using Yocto and meta-raspberrypi. I could see that in older branches like warrior there was a specific -rt recipe accessing the specific -rt branch e.g. "rpi-4.19.y-rt".
+
+I do see in the linux/raspberrypi git that for newer branches like "rpi-5.15.y" there is no rt specific branch anymore. However from just checking through the mailing list and commits I was not able to understand what the history is, and if support was stopped or there is now another way to do this.
+
+Is it still possible to get the preempt-rt patches to build the kernel within meta-raspberrypi using "PREFERRED_PROVIDER_virtual/kernel in local.conf?
+
+Any hints on how to accomplish this with the latest releases (if still supported) would be much appreciated.
+
+Best Regards,
+Carles
+
+[-- Attachment #2: Type: text/html, Size: 912 bytes --]
+
+^ permalink raw reply	[flat|nested] 16+ messages in thread
+end of thread, other threads:[~2023-03-06 18:53 UTC | newest]
+
+Thread overview: 16+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-01-23  9:57 [meta-raspberrypi] Is Preempt-rt still supported in master / latest releases? #raspberrypi Carles Sole
+2023-01-23 10:47 ` [yocto] " Alexander Kanavin
+2023-01-23 16:03   ` Andrei Gherzan
+2023-01-25 12:49     ` [meta-raspberrypi] Is Preempt-rt still supported in master / latest releases? Carles Sole
+2023-01-30 22:59       ` [yocto] " Lukasz Majewski
+2023-01-31  6:57       ` Kuzemko Aleksandr
+2023-01-31 20:43         ` Carles Sole
+2023-02-01 13:26           ` [yocto] " Joel Winarske
+2023-02-02 10:24             ` Carles Sole
+2023-02-03  0:00               ` [yocto] " Joel Winarske
+2023-02-03  7:18                 ` Carles Sole
+2023-02-03 13:18                   ` [yocto] " Joel Winarske
+     [not found]                   ` <174052FEBB286E1B.4349@lists.yoctoproject.org>
+2023-02-03 16:40                     ` Joel Winarske
+2023-02-06  7:38                       ` Carles Sole
+2023-03-06 18:53                         ` Carles Sole
+  -- strict thread matches above, loose matches on Subject: below --
+2023-01-19 13:00 Carles Sole
+

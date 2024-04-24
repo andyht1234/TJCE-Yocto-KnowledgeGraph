@@ -1,0 +1,70 @@
+* Wic partition dir ownership #yocto
+@ 2021-05-14  9:36 Alessandro Tagliapietra
+  2021-05-15 21:41 ` Alessandro Tagliapietra
+  0 siblings, 1 reply; 2+ messages in thread
+From: Alessandro Tagliapietra @ 2021-05-14  9:36 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2041 bytes --]
+
+Hi everyone,
+
+I'm building an image for a raspberrypi 4, I have a readonly rootfs and I have multiple configs in a custom partition mounted in rw mode at /data
+My wks file is
+
+part --source bootimg-partition --ondisk mmcblk0 --fstype=vfat --label boot --active --align 4096 --size 100
+part / --source rootfs --ondisk mmcblk0 --fstype=ext4 --label rootfs_A --align 4096 --overhead-factor 1
+part / --source rootfs --ondisk mmcblk0 --fstype=ext4 --label rootfs_B --align 4096 --overhead-factor 1
+part --source rootfs --rootfs-dir=${IMAGE_ROOTFS}/data --ondisk mmcblk0 --fstype=ext4 --label data --align 1024 --size 1024
+
+mount points for /boot and /data are skipped because I have a custom fstab file because otherwise rauc bundle won't mount them.
+
+The problem is that while the rootfs has the correct permissions:
+
+% wic ls tmp/deploy/images/raspberrypi4/myapp-dev-image-raspberrypi4.wic:3/data
+debugfs 1.45.7 (28-Jan-2021)
+100   40755 (2)      0      0    4096  9-Mar-2018 04:34 .
+2   40755 (2)      0      0    4096 14-May-2021 02:26 ..
+101   40740 (2)      0      0    4096  9-Mar-2018 04:34 dropbear
+102   40755 (2)   1000   1000    4096  9-Mar-2018 04:34 node-red
+105   40740 (2)      0      0    4096  9-Mar-2018 04:34 openvpn
+
+the partition created by wic (which should copy rootfs/data) doesn't:
+
+alex-desktop% wic ls tmp/deploy/images/raspberrypi4/myapp-dev-image-raspberrypi4.wic:4
+debugfs 1.45.7 (28-Jan-2021)
+2   40755 (2)      0      0    4096 14-May-2021 02:26 .
+2   40755 (2)      0      0    4096 14-May-2021 02:26 ..
+11   40700 (2)      0      0   16384 14-May-2021 02:26 lost+found
+12   40740 (2)   1000   1000    4096  9-Mar-2018 04:34 dropbear
+13   40755 (2)   1000   1000    4096  9-Mar-2018 04:34 node-red
+16   40740 (2)   1000   1000    4096  9-Mar-2018 04:34 openvpn
+
+where is this difference coming from? Isn't possible for wic to maintain the same dir ownership?
+
+Thanks
+
+[-- Attachment #2: Type: text/html, Size: 3005 bytes --]
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+* Re: Wic partition dir ownership #yocto
+  2021-05-14  9:36 Wic partition dir ownership #yocto Alessandro Tagliapietra
+@ 2021-05-15 21:41 ` Alessandro Tagliapietra
+  0 siblings, 0 replies; 2+ messages in thread
+From: Alessandro Tagliapietra @ 2021-05-15 21:41 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 154 bytes --]
+
+Just saw that the issue is that you can't use rootfs-dir with a subfolder as the pseudo folder is missing in the parent folder, ended up using overlayfs
+
+[-- Attachment #2: Type: text/html, Size: 154 bytes --]
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2021-05-15 21:41 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-05-14  9:36 Wic partition dir ownership #yocto Alessandro Tagliapietra
+2021-05-15 21:41 ` Alessandro Tagliapietra
+

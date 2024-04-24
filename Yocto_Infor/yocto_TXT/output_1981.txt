@@ -1,0 +1,90 @@
+* System is booting to "emergency/rescue mode"
+@ 2022-04-08 22:43 Sourabh Hegde
+  0 siblings, 0 replies; only message in thread
+From: Sourabh Hegde @ 2022-04-08 22:43 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 4629 bytes --]
+
+Hello All,
+
+This may not be the issue with Yocto itself but rather related to properly booting up Linux on Avenger96(STM32MP1) board. I am currently working on Avenger96 with Yocto(Dunfell). Aim is to implement SWUpdate OTA update system. For this I am using A/B strategy. Also I am using "systemd" instead of sysVinit. In my conf/local.conf I have set:
+
+DISTRO_FEATURES_append = " systemd"
+DISTRO_FEATURES_BACKFILL_CONSIDERED += "sysvinit"
+VIRTUAL-RUNTIME_init_manager = "systemd"
+VIRTUAL-RUNTIME_initscripts = "systemd-compat-units"
+
+My .wks file looks like:
+
+part fsbl1 --source rawcopy --sourceparams="file=u-boot-spl.stm32" --part-name "fsbl1" --ondisk mmcblk --align 1 --size 256k
+part fsbl2 --source rawcopy --sourceparams="file=u-boot-spl.stm32" --part-name "fsbl2" --ondisk mmcblk --align 1 --size 256k
+part ssbl --source rawcopy --sourceparams="file=u-boot.itb" --part-name "ssbl" --ondisk mmcblk --align 1 --size 2M
+part / --source rootfs --ondisk mmcblk0 --fstype=ext4 --label root_A --part-name "rootfs_A" --align 4096 --use-uuid --active --size 3G
+part / --source rootfs --ondisk mmcblk0 --fstype=ext4 --label root_B --part-name "rootfs_B" --align 4096 --use-uuid --size 3G
+
+bootloader --ptable gpt
+
+I am able to create the image and could copy it to SD card. But while booting I am getting below issue/errors:
+
+[  OK  ] Started D-Bus System Message Bus.
+Starting Load/Save RF Kill Switch Status...
+*You are in rescue mode.* After logging in, type "journalctl -xb" to view
+system logs, "systemctl reboot" to reboot, "systemctl default" or "exit"
+to boot into default mode.
+Press Enter for maintenance
+(or press Control-D to continue):
+
+On pressing "Ctrl+D", I get :
+
+Reloading system manager configuration
+[ 1306.916497] systemd-fstab-generator[202]: Mount point fsbl1 is not a valid path, ignoring.
+[ 1306.940236] systemd-fstab-generator[202]: Mount point fsbl2 is not a valid path, ignoring.
+[ 1306.947455] systemd-fstab-generator[202]: Mount point ssbl is not a valid path, ignoring.
+Starting default target
+.
+.
+Then it asks for login and I could login as "root".
+
+I don't understand why it's going to emergency or resume mode. On googling I found that it is usually related to /etc/fstab. Below is /etc/fstab/ content (copied from board):
+
+# stock fstab - you probably want to override this with a machine specific one
+/dev/root            /                    auto       defaults              1  1
+proc                  /proc              proc       defaults              0  0
+devpts              /dev/pts         devpts    mode=0620,ptmxmode=0666,gid=5      0  0
+tmpfs                /run               tmpfs      mode=0755,nodev,nosuid,strictatime 0  0
+tmpfs               /var/volatile    tmpfs      defaults              0  0
+
+# uncomment this if your device has a SD/MMC/Transflash slot
+#/dev/mmcblk0p1       /media/card          auto       defaults,sync,noauto  0  0
+
+/dev/mmcblkp1   fsbl1   vfat    defaults            0            0
+/dev/mmcblkp2   fsbl2   vfat    defaults            0            0
+/dev/mmcblkp3   ssbl    vfat    defaults            0            0
+
+Also one more doubt: what happens when we do software updates from emergency/rescue mode? In my case, I could install updates (using SWUpdate) but after reboot system is again booting from old partition. But I could manually switch to updated partition from u-boot env and verify that new image is installed. So I am assuming this behavior is again related to some issue with u-boot(probably, newly set environment is wiped on next startup). And also I can do other stuffs like accessing fw_printenv/fw_setenv, set bootlimit and change partition from u-boot env..
+
+I found that a "boot.scr" is being used and I have set below in the script. And "rootfspart" in u-boot header file as "rootfspart=4\0" \
+
+setenv bootargs "${bootargs} root=/dev/mmcblk0p${rootfspart} rdinit=/bin/kinit rw rootwait single"
+
+Can anyone please let me know what could be the potential issue here? Any advice on which direction to look into would be helpful.
+
+Your help will be much appreciated.
+
+Thanks in advance.
+
+P.S: Please let me know if any info is missing. Also when I checked with "journalctl -xb" after logging in I could only find "Alternate GPT is invalid, using primary GPT." and "GPT: Use GNU Parted to correct GPT errors.". But may be I missed something here.
+
+Kind Regards,
+Sourabh
+
+[-- Attachment #2: Type: text/html, Size: 6029 bytes --]
+
+^ permalink raw reply	[flat|nested] only message in thread
+only message in thread, other threads:[~2022-04-11 17:17 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-04-08 22:43 System is booting to "emergency/rescue mode" Sourabh Hegde
+

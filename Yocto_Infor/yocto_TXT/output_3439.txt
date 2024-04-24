@@ -1,0 +1,202 @@
+* [meta-security][PATCH 1/2] clamav: fix systemd startup
+@ 2021-05-15 15:24 Armin Kuster
+  2021-05-15 15:24 ` [meta-security][PATCH 2/2] packagegroup-core-security: add clamav-daemon Armin Kuster
+  0 siblings, 1 reply; 2+ messages in thread
+From: Armin Kuster @ 2021-05-15 15:24 UTC (permalink / raw)
+  To: yocto
+
+cleanup recipe
+
+Signed-off-by: Armin Kuster <akuster808@gmail.com>
+---
+ recipes-scanners/clamav/clamav_0.104.0.bb     | 44 ++++++++++---------
+ .../clamav/files/fix_systemd_socket.patch     | 25 +++++++++++
+ 2 files changed, 48 insertions(+), 21 deletions(-)
+ create mode 100644 recipes-scanners/clamav/files/fix_systemd_socket.patch
+
+diff --git a/recipes-scanners/clamav/clamav_0.104.0.bb b/recipes-scanners/clamav/clamav_0.104.0.bb
+index 6892bb0..ce5b0ea 100644
+--- a/recipes-scanners/clamav/clamav_0.104.0.bb
++++ b/recipes-scanners/clamav/clamav_0.104.0.bb
+@@ -16,9 +16,9 @@ SRC_URI = "git://github.com/vrtadmin/clamav-devel;branch=dev/0.104 \
+     file://freshclam.conf \
+     file://volatiles.03_clamav \
+     file://tmpfiles.clamav \
+-    file://${BPN}.service \
+     file://headers_fixup.patch \
+     file://oe_cmake_fixup.patch \
++    file://fix_systemd_socket.patch \
+ "
+ S = "${WORKDIR}/git"
+ 
+@@ -70,31 +70,29 @@ do_install_append () {
+     rm ${D}/${libdir}/libmspack.so
+ 
+     if ${@bb.utils.contains('DISTRO_FEATURES','systemd','true','false',d)};then
+-        install -D -m 0644 ${WORKDIR}/clamav.service ${D}${systemd_unitdir}/system/clamav.service
+         install -d ${D}${sysconfdir}/tmpfiles.d
+         install -m 0644 ${WORKDIR}/tmpfiles.clamav ${D}${sysconfdir}/tmpfiles.d/clamav.conf
+     fi
+     oe_multilib_header clamav-types.h
+ }
+ 
+-pkg_postinst_ontarget_${PN} () {
+-    if command -v systemd-tmpfiles >/dev/null; then
+-        systemd-tmpfiles --create ${sysconfdir}/tmpfiles.d/clamav.conf
+-    elif [ -e ${sysconfdir}/init.d/populate-volatile.sh ]; then
+-        ${sysconfdir}/init.d/populate-volatile.sh update
++pkg_postinst_${PN} () {
++    if [ -z "$D" ]; then
++        if command -v systemd-tmpfiles >/dev/null; then
++            systemd-tmpfiles --create ${sysconfdir}/tmpfiles.d/clamav.conf
++        elif [ -e ${sysconfdir}/init.d/populate-volatile.sh ]; then
++            ${sysconfdir}/init.d/populate-volatile.sh update
++        fi
++        chown -R ${CLAMAV_UID}:${CLAMAV_GID} ${localstatedir}/lib/clamav
+     fi
+-    mkdir -p ${localstatedir}/lib/clamav
+-    chown -R ${CLAMAV_UID}:${CLAMAV_GID} ${localstatedir}/lib/clamav
+ }
+ 
+-
+-PACKAGES = "${PN} ${PN}-dev ${PN}-dbg ${PN}-daemon ${PN}-doc \
+-            ${PN}-clamdscan ${PN}-freshclam ${PN}-libclamav ${PN}-staticdev"
++PACKAGES += "${PN}-daemon ${PN}-clamdscan ${PN}-freshclam ${PN}-libclamav"
+ 
+ FILES_${PN} = "${bindir}/clambc ${bindir}/clamscan ${bindir}/clamsubmit ${sbindir}/clamonacc \
+                 ${bindir}/*sigtool ${mandir}/man1/clambc* ${mandir}/man1/clamscan* \
+                 ${mandir}/man1/sigtool* ${mandir}/man1/clambsubmit*  \
+-                ${docdir}/clamav/* ${libdir}/libmspack* "
++                ${docdir}/clamav/*"
+ 
+ FILES_${PN}-clamdscan = " ${bindir}/clamdscan \
+                         ${docdir}/clamdscan/* \
+@@ -106,11 +104,11 @@ FILES_${PN}-daemon = "${bindir}/clamconf ${bindir}/clamdtop ${sbindir}/clamd \
+                         ${mandir}/man5/clamd*  ${mandir}/man8/clamd* \
+                         ${sysconfdir}/clamd.conf* \
+                         /usr/etc/clamd.conf* \
+-                        ${systemd_unitdir}/system/clamav-daemon/* \
++                        ${systemd_system_unitdir}/clamav-daemon/* \
+                         ${docdir}/clamav-daemon/*  ${sysconfdir}/clamav-daemon \
+                         ${sysconfdir}/logcheck/ignore.d.server/clamav-daemon \
+-                        ${systemd_unitdir}/system/clamav-daemon.service \
+-                        ${systemd_unitdir}/system/clamav-clamonacc.service \
++                        ${systemd_system_unitdir}/clamav-daemon.service \
++                        ${systemd_system_unitdir}/clamav-clamonacc.service \
+                         "
+ 
+ FILES_${PN}-freshclam = "${bindir}/freshclam \
+@@ -121,7 +119,7 @@ FILES_${PN}-freshclam = "${bindir}/freshclam \
+                         ${localstatedir}/lib/clamav \
+                         ${docdir}/${PN}-freshclam ${mandir}/man1/freshclam.* \
+                         ${mandir}/man5/freshclam.conf.* \
+-                        ${systemd_unitdir}/system/clamav-freshclam.service"
++                        ${systemd_system_unitdir}/clamav-freshclam.service"
+ 
+ FILES_${PN}-dev = " ${bindir}/clamav-config ${libdir}/*.la \
+                     ${libdir}/pkgconfig/*.pc \
+@@ -131,7 +129,8 @@ FILES_${PN}-dev = " ${bindir}/clamav-config ${libdir}/*.la \
+ FILES_${PN}-staticdev = "${libdir}/*.a"
+ 
+ FILES_${PN}-libclamav = "${libdir}/libclamav.so* ${libdir}/libclammspack.so* \
+-                         ${libdir}/libfreshclam.so* ${docdir}/libclamav/* "
++                         ${libdir}/libfreshclam.so* ${docdir}/libclamav/* \
++                         ${libdir}/libmspack* "
+ 
+ FILES_${PN}-doc = "${mandir}/man/* \
+                    ${datadir}/man/* \
+@@ -140,12 +139,15 @@ FILES_${PN}-doc = "${mandir}/man/* \
+ USERADD_PACKAGES = "${PN}"
+ GROUPADD_PARAM_${PN} = "--system ${CLAMAV_UID}"
+ USERADD_PARAM_${PN} = "--system -g ${CLAMAV_GID} --home-dir  \
+-    ${localstatedir}/spool/${BPN} \
+-    --no-create-home  --shell /bin/false ${BPN}"
++    ${localstatedir}/lib/${BPN} \
++    --no-create-home  --shell /sbin/nologin ${BPN}"
+ 
+ RPROVIDES_${PN} += "${PN}-systemd"
+ RREPLACES_${PN} += "${PN}-systemd"
+ RCONFLICTS_${PN} += "${PN}-systemd"
+-SYSTEMD_SERVICE_${PN} = "${BPN}.service"
++SYSTEMD_PACKAGES  = "${PN}-daemon ${PN}-freshclam"
++SYSTEMD_SERVICE_${PN}-daemon = "clamav-daemon.service"
++SYSTEMD_SERVICE_${PN}-freshclam = "clamav-freshclam.service"
+ 
+ RDEPENDS_${PN} = "openssl ncurses-libncurses libxml2 libbz2 ncurses-libtinfo curl libpcre2 clamav-freshclam clamav-libclamav"
++RDEPENDS_${PN}-daemon = "clamav"
+diff --git a/recipes-scanners/clamav/files/fix_systemd_socket.patch b/recipes-scanners/clamav/files/fix_systemd_socket.patch
+new file mode 100644
+index 0000000..3e9abe2
+--- /dev/null
++++ b/recipes-scanners/clamav/files/fix_systemd_socket.patch
+@@ -0,0 +1,25 @@
++clamd not installing clamav-daemon.socket
++
++Fixes:
++__main__.SystemdUnitNotFoundError: (PosixPath('../security-build-image/1.0-r0/rootfs'), 'clamav-daemon.socket')
++%post(clamav-daemon-0.104.0-r0.core2_64): waitpid(3587571) rc 3587571 status 100
++warning: %post(clamav-daemon-0.104.0-r0.core2_64) scriptlet failed, exit status 1
++
++Upstream-Status: Pending
++Signed-off-by: Armin Kuster <akuster808@gmail.com>
++
++Index: git/clamd/CMakeLists.txt
++===================================================================
++--- git.orig/clamd/CMakeLists.txt
+++++ git/clamd/CMakeLists.txt
++@@ -54,4 +54,10 @@ if(SYSTEMD_FOUND)
++     install(
++         FILES ${CMAKE_CURRENT_BINARY_DIR}/clamav-daemon.service
++         DESTINATION ${SYSTEMD_UNIT_DIR})
+++    configure_file(
+++        ${CMAKE_CURRENT_SOURCE_DIR}/clamav-daemon.socket.in
+++        ${CMAKE_CURRENT_BINARY_DIR}/clamav-daemon.socket @ONLY)
+++    install(
+++        FILES ${CMAKE_CURRENT_BINARY_DIR}/clamav-daemon.socket
+++        DESTINATION ${SYSTEMD_UNIT_DIR})
++ endif()
+-- 
+2.25.1
+
+
+^ permalink raw reply related	[flat|nested] 2+ messages in thread
+* [meta-security][PATCH 2/2] packagegroup-core-security: add clamav-daemon
+  2021-05-15 15:24 [meta-security][PATCH 1/2] clamav: fix systemd startup Armin Kuster
+@ 2021-05-15 15:24 ` Armin Kuster
+  0 siblings, 0 replies; 2+ messages in thread
+From: Armin Kuster @ 2021-05-15 15:24 UTC (permalink / raw)
+  To: yocto
+
+Signed-off-by: Armin Kuster <akuster808@gmail.com>
+---
+ recipes-core/packagegroup/packagegroup-core-security.bb | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/recipes-core/packagegroup/packagegroup-core-security.bb b/recipes-core/packagegroup/packagegroup-core-security.bb
+index 0bddf64..d7349b0 100644
+--- a/recipes-core/packagegroup/packagegroup-core-security.bb
++++ b/recipes-core/packagegroup/packagegroup-core-security.bb
+@@ -51,9 +51,9 @@ RDEPENDS_packagegroup-security-scanners = "\
+     isic \
+     nikto \
+     checksecurity \
+-    ${@bb.utils.contains_any("TUNE_FEATURES", "riscv32 riscv64", "", " clamav clamav-freshclam",d)} \
++    ${@bb.utils.contains_any("TUNE_FEATURES", "riscv32 riscv64", "", " clamav clamav-daemon clamav-freshclam",d)} \
+     "
+-RDEPENDS_packagegroup-security-scanners_remove_libc-musl = "clamav clamav-freshclam"
++RDEPENDS_packagegroup-security-scanners_remove_libc-musl = "clamav clamav-daemon clamav-freshclam"
+ 
+ SUMMARY_packagegroup-security-audit = "Security Audit tools "
+ RDEPENDS_packagegroup-security-audit = " \
+-- 
+2.25.1
+
+
+^ permalink raw reply related	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2021-05-15 15:24 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-05-15 15:24 [meta-security][PATCH 1/2] clamav: fix systemd startup Armin Kuster
+2021-05-15 15:24 ` [meta-security][PATCH 2/2] packagegroup-core-security: add clamav-daemon Armin Kuster
+

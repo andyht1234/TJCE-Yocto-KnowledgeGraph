@@ -1,0 +1,132 @@
+* How to maintain meta layer with different versions of recipes?
+@ 2022-12-05 16:22 Sourabh Hegde
+  2022-12-05 19:06 ` [yocto] " Khem Raj
+  0 siblings, 1 reply; 4+ messages in thread
+From: Sourabh Hegde @ 2022-12-05 16:22 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 820 bytes --]
+
+Hello,
+
+I have a generic use-case of maintaining the meta layer. I have a custom meta layer. But this layer serves multiple customers who share most of the recipes and files. But some files are customer-specific. Currently, I am using different repos and tags in gitlab but regularly updating them is tedious and time-consuming. Rather I am think to create to create a generic meta layer and use Yocto features/variables (if existing) to maintain different versions. For example, a recipe test.bb has FILES_${PN} += " /lib/systemd/system/test.service \ "
+But the contents of "test.service" is customer-specific and different versions has to be maintained. So, is there any way to make this generic? Can this be done using .bbappend files?
+
+I assume this might be the use case of many people..
+
+Thanks in advance
+
+[-- Attachment #2: Type: text/html, Size: 1137 bytes --]
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] How to maintain meta layer with different versions of recipes?
+  2022-12-05 16:22 How to maintain meta layer with different versions of recipes? Sourabh Hegde
+@ 2022-12-05 19:06 ` Khem Raj
+  2022-12-06  6:42   ` Sourabh Hegde
+  0 siblings, 1 reply; 4+ messages in thread
+From: Khem Raj @ 2022-12-05 19:06 UTC (permalink / raw)
+  To: Sourabh Hegde; +Cc: yocto
+
+On Mon, Dec 5, 2022 at 8:23 AM Sourabh Hegde <hrsourabh011@gmail.com> wrote:
+>
+> Hello,
+>
+> I have a generic use-case of maintaining the meta layer. I have a custom meta layer. But this layer serves multiple customers who share most of the recipes and files. But some files are customer-specific. Currently, I am using different repos and tags in gitlab but regularly updating them is tedious and time-consuming. Rather I am think to create to create a generic meta layer and use Yocto features/variables (if existing) to maintain different versions. For example, a recipe test.bb has FILES_${PN} += "/lib/systemd/system/test.service \ "
+> But the contents of "test.service" is customer-specific and different versions has to be maintained. So, is there any way to make this generic? Can this be done using .bbappend files?
+
+Few things comes to mind. You could deploy the systemd unit fragment strategy
+https://wiki.archlinux.org/title/systemd#Drop-in_files
+so any customizations you have could be done via these drop-ins and
+keeping common service file
+these drops can be then controlled via customer distro specific
+override in your main bb itself.
+
+Second, way would be to have test.service copies installed under
+files/<customer-override>/ directory next to recipe
+and then define customer distro specific overrides
+
+>
+> I assume this might be the use case of many people..
+>
+> Thanks in advance
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> You automatically follow any topics you start or reply to.
+> View/Reply Online (#58728): https://lists.yoctoproject.org/g/yocto/message/58728
+> Mute This Topic: https://lists.yoctoproject.org/mt/95472335/1997914
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [raj.khem@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: How to maintain meta layer with different versions of recipes?
+  2022-12-05 19:06 ` [yocto] " Khem Raj
+@ 2022-12-06  6:42   ` Sourabh Hegde
+  2022-12-06 17:21     ` [yocto] " Khem Raj
+  0 siblings, 1 reply; 4+ messages in thread
+From: Sourabh Hegde @ 2022-12-06  6:42 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 505 bytes --]
+
+Hello Khem Raj,
+
+Thank you for the response.
+> 
+> Second, way would be to have test.service copies installed under
+> files/<customer-override>/ directory next to recipe
+> and then define customer distro specific overrides
+
+This seems to be a better solution for my use case. But, I didn't understand it completely. Could you please provide an example or any link to documentation? Is it also needed to create a custom distribution? This layer will be used by different customers in bblayers.conf
+
+[-- Attachment #2: Type: text/html, Size: 734 bytes --]
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] How to maintain meta layer with different versions of recipes?
+  2022-12-06  6:42   ` Sourabh Hegde
+@ 2022-12-06 17:21     ` Khem Raj
+  0 siblings, 0 replies; 4+ messages in thread
+From: Khem Raj @ 2022-12-06 17:21 UTC (permalink / raw)
+  To: Sourabh Hegde; +Cc: yocto
+
+On Mon, Dec 5, 2022 at 10:42 PM Sourabh Hegde <hrsourabh011@gmail.com> wrote:
+>
+> Hello Khem Raj,
+>
+> Thank you for the response.
+>
+> Second, way would be to have test.service copies installed under
+> files/<customer-override>/ directory next to recipe
+> and then define customer distro specific overrides
+>
+> This seems to be a better solution for my use case. But, I didn't understand it completely. Could you please provide an example or any link to documentation? Is it also needed to create a custom distribution? This layer will be used by different customers in bblayers.conf
+
+see how xorg.conf is defined for different qemu based machines in
+xserver-xf86-config recipe [1]
+
+[1] https://git.yoctoproject.org/poky/tree/meta/recipes-graphics/xorg-xserver/xserver-xf86-config
+
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> You automatically follow any topics you start or reply to.
+> View/Reply Online (#58732): https://lists.yoctoproject.org/g/yocto/message/58732
+> Unfollow This Topic: https://lists.yoctoproject.org/unft/95472335/1997914
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [raj.khem@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+end of thread, other threads:[~2022-12-06 17:21 UTC | newest]
+
+Thread overview: 4+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-12-05 16:22 How to maintain meta layer with different versions of recipes? Sourabh Hegde
+2022-12-05 19:06 ` [yocto] " Khem Raj
+2022-12-06  6:42   ` Sourabh Hegde
+2022-12-06 17:21     ` [yocto] " Khem Raj
+

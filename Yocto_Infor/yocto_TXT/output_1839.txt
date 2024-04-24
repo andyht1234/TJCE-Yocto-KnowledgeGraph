@@ -1,0 +1,298 @@
+* [PATCH yocto-autobuilder-helper v15] Add a banner on the old documentation docs.
+@ 2022-05-12 11:45 Abongwa Bonalais Amahnui
+  2022-05-12 12:25 ` [yocto] " Quentin Schulz
+  0 siblings, 1 reply; 2+ messages in thread
+From: Abongwa Bonalais Amahnui @ 2022-05-12 11:45 UTC (permalink / raw)
+  To: yocto; +Cc: Abongwa Bonalais Amahnui
+
+Script to add banners to the old docs and outdated dunfell docs
+
+Signed-off-by: Abongwa Bonalais Amahnui <abongwabonalais@gmail.com>
+---
+ scripts/docs_add_banner.py | 84 ++++++++++++++++++++++++++++++++++++++
+ scripts/run-docs-build     |  6 ++-
+ 2 files changed, 88 insertions(+), 2 deletions(-)
+ create mode 100755 scripts/docs_add_banner.py
+
+diff --git a/scripts/docs_add_banner.py b/scripts/docs_add_banner.py
+new file mode 100755
+index 0000000..0de70d0
+--- /dev/null
++++ b/scripts/docs_add_banner.py
+@@ -0,0 +1,84 @@
++#!/usr/bin/env python3
++#
++# SPDX-License-Identifier: GPL-2.0-only
++#
++#Signed-off-by: Abongwa Bonalais Amahnui <abongwabonalais@gmail.com>
++#
++#
++# Script to add banners to the old docs and outdated dunfell docs
++#
++#
++
++
++import os
++
++
++
++
++
++html_content_dunfell = '''
++<div id="outdated-warning">This document is outdated, you should select the <a href="https://docs.yoctoproject.org/dunfell">latest release version</a> in this series.</div>
++<div xml:lang="en" class="body" lang="en">
++'''
++html_content = '''
++<div id="outdated-warning">This version of the project is now considered obsolete, please select and use a <a href="https://docs.yoctoproject.org">more recent version</a>.</div>
++<div xml:lang="en" class="body" lang="en">
++'''
++
++# the class body and the last_div are used to make sure any .body property existing in any css file is not overwritten
++last_div = '''
++</div>
++
++'''
++
++css_replacement_content = '''
++ 
++  font-family: Verdana, Sans, sans-serif;
++
++  width: 100%;
++  margin:  0;
++  padding: 0;
++  color: #333;
++  overflow-x: hidden;
++  }
++ 
++.body{
++margin:  0 auto;
++min-width: 640px;
++padding: 0 5em 5em 5em;
++}
++#outdated-warning{
++text-align: center;
++background-color: rgb(255, 186, 186); 
++color: rgb(106, 14, 14); 
++padding: 0.5em 0; 
++width: 100%;
++position: fixed;
++top: 0;
++
++
++'''
++
++
++def add_banner_old_docs(dir):
++    for root, dirs, filenames in os.walk(dir):
++        
++        if root.startswith('./3.1'):
++            html_replacement = html_content_dunfell
++        else:
++            html_replacement = html_content
++            
++        for filename in filenames:
++            if filename.endswith('.html'):
++                with open(os.path.join(root, filename), 'r', encoding="ISO-8859-1") as f:
++                    current_content = f.read()
++                with open(os.path.join(root, filename), 'w', encoding="ISO-8859-1") as f:
++                    f.write(current_content.replace('<body>', '<body>' + html_replacement))
++                    f.write(current_content.replace('</body>', last_div + '</body>'))
++            if filename.endswith('.css'):
++                with open(os.path.join(root, filename), 'r', encoding="ISO-8859-1") as f:
++                    css_content = f.read()
++                with open(os.path.join(root, filename), 'w', encoding="ISO-8859-1") as f:
++                    f.write(css_content.replace(css_content[css_content.find('body {'):css_content.find('}'[0])], 'body {' + css_replacement_content ))
++
++add_banner_old_docs('.')
+diff --git a/scripts/run-docs-build b/scripts/run-docs-build
+index ecc5332..afff62f 100755
+--- a/scripts/run-docs-build
++++ b/scripts/run-docs-build
+@@ -18,7 +18,7 @@ set -x
+ builddir=$(realpath "$1")
+ ypdocs=$(realpath "$2/documentation/")
+ bbdocs=$(realpath "$3/doc/")
+-docs_buildtools=${docs_buildtools:-/srv/autobuilder/autobuilder.yocto.io/pub/buildtools/x86_64-buildtools-docs-nativesdk-standalone-3.2+snapshot-20201105.sh}
++docs_buildtools=${docs_buildtools:-'/home/abongwa/Downloads/x86_64-buildtools-docs-nativesdk-standalone-4.0.sh'}
+ outputdir=$builddir/output
+ scriptdir="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
+ PUBLISH=${PUBLISH:-1}
+@@ -31,12 +31,14 @@ $docs_buildtools -y -d $builddir/buildtools
+ 
+ # Getting the old docbook built docs from an archive. Not rebuilding them.
+ #wget https://downloads.yoctoproject.org/mirror/docbook-mirror/docbook-archives-20201105.tar.xz
+-docbookarchive=${docbookarchive:-/srv/autobuilder/autobuilder.yocto.io/pub/docbook-mirror/docbook-archives-20201105.tar.xz}
++docbookarchive=${docbookarchive:-'/home/abongwa/Downloads/docbook-archives-20201105.tar.xz'}
+ mkdir $outputdir
+ cd $outputdir
+ echo Extracing old content from archive
+ tar -xJf $docbookarchive
+ 
++$scriptdir/docs_add_banner.py
++
+ cd $bbdocs
+ mkdir $outputdir/bitbake
+ 
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 2+ messages in thread
+* Re: [yocto] [PATCH yocto-autobuilder-helper v15] Add a banner on the old documentation docs.
+  2022-05-12 11:45 [PATCH yocto-autobuilder-helper v15] Add a banner on the old documentation docs Abongwa Bonalais Amahnui
+@ 2022-05-12 12:25 ` Quentin Schulz
+  0 siblings, 0 replies; 2+ messages in thread
+From: Quentin Schulz @ 2022-05-12 12:25 UTC (permalink / raw)
+  To: Abongwa Amahnui Bonalais, yocto
+
+Hi Amahnui,
+
+On 5/12/22 13:45, Abongwa Amahnui Bonalais wrote:
+> Script to add banners to the old docs and outdated dunfell docs
+> 
+> Signed-off-by: Abongwa Bonalais Amahnui <abongwabonalais@gmail.com>
+> ---
+>   scripts/docs_add_banner.py | 84 ++++++++++++++++++++++++++++++++++++++
+>   scripts/run-docs-build     |  6 ++-
+>   2 files changed, 88 insertions(+), 2 deletions(-)
+>   create mode 100755 scripts/docs_add_banner.py
+> 
+> diff --git a/scripts/docs_add_banner.py b/scripts/docs_add_banner.py
+> new file mode 100755
+> index 0000000..0de70d0
+> --- /dev/null
+> +++ b/scripts/docs_add_banner.py
+> @@ -0,0 +1,84 @@
+> +#!/usr/bin/env python3
+> +#
+> +# SPDX-License-Identifier: GPL-2.0-only
+> +#
+> +#Signed-off-by: Abongwa Bonalais Amahnui <abongwabonalais@gmail.com>
+> +#
+> +#
+> +# Script to add banners to the old docs and outdated dunfell docs
+> +#
+> +#
+> +
+> +
+> +import os
+> +
+> +
+> +
+> +
+> +
+> +html_content_dunfell = '''
+> +<div id="outdated-warning">This document is outdated, you should select the <a href="https://urldefense.proofpoint.com/v2/url?u=https-3A__docs.yoctoproject.org_dunfell&amp;d=DwMDAg&amp;c=_sEr5x9kUWhuk4_nFwjJtA&amp;r=LYjLexDn7rXIzVmkNPvw5ymA1XTSqHGq8yBP6m6qZZ4njZguQhZhkI_-172IIy1t&amp;m=ECrUveRFbGF5T0Oqpl6f2-OWDNw3UBPMihRbRBPAEgKjNmvQtQBNtL5WF4JzoA3Z&amp;s=mqGqi5kMdquK3v6sCE3zHkCmW172k8NU3sMlC8mnRyQ&amp;e=">latest release version</a> in this series.</div>
+> +<div xml:lang="en" class="body" lang="en">
+> +'''
+> +html_content = '''
+> +<div id="outdated-warning">This version of the project is now considered obsolete, please select and use a <a href="https://urldefense.proofpoint.com/v2/url?u=https-3A__docs.yoctoproject.org&amp;d=DwMDAg&amp;c=_sEr5x9kUWhuk4_nFwjJtA&amp;r=LYjLexDn7rXIzVmkNPvw5ymA1XTSqHGq8yBP6m6qZZ4njZguQhZhkI_-172IIy1t&amp;m=ECrUveRFbGF5T0Oqpl6f2-OWDNw3UBPMihRbRBPAEgKjNmvQtQBNtL5WF4JzoA3Z&amp;s=7aPHgsTb1x0FA1MPDujXji0P-X6YAQjBTIqsLrDhy38&amp;e=">more recent version</a>.</div>
+> +<div xml:lang="en" class="body" lang="en">
+> +'''
+> +
+> +# the class body and the last_div are used to make sure any .body property existing in any css file is not overwritten
+> +last_div = '''
+> +</div>
+> +
+> +'''
+> +
+> +css_replacement_content = '''
+> +
+> +  font-family: Verdana, Sans, sans-serif;
+> +
+> +  width: 100%;
+> +  margin:  0;
+> +  padding: 0;
+> +  color: #333;
+> +  overflow-x: hidden;
+> +  }
+> +
+> +.body{
+> +margin:  0 auto;
+> +min-width: 640px;
+> +padding: 0 5em 5em 5em;
+> +}
+> +#outdated-warning{
+> +text-align: center;
+> +background-color: rgb(255, 186, 186);
+> +color: rgb(106, 14, 14);
+> +padding: 0.5em 0;
+> +width: 100%;
+> +position: fixed;
+> +top: 0;
+> +
+> +
+> +'''
+> +
+> +
+> +def add_banner_old_docs(dir):
+> +    for root, dirs, filenames in os.walk(dir):
+> +
+> +        if root.startswith('./3.1'):
+> +            html_replacement = html_content_dunfell
+> +        else:
+> +            html_replacement = html_content
+> +
+> +        for filename in filenames:
+> +            if filename.endswith('.html'):
+> +                with open(os.path.join(root, filename), 'r', encoding="ISO-8859-1") as f:
+> +                    current_content = f.read()
+> +                with open(os.path.join(root, filename), 'w', encoding="ISO-8859-1") as f:
+> +                    f.write(current_content.replace('<body>', '<body>' + html_replacement))
+> +                    f.write(current_content.replace('</body>', last_div + '</body>'))
+> +            if filename.endswith('.css'):
+> +                with open(os.path.join(root, filename), 'r', encoding="ISO-8859-1") as f:
+> +                    css_content = f.read()
+> +                with open(os.path.join(root, filename), 'w', encoding="ISO-8859-1") as f:
+> +                    f.write(css_content.replace(css_content[css_content.find('body {'):css_content.find('}'[0])], 'body {' + css_replacement_content ))
+> +
+> +add_banner_old_docs('.')
+> diff --git a/scripts/run-docs-build b/scripts/run-docs-build
+> index ecc5332..afff62f 100755
+> --- a/scripts/run-docs-build
+> +++ b/scripts/run-docs-build
+> @@ -18,7 +18,7 @@ set -x
+>   builddir=$(realpath "$1")
+>   ypdocs=$(realpath "$2/documentation/")
+>   bbdocs=$(realpath "$3/doc/")
+> -docs_buildtools=${docs_buildtools:-/srv/autobuilder/autobuilder.yocto.io/pub/buildtools/x86_64-buildtools-docs-nativesdk-standalone-3.2+snapshot-20201105.sh}
+> +docs_buildtools=${docs_buildtools:-'/home/abongwa/Downloads/x86_64-buildtools-docs-nativesdk-standalone-4.0.sh'}
+
+This line exists so you don't have to change the path in there.
+
+>   outputdir=$builddir/output
+>   scriptdir="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
+>   PUBLISH=${PUBLISH:-1}
+> @@ -31,12 +31,14 @@ $docs_buildtools -y -d $builddir/buildtools
+>   
+>   # Getting the old docbook built docs from an archive. Not rebuilding them.
+>   #wget https://downloads.yoctoproject.org/mirror/docbook-mirror/docbook-archives-20201105.tar.xz
+> -docbookarchive=${docbookarchive:-/srv/autobuilder/autobuilder.yocto.io/pub/docbook-mirror/docbook-archives-20201105.tar.xz}
+> +docbookarchive=${docbookarchive:-'/home/abongwa/Downloads/docbook-archives-20201105.tar.xz'}
+
+This line exists so you don't have to change the path in there.
+
+You should be able to start the run-docs-build script as follows:
+
+docs_buildtools=/home/abongwa/Downloads/x86_64-buildtools-docs-nativesdk-standalone-4.0.sh 
+docbookarchive=/home/abongwa/Downloads/docbook-archives-20201105.tar.xz 
+./run-docs-build
+
+without the need to modify the two lines above like you did.
+
+Otherwise, tested and looks good. So please send a v16 with this fixed.
+
+Thanks!
+
+Quentin
+
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2022-05-12 12:25 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-05-12 11:45 [PATCH yocto-autobuilder-helper v15] Add a banner on the old documentation docs Abongwa Bonalais Amahnui
+2022-05-12 12:25 ` [yocto] " Quentin Schulz
+

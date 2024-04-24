@@ -1,0 +1,755 @@
+* [meta-spdxscanner][PATCH] fossology-rest.bbclass: Moved check if spdx already exists out of the task
+@ 2021-07-22 13:06 Marco Cavallini
+  2021-07-27  1:11 ` [yocto] " leimaohui
+  0 siblings, 1 reply; 6+ messages in thread
+From: Marco Cavallini @ 2021-07-22 13:06 UTC (permalink / raw)
+  To: yocto; +Cc: Marco Cavallini, Marco Cavallini
+
+From: Marco Cavallini <m.cavallini@koansoftware.com>
+
+ With the previous code was impossible to run the do_get_report
+ task  whenever a correspondent .spdx file was already present
+ in tmp/deploy/spdx.
+ Now the check if spdx already exists is at a higher level
+ therefore is possible to run : bitbake -c get_report
+
+Signed-off-by: Marco Cavallini <koansoftware@gmail.com>
+---
+ classes/fossology-rest.bbclass | 18 +++++++++---------
+ 1 file changed, 9 insertions(+), 9 deletions(-)
+
+diff --git a/classes/fossology-rest.bbclass b/classes/fossology-rest.bbclass
+index 3694440..e55e859 100644
+--- a/classes/fossology-rest.bbclass
++++ b/classes/fossology-rest.bbclass
+@@ -84,6 +84,15 @@ python () {
+         create_manifest(info,sstatefile)
+         return
+ 
++    # if spdx already exists
++    if os.path.exists(info['outfile']):
++        bb.note(info['pn'] + "spdx file has been exist, do nothing")
++        return
++    if os.path.exists( sstatefile ):
++        bb.note(info['pn'] + "spdx file has been exist, do nothing")
++        create_manifest(info,sstatefile)
++        return
++
+     d.appendVarFlag('do_spdx', 'depends', ' %s:do_get_report' % pn)
+     bb.build.addtask('do_get_report', 'do_configure', 'do_patch' , d)
+     bb.build.addtask('do_spdx', 'do_configure', 'do_get_report', d)
+@@ -157,15 +166,6 @@ python do_get_report () {
+     info['outfile'] = os.path.join(manifest_dir, info['pn'] + "-" + info['pv'] + ".spdx" )
+     sstatefile = os.path.join(spdx_outdir, info['pn'] + "-" + info['pv'] + ".spdx" )
+     
+-    # if spdx has been exist
+-    if os.path.exists(info['outfile']):
+-        bb.note(info['pn'] + "spdx file has been exist, do nothing")
+-        return
+-    if os.path.exists( sstatefile ):
+-        bb.note(info['pn'] + "spdx file has been exist, do nothing")
+-        create_manifest(info,sstatefile)
+-        return
+-
+     spdx_get_src(d)
+ 
+     bb.note('SPDX: Archiving the patched source...')
+-- 
+2.17.1
+
+
+^ permalink raw reply related	[flat|nested] 6+ messages in thread
+* Re: [yocto] [meta-spdxscanner][PATCH] fossology-rest.bbclass: Moved check if spdx already exists out of the task
+  2021-07-22 13:06 [meta-spdxscanner][PATCH] fossology-rest.bbclass: Moved check if spdx already exists out of the task Marco Cavallini
+@ 2021-07-27  1:11 ` leimaohui
+  2021-07-27  6:51   ` Marco Cavallini
+  0 siblings, 1 reply; 6+ messages in thread
+From: leimaohui @ 2021-07-27  1:11 UTC (permalink / raw)
+  To: Marco Cavallini, yocto; +Cc: Marco Cavallini
+
+Hi Marco
+
+I'm sorry, but your patch seems not base on the latest source code.
+https://git.yoctoproject.org/cgit/cgit.cgi/meta-spdxscanner/tree/classes/fossology-rest.bbclass
+
+Best regards
+Lei
+
+
+> -----Original Message-----
+> From: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org> On Behalf
+> Of Marco Cavallini
+> Sent: Thursday, July 22, 2021 9:06 PM
+> To: yocto@lists.yoctoproject.org
+> Cc: Marco Cavallini <m.cavallini@koansoftware.com>; Marco Cavallini
+> <koansoftware@gmail.com>
+> Subject: [yocto] [meta-spdxscanner][PATCH] fossology-rest.bbclass: Moved
+> check if spdx already exists out of the task
+> 
+> From: Marco Cavallini <m.cavallini@koansoftware.com>
+> 
+>  With the previous code was impossible to run the do_get_report  task
+> whenever a correspondent .spdx file was already present  in
+> tmp/deploy/spdx.
+>  Now the check if spdx already exists is at a higher level  therefore is possible
+> to run : bitbake -c get_report
+> 
+> Signed-off-by: Marco Cavallini <koansoftware@gmail.com>
+> ---
+>  classes/fossology-rest.bbclass | 18 +++++++++---------
+>  1 file changed, 9 insertions(+), 9 deletions(-)
+> 
+> diff --git a/classes/fossology-rest.bbclass b/classes/fossology-rest.bbclass index
+> 3694440..e55e859 100644
+> --- a/classes/fossology-rest.bbclass
+> +++ b/classes/fossology-rest.bbclass
+> @@ -84,6 +84,15 @@ python () {
+>          create_manifest(info,sstatefile)
+>          return
+> 
+> +    # if spdx already exists
+> +    if os.path.exists(info['outfile']):
+> +        bb.note(info['pn'] + "spdx file has been exist, do nothing")
+> +        return
+> +    if os.path.exists( sstatefile ):
+> +        bb.note(info['pn'] + "spdx file has been exist, do nothing")
+> +        create_manifest(info,sstatefile)
+> +        return
+> +
+>      d.appendVarFlag('do_spdx', 'depends', ' %s:do_get_report' % pn)
+>      bb.build.addtask('do_get_report', 'do_configure', 'do_patch' , d)
+>      bb.build.addtask('do_spdx', 'do_configure', 'do_get_report', d) @@
+> -157,15 +166,6 @@ python do_get_report () {
+>      info['outfile'] = os.path.join(manifest_dir, info['pn'] + "-" + info['pv'] +
+> ".spdx" )
+>      sstatefile = os.path.join(spdx_outdir, info['pn'] + "-" + info['pv'] + ".spdx" )
+> 
+> -    # if spdx has been exist
+> -    if os.path.exists(info['outfile']):
+> -        bb.note(info['pn'] + "spdx file has been exist, do nothing")
+> -        return
+> -    if os.path.exists( sstatefile ):
+> -        bb.note(info['pn'] + "spdx file has been exist, do nothing")
+> -        create_manifest(info,sstatefile)
+> -        return
+> -
+>      spdx_get_src(d)
+> 
+>      bb.note('SPDX: Archiving the patched source...')
+> --
+> 2.17.1
+
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] [meta-spdxscanner][PATCH] fossology-rest.bbclass: Moved check if spdx already exists out of the task
+  2021-07-27  1:11 ` [yocto] " leimaohui
+@ 2021-07-27  6:51   ` Marco Cavallini
+  2021-07-27  7:27     ` leimaohui
+  0 siblings, 1 reply; 6+ messages in thread
+From: Marco Cavallini @ 2021-07-27  6:51 UTC (permalink / raw)
+  To: leimaohui, yocto; +Cc: Marco Cavallini
+
+Hi Lei,
+my patches are based on branch MASTER therefore they are based on the 
+latest source code.
+
+Would you mind to apply this one so will be possible to call "bitbake -c 
+get_report" ?
+
+Thank you
+
+--
+Marco
+
+
+
+On 27/07/21 03:11, leimaohui@fujitsu.com wrote:
+> Hi Marco
+> 
+> I'm sorry, but your patch seems not base on the latest source code.
+> https://git.yoctoproject.org/cgit/cgit.cgi/meta-spdxscanner/tree/classes/fossology-rest.bbclass
+> 
+> Best regards
+> Lei
+> 
+> 
+>> -----Original Message-----
+>> From: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org> On Behalf
+>> Of Marco Cavallini
+>> Sent: Thursday, July 22, 2021 9:06 PM
+>> To: yocto@lists.yoctoproject.org
+>> Cc: Marco Cavallini <m.cavallini@koansoftware.com>; Marco Cavallini
+>> <koansoftware@gmail.com>
+>> Subject: [yocto] [meta-spdxscanner][PATCH] fossology-rest.bbclass: Moved
+>> check if spdx already exists out of the task
+>>
+>> From: Marco Cavallini <m.cavallini@koansoftware.com>
+>>
+>>   With the previous code was impossible to run the do_get_report  task
+>> whenever a correspondent .spdx file was already present  in
+>> tmp/deploy/spdx.
+>>   Now the check if spdx already exists is at a higher level  therefore is possible
+>> to run : bitbake -c get_report
+>>
+>> Signed-off-by: Marco Cavallini <koansoftware@gmail.com>
+>> ---
+>>   classes/fossology-rest.bbclass | 18 +++++++++---------
+>>   1 file changed, 9 insertions(+), 9 deletions(-)
+>>
+>> diff --git a/classes/fossology-rest.bbclass b/classes/fossology-rest.bbclass index
+>> 3694440..e55e859 100644
+>> --- a/classes/fossology-rest.bbclass
+>> +++ b/classes/fossology-rest.bbclass
+>> @@ -84,6 +84,15 @@ python () {
+>>           create_manifest(info,sstatefile)
+>>           return
+>>
+>> +    # if spdx already exists
+>> +    if os.path.exists(info['outfile']):
+>> +        bb.note(info['pn'] + "spdx file has been exist, do nothing")
+>> +        return
+>> +    if os.path.exists( sstatefile ):
+>> +        bb.note(info['pn'] + "spdx file has been exist, do nothing")
+>> +        create_manifest(info,sstatefile)
+>> +        return
+>> +
+>>       d.appendVarFlag('do_spdx', 'depends', ' %s:do_get_report' % pn)
+>>       bb.build.addtask('do_get_report', 'do_configure', 'do_patch' , d)
+>>       bb.build.addtask('do_spdx', 'do_configure', 'do_get_report', d) @@
+>> -157,15 +166,6 @@ python do_get_report () {
+>>       info['outfile'] = os.path.join(manifest_dir, info['pn'] + "-" + info['pv'] +
+>> ".spdx" )
+>>       sstatefile = os.path.join(spdx_outdir, info['pn'] + "-" + info['pv'] + ".spdx" )
+>>
+>> -    # if spdx has been exist
+>> -    if os.path.exists(info['outfile']):
+>> -        bb.note(info['pn'] + "spdx file has been exist, do nothing")
+>> -        return
+>> -    if os.path.exists( sstatefile ):
+>> -        bb.note(info['pn'] + "spdx file has been exist, do nothing")
+>> -        create_manifest(info,sstatefile)
+>> -        return
+>> -
+>>       spdx_get_src(d)
+>>
+>>       bb.note('SPDX: Archiving the patched source...')
+>> --
+>> 2.17.1
+> 
+
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] [meta-spdxscanner][PATCH] fossology-rest.bbclass: Moved check if spdx already exists out of the task
+  2021-07-27  6:51   ` Marco Cavallini
+@ 2021-07-27  7:27     ` leimaohui
+  2021-07-27  7:33       ` Marco Cavallini
+  0 siblings, 1 reply; 6+ messages in thread
+From: leimaohui @ 2021-07-27  7:27 UTC (permalink / raw)
+  To: koansoftware, yocto; +Cc: Marco Cavallini
+
+Hi, Marco
+
+I got what you mean, but I think your patch should be modified as the following, just make do_get_report not check spdx file again, is it ?
+
+$ git diff classes/fossology-rest.bbclass
+diff --git a/classes/fossology-rest.bbclass b/classes/fossology-rest.bbclass
+index 3694440..c29e57f 100644
+--- a/classes/fossology-rest.bbclass
++++ b/classes/fossology-rest.bbclass
+@@ -157,15 +157,6 @@ python do_get_report () {
+     info['outfile'] = os.path.join(manifest_dir, info['pn'] + "-" + info['pv'] + ".spdx" )
+     sstatefile = os.path.join(spdx_outdir, info['pn'] + "-" + info['pv'] + ".spdx" )
+
+-    # if spdx has been exist
+-    if os.path.exists(info['outfile']):
+-        bb.note(info['pn'] + "spdx file has been exist, do nothing")
+-        return
+-    if os.path.exists( sstatefile ):
+-        bb.note(info['pn'] + "spdx file has been exist, do nothing")
+-        create_manifest(info,sstatefile)
+-        return
+-
+     spdx_get_src(d)
+
+     bb.note('SPDX: Archiving the patched source...')
+
+There is no necessary to add check in line 87, because line 79~85 has checked whether the spdx files exist.
+> @@ -84,6 +84,15 @@ python () {
+>         create_manifest(info,sstatefile)
+>         return
+> 
+>+    # if spdx already exists
+>+    if os.path.exists(info['outfile']):
+>+        bb.note(info['pn'] + "spdx file has been exist, do nothing")
+>+        return
+>+    if os.path.exists( sstatefile ):
+>+        bb.note(info['pn'] + "spdx file has been exist, do nothing")
+>+        create_manifest(info,sstatefile)
+>+        return
+>+
+
+Best regards
+Lei
+
+> -----Original Message-----
+> From: Marco <koansoftware@gmail.com>
+> Sent: Tuesday, July 27, 2021 2:51 PM
+> To: Lei, Maohui <leimaohui@fujitsu.com>;
+> yocto@lists.yoctoproject.org
+> Cc: Marco Cavallini <m.cavallini@koansoftware.com>
+> Subject: Re: [yocto] [meta-spdxscanner][PATCH] fossology-rest.bbclass: Moved
+> check if spdx already exists out of the task
+> 
+> Hi Lei,
+> my patches are based on branch MASTER therefore they are based on the latest
+> source code.
+> 
+> Would you mind to apply this one so will be possible to call "bitbake -c
+> get_report" ?
+> 
+> Thank you
+> 
+> --
+> Marco
+> 
+> 
+> 
+> On 27/07/21 03:11, leimaohui@fujitsu.com wrote:
+> > Hi Marco
+> >
+> > I'm sorry, but your patch seems not base on the latest source code.
+> > https://git.yoctoproject.org/cgit/cgit.cgi/meta-spdxscanner/tree/class
+> > es/fossology-rest.bbclass
+> >
+> > Best regards
+> > Lei
+> >
+> >
+> >> -----Original Message-----
+> >> From: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org> On
+> >> Behalf Of Marco Cavallini
+> >> Sent: Thursday, July 22, 2021 9:06 PM
+> >> To: yocto@lists.yoctoproject.org
+> >> Cc: Marco Cavallini <m.cavallini@koansoftware.com>; Marco Cavallini
+> >> <koansoftware@gmail.com>
+> >> Subject: [yocto] [meta-spdxscanner][PATCH] fossology-rest.bbclass:
+> >> Moved check if spdx already exists out of the task
+> >>
+> >> From: Marco Cavallini <m.cavallini@koansoftware.com>
+> >>
+> >>   With the previous code was impossible to run the do_get_report
+> >> task whenever a correspondent .spdx file was already present  in
+> >> tmp/deploy/spdx.
+> >>   Now the check if spdx already exists is at a higher level
+> >> therefore is possible to run : bitbake -c get_report
+> >>
+> >> Signed-off-by: Marco Cavallini <koansoftware@gmail.com>
+> >> ---
+> >>   classes/fossology-rest.bbclass | 18 +++++++++---------
+> >>   1 file changed, 9 insertions(+), 9 deletions(-)
+> >>
+> >> diff --git a/classes/fossology-rest.bbclass
+> >> b/classes/fossology-rest.bbclass index
+> >> 3694440..e55e859 100644
+> >> --- a/classes/fossology-rest.bbclass
+> >> +++ b/classes/fossology-rest.bbclass
+> >> @@ -84,6 +84,15 @@ python () {
+> >>           create_manifest(info,sstatefile)
+> >>           return
+> >>
+> >> +    # if spdx already exists
+> >> +    if os.path.exists(info['outfile']):
+> >> +        bb.note(info['pn'] + "spdx file has been exist, do nothing")
+> >> +        return
+> >> +    if os.path.exists( sstatefile ):
+> >> +        bb.note(info['pn'] + "spdx file has been exist, do nothing")
+> >> +        create_manifest(info,sstatefile)
+> >> +        return
+> >> +
+> >>       d.appendVarFlag('do_spdx', 'depends', ' %s:do_get_report' % pn)
+> >>       bb.build.addtask('do_get_report', 'do_configure', 'do_patch' , d)
+> >>       bb.build.addtask('do_spdx', 'do_configure', 'do_get_report', d)
+> >> @@
+> >> -157,15 +166,6 @@ python do_get_report () {
+> >>       info['outfile'] = os.path.join(manifest_dir, info['pn'] + "-" +
+> >> info['pv'] + ".spdx" )
+> >>       sstatefile = os.path.join(spdx_outdir, info['pn'] + "-" +
+> >> info['pv'] + ".spdx" )
+> >>
+> >> -    # if spdx has been exist
+> >> -    if os.path.exists(info['outfile']):
+> >> -        bb.note(info['pn'] + "spdx file has been exist, do nothing")
+> >> -        return
+> >> -    if os.path.exists( sstatefile ):
+> >> -        bb.note(info['pn'] + "spdx file has been exist, do nothing")
+> >> -        create_manifest(info,sstatefile)
+> >> -        return
+> >> -
+> >>       spdx_get_src(d)
+> >>
+> >>       bb.note('SPDX: Archiving the patched source...')
+> >> --
+> >> 2.17.1
+> >
+
+
+^ permalink raw reply related	[flat|nested] 6+ messages in thread
+* Re: [yocto] [meta-spdxscanner][PATCH] fossology-rest.bbclass: Moved check if spdx already exists out of the task
+  2021-07-27  7:27     ` leimaohui
+@ 2021-07-27  7:33       ` Marco Cavallini
+  2021-07-27  9:07         ` leimaohui
+  0 siblings, 1 reply; 6+ messages in thread
+From: Marco Cavallini @ 2021-07-27  7:33 UTC (permalink / raw)
+  To: leimaohui, yocto; +Cc: Marco Cavallini
+
+Hi Lei,
+you are right.
+Ignore this one and please see my other patch I set a few minutes ago.
+
+Thank you
+--
+Marco
+
+
+On 27/07/21 09:27, leimaohui@fujitsu.com wrote:
+> Hi, Marco
+> 
+> I got what you mean, but I think your patch should be modified as the following, just make do_get_report not check spdx file again, is it ?
+> 
+> $ git diff classes/fossology-rest.bbclass
+> diff --git a/classes/fossology-rest.bbclass b/classes/fossology-rest.bbclass
+> index 3694440..c29e57f 100644
+> --- a/classes/fossology-rest.bbclass
+> +++ b/classes/fossology-rest.bbclass
+> @@ -157,15 +157,6 @@ python do_get_report () {
+>       info['outfile'] = os.path.join(manifest_dir, info['pn'] + "-" + info['pv'] + ".spdx" )
+>       sstatefile = os.path.join(spdx_outdir, info['pn'] + "-" + info['pv'] + ".spdx" )
+> 
+> -    # if spdx has been exist
+> -    if os.path.exists(info['outfile']):
+> -        bb.note(info['pn'] + "spdx file has been exist, do nothing")
+> -        return
+> -    if os.path.exists( sstatefile ):
+> -        bb.note(info['pn'] + "spdx file has been exist, do nothing")
+> -        create_manifest(info,sstatefile)
+> -        return
+> -
+>       spdx_get_src(d)
+> 
+>       bb.note('SPDX: Archiving the patched source...')
+> 
+> There is no necessary to add check in line 87, because line 79~85 has checked whether the spdx files exist.
+>> @@ -84,6 +84,15 @@ python () {
+>>          create_manifest(info,sstatefile)
+>>          return
+>>
+>> +    # if spdx already exists
+>> +    if os.path.exists(info['outfile']):
+>> +        bb.note(info['pn'] + "spdx file has been exist, do nothing")
+>> +        return
+>> +    if os.path.exists( sstatefile ):
+>> +        bb.note(info['pn'] + "spdx file has been exist, do nothing")
+>> +        create_manifest(info,sstatefile)
+>> +        return
+>> +
+> 
+> Best regards
+> Lei
+> 
+>> -----Original Message-----
+>> From: Marco <koansoftware@gmail.com>
+>> Sent: Tuesday, July 27, 2021 2:51 PM
+>> To: Lei, Maohui <leimaohui@fujitsu.com>;
+>> yocto@lists.yoctoproject.org
+>> Cc: Marco Cavallini <m.cavallini@koansoftware.com>
+>> Subject: Re: [yocto] [meta-spdxscanner][PATCH] fossology-rest.bbclass: Moved
+>> check if spdx already exists out of the task
+>>
+>> Hi Lei,
+>> my patches are based on branch MASTER therefore they are based on the latest
+>> source code.
+>>
+>> Would you mind to apply this one so will be possible to call "bitbake -c
+>> get_report" ?
+>>
+>> Thank you
+>>
+>> --
+>> Marco
+>>
+>>
+>>
+>> On 27/07/21 03:11, leimaohui@fujitsu.com wrote:
+>>> Hi Marco
+>>>
+>>> I'm sorry, but your patch seems not base on the latest source code.
+>>> https://git.yoctoproject.org/cgit/cgit.cgi/meta-spdxscanner/tree/class
+>>> es/fossology-rest.bbclass
+>>>
+>>> Best regards
+>>> Lei
+>>>
+>>>
+>>>> -----Original Message-----
+>>>> From: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org> On
+>>>> Behalf Of Marco Cavallini
+>>>> Sent: Thursday, July 22, 2021 9:06 PM
+>>>> To: yocto@lists.yoctoproject.org
+>>>> Cc: Marco Cavallini <m.cavallini@koansoftware.com>; Marco Cavallini
+>>>> <koansoftware@gmail.com>
+>>>> Subject: [yocto] [meta-spdxscanner][PATCH] fossology-rest.bbclass:
+>>>> Moved check if spdx already exists out of the task
+>>>>
+>>>> From: Marco Cavallini <m.cavallini@koansoftware.com>
+>>>>
+>>>>    With the previous code was impossible to run the do_get_report
+>>>> task whenever a correspondent .spdx file was already present  in
+>>>> tmp/deploy/spdx.
+>>>>    Now the check if spdx already exists is at a higher level
+>>>> therefore is possible to run : bitbake -c get_report
+>>>>
+>>>> Signed-off-by: Marco Cavallini <koansoftware@gmail.com>
+>>>> ---
+>>>>    classes/fossology-rest.bbclass | 18 +++++++++---------
+>>>>    1 file changed, 9 insertions(+), 9 deletions(-)
+>>>>
+>>>> diff --git a/classes/fossology-rest.bbclass
+>>>> b/classes/fossology-rest.bbclass index
+>>>> 3694440..e55e859 100644
+>>>> --- a/classes/fossology-rest.bbclass
+>>>> +++ b/classes/fossology-rest.bbclass
+>>>> @@ -84,6 +84,15 @@ python () {
+>>>>            create_manifest(info,sstatefile)
+>>>>            return
+>>>>
+>>>> +    # if spdx already exists
+>>>> +    if os.path.exists(info['outfile']):
+>>>> +        bb.note(info['pn'] + "spdx file has been exist, do nothing")
+>>>> +        return
+>>>> +    if os.path.exists( sstatefile ):
+>>>> +        bb.note(info['pn'] + "spdx file has been exist, do nothing")
+>>>> +        create_manifest(info,sstatefile)
+>>>> +        return
+>>>> +
+>>>>        d.appendVarFlag('do_spdx', 'depends', ' %s:do_get_report' % pn)
+>>>>        bb.build.addtask('do_get_report', 'do_configure', 'do_patch' , d)
+>>>>        bb.build.addtask('do_spdx', 'do_configure', 'do_get_report', d)
+>>>> @@
+>>>> -157,15 +166,6 @@ python do_get_report () {
+>>>>        info['outfile'] = os.path.join(manifest_dir, info['pn'] + "-" +
+>>>> info['pv'] + ".spdx" )
+>>>>        sstatefile = os.path.join(spdx_outdir, info['pn'] + "-" +
+>>>> info['pv'] + ".spdx" )
+>>>>
+>>>> -    # if spdx has been exist
+>>>> -    if os.path.exists(info['outfile']):
+>>>> -        bb.note(info['pn'] + "spdx file has been exist, do nothing")
+>>>> -        return
+>>>> -    if os.path.exists( sstatefile ):
+>>>> -        bb.note(info['pn'] + "spdx file has been exist, do nothing")
+>>>> -        create_manifest(info,sstatefile)
+>>>> -        return
+>>>> -
+>>>>        spdx_get_src(d)
+>>>>
+>>>>        bb.note('SPDX: Archiving the patched source...')
+>>>> --
+>>>> 2.17.1
+>>>
+> 
+
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] [meta-spdxscanner][PATCH] fossology-rest.bbclass: Moved check if spdx already exists out of the task
+  2021-07-27  7:33       ` Marco Cavallini
+@ 2021-07-27  9:07         ` leimaohui
+  0 siblings, 0 replies; 6+ messages in thread
+From: leimaohui @ 2021-07-27  9:07 UTC (permalink / raw)
+  To: koansoftware, yocto; +Cc: Marco Cavallini
+
+merged
+
+> -----Original Message-----
+> From: Marco <koansoftware@gmail.com>
+> Sent: Tuesday, July 27, 2021 3:34 PM
+> To: Lei, Maohui <leimaohui@fujitsu.com>;
+> yocto@lists.yoctoproject.org
+> Cc: Marco Cavallini <m.cavallini@koansoftware.com>
+> Subject: Re: [yocto] [meta-spdxscanner][PATCH] fossology-rest.bbclass: Moved
+> check if spdx already exists out of the task
+> 
+> Hi Lei,
+> you are right.
+> Ignore this one and please see my other patch I set a few minutes ago.
+> 
+> Thank you
+> --
+> Marco
+> 
+> 
+> On 27/07/21 09:27, leimaohui@fujitsu.com wrote:
+> > Hi, Marco
+> >
+> > I got what you mean, but I think your patch should be modified as the
+> following, just make do_get_report not check spdx file again, is it ?
+> >
+> > $ git diff classes/fossology-rest.bbclass diff --git
+> > a/classes/fossology-rest.bbclass b/classes/fossology-rest.bbclass
+> > index 3694440..c29e57f 100644
+> > --- a/classes/fossology-rest.bbclass
+> > +++ b/classes/fossology-rest.bbclass
+> > @@ -157,15 +157,6 @@ python do_get_report () {
+> >       info['outfile'] = os.path.join(manifest_dir, info['pn'] + "-" + info['pv'] +
+> ".spdx" )
+> >       sstatefile = os.path.join(spdx_outdir, info['pn'] + "-" +
+> > info['pv'] + ".spdx" )
+> >
+> > -    # if spdx has been exist
+> > -    if os.path.exists(info['outfile']):
+> > -        bb.note(info['pn'] + "spdx file has been exist, do nothing")
+> > -        return
+> > -    if os.path.exists( sstatefile ):
+> > -        bb.note(info['pn'] + "spdx file has been exist, do nothing")
+> > -        create_manifest(info,sstatefile)
+> > -        return
+> > -
+> >       spdx_get_src(d)
+> >
+> >       bb.note('SPDX: Archiving the patched source...')
+> >
+> > There is no necessary to add check in line 87, because line 79~85 has checked
+> whether the spdx files exist.
+> >> @@ -84,6 +84,15 @@ python () {
+> >>          create_manifest(info,sstatefile)
+> >>          return
+> >>
+> >> +    # if spdx already exists
+> >> +    if os.path.exists(info['outfile']):
+> >> +        bb.note(info['pn'] + "spdx file has been exist, do nothing")
+> >> +        return
+> >> +    if os.path.exists( sstatefile ):
+> >> +        bb.note(info['pn'] + "spdx file has been exist, do nothing")
+> >> +        create_manifest(info,sstatefile)
+> >> +        return
+> >> +
+> >
+> > Best regards
+> > Lei
+> >
+> >> -----Original Message-----
+> >> From: Marco <koansoftware@gmail.com>
+> >> Sent: Tuesday, July 27, 2021 2:51 PM
+> >> To: Lei, Maohui <leimaohui@fujitsu.com>; yocto@lists.yoctoproject.org
+> >> Cc: Marco Cavallini <m.cavallini@koansoftware.com>
+> >> Subject: Re: [yocto] [meta-spdxscanner][PATCH]
+> >> fossology-rest.bbclass: Moved check if spdx already exists out of the
+> >> task
+> >>
+> >> Hi Lei,
+> >> my patches are based on branch MASTER therefore they are based on the
+> >> latest source code.
+> >>
+> >> Would you mind to apply this one so will be possible to call "bitbake
+> >> -c get_report" ?
+> >>
+> >> Thank you
+> >>
+> >> --
+> >> Marco
+> >>
+> >>
+> >>
+> >> On 27/07/21 03:11, leimaohui@fujitsu.com wrote:
+> >>> Hi Marco
+> >>>
+> >>> I'm sorry, but your patch seems not base on the latest source code.
+> >>> https://git.yoctoproject.org/cgit/cgit.cgi/meta-spdxscanner/tree/cla
+> >>> ss
+> >>> es/fossology-rest.bbclass
+> >>>
+> >>> Best regards
+> >>> Lei
+> >>>
+> >>>
+> >>>> -----Original Message-----
+> >>>> From: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+> >>>> On Behalf Of Marco Cavallini
+> >>>> Sent: Thursday, July 22, 2021 9:06 PM
+> >>>> To: yocto@lists.yoctoproject.org
+> >>>> Cc: Marco Cavallini <m.cavallini@koansoftware.com>; Marco Cavallini
+> >>>> <koansoftware@gmail.com>
+> >>>> Subject: [yocto] [meta-spdxscanner][PATCH] fossology-rest.bbclass:
+> >>>> Moved check if spdx already exists out of the task
+> >>>>
+> >>>> From: Marco Cavallini <m.cavallini@koansoftware.com>
+> >>>>
+> >>>>    With the previous code was impossible to run the do_get_report
+> >>>> task whenever a correspondent .spdx file was already present  in
+> >>>> tmp/deploy/spdx.
+> >>>>    Now the check if spdx already exists is at a higher level
+> >>>> therefore is possible to run : bitbake -c get_report
+> >>>>
+> >>>> Signed-off-by: Marco Cavallini <koansoftware@gmail.com>
+> >>>> ---
+> >>>>    classes/fossology-rest.bbclass | 18 +++++++++---------
+> >>>>    1 file changed, 9 insertions(+), 9 deletions(-)
+> >>>>
+> >>>> diff --git a/classes/fossology-rest.bbclass
+> >>>> b/classes/fossology-rest.bbclass index
+> >>>> 3694440..e55e859 100644
+> >>>> --- a/classes/fossology-rest.bbclass
+> >>>> +++ b/classes/fossology-rest.bbclass
+> >>>> @@ -84,6 +84,15 @@ python () {
+> >>>>            create_manifest(info,sstatefile)
+> >>>>            return
+> >>>>
+> >>>> +    # if spdx already exists
+> >>>> +    if os.path.exists(info['outfile']):
+> >>>> +        bb.note(info['pn'] + "spdx file has been exist, do nothing")
+> >>>> +        return
+> >>>> +    if os.path.exists( sstatefile ):
+> >>>> +        bb.note(info['pn'] + "spdx file has been exist, do nothing")
+> >>>> +        create_manifest(info,sstatefile)
+> >>>> +        return
+> >>>> +
+> >>>>        d.appendVarFlag('do_spdx', 'depends', ' %s:do_get_report' %
+> pn)
+> >>>>        bb.build.addtask('do_get_report', 'do_configure', 'do_patch' , d)
+> >>>>        bb.build.addtask('do_spdx', 'do_configure', 'do_get_report',
+> >>>> d) @@
+> >>>> -157,15 +166,6 @@ python do_get_report () {
+> >>>>        info['outfile'] = os.path.join(manifest_dir, info['pn'] +
+> >>>> "-" + info['pv'] + ".spdx" )
+> >>>>        sstatefile = os.path.join(spdx_outdir, info['pn'] + "-" +
+> >>>> info['pv'] + ".spdx" )
+> >>>>
+> >>>> -    # if spdx has been exist
+> >>>> -    if os.path.exists(info['outfile']):
+> >>>> -        bb.note(info['pn'] + "spdx file has been exist, do nothing")
+> >>>> -        return
+> >>>> -    if os.path.exists( sstatefile ):
+> >>>> -        bb.note(info['pn'] + "spdx file has been exist, do nothing")
+> >>>> -        create_manifest(info,sstatefile)
+> >>>> -        return
+> >>>> -
+> >>>>        spdx_get_src(d)
+> >>>>
+> >>>>        bb.note('SPDX: Archiving the patched source...')
+> >>>> --
+> >>>> 2.17.1
+> >>>
+> >
+
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+end of thread, other threads:[~2021-07-27  9:07 UTC | newest]
+
+Thread overview: 6+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-07-22 13:06 [meta-spdxscanner][PATCH] fossology-rest.bbclass: Moved check if spdx already exists out of the task Marco Cavallini
+2021-07-27  1:11 ` [yocto] " leimaohui
+2021-07-27  6:51   ` Marco Cavallini
+2021-07-27  7:27     ` leimaohui
+2021-07-27  7:33       ` Marco Cavallini
+2021-07-27  9:07         ` leimaohui
+

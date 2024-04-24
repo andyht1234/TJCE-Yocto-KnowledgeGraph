@@ -1,0 +1,140 @@
+* bbappend conditional check for advanced metadata (yocto-kernel-cache)?
+@ 2022-01-20 11:20 Matthias Klein
+  2022-01-20 15:29 ` [yocto] " Bruce Ashfield
+  0 siblings, 1 reply; 3+ messages in thread
+From: Matthias Klein @ 2022-01-20 11:20 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 426 bytes --]
+
+Hello,
+
+I would like to create a linux-%.bbappend file and add the following to it, for example:
+
+KERNEL_FEATURES:append = " features/overlayfs/overlayfs.scc".
+
+Works also for all kernels which use the advanced metadata. Unfortunately it leads to an error with a kernel which uses a defconfig.
+I would only enable the above line if the kernel uses the advanced metadata. Is this possible?
+
+Many greetings,
+Matthias
+
+[-- Attachment #2: Type: text/html, Size: 2338 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] bbappend conditional check for advanced metadata (yocto-kernel-cache)?
+  2022-01-20 11:20 bbappend conditional check for advanced metadata (yocto-kernel-cache)? Matthias Klein
+@ 2022-01-20 15:29 ` Bruce Ashfield
+  2022-01-27 16:37   ` AW: " Matthias Klein
+  0 siblings, 1 reply; 3+ messages in thread
+From: Bruce Ashfield @ 2022-01-20 15:29 UTC (permalink / raw)
+  To: Matthias Klein; +Cc: yocto
+
+On Thu, Jan 20, 2022 at 6:20 AM Matthias Klein
+<matthias.klein@optimeas.de> wrote:
+>
+> Hello,
+>
+>
+>
+> I would like to create a linux-%.bbappend file and add the following to it, for example:
+>
+>
+>
+> KERNEL_FEATURES:append = " features/overlayfs/overlayfs.scc".
+>
+>
+>
+> Works also for all kernels which use the advanced metadata. Unfortunately it leads to an error with a kernel which uses a defconfig.
+>
+> I would only enable the above line if the kernel uses the advanced metadata. Is this possible?
+>
+
+Presumably, the kernel recipe you are using inherits kernel-yocto, and
+that whatever recipe is using a defconfig isn't also putting the
+kernel-cache into the SRC_URI ? (or that kernel_features append
+wouldn't be an actual error). So we can run with that assumption.
+
+One option is to allow dangling kernel features, and you'll get a
+warning from a the missing feature
+(KERNEL_DANGLING_FEATURES_WARN_ONLY). But of course, you'll get a
+warning .. which may or may not be a bad thing :)
+
+Another is to make that append conditional based on something you can
+test. i.e. test for kernel-cache in the SRC_URI, and if present, do
+the append. Or you could test for the defconfig in the SRC_URI and
+don't do the append. There may be other options for this, but without
+all the details of the recipes, I can't say for sure.
+
+I have a few variations of that theme in meta-virtualization, since
+there's a broad range of kernel types supported
+(https://git.yoctoproject.org/meta-virtualization/tree/recipes-kernel/linux/linux-yocto_virtualization.inc).
+
+Cheers,
+
+Bruce
+
+
+>
+>
+> Many greetings,
+>
+> Matthias
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#55930): https://lists.yoctoproject.org/g/yocto/message/55930
+> Mute This Topic: https://lists.yoctoproject.org/mt/88556517/1050810
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [bruce.ashfield@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+-- 
+- Thou shalt not follow the NULL pointer, for chaos and madness await
+thee at its end
+- "Use the force Harry" - Gandalf, Star Trek II
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* AW: [yocto] bbappend conditional check for advanced metadata (yocto-kernel-cache)?
+  2022-01-20 15:29 ` [yocto] " Bruce Ashfield
+@ 2022-01-27 16:37   ` Matthias Klein
+  0 siblings, 0 replies; 3+ messages in thread
+From: Matthias Klein @ 2022-01-27 16:37 UTC (permalink / raw)
+  To: Bruce Ashfield; +Cc: yocto
+
+Hello Bruce,
+
+> Another is to make that append conditional based on something you can test. i.e. test for kernel-cache in the SRC_URI, and if present, do the append. Or you could test for the defconfig in the SRC_URI and don't do the append. There may be other options for this, but without all the details of the recipes, I can't say for sure.
+> I have a few variations of that theme in meta-virtualization, since there's a broad range of kernel types supported (https://git.yoctoproject.org/meta-virtualization/tree/recipes-kernel/linux/linux-yocto_virtualization.inc).
+
+I chose the variant based on SRC_URI, but used KERNEL_CONFIG_URI because I got endless recursion between SRC_URI and KERNEL_FEATURES in the kernel recipe I use.
+I ended up with this function:
+
+def insert_if_kernel_cache_available(feature, d):
+    import re
+    if d.getVar('KERNEL_CONFIG_URI'):
+       config_uri = d.getVar('KERNEL_CONFIG_URI')
+       kernel_cache = re.search("kernel-cache", config_uri)
+       if kernel_cache:
+          return feature
+    return ""
+
+KERNEL_FEATURES:append = "${@insert_if_kernel_cache_available(' features/overlayfs/overlayfs.scc', d)}"
+
+Many greetings,
+Matthias
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2022-01-27 16:37 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-01-20 11:20 bbappend conditional check for advanced metadata (yocto-kernel-cache)? Matthias Klein
+2022-01-20 15:29 ` [yocto] " Bruce Ashfield
+2022-01-27 16:37   ` AW: " Matthias Klein
+

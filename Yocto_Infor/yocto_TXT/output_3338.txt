@@ -1,0 +1,175 @@
+* Yocto Autobuilder: Latency Monitor and AB-INT - Meeting notes: June 3, 2021
+@ 2021-06-03 14:22 Randy MacLeod
+  0 siblings, 0 replies; only message in thread
+From: Randy MacLeod @ 2021-06-03 14:22 UTC (permalink / raw)
+  To: Sakib Sajal, alexandre.belloni, richard.purdie, Wold, Saul
+  Cc: Yocto discussion list, Tascioglu, Tony, Trevor Gamblin
+
+Attendees: Sakib, Alex, Richard, Saul, Randy
+
+1. Sakib is working on using procpath (1) to generate full-system 
+process summary that is specific to bitbake builds and perhaps even
+YP AB.
+
+The basic idea is to take a single run of top and convert it  to 
+something easier to quicly understand (see (4) below).
+
+
+We are interested in procpath since screen scraping the top output
+is likely error prone. Richard is concerned that
+using python and this module will be quite inefficent compared to what
+top does. That's a valid concern but we believe and will prove that
+the module and top are both just accessing the same data in /proc.
+Stay tuned.
+
+
+2. Tony and Randy have a work-around of using taskset for the valgrind
+races. We will have a patch to use taskset of the list of 'racey'
+valgrind tests. We think it has gotten worse when we added 'smp'
+to qemu. There are similar VG bug reports from 5
+years ago so we may have to carry the work-around for some time.
+
+
+3. Add logging to runqemu when qemu fails.
+
+a. Run ps (or top) to see what's happening on the host.
+b. collect qemu logs
+    In this example:
+ 
+https://autobuilder.yoctoproject.org/typhoon/#/builders/101/builds/2386/steps/12/logs/stdio
+   there should be a log file unde:
+ 
+/home/pokybuild/yocto-worker/qemux86-alt/build/build/tmp/work/qemux86-poky-linux/core-image-sato-sdk/1.0-r0/temp
+
+but  s/temp/testimage/ and logs should be under there.
+
+Note that the logs may not always be there so check and
+make that clear with a warning when one is missing.
+This now is Sakib's top priority for the week.
+
+
+4. Regarding a LTP test that fails because mkdir failed...
+This is described in an email (2) from Richard with the subject:
+    Re: [swat] qemux86-64 ltp kernel panic
+
+Alex is going to use gcore (3) to get a core file for the qemu process
+and try to figure out what is crazy in the qemu guest kernel.
+
+Did that work Alex?
+Where are the core file and related symbols?
+
+5. As a general remark, we are overloading the systems but
+we don't want to scale back too much.
+
+In the cases wehre qemu failed to copy in 120 seconds,
+what has generally be going on is lots of builds involving:
+    llvm, kea, webkit or two, musl world build.
+The load average goes over 300 but as you'd expect most jobs
+are sleeping.
+We think the biggest step forward on this is the job server that
+Trevor is going to start working on that.
+
+There are a few knobs that we can adjust to reduce the maximum load:
+- Number of build in parallel - currently 3
+- parallel make - currently 16, could drop to 12 but
+   dropping below say 8 would reduce the test system throughput too much.
+- bb number of threads - number of bitbake tasks.
+
+Many times this results in a RCU stall and things go off the rails.
+
+
+If anyone else is interested in helping, please let me know.
+More next week.
+
+
+-- 
+# Randy MacLeod
+# Wind River Linux
+
+
+1) https://heptapod.host/saajns/procpath
+2) https://lists.yoctoproject.org/g/swat/message/156
+3) https://www.linux.org/docs/man1/gcore.html
+
+4)
+
+If I hack up a sed pipeline and run it on the entire latency-full.log, I 
+get:
+
+$ cat /tmp/latency-full.log | grep -v "^NOTE:" | \
+   cut -c 69- | cut -d" " -f 1 | grep -v "\[" | \
+   sed -e 's|/home/pokybuild/yocto-worker/|/~/|' | \
+   sed -e 's|/build/build/tmp/work/core2-64-poky-linux/| 
+.../tmp/pklin/... |g' | \
+   sed -e 
+'s|/recipe-sysroot-native/usr/bin/x86_64-poky-linux/../../libexec/x86_64-poky-linux/gcc/x86_64-poky-linux/| 
+.../gcc-foo/... |' | \
+   sed -e 's|/build/build/tmp/work/core2-32-poky-linux/| .../pklin32/... 
+|' | \
+   grep -v "^$" | \
+   sort | uniq -c | sort -n | tail -30
+
+     42 /~/meta-oe .../tmp/pklin/... vulkan-cts/1.2.6.0-r0 
+.../gcc-foo/... 11.1.0/as
+      42 /~/meta-oe .../tmp/pklin/... 
+vulkan-cts/1.2.6.0-r0/recipe-sysroot-native/usr/bin/x86_64-poky-linux/x86_64-poky-linux-g++
+      43 as
+      43 top
+      44 tar
+      45 cmake
+      45 ninja
+      50 
+/~/reproducible-ubuntu/build/build-st-38234/reproducibleB/tmp/work/qemux86_64-poky-linux/linux-yocto/5.4.119+gitAUTOINC+9e2546ab8d_8997f66300-r0 
+.../gcc-foo/... 9.3.0/cc1
+      58 bitbake-server
+      58 /lib/systemd/systemd
+      58 (sd-pam)
+      65 
+/~/pkgman-non-rpm/build/build/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+      90 
+/~/pkgman-non-rpm/build/build/tmp/work/qemux86-poky-linux/linux-yocto/5.4.119+gitAUTOINC+9e2546ab8d_8997f66300-r0/recipe-sysroot-native/usr/bin/i686-poky-linux/../../libexec/i686-poky-linux/gcc/i686-poky-linux/9.3.0/cc1
+      97 /~/meta-oe .../tmp/pklin/... opengl-es-cts/3.2.7.0-r0 
+.../gcc-foo/... 11.1.0/cc1plus
+      98 /~/meta-oe .../tmp/pklin/... opengl-es-cts/3.2.7.0-r0 
+.../gcc-foo/... 11.1.0/as
+     102 /~/meta-oe .../tmp/pklin/... 
+opengl-es-cts/3.2.7.0-r0/recipe-sysroot-native/usr/bin/x86_64-poky-linux/x86_64-poky-linux-g++
+     112 /~/meta-oe .../tmp/pklin/... mongodb/4.4.5+4.4.6-rc0-r0 
+.../gcc-foo/... 11.1.0/cc1plus
+     113 /~/meta-oe .../tmp/pklin/... mongodb/4.4.5+4.4.6-rc0-r0 
+.../gcc-foo/... 11.1.0/as
+     116 /usr/bin/python3
+     141 i686-poky-linux-gcc
+     151 /~/meta-oe .../tmp/pklin/... nodejs/14.16.1-r0 .../gcc-foo/... 
+11.1.0/cc1plus
+     153 /~/meta-oe .../tmp/pklin/... nodejs/14.16.1-r0 .../gcc-foo/... 
+11.1.0/as
+     154 sh
+     209 x86_64-poky-linux-gcc
+     313 x86_64-poky-linux-g++
+     345 
+/~/meta-oe/build/build/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+     476 /bin/bash
+     629 make
+    1130 python3
+    1331 /bin/sh
+
+the 'one cmd' lines such as, 'make, python3, /bin/sh, tar lines clearly 
+need more context.
+
+There's more work to do cleaning up some 'noise' but does
+anyone want anything else in the first version?
+
+Trevor pointed me at:
+    https://heptapod.host/saajns/procpath
+that we might useful but I haven't played with it yet.
+
+A quick simple filter is likely a better starting point.
+
+^ permalink raw reply	[flat|nested] only message in thread
+only message in thread, other threads:[~2021-06-03 14:22 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-06-03 14:22 Yocto Autobuilder: Latency Monitor and AB-INT - Meeting notes: June 3, 2021 Randy MacLeod
+

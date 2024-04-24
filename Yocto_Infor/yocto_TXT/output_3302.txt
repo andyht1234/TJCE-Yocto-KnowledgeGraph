@@ -1,0 +1,110 @@
+* Building a different GCC version in SDK vs GCC used to build the rootfs/image
+@ 2021-06-10 14:57 greghwang
+  2021-06-10 15:35 ` [yocto] " Khem Raj
+  0 siblings, 1 reply; 3+ messages in thread
+From: greghwang @ 2021-06-10 14:57 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1424 bytes --]
+
+The backstory is I'm supporting a legacy system built with the Jethro branch and gcc 5.x.  I'm wondering instead of upgrading the underlying yocto layers to a more recent branch like Thud which supports gcc 8.2, is there a way to leave the image built with gcc 5, but build a new cross compiler toolchain use gcc 8.2.  The application team I'm supporting really wants to use C++17 features, and is unable to with gcc 5.x as their crosscompiler.  I would try to put the 2.28 glibc and 8.2 gcc-runtime libraries on the image and rely on forward compatibility of the libs to ensure compatibility with gcc 5.  Otherwise, the image would still be using gcc-5 as the compiler for all the recipes.
+
+I did some experiments on Thud poky and was able to get a different version of gcc in the toolchain by modifying PREFERRED_VERSION_gcc_corss-canadian-${TRANSLATED_TARGET_ARCH}, however I quickly ran into problem trying compile hello-world with g++.  It looked like the compiler was trying to find its header files in
+
+sysroots/aarch64-oe-linux/usr/include/c++/<gcc version>
+
+but now I have a mismatched gcc version from what is on the sysroot and the cross compiler can't find it's headers.
+
+I'm wondering if forcing a different version of gcc in the SDK is even feasible, or maybe I should be looking at external toolchains or some other solution to support my application team's need for an upgraded version of gcc.
+
+[-- Attachment #2: Type: text/html, Size: 1687 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] Building a different GCC version in SDK vs GCC used to build the rootfs/image
+  2021-06-10 14:57 Building a different GCC version in SDK vs GCC used to build the rootfs/image greghwang
+@ 2021-06-10 15:35 ` Khem Raj
+  2021-06-10 17:57   ` greghwang
+  0 siblings, 1 reply; 3+ messages in thread
+From: Khem Raj @ 2021-06-10 15:35 UTC (permalink / raw)
+  To: greghwang, yocto
+
+
+
+On 6/10/21 7:57 AM, greghwang@gmail.com wrote:
+> The backstory is I'm supporting a legacy system built with the Jethro 
+> branch and gcc 5.x.  I'm wondering instead of upgrading the underlying 
+> yocto layers to a more recent branch like Thud which supports gcc 8.2, 
+> is there a way to leave the image built with gcc 5, but build a new 
+> cross compiler toolchain use gcc 8.2.  The application team I'm 
+> supporting really wants to use C++17 features, and is unable to with gcc 
+> 5.x as their crosscompiler.  I would try to put the 2.28 glibc and 8.2 
+> gcc-runtime libraries on the image and rely on forward compatibility of 
+> the libs to ensure compatibility with gcc 5.  Otherwise, the image would 
+> still be using gcc-5 as the compiler for all the recipes.
+> 
+> I did some experiments on Thud poky and was able to get a different 
+> version of gcc in the toolchain by modifying 
+> PREFERRED_VERSION_gcc_corss-canadian-${TRANSLATED_TARGET_ARCH}, however 
+> I quickly ran into problem trying compile hello-world with g++.  It 
+> looked like the compiler was trying to find its header files in
+> 
+> sysroots/aarch64-oe-linux/usr/include/c++/<gcc version>
+> 
+> but now I have a mismatched gcc version from what is on the sysroot and 
+> the cross compiler can't find it's headers.
+> 
+> I'm wondering if forcing a different version of gcc in the SDK is even 
+> feasible, or maybe I should be looking at external toolchains or some 
+> other solution to support my application team's need for an upgraded 
+> version of gcc.
+>
+
+I think this will be hard to support unless your applications are self 
+contained and will bring its own runtime as well in that case you can 
+build a SDK from newer releases which matches compiler you need and let 
+them use it, if you want to mix and match then it will require a bit of 
+extra work e.g. check if runtime from newer compiler will still work 
+with older libs/binaries or find a way to package two versions seprately 
+and ensure that existing packages on image can keep using older libs
+
+So usually upgrading to relevant yocto release would be cleanest way to 
+move forward and would be most reliable of all options but if thats not 
+an option then
+Perhaps upgrading compiler across the board might be better approach
+
+> 
+> 
+> 
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: Building a different GCC version in SDK vs GCC used to build the rootfs/image
+  2021-06-10 15:35 ` [yocto] " Khem Raj
+@ 2021-06-10 17:57   ` greghwang
+  0 siblings, 0 replies; 3+ messages in thread
+From: greghwang @ 2021-06-10 17:57 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 805 bytes --]
+
+> 
+> I think this will be hard to support unless your applications are self
+> contained and will bring its own runtime as well in that case you can
+> build a SDK from newer releases which matches compiler you need and let
+> them use it, if you want to mix and match then it will require a bit of
+> extra work e.g. check if runtime from newer compiler will still work with
+> older libs/binaries or find a way to package two versions seprately and
+> ensure that existing packages on image can keep using older libs
+
+So our application might be able to be self contained and bring in all of it's own libs and runtime that it needs.  If that case I wouldn't have to supply the sysroot that comes as part of the SDK; I'd just provide the compiled toolchain/compiler with the updated gcc 8.2, right?
+
+[-- Attachment #2: Type: text/html, Size: 852 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2021-06-10 17:57 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-06-10 14:57 Building a different GCC version in SDK vs GCC used to build the rootfs/image greghwang
+2021-06-10 15:35 ` [yocto] " Khem Raj
+2021-06-10 17:57   ` greghwang
+

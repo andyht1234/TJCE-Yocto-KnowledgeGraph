@@ -1,0 +1,153 @@
+* Adding avr-gcc to an SDK #bitbake #avr #gcc #sdk
+@ 2023-04-13 15:49 logan.grosz
+  0 siblings, 0 replies; only message in thread
+From: logan.grosz @ 2023-04-13 15:49 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 4145 bytes --]
+
+Hi,
+
+I am using meta-microcontroller ( https://github.com/schnitzeltony/meta-microcontroller ) to build an AVR image at build-time. The target device will then image the microcontroller at runtime. I want to put the avr utilities into the produce yocto sdk to I can do development for the microcontroller with the same tools its final build will be made with. The meta layer already provides `-native` variants of the necessary recipes. I am attempting to create `nativesdk-` variants for the necessary recipes.
+
+I was successfully able to make `nativesdk-avr-binutils` by adding the following line to the recipe:
+
+```
+BBCLASSEXTEND =+ "nativesdk"
+```
+
+I do the same to the `avr-gcc` recipe, but I get the following compile error when I `bitbake nativesdk-avr-gcc`:
+
+```
+g++: error: unrecognized command line option ‘-fmacro-prefix-map=...
+```
+
+`avr-binutils` builds just fine with the same command line options according to `run.do_compile`, so I feel like the issue has to reside in the `avr-gcc` recipe.
+
+```meta-microcontroller/recipes-avr/avr-gcc/avr-gcc_8.4.0.bb
+SUMMARY = "GNU compiler for Microchip (formerly Atmel) AVR microcontrollers"
+HOMEPAGE = "http://www.gnu.org/software/gcc/"
+SECTION = "devel"
+LICENSE = "GPLv2+"
+
+LIC_FILES_CHKSUM = "\
+file://COPYING;md5=59530bdf33659b29e73d4adb9f9f6552 \
+file://COPYING3;md5=d32239bcb673463ab874e80d47fae504 \
+file://COPYING3.LIB;md5=6a6a8e020838b23406c81b19c1d46df6 \
+file://COPYING.LIB;md5=2d5025d4aa3495befef8f17206a5b0a1 \
+file://COPYING.RUNTIME;md5=fe60d87048567d4fe8c8a0ed2448bcc8 \
+"
+
+inherit autotools gettext texinfo
+
+BBCLASSEXTEND = "native nativesdk"
+
+DEPENDS = " \
+avr-binutils \
+zlib \
+gawk \
+gmp \
+mpfr \
+libmpc \
+flex \
+"
+DEPENDS_append_class-target = " ${BPN}-native"
+
+PE = "1"
+
+SRC_URI = "https://ftp.gnu.org/gnu/gcc/gcc-${PV}/gcc-${PV}.tar.xz"
+SRC_URI[md5sum] = "bb815a8e3b7be43c4a26fa89dbbd9795"
+SRC_URI[sha256sum] = "e30a6e52d10e1f27ed55104ad233c30bd1e99cfb5ff98ab022dc941edd1b2dd4"
+
+S = "${WORKDIR}/gcc-${PV}"
+
+EXTRA_OECONF = " \
+--target=avr \
+--program-prefix=avr- \
+--enable-languages=c,c++ \
+--enable-c99 \
+--enable-long-long \
+--disable-bootstrap \
+--disable-libmudflap \
+--with-system-zlib \
+--with-build-sysroot=${STAGING_DIR_TARGET} \
+"
+
+EXTRA_OECONF_append_class-target = " \
+--with-gnu-as \
+--with-gnu-ld \
+--with-as=${STAGING_BINDIR_NATIVE}/avr-as \
+--with-ld=${STAGING_BINDIR_NATIVE}/avr-ld \
+"
+
+export AR_FOR_TARGET = "avr-ar"
+export AS_FOR_TARGET = "avr-as"
+export DLLTOOL_FOR_TARGET = "avr-dlltool"
+export CC_FOR_TARGET = "avr-gcc"
+export CXX_FOR_TARGET = "avr-g++"
+export GCC_FOR_TARGET = "avr-gcc"
+export LD_FOR_TARGET = "avr-ld"
+export LIPO_FOR_TARGET = "avr-lipo"
+export NM_FOR_TARGET = "avr-nm"
+export OBJDUMP_FOR_TARGET = "avr-objdump"
+export RANLIB_FOR_TARGET = "avr-ranlib"
+export STRIP_FOR_TARGET = "avr-strip"
+export WINDRES_FOR_TARGET = "avr-windres"
+
+do_configure_preend_class-target() {
+# broken libtool here - stolen from oe-core gcc-source.inc
+#sed -i -e 's/hardcode_into_libs=yes/hardcode_into_libs=no/' ${S}/libcc1/configure
+}
+
+do_configure() {
+(cd ${S} && gnu-configize)
+
+oe_runconf
+}
+
+do_install_append() {
+# fix some host contamination - TBD: fix properly
+for file in `find ${D}/${libdir}/gcc/avr/${PV}/include`; do
+chown root:root $file
+done
+for file in `find ${D}/${libdir}/gcc/avr/${PV}/include-fixed`; do
+chown root:root $file
+done
+
+# remove some files conflicting with target utils
+rm -rf ${D}/${datadir}/locale
+rm -rf ${D}/${datadir}/info
+rm -rf ${D}/${datadir}/man/man7
+}
+
+FILES_${PN} += "${libdir}/gcc/avr"
+
+FILES_${PN}-staticdev += " \
+${libdir}/gcc/avr/${PV}/*.a \
+${libdir}/gcc/avr/${PV}/*/*.a \
+${libdir}/gcc/avr/${PV}/*/*/*.a \
+"
+
+# as long as there is no other libc we can pin avr-libc
+RDEPENDS_${PN}_class-target += " \
+${PN}-staticdev \
+avr-libc \
+"
+
+INSANE_SKIP_${PN} = "dev-so"
+```
+
+I feel like there's some funny-business in the dependencies that may be messing thing up, but I am not familiar enough with `-native`, and `nativesdk-` variants to say what's wrong.
+
+Thank you,
+Logan
+
+[-- Attachment #2: Type: text/html, Size: 5709 bytes --]
+
+^ permalink raw reply	[flat|nested] only message in thread
+only message in thread, other threads:[~2023-04-13 15:49 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-04-13 15:49 Adding avr-gcc to an SDK #bitbake #avr #gcc #sdk logan.grosz
+

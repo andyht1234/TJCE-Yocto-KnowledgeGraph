@@ -1,0 +1,1687 @@
+* Yocto Autobuilder: Latency Monitor and AB-INT - Meeting notes: July 29, 2021
+@ 2021-07-29 14:07 Randy MacLeod
+  0 siblings, 0 replies; only message in thread
+From: Randy MacLeod @ 2021-07-29 14:07 UTC (permalink / raw)
+  To: Sakib Sajal, alexandre.belloni, richard.purdie, Wold, Saul,
+	Trevor Gamblin, Michael Halstead
+  Cc: Tascioglu, Tony, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 6689 bytes --]
+
+
+YP AB Intermittent failures meeting
+===================================
+July 29, 2021, 9 AM ET
+https://windriver.zoom.us/j/3696693975
+
+Attendees:  Tony, Richard, Trevor, Randy, Sakib!
+
+
+Summary:
+========
+
+ptest failures again are better but there's still room
+for improvement.
+
+The make/ninja load average limit is in but it's not clear
+if it's effective yet.
+
+We tried mechanically summarizing all the high latency top logs
+for the last week. No firm conclusions but initial thoughts below.
+
+
+If anyone wants to help, we could use more eyes on the logs,
+particularly the summary logs and understanding iostat #
+when the dd test times out.
+
+
+
+Plans for the week:
+===================
+
+All: Wait and see if the ptest failure rate continues to be lower
+      than previous weeks.
+
+   Richard:
+   Alex:
+   Sakib: hook more responsive load average in to latency test. (v2)
+   Trevor: patch to set PARALLEL_MAKE : -l 50
+     -> dunfell, gatesgarth, hardknott
+     Investigate dunfell which failed with this change.
+   Tony:
+   Saul: on vacation
+   Randy: Look at performance data
+
+
+Meeting Notes:
+==============
+
+1. job server
+
+- ninja could be patched with make's more responsive algorithm
+   next or is this good enough?
+
+- Richard suggested that we extract make's code for measuring the load
+   average to a separate binary and run it in the periodic io latency
+   test. Also can we translate it to python?
+   - Trevor is working on this and had some problems so next week.
+
+
+2. AB status
+
+    ptest cases are improving, we may be close to done!
+    Let's wait a week to see how things go. (July29, we're not done...)
+
+    - development week with lots of failures and a-quick builds
+      so it's hard to say.
+
+3. Nothing new on this item this week (July 29):
+    Richard reported
+    - something really flaky going on with serial ports.
+    - particularly bad on qemuppc but also x86.
+    - related to Saul's QMP data dump?
+    - Juy 22/29: We didn't talk about this issue this week.
+
+4. Sakib's improvements to the logging are merged.
+    We think Michael needs to update the script that generates the
+    web page. Randy/Sakib to talk with Michael.
+    -- Done.
+
+    Sakib generated a summary of all high latency 'top' logs from
+    ~July 23->July 29 by just running his summary script on the
+    merged raw top logs. see all_summary attached.
+
+    You can see what compilation jobs are most frequently associated
+    with high latency events by:
+    $ grep GCC ~/Downloads/all_summary.txt  | less
+
+    They are: linux-yocto, llvm, qemu, gtk+,
+
+# quick top 10 list:
+$ grep GCC ~/Downloads/all_summary.txt  | grep cc | head -10 | \
+   cut -d"/" -f1,4,5,8
+
+104  ~/genericx86_64-poky-linux/linux-yocto/x86_64-poky-linux
+
+94  ~/core2-32-poky-linux-musl/llvm/i686-poky-linux-musl
+
+89  ~/i686-nativesdk-pokysdk-linux/nativesdk-qemu/i686-pokysdk-linux
+
+74  ~/core2-32-poky-linux-musl/gtk+3/i686-poky-linux-musl
+
+64  ~/build-st/reproducibleB/core2-64-poky-linux
+
+59  ~/cortexa8hf-neon-poky-linux-gnueabi/qemu/arm-poky-linux-gnueabi
+
+53  ~/qemux86-poky-linux/perf/i686-poky-linux
+
+40  ~/core2-64-poky-linux/glibc/x86_64-poky-linux
+
+39  ~/build-st/reproducibleA/core2-64-poky-linux
+
+38  ~/ppc7400-poky-linux/ofono/powerpc-poky-linux
+
+
+    If you look at the non-GCC activities that are not part of the
+    base OS activities you see processes such as:
+      make, mv, perl, tar, pseudo, rm, ninja
+
+$ grep -v GCC ~/Downloads/all_summary.txt | grep -A 33 "Userspace 
+Process Summary:"
+
+Userspace Process Summary:
+
+12326  bitbake-server
+
+12145  python3
+
+8112  /bin/sh
+
+7213  /bin/bash
+
+5207  make
+
+1329  /usr/bin/python3
+
+826  mv
+
+758  (sd-pam)
+
+715  perl
+
+694  x86_64-poky-linux-gcc
+
+620  top
+
+587  sshd:
+
+580  bash
+
+566  /lib/systemd/systemd
+
+561  -bash
+
+476  tar
+
+398  sh
+
+397  arm-poky-linux-gnueabi-gcc
+
+386  /usr/bin/dbus-daemon
+
+382  gcc
+
+379  /usr/sbin/irqbalance
+
+379  /sbin/agetty
+
+373 
+~/pkgman-rpm-non-rpm/build/build/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+
+360  qmgr
+
+360  dpkg-deb
+
+358  pickup
+
+356  rm
+
+351  as
+
+335  /usr/sbin/cron
+
+333  /usr/sbin/rsyslogd
+
+326  /usr/sbin/atd
+
+314  /usr/sbin/sshd
+
+296  ninja
+
+
+
+mv is likely blocked on IO (Sakib please confirm from logs)
+Since make is around more than ninja, we may be able to better
+control the load using the 'load average' limit and not have to patch
+ninja (with make's enhancement) to be more responsive.
+
+Attachments:
+a. script to gather the file: sum_sum.py
+b. ./summarize_to_outup.py all <directory w/ all the interval files>
+
+More analysis required....
+
+
+5. (From July 8)
+    Richard says that we may need to redesign the data collection system
+    that Sakib's AB INT tests are based on.
+    Was worried the current approach does NOT cover oe-selftests but
+    we do see it when we see the AB-INT trigger from builds. Not sure
+    if we need the change anything yet. Everything goes through
+    run-command in yocto-ab-helper.
+
+
+Still relevant parts of
+Previous Meeting Notes:
+=======================
+
+
+4. bitbake server timeout ( no change july 29)
+
+    "Timeout while waiting for a reply from the bitbake server (60s)"
+
+    Randy mentioned that the bitbake server timeouts seen in the
+    Wind River build cluster have gone away after upgrading to
+    a newer version of docker.
+
+    Old: Docker Version: Docker version 18.09.4, build d14af54266
+    New: Docker Version: Docker version 20.10.7, build f0df350
+
+
+    Clearly the YP ABs aren't running in docker but what
+    about firmware and kernel tunings.
+
+    Michael,
+
+    Is the BIOS/firmware kept up to date on most nodes?
+    - July 22: This was done.
+
+
+    For the performance builder trend see:
+
+https://autobuilder.yocto.io/pub/non-release/20210721-9/testresults/buildperf-centos7/perf-centos7.yoctoproject.org_master_20210721150057_1ad79313a5.html
+
+
+https://autobuilder.yocto.io/pub/non-release/20210721-14/testresults/buildperf-ubuntu1604/perf-ubuntu1604_master_20210721210034_1ad79313a5.html
+
+
+    Summary,
+     - CentOS-7 seems to take less time (~ 1 min),
+     - Ubuntu-16.04 seems to take more (~ 5 min)
+    That's a bit surprising!
+    Randy to look at 62659 commit number in poky.
+
+
+5. io stalls (no update: July 29)
+
+    Richard said that it would make sense to write an ftrace utility
+    / script to monitor io latency and we could install it with sudo
+    Ch^W mentioned ftrace on IRC.
+    Sakib and Randy will work on that but not for a week or two.
+
+
+
+
+
+../Randy
+
+[-- Attachment #2: all_summary.txt --]
+[-- Type: text/plain, Size: 99739 bytes --]
+
+NOTE:
+Processes that occur only once is not reported.
+Program names have been shortened for better readability.
+Substitutions are as follows:
+~/ = /home/pokybuild/yocto-worker/
+/...WORK_DIR.../ = /build/build/tmp/work/
+
+top was invoked 1 times.
+
+Other builds: qemuarm64 musl-qemux86 qemumips genericx86-alt build-appliance genericx86 qemumips64 beaglebone genericx86-64-alt reproducible meta-mingw genericx86-64 qemuarm oe-selftest-fedora pkgman-rpm-non-rpm meta-intel qemux86-64-ptest oe-selftest-ubuntu edgerouter qemux86-world qemumips-alt qa-extras2 qemuppc-alt reproducible-fedora qemux86-64-alt qemuppc musl-qemux86-64 qemux86-64-ptest-fast beaglebone-alt multilib qemuarm-alt poky-tiny qemux86-world-alt oe-selftest-debian qa-extras meta-agl-core qemux86-64 qemux86 no-x11 pkgman-non-rpm reproducible-ubuntu oe-selftest
+
+top - 02:01:32 up 3 days,  5:39,  1 user,  load average: 29.65, 32.64, 39.03
+Tasks: 841 total,   1 running, 484 sleeping,   0 stopped,  11 zombie
+%Cpu(s):  1.0 us,  1.4 sy,  7.0 ni, 85.6 id,  4.9 wa,  0.0 hi,  0.0 si,  0.0 st
+KiB Mem : 13192558+total, 50695772 free,  9348012 used, 71881800 buff/cache
+KiB Swap:  8388604 total,  8372720 free,    15884 used. 11670964+avail Mem
+
+PID USER      PR  NI    VIRT    RES    SHR S  %CPU %MEM     TIME+ COMMAND
+24441 pokybui+  20   0  206160  77440   9224 S  94.7  0.1 164:51.95 python3 /home/pokybuild/yocto-worker/qemumips64/build/bitbake/bin/bitbake-worker decafbad
+20095 pokybui+  15  -5 4266288 1.096g  13944 S  10.5  0.9  16:47.11 /home/pokybuild/yocto-worker/qemux86-64-ptest/build/build/tmp/work/x86_64-linux/qemu-helper-native/1.0-r1/recipe-sysroot-native/usr/bin/qemu-system-x86_64 -device virtio-net-pci,netdev=net0,mac=52:54:00:12:34:06 -netdev tap,id=net0,ifname=tap2,script=no,downscript=no -object rng-random,filename=/dev/urandom,id=rng0 -device virtio-rng-pci,rng=rng0 -drive file=/home/pokybuild/tmp/core-image-sato-sdk-ptest-qemux86-64.ext4.13181,if=virtio,for+
+34048 pokybui+  20   0   43624   4992   3516 R  10.5  0.0   0:00.05 top -c -b -n1 -w 512
+1 root      20   0  225284   9020   6664 S   0.0  0.0   0:14.85 /sbin/init maybe-ubiquity noibrs noibpb nopti nospectre_v2 nospec_store_bypass_disable no_stf_barrier
+2 root      20   0       0      0      0 S   0.0  0.0   0:00.36 [kthreadd]
+
+Userspace Process Summary: 
+12326  bitbake-server
+12145  python3
+8112  /bin/sh
+7213  /bin/bash
+5207  make
+1329  /usr/bin/python3
+826  mv
+758  (sd-pam)
+715  perl
+694  x86_64-poky-linux-gcc
+620  top
+587  sshd:
+580  bash
+566  /lib/systemd/systemd
+561  -bash
+476  tar
+398  sh
+397  arm-poky-linux-gnueabi-gcc
+386  /usr/bin/dbus-daemon
+382  gcc
+379  /usr/sbin/irqbalance
+379  /sbin/agetty
+373  ~/pkgman-rpm-non-rpm/build/build/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+360  qmgr
+360  dpkg-deb
+358  pickup
+356  rm
+351  as
+335  /usr/sbin/cron
+333  /usr/sbin/rsyslogd
+326  /usr/sbin/atd
+314  /usr/sbin/sshd
+296  ninja
+294  ~/musl-qemux86/build/build/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+289  xterm
+288  /usr/lib/systemd/systemd
+283  /sbin/init
+283  /lib/systemd/systemd-journald
+283  /lib/systemd/systemd-udevd
+283  /sbin/rpcbind
+283  /lib/systemd/systemd-logind
+283  /usr/lib/postfix/sbin/master
+283  /usr/bin/Xtigervnc
+283  /usr/bin/perl
+283  /usr/bin/ssh-agent
+282  /sbin/lvmetad
+282  /lib/systemd/systemd-timesyncd
+282  /lib/systemd/systemd-networkd
+282  /lib/systemd/systemd-resolved
+282  /usr/bin/lxcfs
+282  /usr/lib/accountsservice/accounts-daemon
+282  /usr/lib/policykit-1/polkitd
+281  vncconfig
+280  i686-poky-linux-musl-gcc
+266  ~/beaglebone/build/build/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+256  i686-pokysdk-linux-gcc
+253  sudo
+253  su
+248  sed
+238  i686-poky-linux-gcc
+205  -su
+204  ~/qemumips/build/build/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+200  cp
+186  git
+181  ~/qemuppc/build/build/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+174  cat
+171  ~/genericx86-64-alt/build/build/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+166  nativepython3
+158  /usr/lib/gcc/x86_64-linux-gnu/7/cc1
+155  powerpc-poky-linux-gcc
+152  sync
+152  /usr/lib/gcc/x86_64-linux-gnu/7/cc1plus
+149  xz
+148  mips-poky-linux-gcc
+146  ~/oe-selftest-fedora/build/build-st-1345490/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+141  xargs
+126  timeout
+126  dd
+124  ~/qemuarm/build/build/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+122  ~/qemuarm64/build/build/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+116  ~/qemumips/...WORK_DIR.../i686-nativesdk-pokysdk-linux/nativesdk-qemu/6.0.0-r0/recipe-sysroot-native/usr/bin/nativepython3
+113  g++
+104  ~/genericx86-64-alt/...WORK_DIR.../genericx86_64-poky-linux/linux-yocto/5.4.94+gitAUTOINC+d6aec4fb69_31db2b47ac-r0/...GCC.../x86_64-poky-linux/11.1.1/cc1
+98  ~/oe-selftest-fedora/build/build-st-2106462/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+97  /usr/lib/systemd/systemd-udevd
+97  /usr/sbin/smartd
+97  /usr/sbin/chronyd
+96  /usr/lib/systemd/systemd-journald
+96  /sbin/auditd
+96  /usr/sbin/ModemManager
+96  /usr/sbin/NetworkManager
+96  /usr/sbin/mcelog
+96  /usr/lib/systemd/systemd-logind
+96  /usr/bin/Xvnc
+94  ~/musl-qemux86/...WORK_DIR.../core2-32-poky-linux-musl/llvm/12.0.1-r0/...GCC.../i686-poky-linux-musl/11.1.1/cc1plus
+94  ~/musl-qemux86/...WORK_DIR.../core2-32-poky-linux-musl/llvm/12.0.1-r0/...GCC.../i686-poky-linux-musl/11.1.1/as
+94  ~/musl-qemux86/...WORK_DIR.../core2-32-poky-linux-musl/llvm/12.0.1-r0/recipe-sysroot-native/usr/bin/i686-poky-linux-musl/i686-poky-linux-musl-g++
+91  i686-pokysdk-linux-g++
+89  ~/beaglebone/...WORK_DIR.../i686-nativesdk-pokysdk-linux/nativesdk-qemu/6.0.0-r0/...GCC.../i686-pokysdk-linux/11.1.1/cc1
+87  ~/beaglebone/...WORK_DIR.../i686-nativesdk-pokysdk-linux/nativesdk-qemu/6.0.0-r0/...GCC.../i686-pokysdk-linux/11.1.1/as
+83  ~/build-appliance/build/build/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+82  gzip
+80  ~/reproducible-fedora/build/build-st/reproducibleA/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+80  aarch64-poky-linux-gcc
+79  x86_64-poky-linux-strip
+74  cmp
+74  ~/musl-qemux86/...WORK_DIR.../core2-32-poky-linux-musl/gtk+3/3.24.30-r0/...GCC.../i686-poky-linux-musl/11.1.1/cc1
+74  ~/musl-qemux86/...WORK_DIR.../core2-32-poky-linux-musl/gtk+3/3.24.30-r0/...GCC.../i686-poky-linux-musl/11.1.1/as
+72  ~/meta-mingw/build/build/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+69  m4
+66  /usr/lib/gcc/x86_64-linux-gnu/7/collect2
+65  ~/musl-qemux86/build/build/tmp/hosttools/g++
+64  ~/reproducible/build/build-st/reproducibleB/tmp/work/core2-64-poky-linux/llvm/12.0.1-r0/...GCC.../x86_64-poky-linux/11.1.1/cc1plus
+64  ~/reproducible/build/build-st/reproducibleB/tmp/work/core2-64-poky-linux/llvm/12.0.1-r0/...GCC.../x86_64-poky-linux/11.1.1/as
+64  ~/reproducible/build/build-st/reproducibleB/tmp/work/core2-64-poky-linux/llvm/12.0.1-r0/recipe-sysroot-native/usr/bin/x86_64-poky-linux/x86_64-poky-linux-g++
+64  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/qemu/6.0.0-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/as
+63  ~/genericx86-64/build/build/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+59  x86_64-poky-linux-g++
+59  cmake
+59  ~/qemux86-world/build/build/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+59  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/qemu/6.0.0-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/cc1
+58  lsof
+57  systemd-userwork
+55  ssh
+53  /usr/sbin/haveged
+53  ~/pkgman-rpm-non-rpm/...WORK_DIR.../qemux86-poky-linux/perf/1.0-r9/...GCC.../i686-poky-linux/11.1.1/cc1
+53  ~/pkgman-rpm-non-rpm/...WORK_DIR.../qemux86-poky-linux/perf/1.0-r9/...GCC.../i686-poky-linux/11.1.1/as
+52  /usr/sbin/nscd
+52  bpfilter_umh
+52  /usr/sbin/cupsd
+52  /usr/lib/postfix/bin//master
+52  ~/qemuppc/...WORK_DIR.../qemuppc-poky-linux/core-image-sato/1.0-r0/testsdkext/buildtools/sysroots/x86_64-pokysdk-linux/usr/bin/python3
+51  ~/qemux86-64-alt/build/buildtools/sysroots/x86_64-pokysdk-linux/usr/bin/python3
+50  /usr/lib/polkit-1/polkitd
+50  ~/qemuppc/...WORK_DIR.../qemuppc-poky-linux/core-image-minimal/1.0-r0/testsdkext/buildtools/sysroots/x86_64-pokysdk-linux/usr/bin/python3
+49  ~/reproducible/build/build-st/reproducibleB/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+49  ~/qemuppc-alt/build/build/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+49  expect
+48  ~/multilib/build/build/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+46  grep
+46  /usr/libexec/polkit-1/polkitd
+44  /usr/sbin/sedispatch
+44  /usr/sbin/sssd
+44  /usr/sbin/abrtd
+44  /usr/bin/dbus-broker-launch
+44  dbus-broker
+44  /usr/sbin/gssproxy
+44  /usr/libexec/sssd/sssd_be
+44  /usr/libexec/sssd/sssd_nss
+44  /usr/bin/abrt-dump-journal-core
+44  /usr/bin/abrt-dump-journal-oops
+44  /usr/bin/abrt-dump-journal-xorg
+44  dbus-launch
+44  /usr/bin/xterm
+44  x86_64-poky-linux-objcopy
+44  powerpc-poky-linux-g++
+44  i686-poky-linux-musl-g++
+43  ~/genericx86-alt/build/build/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+42  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/e2fsprogs/1.46.2-r0/recipe-sysroot-native/usr/lib/rpm/rpmdeps
+41  ~/qemumips64/...WORK_DIR.../x86_64-linux/qemu-helper-native/1.0-r1/recipe-sysroot-native/usr/bin/qemu-system-mips64
+41  ~/oe-selftest-fedora/build/build-st-2106430/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+41  ~/reproducible-fedora/build/build-st-3091475/reproducibleB/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+40  ~/genericx86-64-alt/...WORK_DIR.../core2-64-poky-linux/glibc/2.33-r0/...GCC.../x86_64-poky-linux/11.1.1/cc1
+39  ~/reproducible-fedora/build/build-st/reproducibleA/tmp/work/core2-64-poky-linux/qemu/6.0.0-r0/...GCC.../x86_64-poky-linux/11.1.1/cc1
+38  ~/qemuppc/...WORK_DIR.../ppc7400-poky-linux/ofono/1.32-r0/...GCC.../powerpc-poky-linux/11.1.1/cc1
+38  ~/qemuppc/...WORK_DIR.../ppc7400-poky-linux/ofono/1.32-r0/...GCC.../powerpc-poky-linux/11.1.1/as
+38  ~/qemuppc/...WORK_DIR.../i686-nativesdk-pokysdk-linux/gdb-cross-canadian-powerpc/10.2-r0/...GCC.../i686-pokysdk-linux/11.1.1/as
+38  ~/qemuarm-alt/build/build/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+36  ~/qa-extras2/build/build/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+36  ~/reproducible-fedora/build/build-st/reproducibleA/tmp/work/core2-64-poky-linux/qemu/6.0.0-r0/...GCC.../x86_64-poky-linux/11.1.1/as
+36  ~/qemuppc/...WORK_DIR.../i686-nativesdk-pokysdk-linux/gdb-cross-canadian-powerpc/10.2-r0/...GCC.../i686-pokysdk-linux/11.1.1/cc1plus
+35  /usr/lib/git-core/git
+35  ~/qemumips/...WORK_DIR.../mips32r2-poky-linux/bluez5/5.60-r0/...GCC.../mips-poky-linux/11.1.1/cc1
+35  ~/qemumips/...WORK_DIR.../mips32r2-poky-linux/bluez5/5.60-r0/...GCC.../mips-poky-linux/11.1.1/as
+35  ~/musl-qemux86/...WORK_DIR.../core2-32-poky-linux-musl/gdb/10.2-r0/...GCC.../i686-poky-linux-musl/11.1.1/cc1plus
+35  ~/musl-qemux86/...WORK_DIR.../core2-32-poky-linux-musl/gdb/10.2-r0/...GCC.../i686-poky-linux-musl/11.1.1/as
+35  ~/musl-qemux86/...WORK_DIR.../core2-32-poky-linux-musl/ovmf/edk2-stable202105-r0/...GCC.../i686-poky-linux-musl/11.1.1/cc1
+33  i686-poky-linux-g++
+32  file
+32  ~/oe-selftest-fedora/build/build-st-1345545/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+32  ~/musl-qemux86/...WORK_DIR.../core2-32-poky-linux-musl/llvm/12.0.1-r0/recipe-sysroot-native/usr/bin/llvm-tblgen12.0.1
+31  find
+31  ~/oe-selftest-fedora/build/build-st-2106449/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+31  ~/oe-selftest-debian/build/buildtools/sysroots/x86_64-pokysdk-linux/usr/bin/python3
+31  ~/musl-qemux86/...WORK_DIR.../core2-32-poky-linux-musl/gstreamer1.0-plugins-bad/1.18.4-r0/...GCC.../i686-poky-linux-musl/11.1.1/cc1
+30  awk
+30  ~/build-appliance/...WORK_DIR.../qemux86_64-poky-linux/linux-yocto/5.10.52+gitAUTOINC+c3900f83a5_c2dc854ee7-r0/...GCC.../x86_64-poky-linux/11.1.1/cc1
+30  ~/oe-selftest/build/build-st-45752/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+29  ~/oe-selftest-fedora/build/build-st-2106405/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+29  i686-pokysdk-linux-objcopy
+29  ~/musl-qemux86/...WORK_DIR.../core2-32-poky-linux-musl/gstreamer1.0-plugins-bad/1.18.4-r0/...GCC.../i686-poky-linux-musl/11.1.1/as
+29  ~/musl-qemux86/build/build/tmp/hosttools/python3
+28  iostat
+27  ~/oe-selftest-fedora/build/build-st-2106420/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+27  ~/qemumips/...WORK_DIR.../mips32r2-poky-linux/ofono/1.32-r0/...GCC.../mips-poky-linux/11.1.1/cc1
+27  ~/qemumips/...WORK_DIR.../mips32r2-poky-linux/ofono/1.32-r0/...GCC.../mips-poky-linux/11.1.1/as
+26  ~/qemuppc/...WORK_DIR.../ppc7400-poky-linux/gstreamer1.0-plugins-bad/1.18.4-r0/...GCC.../powerpc-poky-linux/11.1.1/cc1
+26  ~/qemuppc/...WORK_DIR.../ppc7400-poky-linux/gstreamer1.0-plugins-bad/1.18.4-r0/...GCC.../powerpc-poky-linux/11.1.1/as
+26  ~/qemumips/...WORK_DIR.../x86_64-linux/qemu-helper-native/1.0-r1/recipe-sysroot-native/usr/bin/qemu-system-mips
+26  ~/poky-tiny/build/build/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+25  /sbin/rngd
+25  /usr/libexec/postfix/master
+25  patchelf-uninative
+25  x86_64-pokysdk-linux-gcc
+25  arm-poky-linux-gnueabi-g++
+25  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/valgrind/3.17.0-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/cc1
+25  sort
+25  /usr/libexec/gcc/x86_64-redhat-linux/9/cc1
+25  prelink-rtld
+25  ~/reproducible-fedora/build/build-st-3091475/reproducibleB/tmp/work/core2-64-poky-linux/llvm/9.0.1-r0/...GCC.../x86_64-poky-linux/9.3.0/as
+25  ~/reproducible-fedora/build/build-st-3091475/reproducibleB/tmp/work/core2-64-poky-linux/llvm/9.0.1-r0/...GCC.../x86_64-poky-linux/9.3.0/cc1plus
+25  ~/reproducible-fedora/build/build-st-3091475/reproducibleB/tmp/work/core2-64-poky-linux/llvm/9.0.1-r0/recipe-sysroot-native/usr/bin/x86_64-poky-linux/x86_64-poky-linux-g++
+24  ~/beaglebone/...WORK_DIR.../i686-nativesdk-pokysdk-linux/nativesdk-gmp/6.2.1-r0/...GCC.../i686-pokysdk-linux/11.1.1/as
+24  ~/qemuarm64/...WORK_DIR.../i686-nativesdk-pokysdk-linux/nativesdk-glibc/2.33-r0/...GCC.../i686-pokysdk-linux/11.1.1/cc1
+24  ~/genericx86-64-alt/...WORK_DIR.../core2-64-poky-linux/glibc/2.33-r0/...GCC.../x86_64-poky-linux/11.1.1/as
+24  ~/genericx86-64-alt/...WORK_DIR.../core2-64-poky-linux/ofono/1.32-r0/...GCC.../x86_64-poky-linux/11.1.1/cc1
+24  ~/qemuarm64/...WORK_DIR.../cortexa57-poky-linux/gtk+3/3.24.30-r0/...GCC.../aarch64-poky-linux/11.1.1/cc1
+24  ~/qemuarm64/...WORK_DIR.../cortexa57-poky-linux/gtk+3/3.24.30-r0/...GCC.../aarch64-poky-linux/11.1.1/as
+22  x86_64-poky-linux-objdump
+22  ~/genericx86-64-alt/...WORK_DIR.../core2-64-poky-linux/ofono/1.32-r0/...GCC.../x86_64-poky-linux/11.1.1/as
+21  git-upload-pack
+21  ~/oe-selftest-fedora/build/build-st-1345461/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+21  ~/qemux86-64-alt/build/build/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+21  ~/pkgman-rpm-non-rpm/...WORK_DIR.../core2-32-poky-linux/ltp/20210524-r0/...GCC.../i686-poky-linux/11.1.1/as
+21  ~/musl-qemux86/...WORK_DIR.../x86_64-linux/qemu-system-native/6.0.0-r0/recipe-sysroot-native/usr/bin/ninja
+20  ~/qemumips64/...WORK_DIR.../qemumips64-poky-linux/core-image-minimal/1.0-r0/testsdkext/buildtools/sysroots/x86_64-pokysdk-linux/usr/bin/python3
+20  ~/qemumips64/...WORK_DIR.../qemumips64-poky-linux/core-image-sato/1.0-r0/testsdkext/buildtools/sysroots/x86_64-pokysdk-linux/usr/bin/python3
+20  ~/qemumips/...WORK_DIR.../mips32r2-poky-linux/gstreamer1.0-plugins-good/1.18.4-r0/...GCC.../mips-poky-linux/11.1.1/cc1
+20  ~/qemumips/...WORK_DIR.../mips32r2-poky-linux/gstreamer1.0-plugins-good/1.18.4-r0/...GCC.../mips-poky-linux/11.1.1/as
+20  ~/beaglebone-alt/build/build/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+20  ~/qa-extras/build/buildtools/sysroots/x86_64-pokysdk-linux/usr/bin/python3
+20  ~/musl-qemux86/...WORK_DIR.../core2-32-poky-linux-musl/gstreamer1.0-plugins-good/1.18.4-r0/...GCC.../i686-poky-linux-musl/11.1.1/as
+19  /usr/lib/systemd/systemd-resolved
+19  /usr/sbin/rngd
+19  /usr/lib/systemd/systemd-homed
+19  /usr/lib/systemd/systemd-userdbd
+19  ~/oe-selftest-fedora/build/build-st-2106427/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+19  ~/pkgman-rpm-non-rpm/...WORK_DIR.../core2-32-poky-linux/ltp/20210524-r0/...GCC.../i686-poky-linux/11.1.1/cc1
+19  ~/musl-qemux86/...WORK_DIR.../core2-32-poky-linux-musl/gstreamer1.0-plugins-good/1.18.4-r0/...GCC.../i686-poky-linux-musl/11.1.1/cc1
+18  mkdir
+18  x86_64-w64-mingw32-gcc
+18  ~/qemuarm64/build/build-st-55646/tmp/work/cortexa57-poky-linux/glibc-testsuite/2.33-r0/recipe-sysroot-native/usr/bin/qemu-aarch64
+18  arm-poky-linux-gnueabi-strip
+18  ~/musl-qemux86/...WORK_DIR.../qemux86-poky-linux-musl/core-image-minimal/1.0-r0/recipe-sysroot-native/usr/bin/createrepo_c
+18  ~/qemuarm64/build/build-st-56947/tmp/work/cortexa57-poky-linux/glibc-testsuite/2.33-r0/...GCC.../aarch64-poky-linux/11.1.1/cc1
+18  ~/qemuarm64/build/build-st-56947/tmp/work/cortexa57-poky-linux/glibc-testsuite/2.33-r0/...GCC.../aarch64-poky-linux/11.1.1/as
+18  ~/meta-agl-core/build/build/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+18  ~/qemux86-64/build/build-st-36364/tmp/work/core2-64-poky-linux/gcc-runtime/11.1.0-r0/gcc-11.1.0/build.x86_64-poky-linux.x86_64-poky-linux/gcc/xgcc
+18  ~/qemuarm64/...WORK_DIR.../cortexa57-poky-linux/glibc/2.33-r0/...GCC.../aarch64-poky-linux/11.1.1/as
+18  ~/oe-selftest/build/build-st-45690/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+17  cpio
+17  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/xserver-xorg/2_1.20.12-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/cc1
+17  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/xserver-xorg/2_1.20.12-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/as
+17  b2
+17  arm-poky-linux-gnueabi-objcopy
+17  ~/qemumips64/build/build/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+17  ~/qemuppc/...WORK_DIR.../i686-nativesdk-pokysdk-linux/gcc-cross-canadian-powerpc/11.1.0-r0/...GCC.../i686-pokysdk-linux/11.1.1/cc1plus
+17  ~/qemuppc/...WORK_DIR.../i686-nativesdk-pokysdk-linux/gcc-cross-canadian-powerpc/11.1.0-r0/...GCC.../i686-pokysdk-linux/11.1.1/as
+17  ~/pkgman-non-rpm/build/build/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+17  ~/qemuarm64/...WORK_DIR.../i686-nativesdk-pokysdk-linux/nativesdk-glibc/2.33-r0/...GCC.../i686-pokysdk-linux/11.1.1/as
+17  ~/qemuarm64/...WORK_DIR.../cortexa57-poky-linux/glibc/2.33-r0/...GCC.../aarch64-poky-linux/11.1.1/cc1
+17  i686-poky-linux-musl-objcopy
+16  ~/build-appliance/...WORK_DIR.../core2-64-poky-linux/gtk+3/3.24.30-r0/...GCC.../x86_64-poky-linux/11.1.1/cc1
+16  ~/build-appliance/...WORK_DIR.../core2-64-poky-linux/gtk+3/3.24.30-r0/...GCC.../x86_64-poky-linux/11.1.1/as
+16  aarch64-poky-linux-g++
+16  ~/oe-selftest-fedora/build/build-st-1345482/tmp/work/core2-64-poky-linux/perl/5.34.0-r0/recipe-sysroot-native/usr/lib/rpm/rpmdeps
+16  ~/qemumips-alt/...WORK_DIR.../x86_64-linux/qemu-helper-native/1.0-r1/recipe-sysroot-native/usr/bin/qemu-system-mips
+16  /usr/libexec/gcc/x86_64-redhat-linux/9/cc1plus
+16  ~/oe-selftest-fedora/build/build-st-2106412/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+16  ~/qemux86-64-alt/...WORK_DIR.../core2-64-poky-linux/boost/1.76.0-r0/...GCC.../x86_64-poky-linux/11.1.1/cc1plus
+16  ~/qemux86-64-alt/...WORK_DIR.../core2-64-poky-linux/boost/1.76.0-r0/...GCC.../x86_64-poky-linux/11.1.1/as
+16  ~/qemuarm/...WORK_DIR.../armv7vet2hf-neon-poky-linux-gnueabi/pixman/1_0.40.0-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/cc1
+16  ~/qemuarm/...WORK_DIR.../armv7vet2hf-neon-poky-linux-gnueabi/lzo/2.10-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/cc1
+16  ~/qemuarm/...WORK_DIR.../armv7vet2hf-neon-poky-linux-gnueabi/lzo/2.10-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/as
+16  ~/qemuarm/...WORK_DIR.../armv7vet2hf-neon-poky-linux-gnueabi/pixman/1_0.40.0-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/as
+16  ~/qemuppc/...WORK_DIR.../ppc7400-poky-linux/harfbuzz/2.8.2-r0/...GCC.../powerpc-poky-linux/11.1.1/cc1plus
+16  ~/qemuppc/...WORK_DIR.../ppc7400-poky-linux/harfbuzz/2.8.2-r0/...GCC.../powerpc-poky-linux/11.1.1/as
+16  ~/poky-tiny/build/build/tmp/hosttools/g++
+16  ~/qemuarm-alt/...WORK_DIR.../qemuarm-poky-linux-gnueabi/linux-yocto/5.4.134+gitAUTOINC+d6aec4fb69_bea52ab752-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/cc1
+16  ~/qemux86-world/...WORK_DIR.../x86-pokymllib32-linux/lib32-webkitgtk/2.32.2-r0/...GCC.../i686-pokymllib32-linux/11.1.1/cc1plus
+16  ~/qemux86-world/...WORK_DIR.../core2-64-poky-linux/webkitgtk/2.32.2-r0/...GCC.../x86_64-poky-linux/11.1.1/cc1plus
+16  ~/qemux86-world/...WORK_DIR.../x86-pokymllib32-linux/lib32-webkitgtk/2.32.2-r0/...GCC.../i686-pokymllib32-linux/11.1.1/as
+16  ~/qemux86-world/...WORK_DIR.../core2-64-poky-linux/webkitgtk/2.32.2-r0/recipe-sysroot-native/usr/bin/x86_64-poky-linux/x86_64-poky-linux-g++
+16  ~/qemux86-world/...WORK_DIR.../core2-64-poky-linux/webkitgtk/2.32.2-r0/...GCC.../x86_64-poky-linux/11.1.1/as
+16  ~/qemux86-world/...WORK_DIR.../x86-pokymllib32-linux/lib32-webkitgtk/2.32.2-r0/recipe-sysroot-native/usr/bin/i686-pokymllib32-linux/i686-pokymllib32-linux-g++
+15  ~/genericx86-alt/...WORK_DIR.../genericx86-poky-linux/linux-yocto/5.4.94+gitAUTOINC+d6aec4fb69_31db2b47ac-r0/...GCC.../i686-poky-linux/11.1.1/cc1
+15  install
+15  ~/oe-selftest-ubuntu/build/build-st-3790/tmp/work/qemuarm-poky-linux-gnueabi/linux-yocto/5.10.47+gitAUTOINC+82899c6a71_8950bba5dc-r0/...GCC.../arm-poky-linux-gnueabi/10.2.0/cc1
+15  uniq
+15  ~/musl-qemux86-64/build/build/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+15  ~/pkgman-rpm-non-rpm/...WORK_DIR.../core2-32-poky-linux/gdb/10.2-r0/...GCC.../i686-poky-linux/11.1.1/as
+15  ~/qemuarm/...WORK_DIR.../armv7vet2hf-neon-poky-linux-gnueabi/boost/1.76.0-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/as
+15  touch
+15  ~/qemuarm-alt/build/build/tmp/hosttools/g++
+15  ~/qemuarm64/build/build-st-56947/tmp/work/cortexa57-poky-linux/glibc-testsuite/2.33-r0/recipe-sysroot-native/usr/bin/qemu-aarch64
+15  ~/reproducible-fedora/build/build-st-3091475/reproducibleB/tmp/work/core2-64-poky-linux/babeltrace2/2.0.2-r0/recipe-sysroot-native/usr/bin/xsltproc
+15  ~/qemuppc/build/build-st-47617/tmp/work/ppc7400-poky-linux/gcc-runtime/11.1.0-r0/...GCC.../powerpc-poky-linux/11.1.1/cc1plus
+15  ~/qemuppc/build/build-st-47617/tmp/work/ppc7400-poky-linux/gcc-runtime/11.1.0-r0/...GCC.../powerpc-poky-linux/11.1.1/as
+14  /usr/bin/sh
+14  /usr/bin/updatedb
+14  ~/meta-intel/build/build/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+14  ~/reproducible-fedora/build/build-st/reproducibleA/tmp/hosttools/g++
+14  ~/oe-selftest-fedora/build/build-st-2106402/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+14  ~/pkgman-rpm-non-rpm/...WORK_DIR.../core2-32-poky-linux/gdb/10.2-r0/...GCC.../i686-poky-linux/11.1.1/cc1plus
+14  ~/beaglebone/...WORK_DIR.../i686-nativesdk-pokysdk-linux/nativesdk-gmp/6.2.1-r0/...GCC.../i686-pokysdk-linux/11.1.1/cc1
+14  ~/musl-qemux86/...WORK_DIR.../core2-32-poky-linux-musl/xserver-xorg/2_1.20.12-r0/...GCC.../i686-poky-linux-musl/11.1.1/cc1
+14  ~/musl-qemux86/...WORK_DIR.../core2-32-poky-linux-musl/xserver-xorg/2_1.20.12-r0/...GCC.../i686-poky-linux-musl/11.1.1/as
+13  ~/oe-selftest-fedora/build/build-st-2106469/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+13  /usr/lib64/gcc/x86_64-suse-linux/11/../../../../x86_64-suse-linux/bin/as
+13  mips-poky-linux-g++
+13  ~/qemuarm/...WORK_DIR.../armv7vet2hf-neon-poky-linux-gnueabi/boost/1.76.0-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/cc1plus
+13  qemu-i386
+13  ~/qemumips/...WORK_DIR.../i686-nativesdk-pokysdk-linux/nativesdk-libsolv/0.7.19-r0/...GCC.../i686-pokysdk-linux/11.1.1/cc1
+13  ~/qemumips/...WORK_DIR.../i686-nativesdk-pokysdk-linux/nativesdk-libsolv/0.7.19-r0/recipe-sysroot-native/usr/bin/i686-pokysdk-linux/i686-pokysdk-linux-gcc
+13  ~/qemumips/...WORK_DIR.../i686-nativesdk-pokysdk-linux/nativesdk-libsolv/0.7.19-r0/...GCC.../i686-pokysdk-linux/11.1.1/as
+13  ~/qemuarm-alt/...WORK_DIR.../armv7vet2hf-neon-poky-linux-gnueabi/mesa/2_21.1.5-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/cc1
+13  ~/qemuarm-alt/...WORK_DIR.../armv7vet2hf-neon-poky-linux-gnueabi/mesa/2_21.1.5-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/as
+12  ~/build-appliance/...WORK_DIR.../core2-64-poky-linux/at-spi2-atk/2.38.0-r0/...GCC.../x86_64-poky-linux/11.1.1/cc1
+12  ~/build-appliance/...WORK_DIR.../core2-64-poky-linux/at-spi2-atk/2.38.0-r0/...GCC.../x86_64-poky-linux/11.1.1/as
+12  ~/beaglebone/...WORK_DIR.../i686-nativesdk-pokysdk-linux/nativesdk-perl/5.34.0-r0/perl-5.34.0/miniperl
+12  ~/oe-selftest-fedora/build/build-st-2106442/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+12  ~/qemumips/...WORK_DIR.../i686-nativesdk-pokysdk-linux/nativesdk-cmake/3.20.5-r0/recipe-sysroot-native/usr/bin/i686-pokysdk-linux/i686-pokysdk-linux-g++
+12  ~/qemumips/...WORK_DIR.../i686-nativesdk-pokysdk-linux/nativesdk-cmake/3.20.5-r0/...GCC.../i686-pokysdk-linux/11.1.1/cc1plus
+12  ~/reproducible-ubuntu/build/build-st-35512/reproducibleB/tmp/work/core2-64-poky-linux/glibc/2.31+gitAUTOINC+4f0a61f753-r0/...GCC.../x86_64-poky-linux/9.3.0/as
+11  ~/musl-qemux86/...WORK_DIR.../qemux86-poky-linux-musl/linux-yocto/5.10.52+gitAUTOINC+c3900f83a5_c2dc854ee7-r0/...GCC.../i686-poky-linux-musl/11.1.1/cc1
+11  ~/qemuppc-alt/...WORK_DIR.../ppc7400-poky-linux/gstreamer1.0-plugins-bad/1.18.4-r0/recipe-sysroot-native/usr/bin/glslc
+11  /usr/lib64/gcc/x86_64-suse-linux/11/cc1
+11  ~/qemumips/...WORK_DIR.../i686-nativesdk-pokysdk-linux/nativesdk-qemu/6.0.0-r0/recipe-sysroot-native/usr/bin/ninja
+11  ~/qemumips/...WORK_DIR.../i686-nativesdk-pokysdk-linux/nativesdk-qemu/6.0.0-r0/...GCC.../i686-pokysdk-linux/11.1.1/cc1
+11  ~/qemumips/...WORK_DIR.../i686-nativesdk-pokysdk-linux/nativesdk-qemu/6.0.0-r0/...GCC.../i686-pokysdk-linux/11.1.1/as
+11  ~/pkgman-rpm-non-rpm/...WORK_DIR.../core2-32-poky-linux/xserver-xorg/2_1.20.12-r0/...GCC.../i686-poky-linux/11.1.1/cc1
+11  ~/pkgman-rpm-non-rpm/...WORK_DIR.../core2-32-poky-linux/xserver-xorg/2_1.20.12-r0/...GCC.../i686-poky-linux/11.1.1/as
+11  chmod
+11  ~/beaglebone/...WORK_DIR.../i686-nativesdk-pokysdk-linux/nativesdk-gmp/6.2.1-r0/...GCC.../i686-pokysdk-linux/11.1.1/cc1plus
+11  ~/qemuarm-alt/...WORK_DIR.../armv7vet2hf-neon-poky-linux-gnueabi/systemd/1_249.1-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/as
+11  ~/reproducible-fedora/build/build-st-3091475/reproducibleB/tmp/work/core2-64-poky-linux/webkitgtk/2.28.4-r0/...GCC.../x86_64-poky-linux/9.3.0/as
+11  ~/reproducible-fedora/build/build-st-3091475/reproducibleB/tmp/work/core2-64-poky-linux/webkitgtk/2.28.4-r0/recipe-sysroot-native/usr/bin/x86_64-poky-linux/x86_64-poky-linux-g++
+11  ~/musl-qemux86/build/build/tmp/hosttools/ld.bfd
+11  ~/reproducible-ubuntu/build/build-st-35512/reproducibleB/tmp/work/core2-64-poky-linux/glibc/2.31+gitAUTOINC+4f0a61f753-r0/...GCC.../x86_64-poky-linux/9.3.0/cc1
+10  ar
+10  ~/oe-selftest-fedora/build/build-st-1345519/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+10  ~/oe-selftest-fedora/build/build-st-2106397/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+10  ~/oe-selftest-fedora/build/build-st-2106400/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+10  ~/qemuppc/...WORK_DIR.../i686-nativesdk-pokysdk-linux/nativesdk-qemu/6.0.0-r0/recipe-sysroot-native/usr/bin/ninja
+10  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/qemu/6.0.0-r0/recipe-sysroot-native/usr/bin/ninja
+10  ~/qemumips/...WORK_DIR.../mips32r2-poky-linux/connman/1.40-r0/...GCC.../mips-poky-linux/11.1.1/cc1
+10  ~/qemumips/...WORK_DIR.../mips32r2-poky-linux/connman/1.40-r0/...GCC.../mips-poky-linux/11.1.1/as
+10  i686-poky-linux-strip
+10  ~/qemux86-64/build/build-st-36364/tmp/work/core2-64-poky-linux/gcc-runtime/11.1.0-r0/gcc-11.1.0/build.x86_64-poky-linux.x86_64-poky-linux/gcc/collect2
+10  ~/qemuarm-alt/...WORK_DIR.../armv7vet2hf-neon-poky-linux-gnueabi/systemd/1_249.1-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/cc1
+10  ~/qemux86-world/...WORK_DIR.../core2-64-poky-linux/go/1.16.5-r0/go/pkg/tool/native_native/compile
+10  ~/reproducible-fedora/build/build-st-3091475/reproducibleB/tmp/work/core2-64-poky-linux/webkitgtk/2.28.4-r0/...GCC.../x86_64-poky-linux/9.3.0/cc1plus
+10  ~/reproducible-fedora/build/build-st-3091475/reproducibleB/tmp/work/core2-64-poky-linux/webkitgtk/2.28.4-r0/recipe-sysroot-native/usr/bin/python3-native/python3
+9  glib-compile-resources
+9  qemu-x86_64
+9  cross-localedef
+9  ~/oe-selftest-fedora/build/build-st-1345501/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+9  ~/reproducible-fedora/build/build-st/reproducibleA/tmp/work/qemux86_64-poky-linux/linux-yocto/5.10.52+gitAUTOINC+c3900f83a5_c2dc854ee7-r0/...GCC.../x86_64-poky-linux/11.1.1/cc1
+9  ~/qemuppc/build/build/tmp/hosttools/install
+9  /usr/libexec/git/git
+9  i686-poky-linux-objcopy
+9  tail
+9  ~/qa-extras2/...WORK_DIR.../core2-64-poky-linux/mesa/2_21.1.5-r0/...GCC.../x86_64-poky-linux/11.1.1/cc1
+9  ~/qa-extras2/...WORK_DIR.../core2-64-poky-linux/mesa/2_21.1.5-r0/...GCC.../x86_64-poky-linux/11.1.1/as
+9  ~/oe-selftest/build/build-st-45668/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+8  scripts/kconfig/conf
+8  patch
+8  /usr/lib/git-core/git-remote-https
+8  x86_64-pokysdk-linux-g++
+8  ~/qemux86-64-ptest/...WORK_DIR.../x86_64-linux/qemu-helper-native/1.0-r1/recipe-sysroot-native/usr/bin/qemu-system-x86_64
+8  ~/edgerouter/build/build/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+8  ~/oe-selftest-ubuntu/build/build-st-3769/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+8  ~/oe-selftest-ubuntu/build/build-st-3771/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+8  join
+8  x86_64-poky-linux-gcc-ranlib
+8  i686-pokymllib32-linux-gcc
+8  ~/oe-selftest-fedora/build/build-st-2106395/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+8  ./cmd/dist/dist
+8  ~/reproducible-fedora/build/build-st/reproducibleA/tmp/work/core2-64-poky-linux/gstreamer1.0-plugins-bad/1.18.4-r0/...GCC.../x86_64-poky-linux/11.1.1/cc1
+8  ~/reproducible-fedora/build/build-st/reproducibleA/tmp/work/core2-64-poky-linux/gstreamer1.0-plugins-bad/1.18.4-r0/...GCC.../x86_64-poky-linux/11.1.1/as
+8  ~/reproducible-fedora/build/build-st/reproducibleA/tmp/work/core2-64-poky-linux/python3-numpy/1.21.0-r0/...GCC.../x86_64-poky-linux/11.1.1/cc1
+8  ~/reproducible-fedora/build/build-st/reproducibleA/tmp/work/core2-64-poky-linux/python3-numpy/1.21.0-r0/...GCC.../x86_64-poky-linux/11.1.1/as
+8  ~/qemumips/...WORK_DIR.../i686-nativesdk-pokysdk-linux/gdb-cross-canadian-mips/10.2-r0/...GCC.../i686-pokysdk-linux/11.1.1/as
+8  ~/qemumips/...WORK_DIR.../qemumips-poky-linux/core-image-minimal/1.0-r0/testsdkext/buildtools/sysroots/x86_64-pokysdk-linux/usr/bin/python3
+8  qemu-arm
+8  sgdisk
+8  ~/pkgman-rpm-non-rpm/...WORK_DIR.../core2-32-poky-linux/gettext/0.21-r0/...GCC.../i686-poky-linux/11.1.1/cc1
+8  ~/pkgman-rpm-non-rpm/...WORK_DIR.../core2-32-poky-linux/gettext/0.21-r0/...GCC.../i686-poky-linux/11.1.1/as
+8  ~/pkgman-rpm-non-rpm/...WORK_DIR.../core2-32-poky-linux/gcc/11.1.0-r0/...GCC.../i686-poky-linux/11.1.1/as
+8  ~/qemux86-64/build/build-st-36364/tmp/work/core2-64-poky-linux/gcc-runtime/11.1.0-r0/recipe-sysroot-native/usr/bin/x86_64-poky-linux/x86_64-poky-linux-ld
+8  ~/meta-mingw/...WORK_DIR.../core2-32-poky-linux/elfutils/0.185-r0/...GCC.../i686-poky-linux/11.1.1/as
+7  ~/qemuarm64/...WORK_DIR.../x86_64-linux/qemu-helper-native/1.0-r1/recipe-sysroot-native/usr/bin/qemu-system-aarch64
+7  ~/musl-qemux86/build/build/tmp/hosttools/gcc
+7  ~/musl-qemux86/build/build/tmp/hosttools/ld
+7  ~/pkgman-rpm-non-rpm/...WORK_DIR.../core2-32-poky-linux/binutils/2.37-r0/...GCC.../i686-poky-linux/11.1.1/as
+7  ~/beaglebone/build/build/tmp/hosttools/install
+7  ~/oe-selftest-ubuntu/build/build-st-3787/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+7  ~/oe-selftest-fedora/build/build-st-1345482/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+7  python3.9
+7  ~/reproducible-fedora/build/build-st/reproducibleA/tmp/work/x86_64-linux/qemu-system-native/6.0.0-r0/recipe-sysroot-native/usr/bin/ninja
+7  ~/qemumips/...WORK_DIR.../x86_64-linux/qemu-system-native/6.0.0-r0/recipe-sysroot-native/usr/bin/ninja
+7  ~/qemuppc/...WORK_DIR.../ppc7400-poky-linux/xserver-xorg/2_1.20.12-r0/...GCC.../powerpc-poky-linux/11.1.1/cc1
+7  ~/qemuppc/...WORK_DIR.../ppc7400-poky-linux/xserver-xorg/2_1.20.12-r0/...GCC.../powerpc-poky-linux/11.1.1/as
+7  ~/qemuppc/...WORK_DIR.../i686-nativesdk-pokysdk-linux/nativesdk-gettext/0.21-r0/...GCC.../i686-pokysdk-linux/11.1.1/cc1
+7  ~/qemuppc/...WORK_DIR.../i686-nativesdk-pokysdk-linux/nativesdk-gettext/0.21-r0/...GCC.../i686-pokysdk-linux/11.1.1/as
+7  ~/qemux86-64-ptest-fast/build/build/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+7  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/sudo/1.9.7p1-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/as
+7  ~/qemumips/...WORK_DIR.../qemumips-poky-linux/core-image-sato/1.0-r0/testsdkext/buildtools/sysroots/x86_64-pokysdk-linux/usr/bin/python3
+7  ~/pkgman-rpm-non-rpm/...WORK_DIR.../core2-32-poky-linux/gcc/11.1.0-r0/...GCC.../i686-poky-linux/11.1.1/cc1plus
+7  ~/qemumips/...WORK_DIR.../mips32r2-poky-linux/libcroco/0.6.13-r0/...GCC.../mips-poky-linux/11.1.1/cc1
+7  ~/qemumips/...WORK_DIR.../mips32r2-poky-linux/libcroco/0.6.13-r0/...GCC.../mips-poky-linux/11.1.1/as
+7  ~/beaglebone/...WORK_DIR.../i686-nativesdk-pokysdk-linux/nativesdk-qemu/6.0.0-r0/...GCC.../i686-pokysdk-linux/11.1.1/ld
+7  ~/beaglebone/...WORK_DIR.../i686-nativesdk-pokysdk-linux/nativesdk-qemu/6.0.0-r0/...GCC.../i686-pokysdk-linux/11.1.1/collect2
+7  ~/qemux86-64/build/build-st-36382/tmp/work/core2-64-poky-linux/gcc-runtime/11.1.0-r0/...GCC.../x86_64-poky-linux/11.1.1/cc1plus
+7  ~/meta-mingw/...WORK_DIR.../core2-32-poky-linux/elfutils/0.185-r0/...GCC.../i686-poky-linux/11.1.1/cc1
+7  ~/musl-qemux86/build/build/tmp/hosttools/ranlib
+7  ~/oe-selftest/build/build-st-45679/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+7  ~/oe-selftest/build/build-st-45696/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+7  ~/oe-selftest/build/build-st-45685/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+7  ~/oe-selftest/build/build-st-45727/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+6  ~/genericx86-alt/...WORK_DIR.../genericx86-poky-linux/linux-yocto/5.4.94+gitAUTOINC+d6aec4fb69_31db2b47ac-r0/...GCC.../i686-poky-linux/11.1.1/as
+6  mktemp
+6  ~/qemuarm64/...WORK_DIR.../cortexa57-poky-linux/binutils/2.37-r0/...GCC.../aarch64-poky-linux/11.1.1/ld
+6  ~/qemuarm64/...WORK_DIR.../cortexa57-poky-linux/binutils/2.37-r0/...GCC.../aarch64-poky-linux/11.1.1/collect2
+6  ~/genericx86/build/build/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+6  ~/pkgman-rpm-non-rpm/...WORK_DIR.../core2-32-poky-linux/mesa/2_21.1.5-r0/recipe-sysroot-native/usr/bin/rpmbuild
+6  ~/oe-selftest-ubuntu/build/build-st-3801/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+6  ~/oe-selftest-ubuntu/build/build-st-3817/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+6  ~/qemumips-alt/build/build/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+6  ~/oe-selftest-fedora/build/build-st-2106462/tmp/work/qemux86_64-poky-linux/linux-yocto/5.10.52+gitAUTOINC+c3900f83a5_c2dc854ee7-r0/...GCC.../x86_64-poky-linux/11.1.1/cc1
+6  ~/oe-selftest-fedora/build/build-st-2106395/tmp/work/qemux86_64-poky-linux/linux-yocto/5.10.52+gitAUTOINC+c3900f83a5_c2dc854ee7-r0/...GCC.../x86_64-poky-linux/11.1.1/cc1
+6  ~/qemuppc-alt/...WORK_DIR.../x86_64-linux/qemu-system-native/6.0.0-r0/recipe-sysroot-native/usr/bin/ninja
+6  ~/oe-selftest-fedora/build/build-st-2106469/tmp/work/x86_64-linux/qemu-system-native/6.0.0-r0/recipe-sysroot-native/usr/bin/ninja
+6  ~/oe-selftest-fedora/build/build-st-2106430/tmp/work/x86_64-nativesdk-pokysdk-linux/go-cross-canadian-x86-64/1.16.5-r0/go/pkg/tool/native_native/compile
+6  x86_64-poky-linux-ar
+6  ~/qemumips/...WORK_DIR.../mips32r2-poky-linux/gdb/10.2-r0/...GCC.../mips-poky-linux/11.1.1/as
+6  ~/qemumips/...WORK_DIR.../mips32r2-poky-linux/gstreamer1.0/1.18.4-r0/...GCC.../mips-poky-linux/11.1.1/cc1
+6  ~/qemuppc/...WORK_DIR.../ppc7400-poky-linux/gtk+3/3.24.30-r0/...GCC.../powerpc-poky-linux/11.1.1/cc1
+6  ~/qemuppc/...WORK_DIR.../ppc7400-poky-linux/gtk+3/3.24.30-r0/...GCC.../powerpc-poky-linux/11.1.1/as
+6  ~/qemuppc/...WORK_DIR.../ppc7400-poky-linux/gstreamer1.0-plugins-base/1.18.4-r0/...GCC.../powerpc-poky-linux/11.1.1/cc1
+6  ~/qemuppc/...WORK_DIR.../ppc7400-poky-linux/gstreamer1.0-plugins-base/1.18.4-r0/...GCC.../powerpc-poky-linux/11.1.1/as
+6  ~/qemumips/...WORK_DIR.../mips32r2-poky-linux/pango/1.48.7-r0/...GCC.../mips-poky-linux/11.1.1/cc1
+6  ~/qemumips/...WORK_DIR.../mips32r2-poky-linux/pango/1.48.7-r0/...GCC.../mips-poky-linux/11.1.1/as
+6  ~/qemuarm64/...WORK_DIR.../qemuarm64-poky-linux/core-image-sato/1.0-r0/testimage-sdk/sysroots/x86_64-pokysdk-linux/usr/bin/cmake
+6  ~/qemuarm64/...WORK_DIR.../qemuarm64-poky-linux/core-image-minimal/1.0-r0/testsdkext/tmp/sysroots/x86_64/usr/bin/cmake
+6  ~/qemuarm64/...WORK_DIR.../qemuarm64-poky-linux/core-image-sato/1.0-r0/testsdkext/tmp/sysroots/x86_64/usr/bin/cmake
+6  arm-poky-linux-gnueabi-gcc-ranlib
+6  ~/pkgman-rpm-non-rpm/...WORK_DIR.../core2-32-poky-linux/gtk+3/3.24.30-r0/...GCC.../i686-poky-linux/11.1.1/cc1
+6  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/gettext/0.21-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/cc1
+6  ~/pkgman-rpm-non-rpm/...WORK_DIR.../core2-32-poky-linux/strace/5.12-r0/...GCC.../i686-poky-linux/11.1.1/as
+6  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/gettext/0.21-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/as
+6  ~/pkgman-rpm-non-rpm/...WORK_DIR.../core2-32-poky-linux/gtk+3/3.24.30-r0/...GCC.../i686-poky-linux/11.1.1/as
+6  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/python3/3.9.6-r0/recipe-sysroot-native/usr/bin/rpmbuild
+6  ~/qemuppc/...WORK_DIR.../i686-nativesdk-pokysdk-linux/nativesdk-libxml2/2.9.12-r0/...GCC.../i686-pokysdk-linux/11.1.1/cc1
+6  ~/qemuppc/...WORK_DIR.../i686-nativesdk-pokysdk-linux/nativesdk-libxml2/2.9.12-r0/...GCC.../i686-pokysdk-linux/11.1.1/as
+6  ~/qemuppc/...WORK_DIR.../x86_64-nativesdk-pokysdk-linux/nativesdk-qemu/6.0.0-r0/...GCC.../x86_64-pokysdk-linux/11.1.1/cc1
+6  ~/qemuppc/...WORK_DIR.../x86_64-nativesdk-pokysdk-linux/nativesdk-qemu/6.0.0-r0/...GCC.../x86_64-pokysdk-linux/11.1.1/as
+6  ~/musl-qemux86/...WORK_DIR.../core2-32-poky-linux-musl/gdb/10.2-r0/...GCC.../i686-poky-linux-musl/11.1.1/collect2
+6  ~/musl-qemux86/...WORK_DIR.../core2-32-poky-linux-musl/gdb/10.2-r0/...GCC.../i686-poky-linux-musl/11.1.1/ld
+6  ~/qemuarm64/...WORK_DIR.../cortexa57-poky-linux/puzzles/2_0.0+gitAUTOINC+8f3413c31f-r0/...GCC.../aarch64-poky-linux/11.1.1/cc1
+6  ~/qemuarm64/...WORK_DIR.../cortexa57-poky-linux/puzzles/2_0.0+gitAUTOINC+8f3413c31f-r0/recipe-sysroot-native/usr/bin/aarch64-poky-linux/aarch64-poky-linux-gcc
+6  ~/oe-selftest/build/build-st-45714/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+6  ~/oe-selftest/build/build-st-45711/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+5  bzip2
+5  scripts/basic/fixdep
+5  ~/build-appliance/...WORK_DIR.../core2-64-poky-linux/mesa/2_21.1.5-r0/...GCC.../x86_64-poky-linux/11.1.1/as
+5  ~/beaglebone/...WORK_DIR.../i686-nativesdk-pokysdk-linux/nativesdk-qemu/6.0.0-r0/recipe-sysroot-native/usr/bin/ninja
+5  debugfs
+5  ln
+5  ~/oe-selftest-fedora/build/build-st-2074744/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+5  ~/oe-selftest-fedora/build/build-st-2074709/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+5  ~/genericx86-64-alt/...WORK_DIR.../core2-64-poky-linux/gcc/11.1.0-r0/...GCC.../x86_64-poky-linux/11.1.1/cc1plus
+5  ~/genericx86-64-alt/...WORK_DIR.../core2-64-poky-linux/gcc/11.1.0-r0/...GCC.../x86_64-poky-linux/11.1.1/as
+5  ~/qemuarm/build/build/tmp/hosttools/install
+5  ~/pkgman-rpm-non-rpm/...WORK_DIR.../core2-32-poky-linux/icu/69.1-r0/recipe-sysroot-native/usr/bin/rpmbuild
+5  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/strace/5.12-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/cc1
+5  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/strace/5.12-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/as
+5  /usr/libexec/gcc/x86_64-redhat-linux/10/cc1plus
+5  /usr/libexec/gcc/x86_64-redhat-linux/10/cc1
+5  ~/oe-selftest-fedora/build/build-st-1345456/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+5  ~/oe-selftest-fedora/build/build-st-2106402/tmp/work/qemux86_64-poky-linux/linux-yocto/5.10.52+gitAUTOINC+c3900f83a5_c2dc854ee7-r0/...GCC.../x86_64-poky-linux/11.1.1/cc1
+5  ~/oe-selftest-fedora/build/build-st-2106405/tmp/work/x86_64-linux/qemu-system-native/6.0.0-r0/recipe-sysroot-native/usr/bin/ninja
+5  ~/oe-selftest-fedora/build/build-st-2106449/tmp/work/x86_64-linux/qemu-system-native/6.0.0-r0/recipe-sysroot-native/usr/bin/ninja
+5  ~/oe-selftest-fedora/build/build-st-2106442/tmp/work/x86_64-linux/qemu-system-native/6.0.0-r0/recipe-sysroot-native/usr/bin/ninja
+5  ~/oe-selftest-fedora/build/build-st-2106427/tmp/work/x86_64-linux/qemu-system-native/6.0.0-r0/recipe-sysroot-native/usr/bin/ninja
+5  ~/oe-selftest-fedora/build/build-st-2106405/tmp/work/qemux86_64-poky-linux/core-image-minimal/1.0-r0/recipe-sysroot-native/usr/bin/createrepo_c
+5  ~/oe-selftest-fedora/build/build-st-2106449/tmp/work/qemux86_64-poky-linux/core-image-minimal/1.0-r0/recipe-sysroot-native/usr/bin/createrepo_c
+5  pigz
+5  ~/qemux86-64-alt/...WORK_DIR.../core2-64-poky-linux/lame/3.100-r0/...GCC.../x86_64-poky-linux/11.1.1/cc1
+5  ~/qemux86-64-alt/...WORK_DIR.../core2-64-poky-linux/lame/3.100-r0/...GCC.../x86_64-poky-linux/11.1.1/as
+5  ~/qemumips/...WORK_DIR.../mips32r2-poky-linux/gdb/10.2-r0/...GCC.../mips-poky-linux/11.1.1/cc1plus
+5  ~/qemuppc/...WORK_DIR.../ppc7400-poky-linux/cairo/1.16.0-r0/...GCC.../powerpc-poky-linux/11.1.1/cc1
+5  ~/qemuppc/...WORK_DIR.../ppc7400-poky-linux/cairo/1.16.0-r0/...GCC.../powerpc-poky-linux/11.1.1/as
+5  ~/qemuppc/...WORK_DIR.../i686-nativesdk-pokysdk-linux/nativesdk-elfutils/0.185-r0/...GCC.../i686-pokysdk-linux/11.1.1/cc1
+5  ~/qemumips/...WORK_DIR.../mips32r2-poky-linux/gstreamer1.0/1.18.4-r0/...GCC.../mips-poky-linux/11.1.1/as
+5  ~/qemuppc/...WORK_DIR.../i686-nativesdk-pokysdk-linux/nativesdk-elfutils/0.185-r0/...GCC.../i686-pokysdk-linux/11.1.1/as
+5  ~/qemumips/...WORK_DIR.../mips32r2-poky-linux/harfbuzz/2.8.2-r0/...GCC.../mips-poky-linux/11.1.1/cc1plus
+5  ~/qemumips/...WORK_DIR.../i686-nativesdk-pokysdk-linux/nativesdk-elfutils/0.185-r0/...GCC.../i686-pokysdk-linux/11.1.1/cc1
+5  ~/qemumips/...WORK_DIR.../mips32r2-poky-linux/harfbuzz/2.8.2-r0/...GCC.../mips-poky-linux/11.1.1/as
+5  ~/qemumips/...WORK_DIR.../i686-nativesdk-pokysdk-linux/nativesdk-elfutils/0.185-r0/...GCC.../i686-pokysdk-linux/11.1.1/as
+5  ~/qemumips/...WORK_DIR.../i686-nativesdk-pokysdk-linux/gcc-cross-canadian-mips/11.1.0-r0/...GCC.../i686-pokysdk-linux/11.1.1/as
+5  ~/qemumips/...WORK_DIR.../i686-nativesdk-pokysdk-linux/gdb-cross-canadian-mips/10.2-r0/...GCC.../i686-pokysdk-linux/11.1.1/cc1plus
+5  ~/beaglebone/...WORK_DIR.../i686-nativesdk-pokysdk-linux/nativesdk-ncurses/6.2-r0/...GCC.../i686-pokysdk-linux/11.1.1/as
+5  ~/pkgman-rpm-non-rpm/build/build/tmp/hosttools/install
+5  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/sudo/1.9.7p1-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/cc1
+5  ~/pkgman-rpm-non-rpm/...WORK_DIR.../core2-32-poky-linux/strace/5.12-r0/...GCC.../i686-poky-linux/11.1.1/cc1
+5  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/gconf/3.2.6-r0/recipe-sysroot-native/usr/bin/msgfmt
+5  flock
+5  ~/poky-tiny/build/build/tmp/hosttools/ld
+5  ~/meta-mingw/...WORK_DIR.../core2-32-poky-linux/perl/5.34.0-r0/perl-5.34.0/miniperl
+5  ~/qemux86-world/...WORK_DIR.../x86-pokymllib32-linux/lib32-llvm/12.0.1-r0/...GCC.../i686-pokymllib32-linux/11.1.1/cc1plus
+5  ~/qemux86-world/...WORK_DIR.../x86-pokymllib32-linux/lib32-llvm/12.0.1-r0/recipe-sysroot-native/usr/bin/i686-pokymllib32-linux/i686-pokymllib32-linux-g++
+5  ~/qemux86-world/...WORK_DIR.../x86-pokymllib32-linux/lib32-llvm/12.0.1-r0/...GCC.../i686-pokymllib32-linux/11.1.1/as
+5  ~/musl-qemux86/build/build/tmp/hosttools/ar
+5  ~/qemuppc-alt/...WORK_DIR.../x86_64-linux/qemu-helper-native/1.0-r1/recipe-sysroot-native/usr/bin/qemu-system-ppc
+5  ~/qemuarm64/...WORK_DIR.../cortexa57-poky-linux/puzzles/2_0.0+gitAUTOINC+8f3413c31f-r0/...GCC.../aarch64-poky-linux/11.1.1/as
+5  i686-poky-linux-musl-strip
+5  ~/oe-selftest/build/build-st-45672/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+5  ~/oe-selftest/build/build-st-45679/tmp/work/core2-64-poky-linux/gtk+3/3.24.30-r0/...GCC.../x86_64-poky-linux/11.1.1/collect2
+4  ~/qemumips/build/build-st-1516047/tmp/work/mips32r2-poky-linux/glibc-testsuite/2.33-r0/recipe-sysroot-native/usr/bin/qemu-mips
+4  ~/build-appliance/...WORK_DIR.../core2-64-poky-linux/mesa/2_21.1.5-r0/...GCC.../x86_64-poky-linux/11.1.1/cc1
+4  ~/oe-selftest-fedora/build/build-st-2074744/tmp/work/x86_64-nativesdk-pokysdk-linux/nativesdk-qemu/6.0.0-r0/recipe-sysroot-native/usr/bin/ninja
+4  ~/oe-selftest-fedora/build/build-st-2074772/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+4  ~/oe-selftest-fedora/build/build-st-2074762/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+4  ~/oe-selftest-ubuntu/build/build-st-3776/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+4  arm-poky-linux-gnueabi-ld.bfd
+4  x86_64-poky-linux-gcc-ar
+4  ~/oe-selftest-fedora/build/build-st-2106412/tmp/work/qemux86_64-poky-linux/linux-yocto/5.10.52+gitAUTOINC+c3900f83a5_c2dc854ee7-r0/...GCC.../x86_64-poky-linux/11.1.1/cc1
+4  dwarfsrcfiles
+4  ~/oe-selftest-fedora/build/build-st-2106400/tmp/work/qemux86_64-poky-linux/linux-yocto/5.10.52+git999-r0/...GCC.../x86_64-poky-linux/11.1.1/cc1
+4  ~/oe-selftest-fedora/build/build-st-2106397/tmp/work/qemux86_64-poky-linux/linux-yocto/5.10.52+gitAUTOINC+c3900f83a5_c2dc854ee7-r0/...GCC.../x86_64-poky-linux/11.1.1/cc1
+4  ~/oe-selftest-fedora/build/build-st-2106427/tmp/work/beaglebone_yocto-poky-linux-gnueabi/linux-yocto/5.10.43+gitAUTOINC+c3900f83a5_ab49d2db98-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/cc1
+4  ~/oe-selftest-fedora/build/build-st-2106400/tmp/work/qemux86_64-poky-linux/core-image-minimal/1.0-r0/recipe-sysroot-native/usr/bin/createrepo_c
+4  ~/oe-selftest-fedora/build/build-st-2106430/tmp/work/core2-64-poky-linux/meta-go-toolchain/1.0-r0/recipe-sysroot-native/usr/bin/createrepo_c
+4  ~/qemuppc-alt/...WORK_DIR.../ppc7400-poky-linux/gtk+3/3.24.30-r0/...GCC.../powerpc-poky-linux/11.1.1/as
+4  ~/qemuppc-alt/...WORK_DIR.../ppc7400-poky-linux/gstreamer1.0-plugins-bad/1.18.4-r0/...GCC.../powerpc-poky-linux/11.1.1/cc1
+4  ~/qemuppc-alt/...WORK_DIR.../ppc7400-poky-linux/gstreamer1.0-plugins-bad/1.18.4-r0/...GCC.../powerpc-poky-linux/11.1.1/as
+4  ~/qemuppc/...WORK_DIR.../ppc7400-poky-linux/dbus-test/1.12.20-r0/...GCC.../powerpc-poky-linux/11.1.1/cc1
+4  ~/qemuppc/...WORK_DIR.../ppc7400-poky-linux/dbus-test/1.12.20-r0/...GCC.../powerpc-poky-linux/11.1.1/as
+4  ~/qemuppc/...WORK_DIR.../ppc7400-poky-linux/avahi/0.8-r0/...GCC.../powerpc-poky-linux/11.1.1/cc1
+4  ~/qemuppc/...WORK_DIR.../ppc7400-poky-linux/avahi/0.8-r0/...GCC.../powerpc-poky-linux/11.1.1/as
+4  ~/qemuppc/...WORK_DIR.../i686-nativesdk-pokysdk-linux/nativesdk-qemu/6.0.0-r0/...GCC.../i686-pokysdk-linux/11.1.1/cc1
+4  ~/qemuppc/...WORK_DIR.../i686-nativesdk-pokysdk-linux/nativesdk-qemu/6.0.0-r0/...GCC.../i686-pokysdk-linux/11.1.1/as
+4  ~/qemumips/...WORK_DIR.../mips32r2-poky-linux/gtk+3/3.24.30-r0/...GCC.../mips-poky-linux/11.1.1/cc1
+4  ~/qemumips/...WORK_DIR.../mips32r2-poky-linux/gtk+3/3.24.30-r0/...GCC.../mips-poky-linux/11.1.1/as
+4  ~/pkgman-rpm-non-rpm/...WORK_DIR.../core2-32-poky-linux/binutils/2.37-r0/...GCC.../i686-poky-linux/11.1.1/collect2
+4  ~/pkgman-rpm-non-rpm/...WORK_DIR.../core2-32-poky-linux/binutils/2.37-r0/...GCC.../i686-poky-linux/11.1.1/ld
+4  i686-poky-linux-objdump
+4  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/gcc-runtime/11.1.0-r0/recipe-sysroot-native/usr/bin/rpmbuild
+4  ~/beaglebone/build/build/tmp/hosttools/python3
+4  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/elfutils/0.185-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/cc1
+4  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/elfutils/0.185-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/as
+4  ~/pkgman-rpm-non-rpm/...WORK_DIR.../core2-32-poky-linux/valgrind/3.17.0-r0/...GCC.../i686-poky-linux/11.1.1/cc1
+4  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/util-linux/2.37.1-r0/recipe-sysroot-native/usr/bin/rpmbuild
+4  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/glib-2.0/1_2.68.3-r0/recipe-sysroot-native/usr/bin/rpmbuild
+4  ~/pkgman-rpm-non-rpm/...WORK_DIR.../qemux86-poky-linux/core-image-minimal/1.0-r0/recipe-sysroot-native/usr/bin/createrepo_c
+4  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/libxml2/2.9.12-r0/recipe-sysroot-native/usr/bin/rpmbuild
+4  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/openssl/1.1.1k-r0/recipe-sysroot-native/usr/bin/rpmbuild
+4  mips64-poky-linux-gcc
+4  ~/qemumips/...WORK_DIR.../qemumips-poky-linux/core-image-sato/1.0-r0/testimage-sdk/sysroots/i686-pokysdk-linux/usr/bin/python3
+4  xmlcatalog
+4  ~/qemuarm-alt/build/build/tmp/hosttools/ld
+4  ~/poky-tiny/build/build/tmp/hosttools/sh
+4  ~/poky-tiny/...WORK_DIR.../x86_64-linux/shared-mime-info-native/2.1-r0/build/src/update-mime-database
+4  ~/qemuppc/...WORK_DIR.../qemuppc-poky-linux/core-image-sato/1.0-r0/testsdkext/tmp/hosttools/git
+4  ~/qemuppc/...WORK_DIR.../qemuppc-poky-linux/core-image-minimal/1.0-r0/testsdkext/tmp/hosttools/git
+4  ~/oe-selftest-ubuntu/build/build-st-3799/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+4  ~/qemux86-64/build/build-st-36364/tmp/work/core2-64-poky-linux/gcc-runtime/11.1.0-r0/gcc-11.1.0/build.x86_64-poky-linux.x86_64-poky-linux/gcc/lto-wrapper
+4  ~/qemux86-world/...WORK_DIR.../core2-64-poky-linux/llvm/12.0.1-r0/...GCC.../x86_64-poky-linux/11.1.1/cc1plus
+4  ~/qemux86-world/...WORK_DIR.../core2-64-poky-linux/llvm/12.0.1-r0/recipe-sysroot-native/usr/bin/x86_64-poky-linux/x86_64-poky-linux-g++
+4  ~/qemux86-world/...WORK_DIR.../core2-64-poky-linux/llvm/12.0.1-r0/...GCC.../x86_64-poky-linux/11.1.1/as
+4  ~/reproducible-fedora/build/build-st-3091475/reproducibleB/tmp/work/core2-64-poky-linux/llvm/9.0.1-r0/recipe-sysroot-native/usr/bin/x86_64-poky-linux/x86_64-poky-linux-gcc-ar
+4  ~/reproducible-fedora/build/build-st-3091475/reproducibleB/tmp/work/core2-64-poky-linux/llvm/9.0.1-r0/...GCC.../x86_64-poky-linux/9.3.0/ar
+4  x86_64-poky-linux-musl-gcc
+4  ~/genericx86-64/...WORK_DIR.../core2-64-poky-linux/ltp/20210524-r0/...GCC.../x86_64-poky-linux/11.1.1/collect2
+4  ~/genericx86-64/...WORK_DIR.../core2-64-poky-linux/ltp/20210524-r0/...GCC.../x86_64-poky-linux/11.1.1/ld
+4  ~/qemuarm64/...WORK_DIR.../i686-nativesdk-pokysdk-linux/nativesdk-glibc/2.33-r0/...GCC.../i686-pokysdk-linux/11.1.1/collect2
+4  ~/musl-qemux86/...WORK_DIR.../core2-32-poky-linux-musl/llvm/12.0.1-r0/recipe-sysroot-native/usr/bin/i686-poky-linux-musl/i686-poky-linux-musl-gcc-ar
+4  ~/musl-qemux86/...WORK_DIR.../core2-32-poky-linux-musl/llvm/12.0.1-r0/...GCC.../i686-poky-linux-musl/11.1.1/ar
+4  ~/qemuarm64/build/build-st-55646/tmp/work/cortexa57-poky-linux/glibc-testsuite/2.33-r0/...GCC.../aarch64-poky-linux/11.1.1/cc1
+4  ~/qemuarm64/build/build-st-55646/tmp/work/cortexa57-poky-linux/glibc-testsuite/2.33-r0/...GCC.../aarch64-poky-linux/11.1.1/as
+4  ~/oe-selftest/build/build-st-45737/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+4  ~/oe-selftest/build/build-st-45679/tmp/work/core2-64-poky-linux/gtk+3/3.24.30-r0/...GCC.../x86_64-poky-linux/11.1.1/ld
+3  ~/qemuarm64/...WORK_DIR.../qemuarm64-poky-linux/core-image-sato/1.0-r0/testimage-sdk/sysroots/i686-pokysdk-linux/usr/bin/python3
+3  ~/musl-qemux86/...WORK_DIR.../core2-32-poky-linux-musl/llvm/12.0.1-r0/recipe-sysroot-native/usr/bin/rpmbuild
+3  gawk
+3  ~/genericx86-64-alt/...WORK_DIR.../core2-64-poky-linux/binutils/2.37-r0/...GCC.../x86_64-poky-linux/11.1.1/cc1plus
+3  ~/qemuarm/...WORK_DIR.../armv7vet2hf-neon-poky-linux-gnueabi/gdb/10.2-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/cc1plus
+3  ~/qemuarm/...WORK_DIR.../i686-nativesdk-pokysdk-linux/nativesdk-python3/3.9.6-r0/...GCC.../i686-pokysdk-linux/11.1.1/cc1
+3  ~/oe-selftest-fedora/build/build-st-2074744/tmp/work/x86_64-nativesdk-pokysdk-linux/gcc-cross-canadian-x86-64/11.1.0-r0/...GCC.../x86_64-pokysdk-linux/11.1.1/cc1plus
+3  ~/oe-selftest-fedora/build/build-st-2074736/tmp/work/qemux86_64-poky-linux/linux-yocto/5.10.52+gitAUTOINC+c3900f83a5_c2dc854ee7-r0/...GCC.../x86_64-poky-linux/11.1.1/cc1
+3  ~/genericx86-64-alt/...WORK_DIR.../core2-64-poky-linux/binutils/2.37-r0/...GCC.../x86_64-poky-linux/11.1.1/as
+3  ~/qemuarm/...WORK_DIR.../armv7vet2hf-neon-poky-linux-gnueabi/gdb/10.2-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/as
+3  ~/oe-selftest-fedora/build/build-st-2074754/tmp/work/x86_64-linux/gnupg-native/2.3.1-r0/recipe-sysroot-native/usr/bin/../../usr/bin/gpg-agent
+3  ~/qemuarm/...WORK_DIR.../armv7vet2hf-neon-poky-linux-gnueabi/mesa/2_21.1.5-r0/recipe-sysroot-native/usr/bin/rpmbuild
+3  ~/oe-selftest-fedora/build/build-st-2074744/tmp/work/x86_64-nativesdk-pokysdk-linux/gcc-cross-canadian-x86-64/11.1.0-r0/...GCC.../x86_64-pokysdk-linux/11.1.1/as
+3  ~/qemuarm/...WORK_DIR.../i686-nativesdk-pokysdk-linux/nativesdk-python3/3.9.6-r0/...GCC.../i686-pokysdk-linux/11.1.1/as
+3  ~/qemuarm/...WORK_DIR.../i686-nativesdk-pokysdk-linux/nativesdk-mesa/2_21.1.5-r0/...GCC.../i686-pokysdk-linux/11.1.1/cc1
+3  ~/qemuarm/...WORK_DIR.../i686-nativesdk-pokysdk-linux/nativesdk-mesa/2_21.1.5-r0/...GCC.../i686-pokysdk-linux/11.1.1/as
+3  ~/qemuarm/...WORK_DIR.../armv7vet2hf-neon-poky-linux-gnueabi/ltp/20210524-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/cc1
+3  ~/qemuarm/...WORK_DIR.../armv7vet2hf-neon-poky-linux-gnueabi/ltp/20210524-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/as
+3  ~/oe-selftest-fedora/build/build-st-2074744/tmp/work/x86_64-nativesdk-pokysdk-linux/nativesdk-qemu/6.0.0-r0/...GCC.../x86_64-pokysdk-linux/11.1.1/as
+3  ~/oe-selftest-fedora/build/build-st-2074744/tmp/work/x86_64-nativesdk-pokysdk-linux/nativesdk-qemu/6.0.0-r0/...GCC.../x86_64-pokysdk-linux/11.1.1/cc1
+3  i686-pokysdk-linux-gcc-ranlib
+3  build/gengtype
+3  ~/pkgman-rpm-non-rpm/...WORK_DIR.../core2-32-poky-linux/binutils/2.37-r0/...GCC.../i686-poky-linux/11.1.1/cc1
+3  parted
+3  ~/oe-selftest-fedora/build/build-st-1345461/tmp/work/qemux86_64-poky-linux/linux-yocto/5.10.52+gitAUTOINC+c3900f83a5_c2dc854ee7-r0/...GCC.../x86_64-poky-linux/11.1.1/cc1
+3  ~/oe-selftest-fedora/build/build-st-1345447/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+3  ~/oe-selftest-fedora/build/build-st-1345466/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+3  ~/qemux86-world/...WORK_DIR.../x86_64-linux/qemu-native/6.0.0-r0/recipe-sysroot-native/usr/bin/ninja
+3  ccache
+3  ~/meta-mingw/...WORK_DIR.../qemux86-poky-linux/core-image-mingw-sdktest/1.0-r0/recipe-sysroot-native/usr/bin/createrepo_c
+3  ~/qa-extras2/...WORK_DIR.../qemux86_64-poky-linux/core-image-sato/1.0-r0/recipe-sysroot-native/usr/bin/createrepo_c
+3  ~/oe-selftest-fedora/build/build-st-2106427/tmp/work/qemux86_64-poky-linux/linux-yocto/5.10.52+gitAUTOINC+c3900f83a5_c2dc854ee7-r0/...GCC.../x86_64-poky-linux/11.1.1/cc1
+3  /usr/libexec/gcc/x86_64-redhat-linux/9/collect2
+3  ~/oe-selftest-fedora/build/build-st-2106405/tmp/work/core2-64-poky-linux/perl/5.34.0-r0/recipe-sysroot-native/usr/bin/rpmbuild
+3  powerpc-poky-linux-ld.bfd
+3  ~/reproducible-fedora/build/build-st/reproducibleA/tmp/work/core2-64-poky-linux/openssl/1.1.1k-r0/...GCC.../x86_64-poky-linux/11.1.1/cc1
+3  ~/reproducible-fedora/build/build-st/reproducibleA/tmp/work/core2-64-poky-linux/openssl/1.1.1k-r0/...GCC.../x86_64-poky-linux/11.1.1/as
+3  cross-localedef-hardlink
+3  powerpc-poky-linux-gcc-ranlib
+3  ~/oe-selftest-fedora/build/build-st-2106430/tmp/work/x86_64-nativesdk-pokysdk-linux/nativesdk-qemu/6.0.0-r0/recipe-sysroot-native/usr/bin/ninja
+3  ~/qemuppc-alt/...WORK_DIR.../ppc7400-poky-linux/gcc/11.1.0-r0/...GCC.../powerpc-poky-linux/11.1.1/cc1plus
+3  ~/qemuppc-alt/...WORK_DIR.../ppc7400-poky-linux/gcc/11.1.0-r0/...GCC.../powerpc-poky-linux/11.1.1/as
+3  ~/qemuppc-alt/...WORK_DIR.../ppc7400-poky-linux/gtk+3/3.24.30-r0/...GCC.../powerpc-poky-linux/11.1.1/cc1
+3  ~/reproducible-fedora/build/build-st/reproducibleA/tmp/work/core2-64-poky-linux/gtk+3/3.24.30-r0/...GCC.../x86_64-poky-linux/11.1.1/cc1
+3  sleep
+3  ~/reproducible-fedora/build/build-st/reproducibleA/tmp/work/core2-64-poky-linux/gtk+3/3.24.30-r0/...GCC.../x86_64-poky-linux/11.1.1/as
+3  ~/qemuppc-alt/...WORK_DIR.../ppc7400-poky-linux/binutils/2.37-r0/...GCC.../powerpc-poky-linux/11.1.1/cc1plus
+3  ~/qemuppc-alt/...WORK_DIR.../ppc7400-poky-linux/binutils/2.37-r0/...GCC.../powerpc-poky-linux/11.1.1/as
+3  ~/qemuppc/...WORK_DIR.../ppc7400-poky-linux/lttng-tools/2.12.4-r0/...GCC.../powerpc-poky-linux/11.1.1/cc1
+3  ~/qemuppc/...WORK_DIR.../ppc7400-poky-linux/lttng-tools/2.12.4-r0/...GCC.../powerpc-poky-linux/11.1.1/as
+3  ~/qemumips/...WORK_DIR.../i686-nativesdk-pokysdk-linux/nativesdk-perl/5.34.0-r0/...GCC.../i686-pokysdk-linux/11.1.1/cc1
+3  ~/qemumips/...WORK_DIR.../i686-nativesdk-pokysdk-linux/nativesdk-perl/5.34.0-r0/...GCC.../i686-pokysdk-linux/11.1.1/as
+3  ~/qemuppc/...WORK_DIR.../i686-nativesdk-pokysdk-linux/nativesdk-perl/5.34.0-r0/perl-5.34.0/miniperl
+3  ~/qemuppc/...WORK_DIR.../ppc7400-poky-linux/bluez5/5.60-r0/...GCC.../powerpc-poky-linux/11.1.1/cc1
+3  md5sum
+3  ~/qemumips/...WORK_DIR.../mips32r2-poky-linux/glib-2.0/1_2.68.3-r0/recipe-sysroot-native/usr/bin/msgfmt
+3  ~/qemuppc/...WORK_DIR.../ppc7400-poky-linux/bluez5/5.60-r0/...GCC.../powerpc-poky-linux/11.1.1/as
+3  ~/qemuppc/...WORK_DIR.../ppc7400-poky-linux/gettext/0.21-r0/...GCC.../powerpc-poky-linux/11.1.1/cc1
+3  ~/qemumips/...WORK_DIR.../mips32r2-poky-linux/xserver-xorg/2_1.20.12-r0/...GCC.../mips-poky-linux/11.1.1/cc1
+3  ~/qemumips/...WORK_DIR.../mips32r2-poky-linux/babeltrace2/2.0.4-r0/...GCC.../mips-poky-linux/11.1.1/cc1
+3  ~/qemuppc/...WORK_DIR.../ppc7400-poky-linux/gettext/0.21-r0/...GCC.../powerpc-poky-linux/11.1.1/as
+3  ~/qemumips/...WORK_DIR.../mips32r2-poky-linux/babeltrace2/2.0.4-r0/...GCC.../mips-poky-linux/11.1.1/as
+3  ~/qemumips/...WORK_DIR.../mips32r2-poky-linux/xserver-xorg/2_1.20.12-r0/...GCC.../mips-poky-linux/11.1.1/as
+3  ~/qemumips/...WORK_DIR.../i686-nativesdk-pokysdk-linux/gdb-cross-canadian-mips/10.2-r0/...GCC.../i686-pokysdk-linux/11.1.1/cc1
+3  ~/qemumips/...WORK_DIR.../i686-nativesdk-pokysdk-linux/binutils-cross-canadian-mips/2.37-r0/...GCC.../i686-pokysdk-linux/11.1.1/cc1
+3  ~/qemumips/...WORK_DIR.../i686-nativesdk-pokysdk-linux/binutils-cross-canadian-mips/2.37-r0/...GCC.../i686-pokysdk-linux/11.1.1/as
+3  ~/qemuppc/...WORK_DIR.../i686-nativesdk-pokysdk-linux/nativesdk-qemu/6.0.0-r0/...GCC.../i686-pokysdk-linux/11.1.1/collect2
+3  ~/qemuppc/...WORK_DIR.../i686-nativesdk-pokysdk-linux/nativesdk-qemu/6.0.0-r0/...GCC.../i686-pokysdk-linux/11.1.1/ld
+3  ~/qemumips/...WORK_DIR.../i686-nativesdk-pokysdk-linux/gcc-cross-canadian-mips/11.1.0-r0/...GCC.../i686-pokysdk-linux/11.1.1/cc1plus
+3  ~/qemumips/...WORK_DIR.../mips32r2-poky-linux/libfm/1.3.2-r0/...GCC.../mips-poky-linux/11.1.1/cc1
+3  ~/qemumips/...WORK_DIR.../mips32r2-poky-linux/libfm/1.3.2-r0/...GCC.../mips-poky-linux/11.1.1/as
+3  ~/genericx86-64-alt/build/build/tmp/hosttools/install
+3  ~/meta-mingw/...WORK_DIR.../x86_64-nativesdk-mingw32-w64-mingw32/nativesdk-xz/5.2.5-r0/...GCC.../x86_64-w64-mingw32/11.1.1/cc1
+3  ~/meta-mingw/...WORK_DIR.../x86_64-nativesdk-mingw32-w64-mingw32/nativesdk-libsdl2/2.0.14-r0/...GCC.../x86_64-w64-mingw32/11.1.1/cc1
+3  ~/qemuarm64/...WORK_DIR.../qemuarm64-poky-linux/core-image-sato/1.0-r0/testimage-sdk/sysroots/x86_64-pokysdk-linux/usr/bin/aarch64-poky-linux/aarch64-poky-linux-g++
+3  ~/qemuarm64/...WORK_DIR.../qemuarm64-poky-linux/core-image-sato/1.0-r0/testimage-sdk/sysroots/x86_64-pokysdk-linux/usr/libexec/aarch64-poky-linux/gcc/aarch64-poky-linux/11.1.1/collect2
+3  ~/qemuarm64/...WORK_DIR.../qemuarm64-poky-linux/core-image-sato/1.0-r0/testimage-sdk/sysroots/x86_64-pokysdk-linux/usr/libexec/aarch64-poky-linux/gcc/aarch64-poky-linux/11.1.1/real-ld
+3  ~/qemuarm64/...WORK_DIR.../qemuarm64-poky-linux/core-image-minimal/1.0-r0/testsdkext/tmp/sysroots/x86_64/usr/bin/aarch64-poky-linux/aarch64-poky-linux-g++
+3  ~/qemuarm64/...WORK_DIR.../qemuarm64-poky-linux/core-image-minimal/1.0-r0/testsdkext/tmp/sysroots/x86_64/usr/bin/aarch64-poky-linux/../../libexec/aarch64-poky-linux/gcc/aarch64-poky-linux/11.1.1/collect2
+3  ~/qemuarm64/...WORK_DIR.../qemuarm64-poky-linux/core-image-minimal/1.0-r0/testsdkext/tmp/sysroots/x86_64/usr/bin/aarch64-poky-linux/../../libexec/aarch64-poky-linux/gcc/aarch64-poky-linux/11.1.1/ld
+3  ~/qemuarm64/...WORK_DIR.../qemuarm64-poky-linux/core-image-sato/1.0-r0/testsdkext/tmp/sysroots/x86_64/usr/bin/aarch64-poky-linux/aarch64-poky-linux-g++
+3  ~/qemuarm64/...WORK_DIR.../qemuarm64-poky-linux/core-image-sato/1.0-r0/testsdkext/tmp/sysroots/x86_64/usr/bin/aarch64-poky-linux/../../libexec/aarch64-poky-linux/gcc/aarch64-poky-linux/11.1.1/collect2
+3  ~/qemuarm64/...WORK_DIR.../qemuarm64-poky-linux/core-image-sato/1.0-r0/testsdkext/tmp/sysroots/x86_64/usr/bin/aarch64-poky-linux/../../libexec/aarch64-poky-linux/gcc/aarch64-poky-linux/11.1.1/ld
+3  ~/meta-mingw/...WORK_DIR.../x86_64-nativesdk-mingw32-w64-mingw32/nativesdk-xz/5.2.5-r0/...GCC.../x86_64-w64-mingw32/11.1.1/as
+3  ~/meta-mingw/...WORK_DIR.../x86_64-nativesdk-mingw32-w64-mingw32/nativesdk-libsdl2/2.0.14-r0/...GCC.../x86_64-w64-mingw32/11.1.1/as
+3  ~/qemuarm64/...WORK_DIR.../qemuarm64-poky-linux/core-image-minimal/1.0-r0/testsdkext/buildtools/sysroots/x86_64-pokysdk-linux/usr/bin/make
+3  ~/qemuarm64/...WORK_DIR.../qemuarm64-poky-linux/core-image-sato/1.0-r0/testsdkext/buildtools/sysroots/x86_64-pokysdk-linux/usr/bin/make
+3  ~/qemuarm64/...WORK_DIR.../qemuarm64-poky-linux/core-image-sato/1.0-r0/recipe-sysroot-native/usr/bin/make
+3  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/xserver-xorg/2_1.20.12-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/ranlib
+3  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/gdb/10.2-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/as
+3  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/parted/3.4-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/cc1
+3  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/parted/3.4-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/as
+3  ~/beaglebone/...WORK_DIR.../i686-nativesdk-pokysdk-linux/nativesdk-openssl/1.1.1k-r0/...GCC.../i686-pokysdk-linux/11.1.1/cc1
+3  ~/beaglebone/...WORK_DIR.../i686-nativesdk-pokysdk-linux/nativesdk-openssl/1.1.1k-r0/...GCC.../i686-pokysdk-linux/11.1.1/as
+3  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/connman/1.40-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/as
+3  ~/beaglebone/...WORK_DIR.../i686-nativesdk-pokysdk-linux/nativesdk-ncurses/6.2-r0/...GCC.../i686-pokysdk-linux/11.1.1/cc1
+3  ~/pkgman-rpm-non-rpm/...WORK_DIR.../core2-32-poky-linux/harfbuzz/2.8.2-r0/...GCC.../i686-poky-linux/11.1.1/cc1plus
+3  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/bluez5/5.60-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/cc1
+3  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/mesa/2_21.1.5-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/cc1
+3  ~/pkgman-rpm-non-rpm/...WORK_DIR.../core2-32-poky-linux/gzip/1.10-r0/...GCC.../i686-poky-linux/11.1.1/cc1
+3  ~/pkgman-rpm-non-rpm/...WORK_DIR.../core2-32-poky-linux/harfbuzz/2.8.2-r0/...GCC.../i686-poky-linux/11.1.1/as
+3  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/bluez5/5.60-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/as
+3  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/mesa/2_21.1.5-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/as
+3  ~/pkgman-rpm-non-rpm/...WORK_DIR.../core2-32-poky-linux/ppp/2.4.9-r0/...GCC.../i686-poky-linux/11.1.1/cc1
+3  ~/pkgman-rpm-non-rpm/...WORK_DIR.../core2-32-poky-linux/ppp/2.4.9-r0/...GCC.../i686-poky-linux/11.1.1/as
+3  ~/pkgman-rpm-non-rpm/...WORK_DIR.../core2-32-poky-linux/gzip/1.10-r0/...GCC.../i686-poky-linux/11.1.1/as
+3  ~/pkgman-rpm-non-rpm/...WORK_DIR.../core2-32-poky-linux/libdnf/0.63.1-r0/...GCC.../i686-poky-linux/11.1.1/cc1plus
+3  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/flex/2.6.4-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/cc1
+3  ~/pkgman-rpm-non-rpm/...WORK_DIR.../core2-32-poky-linux/libdnf/0.63.1-r0/...GCC.../i686-poky-linux/11.1.1/as
+3  ~/pkgman-rpm-non-rpm/...WORK_DIR.../core2-32-poky-linux/libdnf/0.63.1-r0/recipe-sysroot-native/usr/bin/i686-poky-linux/i686-poky-linux-g++
+3  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/flex/2.6.4-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/as
+3  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/gtk+3/3.24.30-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/ld
+3  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/gtk+3/3.24.30-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/collect2
+3  ~/pkgman-rpm-non-rpm/...WORK_DIR.../core2-32-poky-linux/binutils/2.37-r0/...GCC.../i686-poky-linux/11.1.1/cc1plus
+3  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/binutils/2.37-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/as
+3  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/perl/5.34.0-r0/recipe-sysroot-native/usr/bin/rpmbuild
+3  ~/qemumips/...WORK_DIR.../mips32r2-poky-linux/gobject-introspection/1.68.0-r0/recipe-sysroot-native/usr/bin/qemu-mips
+3  ~/qemuppc/...WORK_DIR.../ppc7400-poky-linux/babeltrace2/2.0.4-r0/...GCC.../powerpc-poky-linux/11.1.1/cc1
+3  ~/qemuppc/...WORK_DIR.../ppc7400-poky-linux/babeltrace2/2.0.4-r0/...GCC.../powerpc-poky-linux/11.1.1/as
+3  groupadd
+3  bin/cmake
+3  ~/poky-tiny/...WORK_DIR.../x86_64-linux/qemu-native/6.0.0-r0/recipe-sysroot-native/usr/bin/ninja
+3  ~/meta-mingw/...WORK_DIR.../core2-32-poky-linux/perl/5.34.0-r0/...GCC.../i686-poky-linux/11.1.1/cc1
+3  ~/meta-mingw/...WORK_DIR.../core2-32-poky-linux/perl/5.34.0-r0/...GCC.../i686-poky-linux/11.1.1/as
+3  ~/qemuarm-alt/...WORK_DIR.../x86_64-linux/qemu-helper-native/1.0-r1/recipe-sysroot-native/usr/bin/qemu-system-arm
+3  ~/qemux86-world/...WORK_DIR.../x86-pokymllib32-linux/lib32-piglit/1.0+gitrAUTOINC+6a4be9e994-r0/recipe-sysroot-native/usr/bin/rpmbuild
+3  ~/qemux86-world/...WORK_DIR.../core2-64-poky-linux/piglit/1.0+gitrAUTOINC+6a4be9e994-r0/recipe-sysroot-native/usr/bin/rpmbuild
+3  ~/qemux86-64/build/build-st-36382/tmp/work/core2-64-poky-linux/gcc-runtime/11.1.0-r0/...GCC.../x86_64-poky-linux/11.1.1/collect2
+3  ~/qemux86-64/build/build-st-36382/tmp/work/core2-64-poky-linux/gcc-runtime/11.1.0-r0/...GCC.../x86_64-poky-linux/11.1.1/ld
+3  i686-pokymllib32-linux-g++
+3  ~/reproducible-fedora/build/build-st-3091475/reproducibleB/tmp/work/core2-64-poky-linux/llvm/9.0.1-r0/recipe-sysroot-native/usr/bin/x86_64-poky-linux/x86_64-poky-linux-ranlib
+3  ~/genericx86-64-alt/...WORK_DIR.../x86_64-linux/cmake-native/3.20.5-r0/build/Bootstrap.cmk/cmake
+3  ~/musl-qemux86/...WORK_DIR.../core2-32-poky-linux-musl/git/2.32.0-r0/...GCC.../i686-poky-linux-musl/11.1.1/cc1
+3  ~/musl-qemux86/...WORK_DIR.../core2-32-poky-linux-musl/git/2.32.0-r0/...GCC.../i686-poky-linux-musl/11.1.1/as
+3  i686-poky-linux-musl-gcc-ranlib
+3  ~/musl-qemux86/...WORK_DIR.../core2-32-poky-linux-musl/xserver-xorg/2_1.20.12-r0/...GCC.../i686-poky-linux-musl/11.1.1/ranlib
+3  ~/qemuarm64/build/build/tmp/hosttools/mkdir
+3  ~/qemuarm64/build/build/tmp/hosttools/cp
+3  ~/musl-qemux86/...WORK_DIR.../core2-32-poky-linux-musl/cups/2.3.3op2-r0/...GCC.../i686-poky-linux-musl/11.1.1/cc1
+3  ~/musl-qemux86/...WORK_DIR.../core2-32-poky-linux-musl/cups/2.3.3op2-r0/...GCC.../i686-poky-linux-musl/11.1.1/as
+3  ~/qemuarm64/...WORK_DIR.../i686-nativesdk-pokysdk-linux/nativesdk-glibc/2.33-r0/...GCC.../i686-pokysdk-linux/11.1.1/cc1plus
+3  ~/musl-qemux86/...WORK_DIR.../core2-32-poky-linux-musl/bison/3.7.6-r0/...GCC.../i686-poky-linux-musl/11.1.1/cc1plus
+3  ~/musl-qemux86/...WORK_DIR.../core2-32-poky-linux-musl/bison/3.7.6-r0/...GCC.../i686-poky-linux-musl/11.1.1/as
+3  ~/musl-qemux86/...WORK_DIR.../core2-32-poky-linux-musl/dhcpcd/9.4.0-r0/...GCC.../i686-poky-linux-musl/11.1.1/cc1
+3  ~/musl-qemux86/...WORK_DIR.../core2-32-poky-linux-musl/dhcpcd/9.4.0-r0/...GCC.../i686-poky-linux-musl/11.1.1/as
+3  ~/qemuarm64/...WORK_DIR.../cortexa57-poky-linux/libfm/1.3.2-r0/...GCC.../aarch64-poky-linux/11.1.1/as
+3  ~/oe-selftest-fedora/build/build-st-2106469/tmp/work/x86_64-linux/gnupg-native/2.3.1-r0/recipe-sysroot-native/usr/bin/gpg-agent
+3  ~/oe-selftest-fedora/build/build-st-2106469/tmp/work/core2-64-poky-linux/ed/1.17-r0/recipe-sysroot-native/usr/bin/gpg-agent
+3  i686-poky-linux-musl-gcc-ar
+3  ~/musl-qemux86/...WORK_DIR.../core2-32-poky-linux-musl/ovmf/edk2-stable202105-r0/...GCC.../i686-poky-linux-musl/11.1.1/ar
+3  dumpe2fs
+3  ~/poky-tiny/...WORK_DIR.../x86_64-linux/binutils-cross-i686/2.37-r0/recipe-sysroot-native/usr/bin/bison
+2  ~/musl-qemux86/...WORK_DIR.../x86_64-linux/qemu-helper-native/1.0-r1/recipe-sysroot-native/usr/bin/qemu-system-i386
+2  ~/musl-qemux86/...WORK_DIR.../x86_64-linux/python3-cython-native/0.29.23-r0/recipe-sysroot-native/usr/bin/python3-native/python3
+2  ~/build-appliance/build/build/tmp/hosttools/ld
+2  ./tools/objtool/objtool
+2  build/genchecksum
+2  ~/genericx86-64-alt/...WORK_DIR.../genericx86_64-poky-linux/core-image-sato-sdk/1.0-r0/recipe-sysroot-native/usr/bin/createrepo_c
+2  ~/qemumips64/...WORK_DIR.../qemumips64-poky-linux/core-image-minimal/1.0-r0/testsdkext/tmp/hosttools/git
+2  ~/qemumips64/...WORK_DIR.../qemumips64-poky-linux/core-image-sato/1.0-r0/testsdkext/tmp/hosttools/git
+2  ~/reproducible/build/build-st/reproducibleB/tmp/work/core2-64-poky-linux/strace/5.12-r0/recipe-sysroot-native/usr/bin/rpmbuild
+2  ~/reproducible/build/build-st/reproducibleB/tmp/work/core2-64-poky-linux/ltp/20210524-r0/...GCC.../x86_64-poky-linux/11.1.1/cc1
+2  ~/reproducible/build/build-st/reproducibleB/tmp/work/core2-64-poky-linux/ltp/20210524-r0/...GCC.../x86_64-poky-linux/11.1.1/as
+2  /usr/lib/wine/wineserver64
+2  ~/qemuarm/...WORK_DIR.../armv7vet2hf-neon-poky-linux-gnueabi/gettext/0.21-r0/recipe-sysroot-native/usr/bin/rpmbuild
+2  ~/qemuarm/...WORK_DIR.../armv7vet2hf-neon-poky-linux-gnueabi/systemtap/4.5-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/as
+2  ~/qemuarm/...WORK_DIR.../armv7vet2hf-neon-poky-linux-gnueabi/ltp/20210524-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/collect2
+2  ~/qemuarm/...WORK_DIR.../armv7vet2hf-neon-poky-linux-gnueabi/ltp/20210524-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/ld
+2  ~/oe-selftest-ubuntu/build/build-st-3792/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+2  ~/oe-selftest-ubuntu/build/build-st-3787/tmp/work/qemux86_64-poky-linux/core-image-minimal/1.0-r0/recipe-sysroot-native/usr/bin/createrepo_c
+2  ~/oe-selftest-ubuntu/build/build-st-3776/tmp-mc-tiny/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+2  ~/oe-selftest-ubuntu/build/build-st-3776/tmp-mc-musl/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+2  ~/oe-selftest-fedora/build/build-st-1345519/tmp/work/qemux86_64-poky-linux/linux-yocto/5.10.52+gitAUTOINC+c3900f83a5_c2dc854ee7-r0/...GCC.../x86_64-poky-linux/11.1.1/cc1
+2  tee
+2  ~/oe-selftest-fedora/build/build-st-1345475/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+2  ~/oe-selftest-fedora/build/build-st-1345490/tmp/work/qemux86_64-poky-linux/linux-yocto/5.10.52+gitAUTOINC+c3900f83a5_c2dc854ee7-r0/...GCC.../x86_64-poky-linux/11.1.1/cc1
+2  ~/oe-selftest-fedora/build/build-st-1345490/tmp/work/core2-64-poky-linux/util-linux/2.37-r0/...GCC.../x86_64-poky-linux/11.1.1/cc1
+2  ~/oe-selftest-fedora/build/build-st-1345466/tmp/hosttools/g++
+2  ~/oe-selftest-fedora/build/build-st-1345461/tmp/work/core2-64-poky-linux/e2fsprogs/1.46.2-r0/...GCC.../x86_64-poky-linux/11.1.1/as
+2  ~/oe-selftest-fedora/build/build-st-1345490/tmp/work/core2-64-poky-linux/util-linux/2.37-r0/...GCC.../x86_64-poky-linux/11.1.1/as
+2  ~/qemumips-alt/...WORK_DIR.../qemumips-poky-linux/linux-yocto/5.4.134+gitAUTOINC+d6aec4fb69_b15816ccad-r0/...GCC.../mips-poky-linux/11.1.1/cc1
+2  ~/qemumips-alt/...WORK_DIR.../qemumips-poky-linux/linux-yocto/5.4.134+gitAUTOINC+d6aec4fb69_b15816ccad-r0/...GCC.../mips-poky-linux/11.1.1/as
+2  ~/oe-selftest-fedora/build/build-st-1345501/tmp/work/qemux86_64-poky-linux/perf/1.0-r9/...GCC.../x86_64-poky-linux/11.1.1/cc1
+2  ~/oe-selftest-fedora/build/build-st-1345501/tmp/work/qemux86_64-poky-linux/perf/1.0-r9/...GCC.../x86_64-poky-linux/11.1.1/as
+2  ~/qemux86-world/...WORK_DIR.../x86-pokymllib32-linux/lib32-libpcre/8.45-r0/...GCC.../i686-pokymllib32-linux/11.1.1/cc1
+2  ~/qemux86-world/...WORK_DIR.../x86-pokymllib32-linux/lib32-libpcre/8.45-r0/...GCC.../i686-pokymllib32-linux/11.1.1/as
+2  ~/oe-selftest-fedora/build/build-st-1345501/tmp/work/qemux86_64-poky-linux/perf/1.0-r9/...GCC.../x86_64-poky-linux/11.1.1/collect2
+2  ~/oe-selftest-fedora/build/build-st-1345501/tmp/work/qemux86_64-poky-linux/perf/1.0-r9/...GCC.../x86_64-poky-linux/11.1.1/ld
+2  ~/oe-selftest-fedora/build/build-st-1345501/tmp/hosttools/install
+2  ~/build-appliance/...WORK_DIR.../core2-64-poky-linux/gcc/11.1.0-r0/...GCC.../x86_64-poky-linux/11.1.1/as
+2  ~/build-appliance/build/build/tmp/hosttools/install
+2  ~/qemuppc-alt/...WORK_DIR.../qemuppc-poky-linux/linux-yocto/5.4.134+gitAUTOINC+d6aec4fb69_906f9509a8-r0/...GCC.../powerpc-poky-linux/11.1.1/cc1
+2  ~/qemuppc-alt/...WORK_DIR.../qemuppc-poky-linux/linux-yocto/5.4.134+gitAUTOINC+d6aec4fb69_906f9509a8-r0/...GCC.../powerpc-poky-linux/11.1.1/as
+2  ~/oe-selftest-fedora/build/build-st-2106430/tmp/work/x86_64-nativesdk-pokysdk-linux/gdb-cross-canadian-x86-64/10.2-r0/...GCC.../x86_64-pokysdk-linux/11.1.1/cc1
+2  ~/oe-selftest-fedora/build/build-st-2106430/tmp/work/x86_64-nativesdk-pokysdk-linux/gdb-cross-canadian-x86-64/10.2-r0/...GCC.../x86_64-pokysdk-linux/11.1.1/as
+2  ~/oe-selftest-fedora/build/build-st-2106430/tmp/work/x86_64-nativesdk-pokysdk-linux/gcc-cross-canadian-x86-64/11.1.0-r0/...GCC.../x86_64-pokysdk-linux/11.1.1/cc1plus
+2  ~/oe-selftest-fedora/build/build-st-2106430/tmp/work/x86_64-nativesdk-pokysdk-linux/gcc-cross-canadian-x86-64/11.1.0-r0/...GCC.../x86_64-pokysdk-linux/11.1.1/as
+2  ~/oe-selftest-fedora/build/build-st-2106430/tmp/work/x86_64-nativesdk-pokysdk-linux/go-cross-canadian-x86-64/1.16.5-r0/go/pkg/tool/native_native/link
+2  ~/oe-selftest-fedora/build/build-st-2106420/tmp/work/qemux86_64-poky-linux/core-image-minimal/1.0-r0/recipe-sysroot-native/usr/bin/apt-ftparchive
+2  ~/oe-selftest-fedora/build/build-st-2106427/tmp/work/core2-64-poky-linux/python3/3.9.6-r0/...GCC.../x86_64-poky-linux/11.1.1/cc1
+2  ~/oe-selftest-fedora/build/build-st-2106427/tmp/work/core2-64-poky-linux/python3/3.9.6-r0/...GCC.../x86_64-poky-linux/11.1.1/as
+2  ~/oe-selftest-fedora/build/build-st-2106430/tmp/work/x86_64-nativesdk-pokysdk-linux/binutils-cross-canadian-x86-64/2.37-r0/...GCC.../x86_64-pokysdk-linux/11.1.1/cc1plus
+2  ~/oe-selftest-fedora/build/build-st-2106430/tmp/work/x86_64-nativesdk-pokysdk-linux/binutils-cross-canadian-x86-64/2.37-r0/...GCC.../x86_64-pokysdk-linux/11.1.1/as
+2  ~/oe-selftest-fedora/build/build-st-2106430/tmp/work/x86_64-nativesdk-pokysdk-linux/nativesdk-qemu/6.0.0-r0/...GCC.../x86_64-pokysdk-linux/11.1.1/cc1
+2  ~/oe-selftest-fedora/build/build-st-2106430/tmp/work/x86_64-nativesdk-pokysdk-linux/nativesdk-qemu/6.0.0-r0/...GCC.../x86_64-pokysdk-linux/11.1.1/as
+2  ~/oe-selftest-fedora/build/build-st-2106442/tmp/work/x86_64-linux/gnupg-native/2.3.1-r0/recipe-sysroot-native/usr/bin/../../usr/bin/gpg-agent
+2  ~/oe-selftest-fedora/build/build-st-2106442/tmp/work/qemux86_64-poky-linux/core-image-full-cmdline/1.0-r0/recipe-sysroot-native/usr/bin/gpg-agent
+2  ~/oe-selftest-fedora/build/build-st-2106469/tmp/work/x86_64-linux/qemu-helper-native/1.0-r1/recipe-sysroot-native/usr/bin/qemu-system-x86_64
+2  ~/oe-selftest-fedora/build/build-st-2106402/tmp/work/core2-64-poky-linux/wic-tools/1.0-r0/recipe-sysroot-native/usr/bin/pseudo
+2  syslinux
+2  powerpc-poky-linux-strip
+2  ~/reproducible-fedora/build/build-st/reproducibleA/tmp/work/core2-64-poky-linux/go-runtime/1.16.5-r0/go/pkg/tool/linux_amd64/compile
+2  ./scripts/recordmcount
+2  ~/reproducible-fedora/build/build-st/reproducibleA/tmp/work/core2-64-poky-linux/qemu/6.0.0-r0/recipe-sysroot-native/usr/bin/ninja
+2  ~/qemux86-64-alt/...WORK_DIR.../core2-64-poky-linux/xserver-xorg/2_1.20.12-r0/...GCC.../x86_64-poky-linux/11.1.1/cc1
+2  ~/qemux86-64-alt/...WORK_DIR.../core2-64-poky-linux/xserver-xorg/2_1.20.12-r0/...GCC.../x86_64-poky-linux/11.1.1/as
+2  ~/qemux86-64-alt/...WORK_DIR.../core2-64-poky-linux/taglib/1.12-r0/...GCC.../x86_64-poky-linux/11.1.1/cc1plus
+2  ~/qemux86-64-alt/...WORK_DIR.../core2-64-poky-linux/taglib/1.12-r0/recipe-sysroot-native/usr/bin/x86_64-poky-linux/x86_64-poky-linux-g++
+2  ~/qemux86-64-alt/...WORK_DIR.../core2-64-poky-linux/taglib/1.12-r0/...GCC.../x86_64-poky-linux/11.1.1/as
+2  ~/qemuarm/...WORK_DIR.../i686-nativesdk-pokysdk-linux/nativesdk-libsolv/0.7.19-r0/recipe-sysroot-native/usr/lib/rpm/rpmdeps
+2  ~/genericx86-64-alt/...WORK_DIR.../genericx86_64-poky-linux/core-image-full-cmdline/1.0-r0/recipe-sysroot-native/usr/bin/createrepo_c
+2  ~/oe-selftest-fedora/build/build-st-2074724/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+2  ~/oe-selftest-fedora/build/build-st-2074768/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+2  ~/oe-selftest-fedora/build/build-st-2074695/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+2  ~/qemuppc/...WORK_DIR.../ppc7400-poky-linux/openssh/8.6p1-r0/...GCC.../powerpc-poky-linux/11.1.1/ld
+2  ~/qemuppc/...WORK_DIR.../ppc7400-poky-linux/gdb/10.2-r0/...GCC.../powerpc-poky-linux/11.1.1/cc1
+2  ~/qemuppc/...WORK_DIR.../ppc7400-poky-linux/openssh/8.6p1-r0/...GCC.../powerpc-poky-linux/11.1.1/collect2
+2  ~/qemuppc/...WORK_DIR.../ppc7400-poky-linux/gdb/10.2-r0/...GCC.../powerpc-poky-linux/11.1.1/as
+2  i686-pokysdk-linux-strip
+2  ~/qemumips/...WORK_DIR.../i686-nativesdk-pokysdk-linux/nativesdk-gettext/0.21-r0/...GCC.../i686-pokysdk-linux/11.1.1/ranlib
+2  qemu-ppc
+2  ~/qemumips/build/build/tmp/hosttools/ld.bfd
+2  /usr/lib64/gcc/x86_64-suse-linux/11/collect2
+2  ~/qemumips/...WORK_DIR.../mips32r2-poky-linux/python3-pycairo/1.20.1-r0/recipe-sysroot-native/usr/lib/rpm/rpmdeps
+2  ~/qemumips/...WORK_DIR.../mips32r2-poky-linux/blktool/4-7.1-r0/...GCC.../mips-poky-linux/11.1.1/cc1
+2  ~/qemuppc/...WORK_DIR.../ppc7400-poky-linux/gstreamer1.0-plugins-base/1.18.4-r0/recipe-sysroot-native/usr/bin/nativepython3
+2  ~/qemumips/...WORK_DIR.../mips32r2-poky-linux/blktool/4-7.1-r0/...GCC.../mips-poky-linux/11.1.1/as
+2  ~/qemuppc/...WORK_DIR.../i686-nativesdk-pokysdk-linux/nativesdk-glib-2.0/1_2.68.3-r0/recipe-sysroot-native/usr/bin/msgfmt
+2  ~/qemuppc/...WORK_DIR.../qemuppc-poky-linux/core-image-minimal-dev/1.0-r0/recipe-sysroot-native/usr/sbin/prelink
+2  ~/qemumips/...WORK_DIR.../i686-nativesdk-pokysdk-linux/gcc-cross-canadian-mips/11.1.0-r0/...GCC.../i686-pokysdk-linux/11.1.1/cc1
+2  ~/qemuppc/...WORK_DIR.../ppc7400-poky-linux/gtk+3/3.24.30-r0/recipe-sysroot-native/usr/bin/rpmbuild
+2  ~/qemuppc/...WORK_DIR.../ppc7400-poky-linux/matchbox-panel-2/2.11-r0/...GCC.../powerpc-poky-linux/11.1.1/cc1
+2  ~/qemumips/...WORK_DIR.../mips32r2-poky-linux/mpg123/1.28.2-r0/...GCC.../mips-poky-linux/11.1.1/cc1
+2  ~/qemuppc/...WORK_DIR.../ppc7400-poky-linux/gstreamer1.0-plugins-good/1.18.4-r0/...GCC.../powerpc-poky-linux/11.1.1/cc1
+2  ~/qemuppc/...WORK_DIR.../ppc7400-poky-linux/matchbox-panel-2/2.11-r0/...GCC.../powerpc-poky-linux/11.1.1/as
+2  ~/qemumips/...WORK_DIR.../mips32r2-poky-linux/mpg123/1.28.2-r0/...GCC.../mips-poky-linux/11.1.1/as
+2  ~/qemuppc/...WORK_DIR.../ppc7400-poky-linux/gstreamer1.0-plugins-good/1.18.4-r0/...GCC.../powerpc-poky-linux/11.1.1/as
+2  ~/qemuppc/...WORK_DIR.../i686-nativesdk-pokysdk-linux/nativesdk-qemu/6.0.0-r0/recipe-sysroot-native/usr/bin/rpmbuild
+2  ~/qemuppc/...WORK_DIR.../i686-nativesdk-pokysdk-linux/gdb-cross-canadian-powerpc/10.2-r0/...GCC.../i686-pokysdk-linux/11.1.1/cc1
+2  ~/qemumips/...WORK_DIR.../mips32r2-poky-linux/connman-gnome/0.7-r0/recipe-sysroot-native/usr/bin/rpmbuild
+2  ~/qemuppc/...WORK_DIR.../i686-nativesdk-pokysdk-linux/binutils-cross-canadian-powerpc/2.37-r0/...GCC.../i686-pokysdk-linux/11.1.1/cc1
+2  ~/qemumips/build/build/tmp/hosttools/install
+2  ~/qemuppc/...WORK_DIR.../i686-nativesdk-pokysdk-linux/binutils-cross-canadian-powerpc/2.37-r0/...GCC.../i686-pokysdk-linux/11.1.1/as
+2  ~/genericx86-64-alt/...WORK_DIR.../core2-64-poky-linux/gtk+3/3.24.30-r0/recipe-sysroot-native/usr/bin/xmllint
+2  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/gcc/11.1.0-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/as
+2  ~/qemux86-64-ptest-fast/...WORK_DIR.../core2-64-poky-linux/qemu/6.0.0-r0/recipe-sysroot-native/usr/bin/nativepython3
+2  ~/qemux86-64-ptest-fast/...WORK_DIR.../x86_64-linux/qemu-helper-native/1.0-r1/recipe-sysroot-native/usr/bin/qemu-system-x86_64
+2  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/apr-util/1.6.1-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/cc1
+2  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/ethtool/5.13-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/cc1
+2  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/apr-util/1.6.1-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/as
+2  i686-poky-linux-gcc-ranlib
+2  ~/pkgman-rpm-non-rpm/...WORK_DIR.../core2-32-poky-linux/valgrind/3.17.0-r0/...GCC.../i686-poky-linux/11.1.1/ranlib
+2  ~/beaglebone/...WORK_DIR.../i686-nativesdk-pokysdk-linux/nativesdk-xz/5.2.5-r0/...GCC.../i686-pokysdk-linux/11.1.1/as
+2  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/ethtool/5.13-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/as
+2  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/bison/3.7.6-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/as
+2  ~/beaglebone/...WORK_DIR.../beaglebone_yocto-poky-linux-gnueabi/make-mod-scripts/1.0-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/cc1
+2  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/libfm/1.3.2-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/cc1
+2  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/libfm/1.3.2-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/as
+2  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/matchbox-desktop/2.2-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/cc1
+2  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/matchbox-desktop/2.2-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/as
+2  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/qemu/6.0.0-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/cc1plus
+2  ~/pkgman-rpm-non-rpm/...WORK_DIR.../core2-32-poky-linux/gpgme/1.16.0-r0/recipe-sysroot-native/usr/bin/rpmbuild
+2  ~/pkgman-rpm-non-rpm/...WORK_DIR.../core2-32-poky-linux/connman/1.40-r0/recipe-sysroot-native/usr/bin/rpmbuild
+2  ~/meta-intel/...WORK_DIR.../intel_corei7_64-poky-linux/core-image-sato/1.0-r0/testimage-sdk/sysroots/i686-pokysdk-linux/usr/bin/python3
+2  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/libsm/1_1.2.3-r0/recipe-sysroot-native/usr/bin/rpmbuild
+2  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/zstd/1.5.0-r0/recipe-sysroot-native/usr/bin/rpmbuild
+2  ~/pkgman-rpm-non-rpm/...WORK_DIR.../core2-32-poky-linux/rpm/1_4.16.1.3-r0/recipe-sysroot-native/usr/bin/rpmbuild
+2  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/connman/1.40-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/cc1
+2  ~/pkgman-rpm-non-rpm/...WORK_DIR.../core2-32-poky-linux/xhost/1_1.0.8-r0/recipe-sysroot-native/usr/bin/rpmbuild
+2  ~/beaglebone/...WORK_DIR.../i686-nativesdk-pokysdk-linux/nativesdk-libxcrypt/4.4.23-r0/...GCC.../i686-pokysdk-linux/11.1.1/cc1
+2  ~/beaglebone/...WORK_DIR.../i686-nativesdk-pokysdk-linux/nativesdk-libxcrypt/4.4.23-r0/...GCC.../i686-pokysdk-linux/11.1.1/as
+2  ~/qemuarm/...WORK_DIR.../armv7vet2hf-neon-poky-linux-gnueabi/libxml2/2.9.12-r0/recipe-sysroot-native/usr/bin/rpmbuild
+2  ~/qemuarm/...WORK_DIR.../armv7vet2hf-neon-poky-linux-gnueabi/db/1_5.3.28-r1/recipe-sysroot-native/usr/bin/rpmbuild
+2  ~/qemuarm/...WORK_DIR.../armv7vet2hf-neon-poky-linux-gnueabi/e2fsprogs/1.46.2-r0/recipe-sysroot-native/usr/bin/rpmbuild
+2  arm-poky-linux-gnueabi-gcc-ar
+2  ~/pkgman-rpm-non-rpm/...WORK_DIR.../core2-32-poky-linux/m4/1.4.19-r0/...GCC.../i686-poky-linux/11.1.1/cc1
+2  ~/pkgman-rpm-non-rpm/...WORK_DIR.../core2-32-poky-linux/wpa-supplicant/2.9-r0/...GCC.../i686-poky-linux/11.1.1/cc1
+2  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/dbus-test/1.12.20-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/cc1
+2  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/mesa/2_21.1.5-r0/recipe-sysroot-native/usr/bin/python3-native/python3
+2  ~/pkgman-rpm-non-rpm/...WORK_DIR.../core2-32-poky-linux/wpa-supplicant/2.9-r0/...GCC.../i686-poky-linux/11.1.1/as
+2  ~/pkgman-rpm-non-rpm/...WORK_DIR.../core2-32-poky-linux/m4/1.4.19-r0/...GCC.../i686-poky-linux/11.1.1/as
+2  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/dbus-test/1.12.20-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/as
+2  ~/pkgman-rpm-non-rpm/...WORK_DIR.../qemux86-poky-linux/init-ifupdown/1.0-r7/recipe-sysroot-native/usr/lib/rpm/rpmdeps
+2  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/libpipeline/1.5.3-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/as
+2  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/db/1_5.3.28-r1/recipe-sysroot-native/usr/bin/rpmbuild
+2  ~/pkgman-rpm-non-rpm/...WORK_DIR.../core2-32-poky-linux/boost/1.76.0-r0/recipe-sysroot-native/usr/bin/rpmbuild
+2  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/ncurses/6.2-r0/recipe-sysroot-native/usr/bin/rpmbuild
+2  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/e2fsprogs/1.46.2-r0/recipe-sysroot-native/usr/bin/rpmbuild
+2  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/dbus-test/1.12.20-r0/recipe-sysroot-native/usr/bin/rpmbuild
+2  ~/pkgman-rpm-non-rpm/...WORK_DIR.../core2-32-poky-linux/gcc/11.1.0-r0/gcc-11.1.0/build.i686-poky-linux.i686-poky-linux/build-x86_64-linux/fixincludes/fixincl
+2  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/acl/2.3.1-r0/recipe-sysroot-native/usr/bin/rpmbuild
+2  ~/pkgman-rpm-non-rpm/...WORK_DIR.../core2-32-poky-linux/gcc/11.1.0-r0/...GCC.../i686-poky-linux/11.1.1/collect2
+2  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/valgrind/3.17.0-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/collect2
+2  ~/multilib/...WORK_DIR.../core2-64-poky-linux/libxmu/1_1.1.3-r0/recipe-sysroot-native/usr/bin/rpmbuild
+2  ~/multilib/...WORK_DIR.../core2-64-poky-linux/xserver-xorg/2_1.20.12-r0/recipe-sysroot-native/usr/bin/rpmbuild
+2  ~/multilib/...WORK_DIR.../core2-64-poky-linux/bluez5/5.60-r0/recipe-sysroot-native/usr/bin/rpmbuild
+2  ~/qemux86-64-ptest-fast/...WORK_DIR.../core2-64-poky-linux/qemu/6.0.0-r0/...GCC.../x86_64-poky-linux/11.1.1/cc1
+2  ~/qemumips64/...WORK_DIR.../mips64r2-poky-linux/gstreamer1.0-plugins-bad/1.18.4-r0/...GCC.../mips64-poky-linux/11.1.1/cc1
+2  ~/qemumips64/...WORK_DIR.../mips64r2-poky-linux/gtk+3/3.24.30-r0/...GCC.../mips64-poky-linux/11.1.1/cc1
+2  ~/multilib/...WORK_DIR.../x86-pokymllib32-linux/lib32-gtk+3/3.24.30-r0/...GCC.../i686-pokymllib32-linux/11.1.1/cc1
+2  ~/multilib/...WORK_DIR.../x86-pokymllib32-linux/lib32-cairo/1.16.0-r0/recipe-sysroot-native/usr/bin/rpmbuild
+2  ~/multilib/...WORK_DIR.../core2-64-poky-linux/ofono/1.32-r0/recipe-sysroot-native/usr/bin/rpmbuild
+2  ~/multilib/...WORK_DIR.../core2-64-poky-linux/libnss-mdns/0.15.1-r0/recipe-sysroot-native/usr/bin/rpmbuild
+2  ~/qemux86-64-ptest-fast/...WORK_DIR.../core2-64-poky-linux/qemu/6.0.0-r0/...GCC.../x86_64-poky-linux/11.1.1/as
+2  ~/qemumips64/...WORK_DIR.../mips64r2-poky-linux/gstreamer1.0-plugins-bad/1.18.4-r0/...GCC.../mips64-poky-linux/11.1.1/as
+2  ~/qemumips64/...WORK_DIR.../mips64r2-poky-linux/gtk+3/3.24.30-r0/...GCC.../mips64-poky-linux/11.1.1/as
+2  ~/multilib/...WORK_DIR.../x86-pokymllib32-linux/lib32-gtk+3/3.24.30-r0/...GCC.../i686-pokymllib32-linux/11.1.1/as
+2  ~/qemumips64/...WORK_DIR.../mips64r2-poky-linux/boost/1.76.0-r0/recipe-sysroot-native/usr/bin/rpmbuild
+2  ~/qemux86-64-ptest-fast/...WORK_DIR.../core2-64-poky-linux/qemu/6.0.0-r0/recipe-sysroot-native/usr/bin/ninja
+2  ~/qemumips64/...WORK_DIR.../qemumips64-poky-linux/kernel-devsrc/1.0-r0/recipe-sysroot-native/usr/bin/rpmbuild
+2  ~/multilib/...WORK_DIR.../core2-64-poky-linux/perl/5.34.0-r0/recipe-sysroot-native/usr/bin/rpmbuild
+2  ~/qemumips64/...WORK_DIR.../mips64r2-poky-linux/ltp/20210524-r0/recipe-sysroot-native/usr/bin/rpmbuild
+2  ~/qemumips/...WORK_DIR.../qemumips-poky-linux/core-image-sato-sdk/1.0-r0/recipe-sysroot-native/usr/bin/createrepo_c
+2  ~/qemumips/...WORK_DIR.../qemumips-poky-linux/core-image-sato/1.0-r0/recipe-sysroot-native/usr/bin/createrepo_c
+2  ~/qemumips/...WORK_DIR.../qemumips-poky-linux/core-image-minimal/1.0-r0/recipe-sysroot-native/usr/bin/createrepo_c
+2  /usr/lib64/gcc/x86_64-suse-linux/11/cc1plus
+2  ~/qemumips/...WORK_DIR.../mips32r2-poky-linux/pcmanfm/1.3.2-r0/recipe-sysroot-native/usr/bin/msgfmt
+2  ~/pkgman-rpm-non-rpm/...WORK_DIR.../core2-32-poky-linux/gtk+3/3.24.30-r0/recipe-sysroot-native/usr/bin/gdk-pixbuf-pixdata
+2  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/consolekit/0.4.6-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/ranlib
+2  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/alsa-utils-scripts/1.2.5.1-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/cc1
+2  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/alsa-utils-scripts/1.2.5.1-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/as
+2  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/alsa-plugins/1.2.5-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/cc1
+2  ~/beaglebone/...WORK_DIR.../cortexa8hf-neon-poky-linux-gnueabi/alsa-plugins/1.2.5-r0/...GCC.../arm-poky-linux-gnueabi/11.1.1/as
+2  ~/qemuarm-alt/...WORK_DIR.../x86_64-linux/perl-native/5.34.0-r0/perl-5.34.0/miniperl
+2  ~/poky-tiny/...WORK_DIR.../x86_64-linux/cmake-native/3.20.5-r0/build/Bootstrap.cmk/cmake
+2  ~/qemuarm-alt/...WORK_DIR.../x86_64-linux/cmake-native/3.20.5-r0/build/Bootstrap.cmk/cmake
+2  unzip
+2  ~/qemuarm-alt/...WORK_DIR.../x86_64-linux/meson-native/0.58.1-r0/recipe-sysroot-native/usr/bin/python3-native/python3
+2  ~/musl-qemux86/...WORK_DIR.../qemux86-poky-linux-musl/core-image-full-cmdline/1.0-r0/recipe-sysroot-native/usr/bin/createrepo_c
+2  ~/qemuppc/...WORK_DIR.../x86_64-nativesdk-pokysdk-linux/nativesdk-qemu/6.0.0-r0/recipe-sysroot-native/usr/bin/ninja
+2  ~/qemuppc/...WORK_DIR.../qemuppc-poky-linux/core-image-sato/1.0-r0/recipe-sysroot-native/usr/bin/python3-native/python3
+2  ~/qemumips/...WORK_DIR.../x86_64-nativesdk-pokysdk-linux/gdb-cross-canadian-mips/10.2-r0/...GCC.../x86_64-pokysdk-linux/11.1.1/cc1
+2  ~/qemumips/...WORK_DIR.../x86_64-nativesdk-pokysdk-linux/gdb-cross-canadian-mips/10.2-r0/...GCC.../x86_64-pokysdk-linux/11.1.1/as
+2  ~/qemux86-world-alt/build/build/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+2  ~/oe-selftest-ubuntu/build/build-st-3780/tmp/work/x86_64-linux/qemu-helper-native/1.0-r1/recipe-sysroot-native/usr/bin/qemu-system-x86_64
+2  ~/oe-selftest-ubuntu/build/build-st-3766/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+2  ~/oe-selftest-ubuntu/build/build-st-3790/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+2  ~/qemuppc/...WORK_DIR.../qemuppc-poky-linux/linux-yocto/5.10.52+gitAUTOINC+c3900f83a5_afd31d5674-r0/...GCC.../powerpc-poky-linux/11.1.1/cc1
+2  ~/build-appliance/...WORK_DIR.../core2-64-poky-linux/strace/5.12-r0/...GCC.../x86_64-poky-linux/11.1.1/cc1
+2  ~/genericx86-alt/...WORK_DIR.../core2-32-poky-linux/openssh/8.6p1-r0/...GCC.../i686-poky-linux/11.1.1/cc1
+2  ~/genericx86-alt/...WORK_DIR.../core2-32-poky-linux/elfutils/0.185-r0/...GCC.../i686-poky-linux/11.1.1/cc1
+2  ~/build-appliance/...WORK_DIR.../core2-64-poky-linux/gettext/0.21-r0/...GCC.../x86_64-poky-linux/11.1.1/cc1
+2  ~/qemuppc/...WORK_DIR.../qemuppc-poky-linux/linux-yocto/5.10.52+gitAUTOINC+c3900f83a5_afd31d5674-r0/...GCC.../powerpc-poky-linux/11.1.1/as
+2  ~/genericx86-alt/...WORK_DIR.../core2-32-poky-linux/gpgme/1.16.0-r0/...GCC.../i686-poky-linux/11.1.1/as
+2  ~/build-appliance/...WORK_DIR.../core2-64-poky-linux/strace/5.12-r0/...GCC.../x86_64-poky-linux/11.1.1/as
+2  ~/build-appliance/...WORK_DIR.../core2-64-poky-linux/ofono/1.32-r0/...GCC.../x86_64-poky-linux/11.1.1/as
+2  ~/genericx86-alt/...WORK_DIR.../core2-32-poky-linux/openssh/8.6p1-r0/...GCC.../i686-poky-linux/11.1.1/as
+2  ~/build-appliance/...WORK_DIR.../core2-64-poky-linux/gettext/0.21-r0/...GCC.../x86_64-poky-linux/11.1.1/as
+2  ~/genericx86-alt/...WORK_DIR.../core2-32-poky-linux/elfutils/0.185-r0/...GCC.../i686-poky-linux/11.1.1/as
+2  supervise
+2  ~/oe-selftest-debian/build/build-st-49581/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+2  ~/qa-extras/build/build/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+2  /usr/sbin/CRON
+2  ~/oe-selftest-debian/build/build-st-49592/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+2  useradd
+2  ~/qemux86/...WORK_DIR.../qemux86-poky-linux/core-image-sato/1.0-r0/testsdkext/tmp/sysroots/x86_64/usr/bin/cmake
+2  ~/qemux86/...WORK_DIR.../qemux86-poky-linux/core-image-sato/1.0-r0/testimage-sdk/sysroots/x86_64-pokysdk-linux/usr/bin/cmake
+2  ~/qemux86/...WORK_DIR.../qemux86-poky-linux/core-image-minimal/1.0-r0/testsdkext/tmp/sysroots/x86_64/usr/bin/cmake
+2  /usr/libexec/git-core/git
+2  ~/meta-mingw/...WORK_DIR.../x86_64-nativesdk-mingw32-w64-mingw32/nativesdk-curl/7.77.0-r0/...GCC.../x86_64-w64-mingw32/11.1.1/cc1
+2  ~/meta-mingw/...WORK_DIR.../x86_64-nativesdk-mingw32-w64-mingw32/nativesdk-pkgconfig/0.29.2+gitAUTOINC+edf8e6f0ea-r0/...GCC.../x86_64-w64-mingw32/11.1.1/cc1
+2  ~/musl-qemux86-64/...WORK_DIR.../core2-64-poky-linux-musl/musl/1.2.2+gitAUTOINC+aad50fcd79-r0/...GCC.../x86_64-poky-linux-musl/11.1.1/cc1
+2  ~/musl-qemux86-64/...WORK_DIR.../core2-64-poky-linux-musl/musl/1.2.2+gitAUTOINC+aad50fcd79-r0/...GCC.../x86_64-poky-linux-musl/11.1.1/as
+2  ~/meta-mingw/...WORK_DIR.../x86_64-nativesdk-mingw32-w64-mingw32/nativesdk-curl/7.77.0-r0/...GCC.../x86_64-w64-mingw32/11.1.1/as
+2  ~/meta-mingw/...WORK_DIR.../x86_64-nativesdk-mingw32-w64-mingw32/nativesdk-pkgconfig/0.29.2+gitAUTOINC+edf8e6f0ea-r0/...GCC.../x86_64-w64-mingw32/11.1.1/as
+2  ~/no-x11/...WORK_DIR.../core2-64-poky-linux/llvm/12.0.1-r0/...GCC.../x86_64-poky-linux/11.1.1/cc1plus
+2  ~/no-x11/...WORK_DIR.../core2-64-poky-linux/llvm/12.0.1-r0/...GCC.../x86_64-poky-linux/11.1.1/as
+2  ~/no-x11/...WORK_DIR.../core2-64-poky-linux/llvm/12.0.1-r0/recipe-sysroot-native/usr/bin/x86_64-poky-linux/x86_64-poky-linux-g++
+2  ~/genericx86-64/...WORK_DIR.../core2-64-poky-linux/pulseaudio/14.2-r0/recipe-sysroot-native/usr/bin/rpmbuild
+2  ~/genericx86-64/...WORK_DIR.../core2-64-poky-linux/rpm/1_4.16.1.3-r0/recipe-sysroot-native/usr/bin/rpmbuild
+2  ~/musl-qemux86/...WORK_DIR.../core2-32-poky-linux-musl/atk/2.36.0-r0/recipe-sysroot-native/usr/bin/rpmbuild
+2  ~/musl-qemux86/...WORK_DIR.../core2-32-poky-linux-musl/wpebackend-fdo/1.10.0-r0/recipe-sysroot-native/usr/lib/rpm/rpmdeps
+2  ~/qemuarm64/...WORK_DIR.../i686-nativesdk-pokysdk-linux/nativesdk-glibc/2.33-r0/...GCC.../i686-pokysdk-linux/11.1.1/ld
+2  bc
+2  ~/musl-qemux86/...WORK_DIR.../core2-32-poky-linux-musl/usbutils/013-r0/...GCC.../i686-poky-linux-musl/11.1.1/cc1
+2  ~/musl-qemux86/...WORK_DIR.../core2-32-poky-linux-musl/usbutils/013-r0/...GCC.../i686-poky-linux-musl/11.1.1/as
+2  ~/musl-qemux86/...WORK_DIR.../core2-32-poky-linux-musl/cmake/3.20.5-r0/recipe-sysroot-native/usr/bin/i686-poky-linux-musl/i686-poky-linux-musl-g++
+2  ~/musl-qemux86/...WORK_DIR.../core2-32-poky-linux-musl/webkitgtk/2.32.2-r0/...GCC.../i686-poky-linux-musl/11.1.1/cc1plus
+2  ~/genericx86-64-alt/...WORK_DIR.../core2-64-poky-linux/gettext/0.21-r0/...GCC.../x86_64-poky-linux/11.1.1/cc1
+2  ~/musl-qemux86/...WORK_DIR.../core2-32-poky-linux-musl/webkitgtk/2.32.2-r0/...GCC.../i686-poky-linux-musl/11.1.1/as
+2  qemu-aarch64
+2  ~/musl-qemux86/...WORK_DIR.../core2-32-poky-linux-musl/webkitgtk/2.32.2-r0/recipe-sysroot-native/usr/bin/i686-poky-linux-musl/i686-poky-linux-musl-g++
+2  ~/genericx86-64-alt/...WORK_DIR.../core2-64-poky-linux/gettext/0.21-r0/...GCC.../x86_64-poky-linux/11.1.1/as
+2  ~/qemuarm64/...WORK_DIR.../cortexa57-poky-linux/matchbox-panel-2/2.11-r0/...GCC.../aarch64-poky-linux/11.1.1/collect2
+2  ~/qemuarm64/...WORK_DIR.../cortexa57-poky-linux/matchbox-panel-2/2.11-r0/...GCC.../aarch64-poky-linux/11.1.1/ld
+2  ~/oe-selftest-fedora/build/build-st-2106430/tmp/work/qemux86_64-poky-linux/core-image-minimal/1.0-r0/recipe-sysroot-native/usr/bin/createrepo_c
+2  apt-get
+2  ~/musl-qemux86/...WORK_DIR.../core2-32-poky-linux-musl/llvm/12.0.1-r0/recipe-sysroot-native/usr/bin/i686-poky-linux-musl/i686-poky-linux-musl-ranlib
+2  ~/poky-tiny/build/build/tmp/hosttools/mkdir
+2  ~/build-appliance/...WORK_DIR.../core2-64-poky-linux/perl/5.34.0-r0/perl-5.34.0/miniperl
+2  ~/oe-selftest/build/build-st-45672/tmp/work/core2-64-poky-linux/glib-2.0/1_2.68.3-r0/...GCC.../x86_64-poky-linux/11.1.1/cc1
+2  ~/oe-selftest/build/build-st-45664/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo
+2  ~/oe-selftest/build/build-st-45685/tmp/work/core2-64-poky-linux/ncurses/6.2-r0/recipe-sysroot-native/usr/bin/rpmbuild
+2  ~/oe-selftest/build/build-st-45672/tmp/work/core2-64-poky-linux/glib-2.0/1_2.68.3-r0/...GCC.../x86_64-poky-linux/11.1.1/as
+2  ~/oe-selftest/build/build-st-45711/tmp/work/core2-64-poky-linux/go-runtime/1.16.5-r0/go/pkg/tool/native_native/compile
+
+Kernel Process Summary: 
+94807  kworker
+20968  ksoftirqd
+20968  migration
+20968  cpuhp
+15840  watchdog
+2864  idle_inject
+1088  irq
+997  jbd2
+997  ext4-rsv-conver
+564  bioset
+562  kdmflush
+379  ksmd
+379  kthreadd
+379  rcu_sched
+379  kdevtmpfs
+379  netns
+379  kauditd
+379  oom_reaper
+379  writeback
+379  kcompactd0
+379  kcompactd1
+379  khugepaged
+379  kintegrityd
+379  kblockd
+379  ata_sff
+379  edac-poller
+379  watchdogd
+379  kswapd0
+379  kswapd1
+379  kthrotld
+379  ipv6_addrconf
+379  scsi_eh_0
+379  scsi_tmf_0
+379  scsi_eh_1
+379  ixgbe
+379  scsi_tmf_1
+379  scsi_eh_2
+379  scsi_tmf_2
+379  scsi_eh_3
+379  scsi_tmf_3
+379  scsi_eh_4
+379  scsi_tmf_4
+379  scsi_eh_5
+379  scsi_tmf_5
+379  scsi_eh_6
+379  scsi_tmf_6
+379  rpciod
+379  xprtiod
+379  nfsiod
+379  NFSv4 callback
+378  mm_percpu_wq
+378  rcu_tasks_kthre
+378  kstrp
+360  devfreq_wq
+354  scsi_eh_7
+354  scsi_tmf_7
+353  scsi_eh_8
+353  scsi_tmf_8
+353  scsi_eh_9
+353  scsi_tmf_9
+353  scsi_eh_10
+353  scsi_tmf_10
+335  khungtaskd
+334  charger_manager
+326  md
+326  acpi_thermal_pm
+314  ttm_swap
+283  rcu_bh
+283  crypto
+282  ecryptfs-kthrea
+282  raid5wq
+282  iscsi_eh
+282  ib-comp-wq
+282  ib-comp-unb-wq
+282  ib_mcast
+282  ib_nl_sa_wq
+282  rdma_cm
+96  rcu_gp
+96  rcu_par_gp
+96  cryptd
+96  blkcg_punt_bio
+96  tpm_dev_wq
+90  rcu_tasks_rude_
+90  rcu_tasks_trace
+90  zswap-shrink
+88  xfs-buf
+88  xfs-conv
+88  xfs-cil
+88  xfs-reclaim
+88  xfs-log
+88  xfsaild
+71  poll_megasas10_
+65  inet_frag_wq
+57  mld
+52  kaluad
+52  kmpath_rdacd
+52  kmpathd
+52  kmpath_handlerd
+50  xfs-eofblocks
+44  dm_bufio_cache
+44  xfsalloc
+44  xfs_mru_cache
+25  pm_wq
+25  poll_megasas6_s
+22  kvm-nx-lpage-re
+22  xfs-gc
+21  kvm-pit
+16  xfs-blockgc
+16  qemu:package
+9  cc1
+5  ltp:package
+5  e2fsprogs:packa
+4  bash
+4  pigz
+3  nettle:package
+3  cc1plus
+2  as
+2  rpmbuild.real
+2  git
+
+Zombie Process Summary: 
+316  python3
+255  KnottyUI
+61  sh
+56  tar
+22  as
+13  Parser
+9  i686-pokysdk-li
+6  gzip
+4  gawk:package_wr
+4  ltp:package
+3  python3.9.real
+2  qemu-system-aar
+2  core-image-sato
+2  core-image-mini
+2  compile
+1  rm
+
+
+[-- Attachment #3: summarize_top_output.py --]
+[-- Type: text/x-python, Size: 7811 bytes --]
+
+#!/usr/bin/env python3
+
+import os, sys, glob
+
+# constants
+HOME = "/home/pokybuild/yocto-worker/"
+top_header = 7
+max_cols = 11
+cpu_hoggers = 5
+zombie_proc_id = "<defunct>"
+parser = "Parser"
+
+# report the following whenever they occur
+special_cmds = ["rm", "tar", "qemu"]
+
+# string substitution to make things easier to read
+subs = {
+    "/home/pokybuild/yocto-worker/" : "~/",
+    "/build/build/tmp/work/" : "/...WORK_DIR.../"
+}
+
+def usage():
+    print("Usage: " + sys.argv[0] + " <dest> <target>")
+
+def list_top_outputs(logfile):
+    # top delimiter
+    top_start = "start: top output"
+    top_end = "end: top output"
+
+    # list of top outputs
+    top_outputs = []
+
+    # flag
+    collect = False
+    with open(logfile) as log:
+        top_output = []
+        for line in log:
+            lstrip = line.strip()
+            if collect:
+                if lstrip.startswith(top_end):
+                    collect = False
+                    top_outputs.append(top_output)
+                    top_output = []
+                else:
+                    top_output.append(lstrip)
+            if lstrip.startswith(top_start):
+                collect = True
+                    
+    return top_outputs
+
+def summarize_top(top_outs, target):
+    summaries = []
+    kernel_summaries = []
+    zombie_summaries = []
+    short_summaries = []
+    other_builds = []
+    summary = {}
+    kernel_summary = {}
+    zombie_summary = {}
+    for top_out in top_outs:
+        short_summary = top_out[:top_header + cpu_hoggers]
+        for line in top_out[top_header:]:
+            cmd = line.split(maxsplit=max_cols)[-1]
+            if cmd.startswith(HOME):
+                b = cmd.split(HOME)[1].split("/")[0]
+                if b not in other_builds:
+                    other_builds.append(b)
+            if cmd[0] == "[" and cmd[-1] == "]":    # kernel processes
+                kproc = cmd[1:-1].split("/")[0]
+                if kproc not in kernel_summary:
+                    kernel_summary[kproc] = 1
+                else:
+                    kernel_summary[kproc] += 1
+            elif zombie_proc_id in cmd:             # zombie processes
+                zproc = cmd.split()[0][1:-1]
+                if parser in zproc:
+                    zproc = parser
+                if zproc not in zombie_summary:
+                    zombie_summary[zproc] = 1
+                else:
+                    zombie_summary[zproc] += 1
+            else:                                   # userspace processes
+                cmd_split = cmd.split()
+                prog = cmd_split[0]
+                if prog not in summary:
+                    summary[prog] = 1
+                else:
+                    summary[prog] += 1
+    summary = dict(sorted(summary.items(), key=lambda item: item[1], reverse=True))
+    kernel_summary = dict(sorted(kernel_summary.items(), key=lambda item: item[1], reverse=True))
+    zombie_summary = dict(sorted(zombie_summary.items(), key=lambda item: item[1], reverse=True))
+
+    summaries.append(summary)
+    kernel_summaries.append(kernel_summary)
+    zombie_summaries.append(zombie_summary)
+    short_summaries.append(short_summary)
+    return (short_summaries, summaries, kernel_summaries, zombie_summaries, other_builds)
+    
+def summarize_path(path):
+    sub = ["/recipe-sysroot-native/", "/../../libexec/", "/gcc/"]
+    p = path
+    for k, v in subs.items():
+        p = p.replace(k, v)
+    if all(x in p for x in sub):
+        rsn_spl = p.split("/recipe-sysroot-native/")
+        gcc_spl = rsn_spl[-1].split("/gcc/")
+        p = rsn_spl[0] + "/...GCC.../" + gcc_spl[-1]
+    
+    return p
+
+def write_summary(short_summary, summary, kernel_summary, zombie_summary, other_build, target, logfile):
+    if target is not None:
+        dirname = os.path.dirname(logfile)
+        fname = os.path.basename(logfile)
+        report_name = fname.split(".")[0] + "_summary.txt"
+        outfile = os.path.join(dirname, report_name)
+    else:
+        outfile = "all_summary.txt"
+    out = "NOTE:\nProcesses that occur only once is not reported.\n"
+    out += "Program names have been shortened for better readability.\n"
+    out += "Substitutions are as follows:\n"
+    for k, v in subs.items():
+        out += (v + " = " + k + "\n")
+    out += "\n"
+
+    out += "top was invoked " + str(len(short_summary)) + " times.\n\n"
+    if target is not None:
+        out += "Current build: " + target + "\n"
+    out += "Other builds:"
+    for b in other_build:
+        out += " " + b
+    out += "\n\n"
+    for i in range(len(short_summary)):
+        for l in short_summary[i]:
+            out += (l + "\n")
+
+        out += ("\nUserspace Process Summary: " + "\n")
+        if not summary:
+            out += "There were no userspace processes\n"
+        else:
+            for k, v in summary[i].items():
+                if v > 1 or any(k.startswith(x) for x in special_cmds):
+                    r = summarize_path(k)
+                    out += (str(v) + "  " + r + "\n")
+        
+        out += ("\nKernel Process Summary: " + "\n")
+        if not kernel_summary:
+            out += "There were no kernel processes\n"
+        else:
+            for k, v in kernel_summary[i].items():
+                if v > 1 or any(k.startswith(x) for x in special_cmds):
+                    out += (str(v) + "  " + k + "\n")
+
+        out += ("\nZombie Process Summary: " + "\n")
+        if not zombie_summary:
+            out += "There were no zombie processes\n"
+        else:
+            for k, v in zombie_summary[i].items():
+                if v > 1 or any(k.startswith(x) for x in special_cmds):
+                    out += (str(v) + "  " + k + "\n")
+        out += ("\n")
+
+    with open(outfile, "w") as of:
+        of.write(out)
+
+def main():
+    all = False
+    if sys.argv[1] == "all":
+        all = True
+        dest = sys.argv[2]
+    elif len(sys.argv) != 3:
+        usage()
+        sys.exit()
+
+    if not all:  
+        dest = sys.argv[1]
+        target = sys.argv[2]
+        host_data_dir = "intermittent_failure_host_data"
+        directory = os.path.join(dest, target, host_data_dir)
+        regs = (directory + "/*_top.txt", directory + "/*_failure_*.txt")
+        for exts in regs:
+            for f in glob.glob(exts):
+                outputs = list_top_outputs(f)
+                short_summary, summary, kernel_summary, zombie_summary, other_build = summarize_top(outputs, target)
+                write_summary(short_summary, summary, kernel_summary, zombie_summary, other_build, target, f)
+    else:
+        print("Summarizing all files in " + dest)
+        top_outputs = []
+        for f in glob.glob(dest + "/*"):
+            #print(f)
+            top_start = "start: top output"
+            top_end = "end: top output"            
+            # flag
+            collect = False
+            with open(f) as log:
+                top_output = []
+                for line in log:
+                    lstrip = line.strip()
+                    if collect:
+                        if lstrip.startswith(top_end):
+                            collect = False
+                            top_outputs.append(top_output)
+                            top_output = []
+                        else:
+                            top_output.append(lstrip)
+                    if lstrip.startswith(top_start):
+                        collect = True
+        print("top_outputs: " + str(len(top_outputs)))
+        short_summary, summary, kernel_summary, zombie_summary, other_build = summarize_top(top_outputs, None)
+        write_summary(short_summary, summary, kernel_summary, zombie_summary, other_build, None, f)
+
+
+main()
+
+
+
+
+
+[-- Attachment #4: sum_sum.py --]
+[-- Type: text/x-python, Size: 512 bytes --]
+
+#!/usr/bin/env python3
+
+import glob
+import shutil
+
+y = "2021"
+m = "07"
+
+dest = "/home/ssajal/host_data/files/"
+
+count = 0
+pre = "/srv/autobuilder/autobuilder.yoctoproject.org/pub/non-release/"
+for d in range(23, 30):
+    print(y+m+str(d))
+    for f in glob.glob(pre + y + m + str(d) + "-*/testresults/*/intermittent_failure_host_data/host_stats_interval_*_top.txt"):
+        count += 1
+        shutil.copyfile(f, dest + str(count) + ".txt")
+        print (f)
+
+print("count: " + str(count))
+
+
+^ permalink raw reply	[flat|nested] only message in thread
+only message in thread, other threads:[~2021-07-29 14:07 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-07-29 14:07 Yocto Autobuilder: Latency Monitor and AB-INT - Meeting notes: July 29, 2021 Randy MacLeod
+

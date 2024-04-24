@@ -1,0 +1,693 @@
+* [PATCH yocto-autobuilder-helper] scripts: run-docs-build: make the workdir pristine between builds
+@ 2022-10-03 17:04 Quentin Schulz
+  2022-10-03 17:05 ` Quentin Schulz
+                   ` (2 more replies)
+  0 siblings, 3 replies; 9+ messages in thread
+From: Quentin Schulz @ 2022-10-03 17:04 UTC (permalink / raw)
+  To: yocto; +Cc: Quentin Schulz, Quentin Schulz
+
+From: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+
+It happened that the git repositories were dirty and resulted in
+incorrect files being used. Let's use git clean -ffdx to force a
+completely clean git repositories before and after checking out a branch
+so that nothing is left from or to another branch build
+
+Cc: Quentin Schulz <foss+yocto@0leil.net>
+Signed-off-by: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+---
+ scripts/run-docs-build | 10 +++++-----
+ 1 file changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/scripts/run-docs-build b/scripts/run-docs-build
+index c6b3965..69e3257 100755
+--- a/scripts/run-docs-build
++++ b/scripts/run-docs-build
+@@ -61,6 +61,7 @@ for branch in 1.46 $(git branch --remote --contains "$first_sphinx_commit" --for
+ 
+     echo Building bitbake $branch branch
+     git checkout $branch
++    git clean -ffdx
+     git checkout origin/master releases.rst
+     make clean
+     SPHINXOPTS="-j auto" make publish
+@@ -80,7 +81,7 @@ for branch in 1.46 $(git branch --remote --contains "$first_sphinx_commit" --for
+     fi
+ 
+     cp -r ./_build/final/* $outputdir/bitbake/$branch
+-    git reset --hard
++    git clean -ffdx
+ done
+ 
+ if [ "$PUBLISH" -ne 0 ]; then
+@@ -100,8 +101,7 @@ first_dunfell_sphinx_commit=c25fe058b88b893b0d146f3ed27320b47cdec236
+ git checkout origin/master set_versions.py
+ #latest_tag=$(git tag --contains "$first_sphinx_commit" --contains "$first_dunfell_sphinx_commit" --sort="version:refname" 'yocto-*' | tail -1 | sed 's/yocto-//')
+ latest_tag=$(./set_versions.py getlatest)
+-git reset --hard
+-git clean -f
++git clean -ffdx
+ 
+ for branch in dunfell $(git branch --remote --contains "$first_sphinx_commit" --format '%(refname:lstrip=3)') $(git tag --contains "$first_sphinx_commit" --contains "$first_dunfell_sphinx_commit" 'yocto-*') transition; do
+     if [ "$branch" = "HEAD" ]; then
+@@ -116,6 +116,7 @@ for branch in dunfell $(git branch --remote --contains "$first_sphinx_commit" --
+ 
+     echo Building $branch
+     git checkout $branch
++    git clean -ffdx
+ 
+     if [ -e "${scriptdir}/docs-build-patches/${branch}/" ]; then
+         echo Adding patch for $branch
+@@ -160,8 +161,7 @@ for branch in dunfell $(git branch --remote --contains "$first_sphinx_commit" --
+     fi
+ 
+     cp -r ./_build/final/* $outputdir/$branch
+-    git reset --hard
+-    git clean -f
++    git clean -ffdx
+ done
+ 
+ # Update bitbake switchers.js with the copy from master ypdocs
+-- 
+2.37.3
+
+
+
+^ permalink raw reply related	[flat|nested] 9+ messages in thread
+* Re: [PATCH yocto-autobuilder-helper] scripts: run-docs-build: make the workdir pristine between builds
+  2022-10-03 17:04 [PATCH yocto-autobuilder-helper] scripts: run-docs-build: make the workdir pristine between builds Quentin Schulz
+@ 2022-10-03 17:05 ` Quentin Schulz
+  2022-10-03 17:11 ` [yocto] " Michael Opdenacker
+  2022-10-03 21:15 ` Luca Ceresoli
+  2 siblings, 0 replies; 9+ messages in thread
+From: Quentin Schulz @ 2022-10-03 17:05 UTC (permalink / raw)
+  To: Quentin Schulz, yocto
+
+Hi all,
+
+On 10/3/22 19:04, Quentin Schulz wrote:
+> From: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+> 
+> It happened that the git repositories were dirty and resulted in
+> incorrect files being used. Let's use git clean -ffdx to force a
+> completely clean git repositories before and after checking out a branch
+> so that nothing is left from or to another branch build
+> 
+> Cc: Quentin Schulz <foss+yocto@0leil.net>
+> Signed-off-by: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+> ---
+
+Forgot to say this was not tested. Let's run this on the autobuilder and 
+see if it helps? Is there a way to try without merging?
+
+Cheers,
+Quentin
+
+
+^ permalink raw reply	[flat|nested] 9+ messages in thread
+* Re: [yocto] [PATCH yocto-autobuilder-helper] scripts: run-docs-build: make the workdir pristine between builds
+  2022-10-03 17:04 [PATCH yocto-autobuilder-helper] scripts: run-docs-build: make the workdir pristine between builds Quentin Schulz
+  2022-10-03 17:05 ` Quentin Schulz
+@ 2022-10-03 17:11 ` Michael Opdenacker
+  2022-10-03 21:15   ` Luca Ceresoli
+  2022-10-03 21:15 ` Luca Ceresoli
+  2 siblings, 1 reply; 9+ messages in thread
+From: Michael Opdenacker @ 2022-10-03 17:11 UTC (permalink / raw)
+  To: Quentin Schulz, yocto; +Cc: Quentin Schulz, Quentin Schulz
+
+Hi Quentin,
+
+On 03.10.22 19:04, Quentin Schulz wrote:
+> From: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+>
+> It happened that the git repositories were dirty and resulted in
+> incorrect files being used. Let's use git clean -ffdx to force a
+> completely clean git repositories before and after checking out a branch
+> so that nothing is left from or to another branch build
+>
+> Cc: Quentin Schulz <foss+yocto@0leil.net>
+> Signed-off-by: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+> ---
+>   scripts/run-docs-build | 10 +++++-----
+>   1 file changed, 5 insertions(+), 5 deletions(-)
+>
+> diff --git a/scripts/run-docs-build b/scripts/run-docs-build
+> index c6b3965..69e3257 100755
+> --- a/scripts/run-docs-build
+> +++ b/scripts/run-docs-build
+> @@ -61,6 +61,7 @@ for branch in 1.46 $(git branch --remote --contains "$first_sphinx_commit" --for
+>   
+>       echo Building bitbake $branch branch
+>       git checkout $branch
+> +    git clean -ffdx
+>       git checkout origin/master releases.rst
+>       make clean
+>       SPHINXOPTS="-j auto" make publish
+> @@ -80,7 +81,7 @@ for branch in 1.46 $(git branch --remote --contains "$first_sphinx_commit" --for
+>       fi
+>   
+>       cp -r ./_build/final/* $outputdir/bitbake/$branch
+> -    git reset --hard
+> +    git clean -ffdx
+
+
+In both cases, why "-ffdx"? Isn't it the same as "-fdx" (just checking 
+the manual page).
+
+Cheers
+Michael.
+
+-- 
+Michael Opdenacker, Bootlin
+Embedded Linux and Kernel engineering
+https://bootlin.com
+
+
+
+^ permalink raw reply	[flat|nested] 9+ messages in thread
+* Re: [yocto] [PATCH yocto-autobuilder-helper] scripts: run-docs-build: make the workdir pristine between builds
+  2022-10-03 17:04 [PATCH yocto-autobuilder-helper] scripts: run-docs-build: make the workdir pristine between builds Quentin Schulz
+  2022-10-03 17:05 ` Quentin Schulz
+  2022-10-03 17:11 ` [yocto] " Michael Opdenacker
+@ 2022-10-03 21:15 ` Luca Ceresoli
+  2022-10-04  8:15   ` Quentin Schulz
+  2 siblings, 1 reply; 9+ messages in thread
+From: Luca Ceresoli @ 2022-10-03 21:15 UTC (permalink / raw)
+  To: Quentin Schulz; +Cc: yocto, Quentin Schulz, Quentin Schulz
+
+Hi Quentin,
+
+On Mon,  3 Oct 2022 19:04:01 +0200
+"Quentin Schulz" <foss@0leil.net> wrote:
+
+> From: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+> 
+> It happened that the git repositories were dirty and resulted in
+> incorrect files being used. Let's use git clean -ffdx to force a
+> completely clean git repositories before and after checking out a branch
+> so that nothing is left from or to another branch build
+> 
+> Cc: Quentin Schulz <foss+yocto@0leil.net>
+> Signed-off-by: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+> ---
+>  scripts/run-docs-build | 10 +++++-----
+>  1 file changed, 5 insertions(+), 5 deletions(-)
+> 
+> diff --git a/scripts/run-docs-build b/scripts/run-docs-build
+> index c6b3965..69e3257 100755
+> --- a/scripts/run-docs-build
+> +++ b/scripts/run-docs-build
+> @@ -61,6 +61,7 @@ for branch in 1.46 $(git branch --remote --contains "$first_sphinx_commit" --for
+>  
+>      echo Building bitbake $branch branch
+>      git checkout $branch
+> +    git clean -ffdx
+>      git checkout origin/master releases.rst
+>      make clean
+>      SPHINXOPTS="-j auto" make publish
+> @@ -80,7 +81,7 @@ for branch in 1.46 $(git branch --remote --contains "$first_sphinx_commit" --for
+>      fi
+>  
+>      cp -r ./_build/final/* $outputdir/bitbake/$branch
+> -    git reset --hard
+> +    git clean -ffdx
+
+Sure this is correct? 'git clean -ffdx' does not revert changes to
+tracked files, be them staged or not.
+
+>  done
+>  
+>  if [ "$PUBLISH" -ne 0 ]; then
+> @@ -100,8 +101,7 @@ first_dunfell_sphinx_commit=c25fe058b88b893b0d146f3ed27320b47cdec236
+>  git checkout origin/master set_versions.py
+>  #latest_tag=$(git tag --contains "$first_sphinx_commit" --contains "$first_dunfell_sphinx_commit" --sort="version:refname" 'yocto-*' | tail -1 | sed 's/yocto-//')
+>  latest_tag=$(./set_versions.py getlatest)
+> -git reset --hard
+> -git clean -f
+> +git clean -ffdx
+>  
+>  for branch in dunfell $(git branch --remote --contains "$first_sphinx_commit" --format '%(refname:lstrip=3)') $(git tag --contains "$first_sphinx_commit" --contains "$first_dunfell_sphinx_commit" 'yocto-*') transition; do
+>      if [ "$branch" = "HEAD" ]; then
+> @@ -116,6 +116,7 @@ for branch in dunfell $(git branch --remote --contains "$first_sphinx_commit" --
+>  
+>      echo Building $branch
+>      git checkout $branch
+> +    git clean -ffdx
+>  
+>      if [ -e "${scriptdir}/docs-build-patches/${branch}/" ]; then
+>          echo Adding patch for $branch
+> @@ -160,8 +161,7 @@ for branch in dunfell $(git branch --remote --contains "$first_sphinx_commit" --
+>      fi
+>  
+>      cp -r ./_build/final/* $outputdir/$branch
+> -    git reset --hard
+> -    git clean -f
+> +    git clean -ffdx
+
+Same here.
+
+-- 
+Luca Ceresoli, Bootlin
+Embedded Linux and Kernel engineering
+https://bootlin.com
+
+
+^ permalink raw reply	[flat|nested] 9+ messages in thread
+* Re: [yocto] [PATCH yocto-autobuilder-helper] scripts: run-docs-build: make the workdir pristine between builds
+  2022-10-03 17:11 ` [yocto] " Michael Opdenacker
+@ 2022-10-03 21:15   ` Luca Ceresoli
+  0 siblings, 0 replies; 9+ messages in thread
+From: Luca Ceresoli @ 2022-10-03 21:15 UTC (permalink / raw)
+  To: Michael Opdenacker via lists.yoctoproject.org
+  Cc: michael.opdenacker, Quentin Schulz, yocto, Quentin Schulz,
+	Quentin Schulz
+
+On Mon, 3 Oct 2022 19:11:34 +0200
+"Michael Opdenacker via lists.yoctoproject.org"
+<michael.opdenacker=bootlin.com@lists.yoctoproject.org> wrote:
+
+> Hi Quentin,
+> 
+> On 03.10.22 19:04, Quentin Schulz wrote:
+> > From: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+> >
+> > It happened that the git repositories were dirty and resulted in
+> > incorrect files being used. Let's use git clean -ffdx to force a
+> > completely clean git repositories before and after checking out a branch
+> > so that nothing is left from or to another branch build
+> >
+> > Cc: Quentin Schulz <foss+yocto@0leil.net>
+> > Signed-off-by: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+> > ---
+> >   scripts/run-docs-build | 10 +++++-----
+> >   1 file changed, 5 insertions(+), 5 deletions(-)
+> >
+> > diff --git a/scripts/run-docs-build b/scripts/run-docs-build
+> > index c6b3965..69e3257 100755
+> > --- a/scripts/run-docs-build
+> > +++ b/scripts/run-docs-build
+> > @@ -61,6 +61,7 @@ for branch in 1.46 $(git branch --remote --contains "$first_sphinx_commit" --for
+> >   
+> >       echo Building bitbake $branch branch
+> >       git checkout $branch
+> > +    git clean -ffdx
+> >       git checkout origin/master releases.rst
+> >       make clean
+> >       SPHINXOPTS="-j auto" make publish
+> > @@ -80,7 +81,7 @@ for branch in 1.46 $(git branch --remote --contains "$first_sphinx_commit" --for
+> >       fi
+> >   
+> >       cp -r ./_build/final/* $outputdir/bitbake/$branch
+> > -    git reset --hard
+> > +    git clean -ffdx  
+> 
+> 
+> In both cases, why "-ffdx"? Isn't it the same as "-fdx" (just checking 
+> the manual page).
+
+The manpage for git 2.34.1 has this extra detail:
+
+> Git will refuse to modify untracked nested git repositories
+> (directories with a .git subdirectory) unless a second -f is given.
+
+-- 
+Luca Ceresoli, Bootlin
+Embedded Linux and Kernel engineering
+https://bootlin.com
+
+
+^ permalink raw reply	[flat|nested] 9+ messages in thread
+* Re: [yocto] [PATCH yocto-autobuilder-helper] scripts: run-docs-build: make the workdir pristine between builds
+  2022-10-03 21:15 ` Luca Ceresoli
+@ 2022-10-04  8:15   ` Quentin Schulz
+  2022-10-04 20:54     ` Luca Ceresoli
+  0 siblings, 1 reply; 9+ messages in thread
+From: Quentin Schulz @ 2022-10-04  8:15 UTC (permalink / raw)
+  To: Luca Ceresoli; +Cc: yocto, Quentin Schulz
+
+Hi Luca,
+
+On 10/3/22 23:15, Luca Ceresoli wrote:
+> Hi Quentin,
+> 
+> On Mon,  3 Oct 2022 19:04:01 +0200
+> "Quentin Schulz" <foss@0leil.net> wrote:
+> 
+>> From: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+>>
+>> It happened that the git repositories were dirty and resulted in
+>> incorrect files being used. Let's use git clean -ffdx to force a
+>> completely clean git repositories before and after checking out a branch
+>> so that nothing is left from or to another branch build
+>>
+>> Cc: Quentin Schulz <foss+yocto@0leil.net>
+>> Signed-off-by: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+>> ---
+>>   scripts/run-docs-build | 10 +++++-----
+>>   1 file changed, 5 insertions(+), 5 deletions(-)
+>>
+>> diff --git a/scripts/run-docs-build b/scripts/run-docs-build
+>> index c6b3965..69e3257 100755
+>> --- a/scripts/run-docs-build
+>> +++ b/scripts/run-docs-build
+>> @@ -61,6 +61,7 @@ for branch in 1.46 $(git branch --remote --contains "$first_sphinx_commit" --for
+>>   
+>>       echo Building bitbake $branch branch
+>>       git checkout $branch
+>> +    git clean -ffdx
+>>       git checkout origin/master releases.rst
+>>       make clean
+>>       SPHINXOPTS="-j auto" make publish
+>> @@ -80,7 +81,7 @@ for branch in 1.46 $(git branch --remote --contains "$first_sphinx_commit" --for
+>>       fi
+>>   
+>>       cp -r ./_build/final/* $outputdir/bitbake/$branch
+>> -    git reset --hard
+>> +    git clean -ffdx
+> 
+> Sure this is correct? 'git clean -ffdx' does not revert changes to
+> tracked files, be them staged or not.
+> 
+
+Nope, not sure this is correct. I misread git clean manpage, we should 
+have a git reset --hard and git clean -ffdx. Now the question is when 
+those are necessary because with this patch we do it twice, before and 
+after the git checkout. I did this because I remember doing checkouts 
+between branches of U-Boot/kernel and while the pre-checkout branch was 
+not dirty, the after-checkout branch was dirty. I assume this might have 
+something to do with build artifacts of the pre-checkout build that 
+weren't .gitignored in the afer-checkout branch? Something that git 
+clean -ffdx should tackle I think.
+
+Sooo, I guess only having git reset --hard and git clean -ffdx before a 
+checkout should be enough and we don't need them both before and after 
+the checkout like I did in this patch?
+
+Cheers,
+Quentin
+
+
+^ permalink raw reply	[flat|nested] 9+ messages in thread
+* Re: [yocto] [PATCH yocto-autobuilder-helper] scripts: run-docs-build: make the workdir pristine between builds
+  2022-10-04  8:15   ` Quentin Schulz
+@ 2022-10-04 20:54     ` Luca Ceresoli
+  2022-10-05  8:55       ` Quentin Schulz
+  0 siblings, 1 reply; 9+ messages in thread
+From: Luca Ceresoli @ 2022-10-04 20:54 UTC (permalink / raw)
+  To: Quentin Schulz; +Cc: yocto, Quentin Schulz
+
+Hi Quentin,
+
+On Tue, 4 Oct 2022 10:15:20 +0200
+Quentin Schulz <quentin.schulz@theobroma-systems.com> wrote:
+
+> Hi Luca,
+> 
+> On 10/3/22 23:15, Luca Ceresoli wrote:
+> > Hi Quentin,
+> > 
+> > On Mon,  3 Oct 2022 19:04:01 +0200
+> > "Quentin Schulz" <foss@0leil.net> wrote:
+> >   
+> >> From: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+> >>
+> >> It happened that the git repositories were dirty and resulted in
+> >> incorrect files being used. Let's use git clean -ffdx to force a
+> >> completely clean git repositories before and after checking out a branch
+> >> so that nothing is left from or to another branch build
+> >>
+> >> Cc: Quentin Schulz <foss+yocto@0leil.net>
+> >> Signed-off-by: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+> >> ---
+> >>   scripts/run-docs-build | 10 +++++-----
+> >>   1 file changed, 5 insertions(+), 5 deletions(-)
+> >>
+> >> diff --git a/scripts/run-docs-build b/scripts/run-docs-build
+> >> index c6b3965..69e3257 100755
+> >> --- a/scripts/run-docs-build
+> >> +++ b/scripts/run-docs-build
+> >> @@ -61,6 +61,7 @@ for branch in 1.46 $(git branch --remote --contains "$first_sphinx_commit" --for
+> >>   
+> >>       echo Building bitbake $branch branch
+> >>       git checkout $branch
+> >> +    git clean -ffdx
+> >>       git checkout origin/master releases.rst
+> >>       make clean
+> >>       SPHINXOPTS="-j auto" make publish
+> >> @@ -80,7 +81,7 @@ for branch in 1.46 $(git branch --remote --contains "$first_sphinx_commit" --for
+> >>       fi
+> >>   
+> >>       cp -r ./_build/final/* $outputdir/bitbake/$branch
+> >> -    git reset --hard
+> >> +    git clean -ffdx  
+> > 
+> > Sure this is correct? 'git clean -ffdx' does not revert changes to
+> > tracked files, be them staged or not.
+> >   
+> 
+> Nope, not sure this is correct. I misread git clean manpage, we should 
+> have a git reset --hard and git clean -ffdx. Now the question is when 
+> those are necessary because with this patch we do it twice, before and 
+> after the git checkout. I did this because I remember doing checkouts 
+> between branches of U-Boot/kernel and while the pre-checkout branch was 
+> not dirty, the after-checkout branch was dirty. I assume this might have 
+> something to do with build artifacts of the pre-checkout build that 
+> weren't .gitignored in the afer-checkout branch? Something that git 
+> clean -ffdx should tackle I think.
+> 
+> Sooo, I guess only having git reset --hard and git clean -ffdx before a 
+> checkout should be enough and we don't need them both before and after 
+> the checkout like I did in this patch?
+
+I think 'reset --hard' + 'clean -ffdx' only before the checkout should
+be enough. However I'm not sure whether there are corner cases such as
+a file that is .gitignored in commit A and versioned in commit B or
+similar. Perhaps worth trying with reset+clean only before, and see
+what happens. However I don't know exactly the initial problem you're
+trying to fix.
+
+-- 
+Luca Ceresoli, Bootlin
+Embedded Linux and Kernel engineering
+https://bootlin.com
+
+
+^ permalink raw reply	[flat|nested] 9+ messages in thread
+* Re: [yocto] [PATCH yocto-autobuilder-helper] scripts: run-docs-build: make the workdir pristine between builds
+  2022-10-04 20:54     ` Luca Ceresoli
+@ 2022-10-05  8:55       ` Quentin Schulz
+  2022-10-10 14:34         ` Luca Ceresoli
+  0 siblings, 1 reply; 9+ messages in thread
+From: Quentin Schulz @ 2022-10-05  8:55 UTC (permalink / raw)
+  To: Luca Ceresoli; +Cc: yocto, Quentin Schulz
+
+Hi Luka,
+
+On 10/4/22 22:54, Luca Ceresoli wrote:
+> Hi Quentin,
+> 
+> On Tue, 4 Oct 2022 10:15:20 +0200
+> Quentin Schulz <quentin.schulz@theobroma-systems.com> wrote:
+> 
+>> Hi Luca,
+>>
+>> On 10/3/22 23:15, Luca Ceresoli wrote:
+>>> Hi Quentin,
+>>>
+>>> On Mon,  3 Oct 2022 19:04:01 +0200
+>>> "Quentin Schulz" <foss@0leil.net> wrote:
+>>>    
+>>>> From: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+>>>>
+>>>> It happened that the git repositories were dirty and resulted in
+>>>> incorrect files being used. Let's use git clean -ffdx to force a
+>>>> completely clean git repositories before and after checking out a branch
+>>>> so that nothing is left from or to another branch build
+>>>>
+>>>> Cc: Quentin Schulz <foss+yocto@0leil.net>
+>>>> Signed-off-by: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+>>>> ---
+>>>>    scripts/run-docs-build | 10 +++++-----
+>>>>    1 file changed, 5 insertions(+), 5 deletions(-)
+>>>>
+>>>> diff --git a/scripts/run-docs-build b/scripts/run-docs-build
+>>>> index c6b3965..69e3257 100755
+>>>> --- a/scripts/run-docs-build
+>>>> +++ b/scripts/run-docs-build
+>>>> @@ -61,6 +61,7 @@ for branch in 1.46 $(git branch --remote --contains "$first_sphinx_commit" --for
+>>>>    
+>>>>        echo Building bitbake $branch branch
+>>>>        git checkout $branch
+>>>> +    git clean -ffdx
+>>>>        git checkout origin/master releases.rst
+>>>>        make clean
+>>>>        SPHINXOPTS="-j auto" make publish
+>>>> @@ -80,7 +81,7 @@ for branch in 1.46 $(git branch --remote --contains "$first_sphinx_commit" --for
+>>>>        fi
+>>>>    
+>>>>        cp -r ./_build/final/* $outputdir/bitbake/$branch
+>>>> -    git reset --hard
+>>>> +    git clean -ffdx
+>>>
+>>> Sure this is correct? 'git clean -ffdx' does not revert changes to
+>>> tracked files, be them staged or not.
+>>>    
+>>
+>> Nope, not sure this is correct. I misread git clean manpage, we should
+>> have a git reset --hard and git clean -ffdx. Now the question is when
+>> those are necessary because with this patch we do it twice, before and
+>> after the git checkout. I did this because I remember doing checkouts
+>> between branches of U-Boot/kernel and while the pre-checkout branch was
+>> not dirty, the after-checkout branch was dirty. I assume this might have
+>> something to do with build artifacts of the pre-checkout build that
+>> weren't .gitignored in the afer-checkout branch? Something that git
+>> clean -ffdx should tackle I think.
+>>
+>> Sooo, I guess only having git reset --hard and git clean -ffdx before a
+>> checkout should be enough and we don't need them both before and after
+>> the checkout like I did in this patch?
+> 
+> I think 'reset --hard' + 'clean -ffdx' only before the checkout should
+> be enough. However I'm not sure whether there are corner cases such as
+> a file that is .gitignored in commit A and versioned in commit B or
+> similar. Perhaps worth trying with reset+clean only before, and see
+
+I guess it does not hurt to be on the safe side by having them before 
+and after the git checkout then? Since the current issue went unnoticed 
+for months...
+
+> what happens. However I don't know exactly the initial problem you're
+> trying to fix.
+> 
+
+https://lore.kernel.org/yocto-docs/e50abe3c777e4a23a752a3ec25ad0b2a@axis.com/T/#t
+
+Cheers,
+Quentin
+
+
+^ permalink raw reply	[flat|nested] 9+ messages in thread
+* Re: [yocto] [PATCH yocto-autobuilder-helper] scripts: run-docs-build: make the workdir pristine between builds
+  2022-10-05  8:55       ` Quentin Schulz
+@ 2022-10-10 14:34         ` Luca Ceresoli
+  0 siblings, 0 replies; 9+ messages in thread
+From: Luca Ceresoli @ 2022-10-10 14:34 UTC (permalink / raw)
+  To: Quentin Schulz; +Cc: yocto, Quentin Schulz
+
+Hi Quentin,
+
+On Wed, 5 Oct 2022 10:55:44 +0200
+Quentin Schulz <quentin.schulz@theobroma-systems.com> wrote:
+
+> Hi Luka,
+> 
+> On 10/4/22 22:54, Luca Ceresoli wrote:
+> > Hi Quentin,
+> > 
+> > On Tue, 4 Oct 2022 10:15:20 +0200
+> > Quentin Schulz <quentin.schulz@theobroma-systems.com> wrote:
+> >   
+> >> Hi Luca,
+> >>
+> >> On 10/3/22 23:15, Luca Ceresoli wrote:  
+> >>> Hi Quentin,
+> >>>
+> >>> On Mon,  3 Oct 2022 19:04:01 +0200
+> >>> "Quentin Schulz" <foss@0leil.net> wrote:
+> >>>      
+> >>>> From: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+> >>>>
+> >>>> It happened that the git repositories were dirty and resulted in
+> >>>> incorrect files being used. Let's use git clean -ffdx to force a
+> >>>> completely clean git repositories before and after checking out a branch
+> >>>> so that nothing is left from or to another branch build
+> >>>>
+> >>>> Cc: Quentin Schulz <foss+yocto@0leil.net>
+> >>>> Signed-off-by: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+> >>>> ---
+> >>>>    scripts/run-docs-build | 10 +++++-----
+> >>>>    1 file changed, 5 insertions(+), 5 deletions(-)
+> >>>>
+> >>>> diff --git a/scripts/run-docs-build b/scripts/run-docs-build
+> >>>> index c6b3965..69e3257 100755
+> >>>> --- a/scripts/run-docs-build
+> >>>> +++ b/scripts/run-docs-build
+> >>>> @@ -61,6 +61,7 @@ for branch in 1.46 $(git branch --remote --contains "$first_sphinx_commit" --for
+> >>>>    
+> >>>>        echo Building bitbake $branch branch
+> >>>>        git checkout $branch
+> >>>> +    git clean -ffdx
+> >>>>        git checkout origin/master releases.rst
+> >>>>        make clean
+> >>>>        SPHINXOPTS="-j auto" make publish
+> >>>> @@ -80,7 +81,7 @@ for branch in 1.46 $(git branch --remote --contains "$first_sphinx_commit" --for
+> >>>>        fi
+> >>>>    
+> >>>>        cp -r ./_build/final/* $outputdir/bitbake/$branch
+> >>>> -    git reset --hard
+> >>>> +    git clean -ffdx  
+> >>>
+> >>> Sure this is correct? 'git clean -ffdx' does not revert changes to
+> >>> tracked files, be them staged or not.
+> >>>      
+> >>
+> >> Nope, not sure this is correct. I misread git clean manpage, we should
+> >> have a git reset --hard and git clean -ffdx. Now the question is when
+> >> those are necessary because with this patch we do it twice, before and
+> >> after the git checkout. I did this because I remember doing checkouts
+> >> between branches of U-Boot/kernel and while the pre-checkout branch was
+> >> not dirty, the after-checkout branch was dirty. I assume this might have
+> >> something to do with build artifacts of the pre-checkout build that
+> >> weren't .gitignored in the afer-checkout branch? Something that git
+> >> clean -ffdx should tackle I think.
+> >>
+> >> Sooo, I guess only having git reset --hard and git clean -ffdx before a
+> >> checkout should be enough and we don't need them both before and after
+> >> the checkout like I did in this patch?  
+> > 
+> > I think 'reset --hard' + 'clean -ffdx' only before the checkout should
+> > be enough. However I'm not sure whether there are corner cases such as
+> > a file that is .gitignored in commit A and versioned in commit B or
+> > similar. Perhaps worth trying with reset+clean only before, and see  
+> 
+> I guess it does not hurt to be on the safe side by having them before 
+> and after the git checkout then? Since the current issue went unnoticed 
+> for months...
+
+Sorry for the delayed reply. It took a while before I found a little
+time to look at the script code...
+
+Indeed cleaning before _and_ after would be safe, even though perhaps
+unneeded.
+
+> > what happens. However I don't know exactly the initial problem you're
+> > trying to fix.
+> >   
+> 
+> https://lore.kernel.org/yocto-docs/e50abe3c777e4a23a752a3ec25ad0b2a@axis.com/T/#t
+
+Ah, interesting. Thanks for the link. Why not adding it to your commit
+message, for reference?
+
+Best regards.
+-- 
+Luca Ceresoli, Bootlin
+Embedded Linux and Kernel engineering
+https://bootlin.com
+
+
+^ permalink raw reply	[flat|nested] 9+ messages in thread
+end of thread, other threads:[~2022-10-10 14:34 UTC | newest]
+
+Thread overview: 9+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-10-03 17:04 [PATCH yocto-autobuilder-helper] scripts: run-docs-build: make the workdir pristine between builds Quentin Schulz
+2022-10-03 17:05 ` Quentin Schulz
+2022-10-03 17:11 ` [yocto] " Michael Opdenacker
+2022-10-03 21:15   ` Luca Ceresoli
+2022-10-03 21:15 ` Luca Ceresoli
+2022-10-04  8:15   ` Quentin Schulz
+2022-10-04 20:54     ` Luca Ceresoli
+2022-10-05  8:55       ` Quentin Schulz
+2022-10-10 14:34         ` Luca Ceresoli
+

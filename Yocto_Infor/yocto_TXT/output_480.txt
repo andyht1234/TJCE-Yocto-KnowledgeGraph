@@ -1,0 +1,97 @@
+* [yocto-autobuilder-helper][PATCH] ab-janitor: only rm trashdir files over 60s old
+@ 2023-06-13 17:05 Trevor Gamblin
+  2023-06-15 13:39 ` [yocto] " Richard Purdie
+  0 siblings, 1 reply; 2+ messages in thread
+From: Trevor Gamblin @ 2023-06-13 17:05 UTC (permalink / raw)
+  To: yocto
+
+[YOCTO #14952] -- https://bugzilla.yoctoproject.org/show_bug.cgi?id=14952
+
+Help avoid contention by adding a check to ensure files and directories
+are at least 60s old when attempting to delete them from the trashdir,
+in case bitbake or another process is still actively using them.
+
+Signed-off-by: Trevor Gamblin <tgamblin@baylibre.com>
+---
+ janitor/ab-janitor | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/janitor/ab-janitor b/janitor/ab-janitor
+index 080b598..659817e 100755
+--- a/janitor/ab-janitor
++++ b/janitor/ab-janitor
+@@ -43,7 +43,13 @@ def trash_processor(trashdir):
+         try:
+             files = os.listdir(trashdir)
+             if files:
+-                os.system("nice -n 10 ionice -c 3 rm %s/* -rf" % trashdir)
++                for file in files:
++                    file_path = trashdir + "/" + file
++                    file_age = time.time() - os.path.getmtime(file_path)
++                    if file_age >= 60:
++                        os.system("nice -n 10 ionice -c 3 rm %s -rf" % file_path)
++                    else:
++                        print("Not removing '%s' - age is only %s seconds. There may be another process using it" % (file_path, str(int(file_age))))
+             else:
+                 time.sleep(120*60) # 30 minutes
+         except Exception as e:
+-- 
+2.40.1
+
+
+
+^ permalink raw reply related	[flat|nested] 2+ messages in thread
+* Re: [yocto] [yocto-autobuilder-helper][PATCH] ab-janitor: only rm trashdir files over 60s old
+  2023-06-13 17:05 [yocto-autobuilder-helper][PATCH] ab-janitor: only rm trashdir files over 60s old Trevor Gamblin
+@ 2023-06-15 13:39 ` Richard Purdie
+  0 siblings, 0 replies; 2+ messages in thread
+From: Richard Purdie @ 2023-06-15 13:39 UTC (permalink / raw)
+  To: Trevor Gamblin, yocto
+
+On Tue, 2023-06-13 at 13:05 -0400, Trevor Gamblin wrote:
+> [YOCTO #14952] -- https://bugzilla.yoctoproject.org/show_bug.cgi?id=14952
+> 
+> Help avoid contention by adding a check to ensure files and directories
+> are at least 60s old when attempting to delete them from the trashdir,
+> in case bitbake or another process is still actively using them.
+> 
+> Signed-off-by: Trevor Gamblin <tgamblin@baylibre.com>
+> ---
+>  janitor/ab-janitor | 8 +++++++-
+>  1 file changed, 7 insertions(+), 1 deletion(-)
+> 
+> diff --git a/janitor/ab-janitor b/janitor/ab-janitor
+> index 080b598..659817e 100755
+> --- a/janitor/ab-janitor
+> +++ b/janitor/ab-janitor
+> @@ -43,7 +43,13 @@ def trash_processor(trashdir):
+>          try:
+>              files = os.listdir(trashdir)
+>              if files:
+> -                os.system("nice -n 10 ionice -c 3 rm %s/* -rf" % trashdir)
+> +                for file in files:
+> +                    file_path = trashdir + "/" + file
+> +                    file_age = time.time() - os.path.getmtime(file_path)
+> +                    if file_age >= 60:
+> +                        os.system("nice -n 10 ionice -c 3 rm %s -rf" % file_path)
+> +                    else:
+> +                        print("Not removing '%s' - age is only %s seconds. There may be another process using it" % (file_path, str(int(file_age))))
+>              else:
+>                  time.sleep(120*60) # 30 minutes
+>          except Exception as e:
+
+Looks good, merged, thanks!
+
+Cheers,
+
+Richard
+
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2023-06-15 13:39 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-06-13 17:05 [yocto-autobuilder-helper][PATCH] ab-janitor: only rm trashdir files over 60s old Trevor Gamblin
+2023-06-15 13:39 ` [yocto] " Richard Purdie
+

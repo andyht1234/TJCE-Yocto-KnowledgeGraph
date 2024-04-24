@@ -1,0 +1,1892 @@
+* Problems with recipe for our Rust-Software
+@ 2022-05-12 13:09 ` Felix Knorr
+  2022-05-12 13:15   ` [yocto] " Alexander Kanavin
+                     ` (2 more replies)
+  0 siblings, 3 replies; 10+ messages in thread
+From: Felix Knorr @ 2022-05-12 13:09 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 5125 bytes --]
+
+Hey,
+
+I'm struggling with a recipe to build our rust project.
+
+I cannot use cargo-bitbake because we use the 2021 edition. Also the project is quite complex. We have one repository with 4 different crates, some of them are linking c code. I'm trying to create a recipe by hand.
+
+When I run bitbake for the recipe, it will error out with the following error message:
+
+ERROR: serve-1.0.0-r0 do_compile: ExecutionError('/home/felix/git/poky/build/tmp/work/core2-64-poky-linux/serve/1.0.0-r0/temp/run.do_compile.400923', 101, None, None)
+ERROR: Logfile of failure stored in: /home/felix/git/poky/build/tmp/work/core2-64-poky-linux/serve/1.0.0-r0/temp/log.do_compile.400923
+Log data follows:
+| DEBUG: Executing shell function do_compile
+|     Updating crates.io index
+| warning: spurious network error (2 tries remaining): failed to resolve address for github.com: Name or service not known; class=Net (12)
+| warning: spurious network error (1 tries remaining): failed to resolve address for github.com: Name or service not known; class=Net (12)
+| error: failed to get `anyhow` as a dependency of package `nlprog v0.1.0 (/home/felix/git/poky/build/tmp/work/core2-64-poky-linux/serve/1.0.0-r0/tmp/baroloop/programmer-rust/nlprog)`
+|
+| Caused by:
+|   failed to fetch `https://github.com/rust-lang/crates.io-index`
+|
+| Caused by:
+|   network failure seems to have happened
+|   if a proxy or similar is necessary `net.git-fetch-with-cli` may help here
+|   https://doc.rust-lang.org/cargo/reference/config.html#netgit-fetch-with-cli
+|
+| Caused by:
+|   failed to resolve address for github.com: Name or service not known; class=Net (12)
+| WARNING: exit code 101 from a shell command.
+ERROR: Task (/home/felix/git/baroloop/programmer-tablet/layers/meta-main/recipes-core/programmer/serve_1.0.0.bb:do_compile) failed with exit code '1'
+
+
+
+However, if I run the devshell for the recipe and run cargo, it will at least be able to do the fetching. (It will currently fail in the linker step, but I assume thats because I haven't executed oe_cargo_fix_env)
+
+if I don't remove the http.multiplexing=false from the cargo config, it will just hang forever in the devshell (but not error out).
+
+If I set export CARGO_NET_GIT_FETCH_WITH_CLI=true the error is slightly different, but the git call that is then displayed also works in the devshell. Also using a crate://-fetcher doesn't work, which is why I added the CARGO_DISABLE_BITBAKE_VENDORING = "1" I've been fighting this for hours and can't come up with anything. I hope you can help me.
+
+PS: I'm using kirkstone, and I'm not having any url sections in my .gitconfig
+
+This is the recipe:
+
+cargo
+
+SUMMARY = "Copy prebuild programmer serve into the image"
+LICENSE = "CLOSED"
+LIC_FILES_CHKSUM = ""
+
+SRC_URI="\
+    file://${bl_path}/programmer-ui/dist \
+    file://${config_path}/files/session \
+    file:///tmp/baroloop \
+"
+#   crate://crates.io/tokio/1 \
+#   crate://crates.io/war/0.3 \
+#   crate://crates.io/byte/1 \
+#   crate://crates.io/log/0.4.8 \
+#   crate://crates.io/serde_json/1.0.75 \
+#   crate://crates.io/serde/1.0.133 \
+#   crate://crates.io/docopt/1.1.0 \
+#   crate://crates.io/colored/1.9.3 \
+#   crate://crates.io/chrono/0.4.11 \
+#   crate://crates.io/battery/0.7.7 \
+#   crate://crates.io/uuid/0.8.2 \
+#   crate://crates.io/thiserror/1.0 \
+#   crate://crates.io/anyhow/1 \
+#   crate://crates.io/clap/3.0 \
+#   crate://crates.io/futures/0.3 \
+#   crate://crates.io/wry/0.6.1
+S = "${WORKDIR}"
+
+RDEPENDS:${PN} = "\
+    eudev \
+    dbus \
+"
+
+DEPENDS = "\
+    eudev \
+    dbus \
+"
+
+# INSANE_SKIP:${PN} += "file-rdeps"
+
+FILES:${PN} = "\
+    /home/neuro/serve \
+    /home/neuro/dist/** \
+    ${sysconfdir}/mini_x/session \
+"
+
+CARGO_DISABLE_BITBAKE_VENDORING = "1"
+
+do_compile() {
+    oe_cargo_fix_env
+
+    sed -i '/multiplexing = false/d' $CARGO_HOME/config
+    sed -i '/\[http\]/d' $CARGO_HOME/config
+    sed -i '/cainfo/d' $CARGO_HOME/config
+
+    export RUSTFLAGS="${RUSTFLAGS}"
+    export RUST_TARGET_PATH="${RUST_TARGET_PATH}"
+
+    export CARGO_NET_GIT_FETCH_WITH_CLI=true
+    cd ${S}/tmp/baroloop/programmer-rust/
+    cargo build --release --bin serve
+}
+
+do_install() {
+    # this isn_t reached anyway
+        # ...
+}
+
+
+
+--
+Mit freundlichen Grüßen neuroloop GmbH
+i.A. Felix Knorr
+Senior Software Developer
+--------------------------------------
+neuroloop GmbH
+Engesserstr. 4, 79108 Freiburg, Germany
+
+Amtsgericht Freiburg HRB 713935
+
+Geschäftsführer: Dr. Michael Lauk, Dr. Dennis Plachta
+
+
+
+The information contained in this communication is confidential, may be attorney-client privileged, may constitute inside information, and is intended only for the use of the addressee. It is the property of the company of the sender of this e-mail. Unauthorized use, disclosure, or copying of this communication or any part thereof is strictly prohibited and may be unlawful. If you have received this communication in error, please notify us immediately by return e-mail and destroy this communication and all copies thereof, including all attachments.
+
+[-- Attachment #2: Type: text/html, Size: 5888 bytes --]
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+* Re: [yocto] Problems with recipe for our Rust-Software
+  2022-05-12 13:09 ` Problems with recipe for our Rust-Software Felix Knorr
+@ 2022-05-12 13:15   ` Alexander Kanavin
+  2022-05-12 13:23     ` Felix Knorr
+  2022-05-12 13:28   ` Alex Kiernan
+  2022-05-12 13:32   ` Chanho Park
+  2 siblings, 1 reply; 10+ messages in thread
+From: Alexander Kanavin @ 2022-05-12 13:15 UTC (permalink / raw)
+  To: Felix Knorr; +Cc: yocto
+
+Accessing the network is not allowed from do_compile, or any other
+task for that matter. You need to provide every needed item in SRC_URI
+and rely on standard fetchers to form a complete source tree.
+
+Alex
+
+On Thu, 12 May 2022 at 15:09, Felix Knorr <fknorr@neuroloop.de> wrote:
+>
+> Hey,
+>
+> I'm struggling with a recipe to build our rust project.
+>
+> I cannot use cargo-bitbake because we use the 2021 edition. Also the project is quite complex. We have one repository with 4 different crates, some of them are linking c code. I'm trying to create a recipe by hand.
+>
+> When I run bitbake for the recipe, it will error out with the following error message:
+>
+> ERROR: serve-1.0.0-r0 do_compile: ExecutionError('/home/felix/git/poky/build/tmp/work/core2-64-poky-linux/serve/1.0.0-r0/temp/run.do_compile.400923', 101, None, None)
+> ERROR: Logfile of failure stored in: /home/felix/git/poky/build/tmp/work/core2-64-poky-linux/serve/1.0.0-r0/temp/log.do_compile.400923
+> Log data follows:
+> | DEBUG: Executing shell function do_compile
+> |     Updating crates.io index
+> | warning: spurious network error (2 tries remaining): failed to resolve address for github.com: Name or service not known; class=Net (12)
+> | warning: spurious network error (1 tries remaining): failed to resolve address for github.com: Name or service not known; class=Net (12)
+> | error: failed to get `anyhow` as a dependency of package `nlprog v0.1.0 (/home/felix/git/poky/build/tmp/work/core2-64-poky-linux/serve/1.0.0-r0/tmp/baroloop/programmer-rust/nlprog)`
+> |
+> | Caused by:
+> |   failed to fetch `https://github.com/rust-lang/crates.io-index`
+> |
+> | Caused by:
+> |   network failure seems to have happened
+> |   if a proxy or similar is necessary `net.git-fetch-with-cli` may help here
+> |   https://doc.rust-lang.org/cargo/reference/config.html#netgit-fetch-with-cli
+> |
+> | Caused by:
+> |   failed to resolve address for github.com: Name or service not known; class=Net (12)
+> | WARNING: exit code 101 from a shell command.
+> ERROR: Task (/home/felix/git/baroloop/programmer-tablet/layers/meta-main/recipes-core/programmer/serve_1.0.0.bb:do_compile) failed with exit code '1'
+>
+> However, if I run the devshell for the recipe and run cargo, it will at least be able to do the fetching. (It will currently fail in the linker step, but I assume thats because I haven't executed oe_cargo_fix_env)
+>
+> if I don't remove the http.multiplexing=false from the cargo config, it will just hang forever in the devshell (but not error out).
+>
+> If I set export CARGO_NET_GIT_FETCH_WITH_CLI=true the error is slightly different, but the git call that is then displayed also works in the devshell. Also using a crate://-fetcher doesn't work, which is why I added the CARGO_DISABLE_BITBAKE_VENDORING = "1" I've been fighting this for hours and can't come up with anything. I hope you can help me.
+>
+> PS: I'm using kirkstone, and I'm not having any url sections in my .gitconfig
+>
+> This is the recipe:
+>
+> cargo
+>
+> SUMMARY = "Copy prebuild programmer serve into the image"
+> LICENSE = "CLOSED"
+> LIC_FILES_CHKSUM = ""
+>
+> SRC_URI="\
+>     file://${bl_path}/programmer-ui/dist \
+>     file://${config_path}/files/session \
+>     file:///tmp/baroloop \
+> "
+> #   crate://crates.io/tokio/1 \
+> #   crate://crates.io/war/0.3 \
+> #   crate://crates.io/byte/1 \
+> #   crate://crates.io/log/0.4.8 \
+> #   crate://crates.io/serde_json/1.0.75 \
+> #   crate://crates.io/serde/1.0.133 \
+> #   crate://crates.io/docopt/1.1.0 \
+> #   crate://crates.io/colored/1.9.3 \
+> #   crate://crates.io/chrono/0.4.11 \
+> #   crate://crates.io/battery/0.7.7 \
+> #   crate://crates.io/uuid/0.8.2 \
+> #   crate://crates.io/thiserror/1.0 \
+> #   crate://crates.io/anyhow/1 \
+> #   crate://crates.io/clap/3.0 \
+> #   crate://crates.io/futures/0.3 \
+> #   crate://crates.io/wry/0.6.1
+> S = "${WORKDIR}"
+>
+> RDEPENDS:${PN} = "\
+>     eudev \
+>     dbus \
+> "
+>
+> DEPENDS = "\
+>     eudev \
+>     dbus \
+> "
+>
+> # INSANE_SKIP:${PN} += "file-rdeps"
+>
+> FILES:${PN} = "\
+>     /home/neuro/serve \
+>     /home/neuro/dist/** \
+>     ${sysconfdir}/mini_x/session \
+> "
+>
+> CARGO_DISABLE_BITBAKE_VENDORING = "1"
+>
+> do_compile() {
+>     oe_cargo_fix_env
+>
+>     sed -i '/multiplexing = false/d' $CARGO_HOME/config
+>     sed -i '/\[http\]/d' $CARGO_HOME/config
+>     sed -i '/cainfo/d' $CARGO_HOME/config
+>
+>     export RUSTFLAGS="${RUSTFLAGS}"
+>     export RUST_TARGET_PATH="${RUST_TARGET_PATH}"
+>
+>     export CARGO_NET_GIT_FETCH_WITH_CLI=true
+>     cd ${S}/tmp/baroloop/programmer-rust/
+>     cargo build --release --bin serve
+> }
+>
+> do_install() {
+>     # this isn_t reached anyway
+> # ...
+> }
+>
+> --
+> Mit freundlichen Grüßen neuroloop GmbH
+> i.A. Felix Knorr
+> Senior Software Developer
+> --------------------------------------
+> neuroloop GmbH
+> Engesserstr. 4, 79108 Freiburg, Germany
+>
+> Amtsgericht Freiburg HRB 713935
+>
+> Geschäftsführer: Dr. Michael Lauk, Dr. Dennis Plachta
+>
+>
+>
+> The information contained in this communication is confidential, may be attorney-client privileged, may constitute inside information, and is intended only for the use of the addressee. It is the property of the company of the sender of this e-mail. Unauthorized use, disclosure, or copying of this communication or any part thereof is strictly prohibited and may be unlawful. If you have received this communication in error, please notify us immediately by return e-mail and destroy this communication and all copies thereof, including all attachments.
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#57072): https://lists.yoctoproject.org/g/yocto/message/57072
+> Mute This Topic: https://lists.yoctoproject.org/mt/91057468/1686489
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+* Re: [yocto] Problems with recipe for our Rust-Software
+  2022-05-12 13:15   ` [yocto] " Alexander Kanavin
+@ 2022-05-12 13:23     ` Felix Knorr
+  0 siblings, 0 replies; 10+ messages in thread
+From: Felix Knorr @ 2022-05-12 13:23 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: yocto
+
+Oh I see, thanks for the info.
+
+On 12.05.22 15:15, Alexander Kanavin wrote:
+> Accessing the network is not allowed from do_compile, or any other
+> task for that matter. You need to provide every needed item in SRC_URI
+> and rely on standard fetchers to form a complete source tree.
+>
+> Alex
+>
+> On Thu, 12 May 2022 at 15:09, Felix Knorr <fknorr@neuroloop.de> wrote:
+>> Hey,
+>>
+>> I'm struggling with a recipe to build our rust project.
+>>
+>> I cannot use cargo-bitbake because we use the 2021 edition. Also the project is quite complex. We have one repository with 4 different crates, some of them are linking c code. I'm trying to create a recipe by hand.
+>>
+>> When I run bitbake for the recipe, it will error out with the following error message:
+>>
+>> ERROR: serve-1.0.0-r0 do_compile: ExecutionError('/home/felix/git/poky/build/tmp/work/core2-64-poky-linux/serve/1.0.0-r0/temp/run.do_compile.400923', 101, None, None)
+>> ERROR: Logfile of failure stored in: /home/felix/git/poky/build/tmp/work/core2-64-poky-linux/serve/1.0.0-r0/temp/log.do_compile.400923
+>> Log data follows:
+>> | DEBUG: Executing shell function do_compile
+>> |     Updating crates.io index
+>> | warning: spurious network error (2 tries remaining): failed to resolve address for github.com: Name or service not known; class=Net (12)
+>> | warning: spurious network error (1 tries remaining): failed to resolve address for github.com: Name or service not known; class=Net (12)
+>> | error: failed to get `anyhow` as a dependency of package `nlprog v0.1.0 (/home/felix/git/poky/build/tmp/work/core2-64-poky-linux/serve/1.0.0-r0/tmp/baroloop/programmer-rust/nlprog)`
+>> |
+>> | Caused by:
+>> |   failed to fetch `https://github.com/rust-lang/crates.io-index`
+>> |
+>> | Caused by:
+>> |   network failure seems to have happened
+>> |   if a proxy or similar is necessary `net.git-fetch-with-cli` may help here
+>> |   https://doc.rust-lang.org/cargo/reference/config.html#netgit-fetch-with-cli
+>> |
+>> | Caused by:
+>> |   failed to resolve address for github.com: Name or service not known; class=Net (12)
+>> | WARNING: exit code 101 from a shell command.
+>> ERROR: Task (/home/felix/git/baroloop/programmer-tablet/layers/meta-main/recipes-core/programmer/serve_1.0.0.bb:do_compile) failed with exit code '1'
+>>
+>> However, if I run the devshell for the recipe and run cargo, it will at least be able to do the fetching. (It will currently fail in the linker step, but I assume thats because I haven't executed oe_cargo_fix_env)
+>>
+>> if I don't remove the http.multiplexing=false from the cargo config, it will just hang forever in the devshell (but not error out).
+>>
+>> If I set export CARGO_NET_GIT_FETCH_WITH_CLI=true the error is slightly different, but the git call that is then displayed also works in the devshell. Also using a crate://-fetcher doesn't work, which is why I added the CARGO_DISABLE_BITBAKE_VENDORING = "1" I've been fighting this for hours and can't come up with anything. I hope you can help me.
+>>
+>> PS: I'm using kirkstone, and I'm not having any url sections in my .gitconfig
+>>
+>> This is the recipe:
+>>
+>> cargo
+>>
+>> SUMMARY = "Copy prebuild programmer serve into the image"
+>> LICENSE = "CLOSED"
+>> LIC_FILES_CHKSUM = ""
+>>
+>> SRC_URI="\
+>>      file://${bl_path}/programmer-ui/dist \
+>>      file://${config_path}/files/session \
+>>      file:///tmp/baroloop \
+>> "
+>> #   crate://crates.io/tokio/1 \
+>> #   crate://crates.io/war/0.3 \
+>> #   crate://crates.io/byte/1 \
+>> #   crate://crates.io/log/0.4.8 \
+>> #   crate://crates.io/serde_json/1.0.75 \
+>> #   crate://crates.io/serde/1.0.133 \
+>> #   crate://crates.io/docopt/1.1.0 \
+>> #   crate://crates.io/colored/1.9.3 \
+>> #   crate://crates.io/chrono/0.4.11 \
+>> #   crate://crates.io/battery/0.7.7 \
+>> #   crate://crates.io/uuid/0.8.2 \
+>> #   crate://crates.io/thiserror/1.0 \
+>> #   crate://crates.io/anyhow/1 \
+>> #   crate://crates.io/clap/3.0 \
+>> #   crate://crates.io/futures/0.3 \
+>> #   crate://crates.io/wry/0.6.1
+>> S = "${WORKDIR}"
+>>
+>> RDEPENDS:${PN} = "\
+>>      eudev \
+>>      dbus \
+>> "
+>>
+>> DEPENDS = "\
+>>      eudev \
+>>      dbus \
+>> "
+>>
+>> # INSANE_SKIP:${PN} += "file-rdeps"
+>>
+>> FILES:${PN} = "\
+>>      /home/neuro/serve \
+>>      /home/neuro/dist/** \
+>>      ${sysconfdir}/mini_x/session \
+>> "
+>>
+>> CARGO_DISABLE_BITBAKE_VENDORING = "1"
+>>
+>> do_compile() {
+>>      oe_cargo_fix_env
+>>
+>>      sed -i '/multiplexing = false/d' $CARGO_HOME/config
+>>      sed -i '/\[http\]/d' $CARGO_HOME/config
+>>      sed -i '/cainfo/d' $CARGO_HOME/config
+>>
+>>      export RUSTFLAGS="${RUSTFLAGS}"
+>>      export RUST_TARGET_PATH="${RUST_TARGET_PATH}"
+>>
+>>      export CARGO_NET_GIT_FETCH_WITH_CLI=true
+>>      cd ${S}/tmp/baroloop/programmer-rust/
+>>      cargo build --release --bin serve
+>> }
+>>
+>> do_install() {
+>>      # this isn_t reached anyway
+>> # ...
+>> }
+>>
+>> --
+>> Mit freundlichen Grüßen neuroloop GmbH
+>> i.A. Felix Knorr
+>> Senior Software Developer
+>> --------------------------------------
+>> neuroloop GmbH
+>> Engesserstr. 4, 79108 Freiburg, Germany
+>>
+>> Amtsgericht Freiburg HRB 713935
+>>
+>> Geschäftsführer: Dr. Michael Lauk, Dr. Dennis Plachta
+>>
+>>
+>>
+>> The information contained in this communication is confidential, may be attorney-client privileged, may constitute inside information, and is intended only for the use of the addressee. It is the property of the company of the sender of this e-mail. Unauthorized use, disclosure, or copying of this communication or any part thereof is strictly prohibited and may be unlawful. If you have received this communication in error, please notify us immediately by return e-mail and destroy this communication and all copies thereof, including all attachments.
+>>
+>>
+>> -=-=-=-=-=-=-=-=-=-=-=-
+>> Links: You receive all messages sent to this group.
+>> View/Reply Online (#57072): https://lists.yoctoproject.org/g/yocto/message/57072
+>> Mute This Topic: https://lists.yoctoproject.org/mt/91057468/1686489
+>> Group Owner: yocto+owner@lists.yoctoproject.org
+>> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com]
+>> -=-=-=-=-=-=-=-=-=-=-=-
+>>
+
+-- 
+Mit freundlichen Grüßen neuroloop GmbH
+i.A. Felix Knorr
+Senior Software Developer
+--------------------------------------
+neuroloop GmbH
+Engesserstr. 4, 79108 Freiburg, Germany
+
+Amtsgericht Freiburg HRB 713935
+
+Geschäftsführer: Dr. Michael Lauk, Dr. Dennis Plachta
+
+  
+
+The information contained in this communication is confidential, may be attorney-client privileged, may constitute inside information, and is intended only for the use of the addressee. It is the property of the company of the sender of this e-mail. Unauthorized use, disclosure, or copying of this communication or any part thereof is strictly prohibited and may be unlawful. If you have received this communication in error, please notify us immediately by return e-mail and destroy this communication and all copies thereof, including all attachments.
+
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+* Re: [yocto] Problems with recipe for our Rust-Software
+  2022-05-12 13:09 ` Problems with recipe for our Rust-Software Felix Knorr
+  2022-05-12 13:15   ` [yocto] " Alexander Kanavin
+@ 2022-05-12 13:28   ` Alex Kiernan
+  2022-05-13  7:56     ` Felix Knorr
+  2022-05-12 13:32   ` Chanho Park
+  2 siblings, 1 reply; 10+ messages in thread
+From: Alex Kiernan @ 2022-05-12 13:28 UTC (permalink / raw)
+  To: Felix Knorr; +Cc: yocto
+
+On Thu, May 12, 2022 at 2:09 PM Felix Knorr <fknorr@neuroloop.de> wrote:
+>
+> Hey,
+>
+> I'm struggling with a recipe to build our rust project.
+>
+> I cannot use cargo-bitbake because we use the 2021 edition. Also the project is quite complex. We have one repository with 4 different crates, some of them are linking c code. I'm trying to create a recipe by hand.
+>
+
+The HEAD of cargo-bitbake works fine for 2021 for us.
+
+> When I run bitbake for the recipe, it will error out with the following error message:
+>
+> ERROR: serve-1.0.0-r0 do_compile: ExecutionError('/home/felix/git/poky/build/tmp/work/core2-64-poky-linux/serve/1.0.0-r0/temp/run.do_compile.400923', 101, None, None)
+> ERROR: Logfile of failure stored in: /home/felix/git/poky/build/tmp/work/core2-64-poky-linux/serve/1.0.0-r0/temp/log.do_compile.400923
+> Log data follows:
+> | DEBUG: Executing shell function do_compile
+> |     Updating crates.io index
+> | warning: spurious network error (2 tries remaining): failed to resolve address for github.com: Name or service not known; class=Net (12)
+> | warning: spurious network error (1 tries remaining): failed to resolve address for github.com: Name or service not known; class=Net (12)
+> | error: failed to get `anyhow` as a dependency of package `nlprog v0.1.0 (/home/felix/git/poky/build/tmp/work/core2-64-poky-linux/serve/1.0.0-r0/tmp/baroloop/programmer-rust/nlprog)`
+> |
+> | Caused by:
+> |   failed to fetch `https://github.com/rust-lang/crates.io-index`
+> |
+> | Caused by:
+> |   network failure seems to have happened
+> |   if a proxy or similar is necessary `net.git-fetch-with-cli` may help here
+> |   https://doc.rust-lang.org/cargo/reference/config.html#netgit-fetch-with-cli
+> |
+> | Caused by:
+> |   failed to resolve address for github.com: Name or service not known; class=Net (12)
+> | WARNING: exit code 101 from a shell command.
+> ERROR: Task (/home/felix/git/baroloop/programmer-tablet/layers/meta-main/recipes-core/programmer/serve_1.0.0.bb:do_compile) failed with exit code '1'
+>
+> However, if I run the devshell for the recipe and run cargo, it will at least be able to do the fetching. (It will currently fail in the linker step, but I assume thats because I haven't executed oe_cargo_fix_env)
+>
+> if I don't remove the http.multiplexing=false from the cargo config, it will just hang forever in the devshell (but not error out).
+>
+> If I set export CARGO_NET_GIT_FETCH_WITH_CLI=true the error is slightly different, but the git call that is then displayed also works in the devshell. Also using a crate://-fetcher doesn't work, which is why I added the CARGO_DISABLE_BITBAKE_VENDORING = "1" I've been fighting this for hours and can't come up with anything. I hope you can help me.
+>
+> PS: I'm using kirkstone, and I'm not having any url sections in my .gitconfig
+>
+> This is the recipe:
+>
+> cargo
+>
+> SUMMARY = "Copy prebuild programmer serve into the image"
+> LICENSE = "CLOSED"
+> LIC_FILES_CHKSUM = ""
+>
+> SRC_URI="\
+>     file://${bl_path}/programmer-ui/dist \
+>     file://${config_path}/files/session \
+>     file:///tmp/baroloop \
+> "
+> #   crate://crates.io/tokio/1 \
+> #   crate://crates.io/war/0.3 \
+> #   crate://crates.io/byte/1 \
+> #   crate://crates.io/log/0.4.8 \
+> #   crate://crates.io/serde_json/1.0.75 \
+> #   crate://crates.io/serde/1.0.133 \
+> #   crate://crates.io/docopt/1.1.0 \
+> #   crate://crates.io/colored/1.9.3 \
+> #   crate://crates.io/chrono/0.4.11 \
+> #   crate://crates.io/battery/0.7.7 \
+> #   crate://crates.io/uuid/0.8.2 \
+> #   crate://crates.io/thiserror/1.0 \
+> #   crate://crates.io/anyhow/1 \
+> #   crate://crates.io/clap/3.0 \
+> #   crate://crates.io/futures/0.3 \
+> #   crate://crates.io/wry/0.6.1
+> S = "${WORKDIR}"
+>
+> RDEPENDS:${PN} = "\
+>     eudev \
+>     dbus \
+> "
+>
+> DEPENDS = "\
+>     eudev \
+>     dbus \
+> "
+>
+> # INSANE_SKIP:${PN} += "file-rdeps"
+>
+> FILES:${PN} = "\
+>     /home/neuro/serve \
+>     /home/neuro/dist/** \
+>     ${sysconfdir}/mini_x/session \
+> "
+>
+> CARGO_DISABLE_BITBAKE_VENDORING = "1"
+>
+> do_compile() {
+>     oe_cargo_fix_env
+>
+>     sed -i '/multiplexing = false/d' $CARGO_HOME/config
+>     sed -i '/\[http\]/d' $CARGO_HOME/config
+>     sed -i '/cainfo/d' $CARGO_HOME/config
+>
+>     export RUSTFLAGS="${RUSTFLAGS}"
+>     export RUST_TARGET_PATH="${RUST_TARGET_PATH}"
+>
+>     export CARGO_NET_GIT_FETCH_WITH_CLI=true
+>     cd ${S}/tmp/baroloop/programmer-rust/
+>     cargo build --release --bin serve
+> }
+>
+> do_install() {
+>     # this isn_t reached anyway
+> # ...
+> }
+>
+> --
+> Mit freundlichen Grüßen neuroloop GmbH
+> i.A. Felix Knorr
+> Senior Software Developer
+> --------------------------------------
+> neuroloop GmbH
+> Engesserstr. 4, 79108 Freiburg, Germany
+>
+> Amtsgericht Freiburg HRB 713935
+>
+> Geschäftsführer: Dr. Michael Lauk, Dr. Dennis Plachta
+>
+>
+>
+> The information contained in this communication is confidential, may be attorney-client privileged, may constitute inside information, and is intended only for the use of the addressee. It is the property of the company of the sender of this e-mail. Unauthorized use, disclosure, or copying of this communication or any part thereof is strictly prohibited and may be unlawful. If you have received this communication in error, please notify us immediately by return e-mail and destroy this communication and all copies thereof, including all attachments.
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#57072): https://lists.yoctoproject.org/g/yocto/message/57072
+> Mute This Topic: https://lists.yoctoproject.org/mt/91057468/3618097
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kiernan@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+-- 
+Alex Kiernan
+
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+* RE: [yocto] Problems with recipe for our Rust-Software
+  2022-05-12 13:09 ` Problems with recipe for our Rust-Software Felix Knorr
+  2022-05-12 13:15   ` [yocto] " Alexander Kanavin
+  2022-05-12 13:28   ` Alex Kiernan
+@ 2022-05-12 13:32   ` Chanho Park
+  2 siblings, 0 replies; 10+ messages in thread
+From: Chanho Park @ 2022-05-12 13:32 UTC (permalink / raw)
+  To: 'Felix Knorr', yocto; +Cc: Randy.MacLeod
+
+Hi,
+
+I'm also facing same issue behind proxy even though I personally reverted below patch :(
+
+https://git.yoctoproject.org/poky/commit/meta/classes/cargo_common.bbclass?h=kirkstone&id=83651eda51d65bcf479a9a8940232b712583e61f
+
+cargo_common: remove http_proxy
+Fix the test_sstate_noop_samesigs oe-selftest that
+produces an error like:
+
+   core2-64-poky-linux/libstd-rs/1.54.0-r0.do_configure.sigdata differs:
+   basehash changed from <hash-a> to <hash-b>
+   Variable http_proxy value changed from '' to 'http://example.com/'
+
+by simply removing the proxy config option. This may be added back
+after merge to oe-core if needed and if the diffsigs check passes.
+
+Best Regards,
+Chanho Park
+
+> -----Original Message-----
+> From: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org> On
+> Behalf Of Felix Knorr
+> Sent: Thursday, May 12, 2022 10:10 PM
+> To: yocto@lists.yoctoproject.org
+> Subject: [yocto] Problems with recipe for our Rust-Software
+> 
+> Hey,
+> 
+> I'm struggling with a recipe to build our rust project.
+> 
+> I cannot use cargo-bitbake because we use the 2021 edition. Also the
+> project is quite complex. We have one repository with 4 different crates,
+> some of them are linking c code. I'm trying to create a recipe by hand.
+> 
+> 
+> When I run bitbake for the recipe, it will error out with the following
+> error message:
+> 
+> ERROR: serve-1.0.0-r0 do_compile:
+> ExecutionError('/home/felix/git/poky/build/tmp/work/core2-64-poky-
+> linux/serve/1.0.0-r0/temp/run.do_compile.400923', 101, None, None)
+> ERROR: Logfile of failure stored in:
+> /home/felix/git/poky/build/tmp/work/core2-64-poky-linux/serve/1.0.0-
+> r0/temp/log.do_compile.400923
+> Log data follows:
+> | DEBUG: Executing shell function do_compile
+> |     Updating crates.io index
+> | warning: spurious network error (2 tries remaining): failed to resolve
+> address for github.com: Name or service not known; class=Net (12)
+> | warning: spurious network error (1 tries remaining): failed to resolve
+> address for github.com: Name or service not known; class=Net (12)
+> | error: failed to get `anyhow` as a dependency of package `nlprog v0.1.0
+> (/home/felix/git/poky/build/tmp/work/core2-64-poky-linux/serve/1.0.0-
+> r0/tmp/baroloop/programmer-rust/nlprog)`
+> |
+> | Caused by:
+> |   failed to fetch `https://github.com/rust-lang/crates.io-index
+> <https://protect2.fireeye.com/v1/url?k=68eaf684-3771ce79-68eb7dcb-
+> 000babff317b-44b4b436f9e0edc0&q=1&e=3342104f-017d-4ac5-9d70-
+> f1208c419a68&u=https%3A%2F%2Fgithub.com%2Frust-lang%2Fcrates.io-index> `
+> |
+> | Caused by:
+> |   network failure seems to have happened
+> |   if a proxy or similar is necessary `net.git-fetch-with-cli` may help
+> here
+> |   https://doc.rust-lang.org/cargo/reference/config.html#netgit-fetch-
+> with-cli
+> |
+> | Caused by:
+> |   failed to resolve address for github.com: Name or service not known;
+> class=Net (12)
+> | WARNING: exit code 101 from a shell command.
+> ERROR: Task (/home/felix/git/baroloop/programmer-tablet/layers/meta-
+> main/recipes-core/programmer/serve_1.0.0.bb:do_compile) failed with exit
+> code '1'
+> 
+> 
+> However, if I run the devshell for the recipe and run cargo, it will at
+> least be able to do the fetching. (It will currently fail in the linker
+> step, but I assume thats because I haven't executed oe_cargo_fix_env)
+> 
+> if I don't remove the http.multiplexing=false from the cargo config, it
+> will just hang forever in the devshell (but not error out).
+> 
+> 
+> If I set export CARGO_NET_GIT_FETCH_WITH_CLI=true the error is slightly
+> different, but the git call that is then displayed also works in the
+> devshell. Also using a crate://-fetcher doesn't work, which is why I added
+> the CARGO_DISABLE_BITBAKE_VENDORING = "1" I've been fighting this for
+> hours and can't come up with anything. I hope you can help me.
+> 
+> PS: I'm using kirkstone, and I'm not having any url sections in
+> my .gitconfig
+> 
+> 
+> This is the recipe:
+> 
+> cargo
+> 
+> SUMMARY = "Copy prebuild programmer serve into the image"
+> LICENSE = "CLOSED"
+> LIC_FILES_CHKSUM = ""
+> 
+> SRC_URI="\
+>     file://${bl_path}/programmer-ui/dist \
+>     file://${config_path}/files/session \
+>     file:///tmp/baroloop \
+> "
+> #   crate://crates.io/tokio/1 \
+> #   crate://crates.io/war/0.3 \
+> #   crate://crates.io/byte/1 \
+> #   crate://crates.io/log/0.4.8 \
+> #   crate://crates.io/serde_json/1.0.75 \
+> #   crate://crates.io/serde/1.0.133 \
+> #   crate://crates.io/docopt/1.1.0 \
+> #   crate://crates.io/colored/1.9.3 \
+> #   crate://crates.io/chrono/0.4.11 \
+> #   crate://crates.io/battery/0.7.7 \
+> #   crate://crates.io/uuid/0.8.2 \
+> #   crate://crates.io/thiserror/1.0 \
+> #   crate://crates.io/anyhow/1 \
+> #   crate://crates.io/clap/3.0 \
+> #   crate://crates.io/futures/0.3 \
+> #   crate://crates.io/wry/0.6.1
+> S = "${WORKDIR}"
+> 
+> RDEPENDS:${PN} = "\
+>     eudev \
+>     dbus \
+> "
+> 
+> DEPENDS = "\
+>     eudev \
+>     dbus \
+> "
+> 
+> # INSANE_SKIP:${PN} += "file-rdeps"
+> 
+> FILES:${PN} = "\
+>     /home/neuro/serve \
+>     /home/neuro/dist/** \
+>     ${sysconfdir}/mini_x/session \
+> "
+> 
+> CARGO_DISABLE_BITBAKE_VENDORING = "1"
+> 
+> do_compile() {
+>     oe_cargo_fix_env
+> 
+>     sed -i '/multiplexing = false/d' $CARGO_HOME/config
+>     sed -i '/\[http\]/d' $CARGO_HOME/config
+>     sed -i '/cainfo/d' $CARGO_HOME/config
+> 
+>     export RUSTFLAGS="${RUSTFLAGS}"
+>     export RUST_TARGET_PATH="${RUST_TARGET_PATH}"
+> 
+>     export CARGO_NET_GIT_FETCH_WITH_CLI=true
+>     cd ${S}/tmp/baroloop/programmer-rust/
+>     cargo build --release --bin serve
+> }
+> 
+> do_install() {
+>     # this isn_t reached anyway
+> 	# ...
+> }
+> 
+> --
+> Mit freundlichen Grüßen neuroloop GmbH
+> i.A. Felix Knorr
+> Senior Software Developer
+> --------------------------------------
+> neuroloop GmbH
+> Engesserstr. 4, 79108 Freiburg, Germany
+> 
+> Amtsgericht Freiburg HRB 713935
+> 
+> Geschäftsführer: Dr. Michael Lauk, Dr. Dennis Plachta
+> 
+> 
+> 
+> The information contained in this communication is confidential, may be
+> attorney-client privileged, may constitute inside information, and is
+> intended only for the use of the addressee. It is the property of the
+> company of the sender of this e-mail. Unauthorized use, disclosure, or
+> copying of this communication or any part thereof is strictly prohibited
+> and may be unlawful. If you have received this communication in error,
+> please notify us immediately by return e-mail and destroy this
+> communication and all copies thereof, including all attachments.
+
+
+
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+* Re: [yocto] Problems with recipe for our Rust-Software
+  2022-05-12 13:28   ` Alex Kiernan
+@ 2022-05-13  7:56     ` Felix Knorr
+  2022-05-13  8:03       ` Quentin Schulz
+  0 siblings, 1 reply; 10+ messages in thread
+From: Felix Knorr @ 2022-05-13  7:56 UTC (permalink / raw)
+  To: Alex Kiernan; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 7284 bytes --]
+
+Hey,
+
+I'm now using the latest cargo-bitbake (thanks for the tip), but I'm still having problems. One of the dependencies needs pkg-config to build, and the error implies that it couldn't be found. To verify this, I added the following do_compile function:
+
+do_compile() {
+        bbnote "pkg-config: $(which pkg-config)"
+}
+
+
+
+and checked the log.do_compile  file after running which just says
+
+
+DEBUG: Executing shell function do_compile
+NOTE: pkg-config:
+DEBUG: Shell function do_compile finished
+
+
+so it's definitely not there. I added DEPENDS += " dbus (>= 1.6) pkgconf" to the recipe, but that didn't help.
+
+On 12.05.22 15:28, Alex Kiernan wrote:
+
+On Thu, May 12, 2022 at 2:09 PM Felix Knorr <fknorr@neuroloop.de><mailto:fknorr@neuroloop.de> wrote:
+
+
+
+Hey,
+
+I'm struggling with a recipe to build our rust project.
+
+I cannot use cargo-bitbake because we use the 2021 edition. Also the project is quite complex. We have one repository with 4 different crates, some of them are linking c code. I'm trying to create a recipe by hand.
+
+
+
+
+The HEAD of cargo-bitbake works fine for 2021 for us.
+
+
+
+When I run bitbake for the recipe, it will error out with the following error message:
+
+ERROR: serve-1.0.0-r0 do_compile: ExecutionError('/home/felix/git/poky/build/tmp/work/core2-64-poky-linux/serve/1.0.0-r0/temp/run.do_compile.400923', 101, None, None)
+ERROR: Logfile of failure stored in: /home/felix/git/poky/build/tmp/work/core2-64-poky-linux/serve/1.0.0-r0/temp/log.do_compile.400923
+Log data follows:
+| DEBUG: Executing shell function do_compile
+|     Updating crates.io index
+| warning: spurious network error (2 tries remaining): failed to resolve address for github.com: Name or service not known; class=Net (12)
+| warning: spurious network error (1 tries remaining): failed to resolve address for github.com: Name or service not known; class=Net (12)
+| error: failed to get `anyhow` as a dependency of package `nlprog v0.1.0 (/home/felix/git/poky/build/tmp/work/core2-64-poky-linux/serve/1.0.0-r0/tmp/baroloop/programmer-rust/nlprog)`
+|
+| Caused by:
+|   failed to fetch `https://github.com/rust-lang/crates.io-index`
+|
+| Caused by:
+|   network failure seems to have happened
+|   if a proxy or similar is necessary `net.git-fetch-with-cli` may help here
+|   https://doc.rust-lang.org/cargo/reference/config.html#netgit-fetch-with-cli
+|
+| Caused by:
+|   failed to resolve address for github.com: Name or service not known; class=Net (12)
+| WARNING: exit code 101 from a shell command.
+ERROR: Task (/home/felix/git/baroloop/programmer-tablet/layers/meta-main/recipes-core/programmer/serve_1.0.0.bb:do_compile) failed with exit code '1'
+
+However, if I run the devshell for the recipe and run cargo, it will at least be able to do the fetching. (It will currently fail in the linker step, but I assume thats because I haven't executed oe_cargo_fix_env)
+
+if I don't remove the http.multiplexing=false from the cargo config, it will just hang forever in the devshell (but not error out).
+
+If I set export CARGO_NET_GIT_FETCH_WITH_CLI=true the error is slightly different, but the git call that is then displayed also works in the devshell. Also using a crate://-fetcher doesn't work, which is why I added the CARGO_DISABLE_BITBAKE_VENDORING = "1" I've been fighting this for hours and can't come up with anything. I hope you can help me.
+
+PS: I'm using kirkstone, and I'm not having any url sections in my .gitconfig
+
+This is the recipe:
+
+cargo
+
+SUMMARY = "Copy prebuild programmer serve into the image"
+LICENSE = "CLOSED"
+LIC_FILES_CHKSUM = ""
+
+SRC_URI="\
+    file://${bl_path}/programmer-ui/dist \
+    file://${config_path}/files/session \
+    file:///tmp/baroloop \
+"
+#   crate://crates.io/tokio/1 \
+#   crate://crates.io/war/0.3 \
+#   crate://crates.io/byte/1 \
+#   crate://crates.io/log/0.4.8 \
+#   crate://crates.io/serde_json/1.0.75 \
+#   crate://crates.io/serde/1.0.133 \
+#   crate://crates.io/docopt/1.1.0 \
+#   crate://crates.io/colored/1.9.3 \
+#   crate://crates.io/chrono/0.4.11 \
+#   crate://crates.io/battery/0.7.7 \
+#   crate://crates.io/uuid/0.8.2 \
+#   crate://crates.io/thiserror/1.0 \
+#   crate://crates.io/anyhow/1 \
+#   crate://crates.io/clap/3.0 \
+#   crate://crates.io/futures/0.3 \
+#   crate://crates.io/wry/0.6.1
+S = "${WORKDIR}"
+
+RDEPENDS:${PN} = "\
+    eudev \
+    dbus \
+"
+
+DEPENDS = "\
+    eudev \
+    dbus \
+"
+
+# INSANE_SKIP:${PN} += "file-rdeps"
+
+FILES:${PN} = "\
+    /home/neuro/serve \
+    /home/neuro/dist/** \
+    ${sysconfdir}/mini_x/session \
+"
+
+CARGO_DISABLE_BITBAKE_VENDORING = "1"
+
+do_compile() {
+    oe_cargo_fix_env
+
+    sed -i '/multiplexing = false/d' $CARGO_HOME/config
+    sed -i '/\[http\]/d' $CARGO_HOME/config
+    sed -i '/cainfo/d' $CARGO_HOME/config
+
+    export RUSTFLAGS="${RUSTFLAGS}"
+    export RUST_TARGET_PATH="${RUST_TARGET_PATH}"
+
+    export CARGO_NET_GIT_FETCH_WITH_CLI=true
+    cd ${S}/tmp/baroloop/programmer-rust/
+    cargo build --release --bin serve
+}
+
+do_install() {
+    # this isn_t reached anyway
+# ...
+}
+
+--
+Mit freundlichen Grüßen neuroloop GmbH
+i.A. Felix Knorr
+Senior Software Developer
+--------------------------------------
+neuroloop GmbH
+Engesserstr. 4, 79108 Freiburg, Germany
+
+Amtsgericht Freiburg HRB 713935
+
+Geschäftsführer: Dr. Michael Lauk, Dr. Dennis Plachta
+
+
+
+The information contained in this communication is confidential, may be attorney-client privileged, may constitute inside information, and is intended only for the use of the addressee. It is the property of the company of the sender of this e-mail. Unauthorized use, disclosure, or copying of this communication or any part thereof is strictly prohibited and may be unlawful. If you have received this communication in error, please notify us immediately by return e-mail and destroy this communication and all copies thereof, including all attachments.
+
+
+-=-=-=-=-=-=-=-=-=-=-=-
+Links: You receive all messages sent to this group.
+View/Reply Online (#57072): https://lists.yoctoproject.org/g/yocto/message/57072
+Mute This Topic: https://lists.yoctoproject.org/mt/91057468/3618097
+Group Owner: yocto+owner@lists.yoctoproject.org<mailto:yocto+owner@lists.yoctoproject.org>
+Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kiernan@gmail.com<mailto:alex.kiernan@gmail.com>]
+-=-=-=-=-=-=-=-=-=-=-=-
+
+
+
+
+
+
+
+
+--
+Mit freundlichen Grüßen neuroloop GmbH
+i.A. Felix Knorr
+Senior Software Developer
+--------------------------------------
+neuroloop GmbH
+Engesserstr. 4, 79108 Freiburg, Germany
+
+Amtsgericht Freiburg HRB 713935
+
+Geschäftsführer: Dr. Michael Lauk, Dr. Dennis Plachta
+
+
+
+The information contained in this communication is confidential, may be attorney-client privileged, may constitute inside information, and is intended only for the use of the addressee. It is the property of the company of the sender of this e-mail. Unauthorized use, disclosure, or copying of this communication or any part thereof is strictly prohibited and may be unlawful. If you have received this communication in error, please notify us immediately by return e-mail and destroy this communication and all copies thereof, including all attachments.
+
+[-- Attachment #2: Type: text/html, Size: 9123 bytes --]
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+* Re: [yocto] Problems with recipe for our Rust-Software
+  2022-05-13  7:56     ` Felix Knorr
+@ 2022-05-13  8:03       ` Quentin Schulz
+  2022-05-13  9:25         ` Felix Knorr
+  0 siblings, 1 reply; 10+ messages in thread
+From: Quentin Schulz @ 2022-05-13  8:03 UTC (permalink / raw)
+  To: Felix Knorr, Alex Kiernan; +Cc: yocto
+
+Hi Felix,
+
+On 5/13/22 09:56, Felix Knorr wrote:
+> Hey,
+> 
+> I'm now using the latest cargo-bitbake (thanks for the tip), but I'm still having problems. One of the dependencies needs pkg-config to build, and the error implies that it couldn't be found. To verify this, I added the following do_compile function:
+> 
+> do_compile() {
+>          bbnote "pkg-config: $(which pkg-config)"
+> }
+> 
+> 
+> 
+> and checked the log.do_compile  file after running which just says
+> 
+> 
+> DEBUG: Executing shell function do_compile
+> NOTE: pkg-config:
+> DEBUG: Shell function do_compile finished
+> 
+> 
+> so it's definitely not there. I added DEPENDS += " dbus (>= 1.6) pkgconf" to the recipe, but that didn't help.
+> 
+
+Because it's supposed to be pkgconfig-native in DEPENDS, which can be 
+done by just adding:
+inherit pkgconfig
+to your recipe.
+
+Cheers,
+Quentin
+
+> On 12.05.22 15:28, Alex Kiernan wrote:
+> 
+> On Thu, May 12, 2022 at 2:09 PM Felix Knorr <fknorr@neuroloop.de><mailto:fknorr@neuroloop.de> wrote:
+> 
+> 
+> 
+> Hey,
+> 
+> I'm struggling with a recipe to build our rust project.
+> 
+> I cannot use cargo-bitbake because we use the 2021 edition. Also the project is quite complex. We have one repository with 4 different crates, some of them are linking c code. I'm trying to create a recipe by hand.
+> 
+> 
+> 
+> 
+> The HEAD of cargo-bitbake works fine for 2021 for us.
+> 
+> 
+> 
+> When I run bitbake for the recipe, it will error out with the following error message:
+> 
+> ERROR: serve-1.0.0-r0 do_compile: ExecutionError('/home/felix/git/poky/build/tmp/work/core2-64-poky-linux/serve/1.0.0-r0/temp/run.do_compile.400923', 101, None, None)
+> ERROR: Logfile of failure stored in: /home/felix/git/poky/build/tmp/work/core2-64-poky-linux/serve/1.0.0-r0/temp/log.do_compile.400923
+> Log data follows:
+> | DEBUG: Executing shell function do_compile
+> |     Updating crates.io index
+> | warning: spurious network error (2 tries remaining): failed to resolve address for github.com: Name or service not known; class=Net (12)
+> | warning: spurious network error (1 tries remaining): failed to resolve address for github.com: Name or service not known; class=Net (12)
+> | error: failed to get `anyhow` as a dependency of package `nlprog v0.1.0 (/home/felix/git/poky/build/tmp/work/core2-64-poky-linux/serve/1.0.0-r0/tmp/baroloop/programmer-rust/nlprog)`
+> |
+> | Caused by:
+> |   failed to fetch `https://urldefense.proofpoint.com/v2/url?u=https-3A__github.com_rust-2Dlang_crates.io-2Dindex&d=DwIGaQ&c=_sEr5x9kUWhuk4_nFwjJtA&r=LYjLexDn7rXIzVmkNPvw5ymA1XTSqHGq8yBP6m6qZZ4njZguQhZhkI_-172IIy1t&m=KVxrF11PIYLER0S0KZ5nJTg8Ut1pYlTpWVAglebyRABm3CAb_QrF6YGl4ooo6kcf&s=vjlTVOHFeWmwaLHUilCKAh_c4dOX92W-oBIEor_tiR8&e= `
+> |
+> | Caused by:
+> |   network failure seems to have happened
+> |   if a proxy or similar is necessary `net.git-fetch-with-cli` may help here
+> |   https://urldefense.proofpoint.com/v2/url?u=https-3A__doc.rust-2Dlang.org_cargo_reference_config.html-23netgit-2Dfetch-2Dwith-2Dcli&d=DwIGaQ&c=_sEr5x9kUWhuk4_nFwjJtA&r=LYjLexDn7rXIzVmkNPvw5ymA1XTSqHGq8yBP6m6qZZ4njZguQhZhkI_-172IIy1t&m=KVxrF11PIYLER0S0KZ5nJTg8Ut1pYlTpWVAglebyRABm3CAb_QrF6YGl4ooo6kcf&s=aaYEIIOtHpjY7BkTDEi5V9-gt8kNkmRnhhAIUBrpOPI&e=
+> |
+> | Caused by:
+> |   failed to resolve address for github.com: Name or service not known; class=Net (12)
+> | WARNING: exit code 101 from a shell command.
+> ERROR: Task (/home/felix/git/baroloop/programmer-tablet/layers/meta-main/recipes-core/programmer/serve_1.0.0.bb:do_compile) failed with exit code '1'
+> 
+> However, if I run the devshell for the recipe and run cargo, it will at least be able to do the fetching. (It will currently fail in the linker step, but I assume thats because I haven't executed oe_cargo_fix_env)
+> 
+> if I don't remove the http.multiplexing=false from the cargo config, it will just hang forever in the devshell (but not error out).
+> 
+> If I set export CARGO_NET_GIT_FETCH_WITH_CLI=true the error is slightly different, but the git call that is then displayed also works in the devshell. Also using a crate://-fetcher doesn't work, which is why I added the CARGO_DISABLE_BITBAKE_VENDORING = "1" I've been fighting this for hours and can't come up with anything. I hope you can help me.
+> 
+> PS: I'm using kirkstone, and I'm not having any url sections in my .gitconfig
+> 
+> This is the recipe:
+> 
+> cargo
+> 
+> SUMMARY = "Copy prebuild programmer serve into the image"
+> LICENSE = "CLOSED"
+> LIC_FILES_CHKSUM = ""
+> 
+> SRC_URI="\
+>      file://${bl_path}/programmer-ui/dist \
+>      file://${config_path}/files/session \
+>      file:///tmp/baroloop \
+> "
+> #   crate://crates.io/tokio/1 \
+> #   crate://crates.io/war/0.3 \
+> #   crate://crates.io/byte/1 \
+> #   crate://crates.io/log/0.4.8 \
+> #   crate://crates.io/serde_json/1.0.75 \
+> #   crate://crates.io/serde/1.0.133 \
+> #   crate://crates.io/docopt/1.1.0 \
+> #   crate://crates.io/colored/1.9.3 \
+> #   crate://crates.io/chrono/0.4.11 \
+> #   crate://crates.io/battery/0.7.7 \
+> #   crate://crates.io/uuid/0.8.2 \
+> #   crate://crates.io/thiserror/1.0 \
+> #   crate://crates.io/anyhow/1 \
+> #   crate://crates.io/clap/3.0 \
+> #   crate://crates.io/futures/0.3 \
+> #   crate://crates.io/wry/0.6.1
+> S = "${WORKDIR}"
+> 
+> RDEPENDS:${PN} = "\
+>      eudev \
+>      dbus \
+> "
+> 
+> DEPENDS = "\
+>      eudev \
+>      dbus \
+> "
+> 
+> # INSANE_SKIP:${PN} += "file-rdeps"
+> 
+> FILES:${PN} = "\
+>      /home/neuro/serve \
+>      /home/neuro/dist/** \
+>      ${sysconfdir}/mini_x/session \
+> "
+> 
+> CARGO_DISABLE_BITBAKE_VENDORING = "1"
+> 
+> do_compile() {
+>      oe_cargo_fix_env
+> 
+>      sed -i '/multiplexing = false/d' $CARGO_HOME/config
+>      sed -i '/\[http\]/d' $CARGO_HOME/config
+>      sed -i '/cainfo/d' $CARGO_HOME/config
+> 
+>      export RUSTFLAGS="${RUSTFLAGS}"
+>      export RUST_TARGET_PATH="${RUST_TARGET_PATH}"
+> 
+>      export CARGO_NET_GIT_FETCH_WITH_CLI=true
+>      cd ${S}/tmp/baroloop/programmer-rust/
+>      cargo build --release --bin serve
+> }
+> 
+> do_install() {
+>      # this isn_t reached anyway
+> # ...
+> }
+> 
+> --
+> Mit freundlichen Grüßen neuroloop GmbH
+> i.A. Felix Knorr
+> Senior Software Developer
+> --------------------------------------
+> neuroloop GmbH
+> Engesserstr. 4, 79108 Freiburg, Germany
+> 
+> Amtsgericht Freiburg HRB 713935
+> 
+> Geschäftsführer: Dr. Michael Lauk, Dr. Dennis Plachta
+> 
+> 
+> 
+> The information contained in this communication is confidential, may be attorney-client privileged, may constitute inside information, and is intended only for the use of the addressee. It is the property of the company of the sender of this e-mail. Unauthorized use, disclosure, or copying of this communication or any part thereof is strictly prohibited and may be unlawful. If you have received this communication in error, please notify us immediately by return e-mail and destroy this communication and all copies thereof, including all attachments.
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> --
+> Mit freundlichen Grüßen neuroloop GmbH
+> i.A. Felix Knorr
+> Senior Software Developer
+> --------------------------------------
+> neuroloop GmbH
+> Engesserstr. 4, 79108 Freiburg, Germany
+> 
+> Amtsgericht Freiburg HRB 713935
+> 
+> Geschäftsführer: Dr. Michael Lauk, Dr. Dennis Plachta
+> 
+> 
+> 
+> The information contained in this communication is confidential, may be attorney-client privileged, may constitute inside information, and is intended only for the use of the addressee. It is the property of the company of the sender of this e-mail. Unauthorized use, disclosure, or copying of this communication or any part thereof is strictly prohibited and may be unlawful. If you have received this communication in error, please notify us immediately by return e-mail and destroy this communication and all copies thereof, including all attachments.
+> 
+> 
+> 
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#57087): https://urldefense.proofpoint.com/v2/url?u=https-3A__lists.yoctoproject.org_g_yocto_message_57087&d=DwIFaQ&c=_sEr5x9kUWhuk4_nFwjJtA&r=LYjLexDn7rXIzVmkNPvw5ymA1XTSqHGq8yBP6m6qZZ4njZguQhZhkI_-172IIy1t&m=KVxrF11PIYLER0S0KZ5nJTg8Ut1pYlTpWVAglebyRABm3CAb_QrF6YGl4ooo6kcf&s=nSOPRfnF8sfc7MDMEC7nkzjahHnPJNW1A6IO4PIFAyM&e=
+> Mute This Topic: https://urldefense.proofpoint.com/v2/url?u=https-3A__lists.yoctoproject.org_mt_91057468_6293953&d=DwIFaQ&c=_sEr5x9kUWhuk4_nFwjJtA&r=LYjLexDn7rXIzVmkNPvw5ymA1XTSqHGq8yBP6m6qZZ4njZguQhZhkI_-172IIy1t&m=KVxrF11PIYLER0S0KZ5nJTg8Ut1pYlTpWVAglebyRABm3CAb_QrF6YGl4ooo6kcf&s=XQJ4_qwH1c3zIzyBMtV4txka8PH8jirZIIdqVs1LMYQ&e=
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://urldefense.proofpoint.com/v2/url?u=https-3A__lists.yoctoproject.org_g_yocto_unsub&d=DwIFaQ&c=_sEr5x9kUWhuk4_nFwjJtA&r=LYjLexDn7rXIzVmkNPvw5ymA1XTSqHGq8yBP6m6qZZ4njZguQhZhkI_-172IIy1t&m=KVxrF11PIYLER0S0KZ5nJTg8Ut1pYlTpWVAglebyRABm3CAb_QrF6YGl4ooo6kcf&s=Gf_Ak0q1f16Vu8TA-X4Yd_5xO059CVsSDHjYzWtpe4g&e=  [quentin.schulz@theobroma-systems.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+> 
+
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+* Re: [yocto] Problems with recipe for our Rust-Software
+  2022-05-13  8:03       ` Quentin Schulz
+@ 2022-05-13  9:25         ` Felix Knorr
+  2022-05-13  9:44           ` Quentin Schulz
+  0 siblings, 1 reply; 10+ messages in thread
+From: Felix Knorr @ 2022-05-13  9:25 UTC (permalink / raw)
+  To: Quentin Schulz, Alex Kiernan; +Cc: yocto
+
+Hey,
+thanks for your help, it's working now. But could you explain, why 
+adding pkgconf to DEPENDS didn't work?
+
+On 13.05.22 10:03, Quentin Schulz wrote:
+> Hi Felix,
+>
+> On 5/13/22 09:56, Felix Knorr wrote:
+>> Hey,
+>>
+>> I'm now using the latest cargo-bitbake (thanks for the tip), but I'm 
+>> still having problems. One of the dependencies needs pkg-config to 
+>> build, and the error implies that it couldn't be found. To verify 
+>> this, I added the following do_compile function:
+>>
+>> do_compile() {
+>>          bbnote "pkg-config: $(which pkg-config)"
+>> }
+>>
+>>
+>>
+>> and checked the log.do_compile  file after running which just says
+>>
+>>
+>> DEBUG: Executing shell function do_compile
+>> NOTE: pkg-config:
+>> DEBUG: Shell function do_compile finished
+>>
+>>
+>> so it's definitely not there. I added DEPENDS += " dbus (>= 1.6) 
+>> pkgconf" to the recipe, but that didn't help.
+>>
+>
+> Because it's supposed to be pkgconfig-native in DEPENDS, which can be 
+> done by just adding:
+> inherit pkgconfig
+> to your recipe.
+>
+> Cheers,
+> Quentin
+>
+>> On 12.05.22 15:28, Alex Kiernan wrote:
+>>
+>> On Thu, May 12, 2022 at 2:09 PM Felix Knorr 
+>> <fknorr@neuroloop.de><mailto:fknorr@neuroloop.de> wrote:
+>>
+>>
+>>
+>> Hey,
+>>
+>> I'm struggling with a recipe to build our rust project.
+>>
+>> I cannot use cargo-bitbake because we use the 2021 edition. Also the 
+>> project is quite complex. We have one repository with 4 different 
+>> crates, some of them are linking c code. I'm trying to create a 
+>> recipe by hand.
+>>
+>>
+>>
+>>
+>> The HEAD of cargo-bitbake works fine for 2021 for us.
+>>
+>>
+>>
+>> When I run bitbake for the recipe, it will error out with the 
+>> following error message:
+>>
+>> ERROR: serve-1.0.0-r0 do_compile: 
+>> ExecutionError('/home/felix/git/poky/build/tmp/work/core2-64-poky-linux/serve/1.0.0-r0/temp/run.do_compile.400923', 
+>> 101, None, None)
+>> ERROR: Logfile of failure stored in: 
+>> /home/felix/git/poky/build/tmp/work/core2-64-poky-linux/serve/1.0.0-r0/temp/log.do_compile.400923
+>> Log data follows:
+>> | DEBUG: Executing shell function do_compile
+>> |     Updating crates.io index
+>> | warning: spurious network error (2 tries remaining): failed to 
+>> resolve address for github.com: Name or service not known; class=Net 
+>> (12)
+>> | warning: spurious network error (1 tries remaining): failed to 
+>> resolve address for github.com: Name or service not known; class=Net 
+>> (12)
+>> | error: failed to get `anyhow` as a dependency of package `nlprog 
+>> v0.1.0 
+>> (/home/felix/git/poky/build/tmp/work/core2-64-poky-linux/serve/1.0.0-r0/tmp/baroloop/programmer-rust/nlprog)`
+>> |
+>> | Caused by:
+>> |   failed to fetch 
+>> `https://urldefense.proofpoint.com/v2/url?u=https-3A__github.com_rust-2Dlang_crates.io-2Dindex&d=DwIGaQ&c=_sEr5x9kUWhuk4_nFwjJtA&r=LYjLexDn7rXIzVmkNPvw5ymA1XTSqHGq8yBP6m6qZZ4njZguQhZhkI_-172IIy1t&m=KVxrF11PIYLER0S0KZ5nJTg8Ut1pYlTpWVAglebyRABm3CAb_QrF6YGl4ooo6kcf&s=vjlTVOHFeWmwaLHUilCKAh_c4dOX92W-oBIEor_tiR8&e= 
+>> `
+>> |
+>> | Caused by:
+>> |   network failure seems to have happened
+>> |   if a proxy or similar is necessary `net.git-fetch-with-cli` may 
+>> help here
+>> | 
+>> https://urldefense.proofpoint.com/v2/url?u=https-3A__doc.rust-2Dlang.org_cargo_reference_config.html-23netgit-2Dfetch-2Dwith-2Dcli&d=DwIGaQ&c=_sEr5x9kUWhuk4_nFwjJtA&r=LYjLexDn7rXIzVmkNPvw5ymA1XTSqHGq8yBP6m6qZZ4njZguQhZhkI_-172IIy1t&m=KVxrF11PIYLER0S0KZ5nJTg8Ut1pYlTpWVAglebyRABm3CAb_QrF6YGl4ooo6kcf&s=aaYEIIOtHpjY7BkTDEi5V9-gt8kNkmRnhhAIUBrpOPI&e=
+>> |
+>> | Caused by:
+>> |   failed to resolve address for github.com: Name or service not 
+>> known; class=Net (12)
+>> | WARNING: exit code 101 from a shell command.
+>> ERROR: Task 
+>> (/home/felix/git/baroloop/programmer-tablet/layers/meta-main/recipes-core/programmer/serve_1.0.0.bb:do_compile) 
+>> failed with exit code '1'
+>>
+>> However, if I run the devshell for the recipe and run cargo, it will 
+>> at least be able to do the fetching. (It will currently fail in the 
+>> linker step, but I assume thats because I haven't executed 
+>> oe_cargo_fix_env)
+>>
+>> if I don't remove the http.multiplexing=false from the cargo config, 
+>> it will just hang forever in the devshell (but not error out).
+>>
+>> If I set export CARGO_NET_GIT_FETCH_WITH_CLI=true the error is 
+>> slightly different, but the git call that is then displayed also 
+>> works in the devshell. Also using a crate://-fetcher doesn't work, 
+>> which is why I added the CARGO_DISABLE_BITBAKE_VENDORING = "1" I've 
+>> been fighting this for hours and can't come up with anything. I hope 
+>> you can help me.
+>>
+>> PS: I'm using kirkstone, and I'm not having any url sections in my 
+>> .gitconfig
+>>
+>> This is the recipe:
+>>
+>> cargo
+>>
+>> SUMMARY = "Copy prebuild programmer serve into the image"
+>> LICENSE = "CLOSED"
+>> LIC_FILES_CHKSUM = ""
+>>
+>> SRC_URI="\
+>>      file://${bl_path}/programmer-ui/dist \
+>>      file://${config_path}/files/session \
+>>      file:///tmp/baroloop \
+>> "
+>> #   crate://crates.io/tokio/1 \
+>> #   crate://crates.io/war/0.3 \
+>> #   crate://crates.io/byte/1 \
+>> #   crate://crates.io/log/0.4.8 \
+>> #   crate://crates.io/serde_json/1.0.75 \
+>> #   crate://crates.io/serde/1.0.133 \
+>> #   crate://crates.io/docopt/1.1.0 \
+>> #   crate://crates.io/colored/1.9.3 \
+>> #   crate://crates.io/chrono/0.4.11 \
+>> #   crate://crates.io/battery/0.7.7 \
+>> #   crate://crates.io/uuid/0.8.2 \
+>> #   crate://crates.io/thiserror/1.0 \
+>> #   crate://crates.io/anyhow/1 \
+>> #   crate://crates.io/clap/3.0 \
+>> #   crate://crates.io/futures/0.3 \
+>> #   crate://crates.io/wry/0.6.1
+>> S = "${WORKDIR}"
+>>
+>> RDEPENDS:${PN} = "\
+>>      eudev \
+>>      dbus \
+>> "
+>>
+>> DEPENDS = "\
+>>      eudev \
+>>      dbus \
+>> "
+>>
+>> # INSANE_SKIP:${PN} += "file-rdeps"
+>>
+>> FILES:${PN} = "\
+>>      /home/neuro/serve \
+>>      /home/neuro/dist/** \
+>>      ${sysconfdir}/mini_x/session \
+>> "
+>>
+>> CARGO_DISABLE_BITBAKE_VENDORING = "1"
+>>
+>> do_compile() {
+>>      oe_cargo_fix_env
+>>
+>>      sed -i '/multiplexing = false/d' $CARGO_HOME/config
+>>      sed -i '/\[http\]/d' $CARGO_HOME/config
+>>      sed -i '/cainfo/d' $CARGO_HOME/config
+>>
+>>      export RUSTFLAGS="${RUSTFLAGS}"
+>>      export RUST_TARGET_PATH="${RUST_TARGET_PATH}"
+>>
+>>      export CARGO_NET_GIT_FETCH_WITH_CLI=true
+>>      cd ${S}/tmp/baroloop/programmer-rust/
+>>      cargo build --release --bin serve
+>> }
+>>
+>> do_install() {
+>>      # this isn_t reached anyway
+>> # ...
+>> }
+>>
+>> -- 
+>> Mit freundlichen Grüßen neuroloop GmbH
+>> i.A. Felix Knorr
+>> Senior Software Developer
+>> --------------------------------------
+>> neuroloop GmbH
+>> Engesserstr. 4, 79108 Freiburg, Germany
+>>
+>> Amtsgericht Freiburg HRB 713935
+>>
+>> Geschäftsführer: Dr. Michael Lauk, Dr. Dennis Plachta
+>>
+>>
+>>
+>> The information contained in this communication is confidential, may 
+>> be attorney-client privileged, may constitute inside information, and 
+>> is intended only for the use of the addressee. It is the property of 
+>> the company of the sender of this e-mail. Unauthorized use, 
+>> disclosure, or copying of this communication or any part thereof is 
+>> strictly prohibited and may be unlawful. If you have received this 
+>> communication in error, please notify us immediately by return e-mail 
+>> and destroy this communication and all copies thereof, including all 
+>> attachments.
+>>
+>>
+>>
+>>
+>>
+>>
+>>
+>>
+>>
+>>
+>>
+>> -- 
+>> Mit freundlichen Grüßen neuroloop GmbH
+>> i.A. Felix Knorr
+>> Senior Software Developer
+>> --------------------------------------
+>> neuroloop GmbH
+>> Engesserstr. 4, 79108 Freiburg, Germany
+>>
+>> Amtsgericht Freiburg HRB 713935
+>>
+>> Geschäftsführer: Dr. Michael Lauk, Dr. Dennis Plachta
+>>
+>>
+>>
+>> The information contained in this communication is confidential, may 
+>> be attorney-client privileged, may constitute inside information, and 
+>> is intended only for the use of the addressee. It is the property of 
+>> the company of the sender of this e-mail. Unauthorized use, 
+>> disclosure, or copying of this communication or any part thereof is 
+>> strictly prohibited and may be unlawful. If you have received this 
+>> communication in error, please notify us immediately by return e-mail 
+>> and destroy this communication and all copies thereof, including all 
+>> attachments.
+>>
+>>
+>>
+>> -=-=-=-=-=-=-=-=-=-=-=-
+>> Links: You receive all messages sent to this group.
+>> View/Reply Online (#57087): 
+>> https://urldefense.proofpoint.com/v2/url?u=https-3A__lists.yoctoproject.org_g_yocto_message_57087&d=DwIFaQ&c=_sEr5x9kUWhuk4_nFwjJtA&r=LYjLexDn7rXIzVmkNPvw5ymA1XTSqHGq8yBP6m6qZZ4njZguQhZhkI_-172IIy1t&m=KVxrF11PIYLER0S0KZ5nJTg8Ut1pYlTpWVAglebyRABm3CAb_QrF6YGl4ooo6kcf&s=nSOPRfnF8sfc7MDMEC7nkzjahHnPJNW1A6IO4PIFAyM&e=
+>> Mute This Topic: 
+>> https://urldefense.proofpoint.com/v2/url?u=https-3A__lists.yoctoproject.org_mt_91057468_6293953&d=DwIFaQ&c=_sEr5x9kUWhuk4_nFwjJtA&r=LYjLexDn7rXIzVmkNPvw5ymA1XTSqHGq8yBP6m6qZZ4njZguQhZhkI_-172IIy1t&m=KVxrF11PIYLER0S0KZ5nJTg8Ut1pYlTpWVAglebyRABm3CAb_QrF6YGl4ooo6kcf&s=XQJ4_qwH1c3zIzyBMtV4txka8PH8jirZIIdqVs1LMYQ&e=
+>> Group Owner: yocto+owner@lists.yoctoproject.org
+>> Unsubscribe: 
+>> https://urldefense.proofpoint.com/v2/url?u=https-3A__lists.yoctoproject.org_g_yocto_unsub&d=DwIFaQ&c=_sEr5x9kUWhuk4_nFwjJtA&r=LYjLexDn7rXIzVmkNPvw5ymA1XTSqHGq8yBP6m6qZZ4njZguQhZhkI_-172IIy1t&m=KVxrF11PIYLER0S0KZ5nJTg8Ut1pYlTpWVAglebyRABm3CAb_QrF6YGl4ooo6kcf&s=Gf_Ak0q1f16Vu8TA-X4Yd_5xO059CVsSDHjYzWtpe4g&e= 
+>> [quentin.schulz@theobroma-systems.com]
+>> -=-=-=-=-=-=-=-=-=-=-=-
+>>
+
+-- 
+Mit freundlichen Grüßen neuroloop GmbH
+i.A. Felix Knorr
+Senior Software Developer
+--------------------------------------
+neuroloop GmbH
+Engesserstr. 4, 79108 Freiburg, Germany
+
+Amtsgericht Freiburg HRB 713935
+
+Geschäftsführer: Dr. Michael Lauk, Dr. Dennis Plachta
+
+  
+
+The information contained in this communication is confidential, may be attorney-client privileged, may constitute inside information, and is intended only for the use of the addressee. It is the property of the company of the sender of this e-mail. Unauthorized use, disclosure, or copying of this communication or any part thereof is strictly prohibited and may be unlawful. If you have received this communication in error, please notify us immediately by return e-mail and destroy this communication and all copies thereof, including all attachments.
+
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+* Re: [yocto] Problems with recipe for our Rust-Software
+  2022-05-13  9:25         ` Felix Knorr
+@ 2022-05-13  9:44           ` Quentin Schulz
+  2022-05-13 10:33             ` Felix Knorr
+  0 siblings, 1 reply; 10+ messages in thread
+From: Quentin Schulz @ 2022-05-13  9:44 UTC (permalink / raw)
+  To: Felix Knorr, Alex Kiernan; +Cc: yocto
+
+Hi Felix,
+
+On 5/13/22 11:25, Felix Knorr wrote:
+> Hey,
+> thanks for your help, it's working now. But could you explain, why
+> adding pkgconf to DEPENDS didn't work?
+> 
+
+Sure!
+
+pkgconf-native very likely would have worked, so I'll not talk about 
+pkgconf vs pkgconfig (also because I don't know much about them :) ).
+
+There are multiple "flavors" for recipes. The two most common ones are 
+target and host, in Yocto terms, "normal" recipes (or target recipe) and 
+native recipes.
+
+The difference between both is fundamental. Target recipes are going to 
+be built so that they can be run on the target hardware (usually an 
+embedded device, which very often differs from the CPU architecture used 
+to compile the image).
+Native recipes are going to be built so their outcome can be used on the 
+CPU architecture used by your building machine (aka host). This is 
+called native because the architecture used to compile something is the 
+same as the architecture of this something after being built.
+Target recipes are built on your build machine, therefore, you need 
+software compiled for your host architecture to be able to cross-compile 
+for the target (Yocto build system is running on your machine, but the 
+result is supposed to run on a different machine). This means that 
+target recipes depend on native recipes.
+
+For example, if you have a cmake-based project you want to use on your 
+target, you need to run cmake on your build machine. This means cmake 
+needs to be compiled for your build machine. Therefore, your cmake-based 
+project recipe will require cmake-native as dependency.
+
+Any non-target recipe will not make it to the target filesystem and will 
+only be used during compilation for binaries **EXECUTED during 
+compilation**.
+
+By the way, just use inherit pkgconfig instead of adding the dependency 
+manually, it's what is done in poky for all recipes :) (it's doing the 
+same thing, but cleaner, and if some modifications are required later on 
+to fix some issues with pkgconfig, you'll not need to do it yourself and 
+will get the fixes when updating your yocto version).
+
+Let me know if I should rephrase some parts,
+Cheers,
+Quentin
+
+> On 13.05.22 10:03, Quentin Schulz wrote:
+>> Hi Felix,
+>>
+>> On 5/13/22 09:56, Felix Knorr wrote:
+>>> Hey,
+>>>
+>>> I'm now using the latest cargo-bitbake (thanks for the tip), but I'm
+>>> still having problems. One of the dependencies needs pkg-config to
+>>> build, and the error implies that it couldn't be found. To verify
+>>> this, I added the following do_compile function:
+>>>
+>>> do_compile() {
+>>>           bbnote "pkg-config: $(which pkg-config)"
+>>> }
+>>>
+>>>
+>>>
+>>> and checked the log.do_compile  file after running which just says
+>>>
+>>>
+>>> DEBUG: Executing shell function do_compile
+>>> NOTE: pkg-config:
+>>> DEBUG: Shell function do_compile finished
+>>>
+>>>
+>>> so it's definitely not there. I added DEPENDS += " dbus (>= 1.6)
+>>> pkgconf" to the recipe, but that didn't help.
+>>>
+>>
+>> Because it's supposed to be pkgconfig-native in DEPENDS, which can be
+>> done by just adding:
+>> inherit pkgconfig
+>> to your recipe.
+>>
+>> Cheers,
+>> Quentin
+>>
+>>> On 12.05.22 15:28, Alex Kiernan wrote:
+>>>
+>>> On Thu, May 12, 2022 at 2:09 PM Felix Knorr
+>>> <fknorr@neuroloop.de><mailto:fknorr@neuroloop.de> wrote:
+>>>
+>>>
+>>>
+>>> Hey,
+>>>
+>>> I'm struggling with a recipe to build our rust project.
+>>>
+>>> I cannot use cargo-bitbake because we use the 2021 edition. Also the
+>>> project is quite complex. We have one repository with 4 different
+>>> crates, some of them are linking c code. I'm trying to create a
+>>> recipe by hand.
+>>>
+>>>
+>>>
+>>>
+>>> The HEAD of cargo-bitbake works fine for 2021 for us.
+>>>
+>>>
+>>>
+>>> When I run bitbake for the recipe, it will error out with the
+>>> following error message:
+>>>
+>>> ERROR: serve-1.0.0-r0 do_compile:
+>>> ExecutionError('/home/felix/git/poky/build/tmp/work/core2-64-poky-linux/serve/1.0.0-r0/temp/run.do_compile.400923',
+>>> 101, None, None)
+>>> ERROR: Logfile of failure stored in:
+>>> /home/felix/git/poky/build/tmp/work/core2-64-poky-linux/serve/1.0.0-r0/temp/log.do_compile.400923
+>>> Log data follows:
+>>> | DEBUG: Executing shell function do_compile
+>>> |     Updating crates.io index
+>>> | warning: spurious network error (2 tries remaining): failed to
+>>> resolve address for github.com: Name or service not known; class=Net
+>>> (12)
+>>> | warning: spurious network error (1 tries remaining): failed to
+>>> resolve address for github.com: Name or service not known; class=Net
+>>> (12)
+>>> | error: failed to get `anyhow` as a dependency of package `nlprog
+>>> v0.1.0
+>>> (/home/felix/git/poky/build/tmp/work/core2-64-poky-linux/serve/1.0.0-r0/tmp/baroloop/programmer-rust/nlprog)`
+>>> |
+>>> | Caused by:
+>>> |   failed to fetch
+>>> `https://urldefense.proofpoint.com/v2/url?u=https-3A__github.com_rust-2Dlang_crates.io-2Dindex&d=DwIGaQ&c=_sEr5x9kUWhuk4_nFwjJtA&r=LYjLexDn7rXIzVmkNPvw5ymA1XTSqHGq8yBP6m6qZZ4njZguQhZhkI_-172IIy1t&m=KVxrF11PIYLER0S0KZ5nJTg8Ut1pYlTpWVAglebyRABm3CAb_QrF6YGl4ooo6kcf&s=vjlTVOHFeWmwaLHUilCKAh_c4dOX92W-oBIEor_tiR8&e=
+>>> `
+>>> |
+>>> | Caused by:
+>>> |   network failure seems to have happened
+>>> |   if a proxy or similar is necessary `net.git-fetch-with-cli` may
+>>> help here
+>>> |
+>>> https://urldefense.proofpoint.com/v2/url?u=https-3A__doc.rust-2Dlang.org_cargo_reference_config.html-23netgit-2Dfetch-2Dwith-2Dcli&d=DwIGaQ&c=_sEr5x9kUWhuk4_nFwjJtA&r=LYjLexDn7rXIzVmkNPvw5ymA1XTSqHGq8yBP6m6qZZ4njZguQhZhkI_-172IIy1t&m=KVxrF11PIYLER0S0KZ5nJTg8Ut1pYlTpWVAglebyRABm3CAb_QrF6YGl4ooo6kcf&s=aaYEIIOtHpjY7BkTDEi5V9-gt8kNkmRnhhAIUBrpOPI&e=
+>>> |
+>>> | Caused by:
+>>> |   failed to resolve address for github.com: Name or service not
+>>> known; class=Net (12)
+>>> | WARNING: exit code 101 from a shell command.
+>>> ERROR: Task
+>>> (/home/felix/git/baroloop/programmer-tablet/layers/meta-main/recipes-core/programmer/serve_1.0.0.bb:do_compile)
+>>> failed with exit code '1'
+>>>
+>>> However, if I run the devshell for the recipe and run cargo, it will
+>>> at least be able to do the fetching. (It will currently fail in the
+>>> linker step, but I assume thats because I haven't executed
+>>> oe_cargo_fix_env)
+>>>
+>>> if I don't remove the http.multiplexing=false from the cargo config,
+>>> it will just hang forever in the devshell (but not error out).
+>>>
+>>> If I set export CARGO_NET_GIT_FETCH_WITH_CLI=true the error is
+>>> slightly different, but the git call that is then displayed also
+>>> works in the devshell. Also using a crate://-fetcher doesn't work,
+>>> which is why I added the CARGO_DISABLE_BITBAKE_VENDORING = "1" I've
+>>> been fighting this for hours and can't come up with anything. I hope
+>>> you can help me.
+>>>
+>>> PS: I'm using kirkstone, and I'm not having any url sections in my
+>>> .gitconfig
+>>>
+>>> This is the recipe:
+>>>
+>>> cargo
+>>>
+>>> SUMMARY = "Copy prebuild programmer serve into the image"
+>>> LICENSE = "CLOSED"
+>>> LIC_FILES_CHKSUM = ""
+>>>
+>>> SRC_URI="\
+>>>       file://${bl_path}/programmer-ui/dist \
+>>>       file://${config_path}/files/session \
+>>>       file:///tmp/baroloop \
+>>> "
+>>> #   crate://crates.io/tokio/1 \
+>>> #   crate://crates.io/war/0.3 \
+>>> #   crate://crates.io/byte/1 \
+>>> #   crate://crates.io/log/0.4.8 \
+>>> #   crate://crates.io/serde_json/1.0.75 \
+>>> #   crate://crates.io/serde/1.0.133 \
+>>> #   crate://crates.io/docopt/1.1.0 \
+>>> #   crate://crates.io/colored/1.9.3 \
+>>> #   crate://crates.io/chrono/0.4.11 \
+>>> #   crate://crates.io/battery/0.7.7 \
+>>> #   crate://crates.io/uuid/0.8.2 \
+>>> #   crate://crates.io/thiserror/1.0 \
+>>> #   crate://crates.io/anyhow/1 \
+>>> #   crate://crates.io/clap/3.0 \
+>>> #   crate://crates.io/futures/0.3 \
+>>> #   crate://crates.io/wry/0.6.1
+>>> S = "${WORKDIR}"
+>>>
+>>> RDEPENDS:${PN} = "\
+>>>       eudev \
+>>>       dbus \
+>>> "
+>>>
+>>> DEPENDS = "\
+>>>       eudev \
+>>>       dbus \
+>>> "
+>>>
+>>> # INSANE_SKIP:${PN} += "file-rdeps"
+>>>
+>>> FILES:${PN} = "\
+>>>       /home/neuro/serve \
+>>>       /home/neuro/dist/** \
+>>>       ${sysconfdir}/mini_x/session \
+>>> "
+>>>
+>>> CARGO_DISABLE_BITBAKE_VENDORING = "1"
+>>>
+>>> do_compile() {
+>>>       oe_cargo_fix_env
+>>>
+>>>       sed -i '/multiplexing = false/d' $CARGO_HOME/config
+>>>       sed -i '/\[http\]/d' $CARGO_HOME/config
+>>>       sed -i '/cainfo/d' $CARGO_HOME/config
+>>>
+>>>       export RUSTFLAGS="${RUSTFLAGS}"
+>>>       export RUST_TARGET_PATH="${RUST_TARGET_PATH}"
+>>>
+>>>       export CARGO_NET_GIT_FETCH_WITH_CLI=true
+>>>       cd ${S}/tmp/baroloop/programmer-rust/
+>>>       cargo build --release --bin serve
+>>> }
+>>>
+>>> do_install() {
+>>>       # this isn_t reached anyway
+>>> # ...
+>>> }
+>>>
+>>> -- 
+>>> Mit freundlichen Grüßen neuroloop GmbH
+>>> i.A. Felix Knorr
+>>> Senior Software Developer
+>>> --------------------------------------
+>>> neuroloop GmbH
+>>> Engesserstr. 4, 79108 Freiburg, Germany
+>>>
+>>> Amtsgericht Freiburg HRB 713935
+>>>
+>>> Geschäftsführer: Dr. Michael Lauk, Dr. Dennis Plachta
+>>>
+>>>
+>>>
+>>> The information contained in this communication is confidential, may
+>>> be attorney-client privileged, may constitute inside information, and
+>>> is intended only for the use of the addressee. It is the property of
+>>> the company of the sender of this e-mail. Unauthorized use,
+>>> disclosure, or copying of this communication or any part thereof is
+>>> strictly prohibited and may be unlawful. If you have received this
+>>> communication in error, please notify us immediately by return e-mail
+>>> and destroy this communication and all copies thereof, including all
+>>> attachments.
+>>>
+>>>
+>>>
+>>>
+>>>
+>>>
+>>>
+>>>
+>>>
+>>>
+>>>
+>>> -- 
+>>> Mit freundlichen Grüßen neuroloop GmbH
+>>> i.A. Felix Knorr
+>>> Senior Software Developer
+>>> --------------------------------------
+>>> neuroloop GmbH
+>>> Engesserstr. 4, 79108 Freiburg, Germany
+>>>
+>>> Amtsgericht Freiburg HRB 713935
+>>>
+>>> Geschäftsführer: Dr. Michael Lauk, Dr. Dennis Plachta
+>>>
+>>>
+>>>
+>>> The information contained in this communication is confidential, may
+>>> be attorney-client privileged, may constitute inside information, and
+>>> is intended only for the use of the addressee. It is the property of
+>>> the company of the sender of this e-mail. Unauthorized use,
+>>> disclosure, or copying of this communication or any part thereof is
+>>> strictly prohibited and may be unlawful. If you have received this
+>>> communication in error, please notify us immediately by return e-mail
+>>> and destroy this communication and all copies thereof, including all
+>>> attachments.
+>>>
+>>>
+>>>
+>>> -=-=-=-=-=-=-=-=-=-=-=-
+>>> Links: You receive all messages sent to this group.
+>>> View/Reply Online (#57087):
+>>> https://urldefense.proofpoint.com/v2/url?u=https-3A__lists.yoctoproject.org_g_yocto_message_57087&d=DwIFaQ&c=_sEr5x9kUWhuk4_nFwjJtA&r=LYjLexDn7rXIzVmkNPvw5ymA1XTSqHGq8yBP6m6qZZ4njZguQhZhkI_-172IIy1t&m=KVxrF11PIYLER0S0KZ5nJTg8Ut1pYlTpWVAglebyRABm3CAb_QrF6YGl4ooo6kcf&s=nSOPRfnF8sfc7MDMEC7nkzjahHnPJNW1A6IO4PIFAyM&e=
+>>> Mute This Topic:
+>>> https://urldefense.proofpoint.com/v2/url?u=https-3A__lists.yoctoproject.org_mt_91057468_6293953&d=DwIFaQ&c=_sEr5x9kUWhuk4_nFwjJtA&r=LYjLexDn7rXIzVmkNPvw5ymA1XTSqHGq8yBP6m6qZZ4njZguQhZhkI_-172IIy1t&m=KVxrF11PIYLER0S0KZ5nJTg8Ut1pYlTpWVAglebyRABm3CAb_QrF6YGl4ooo6kcf&s=XQJ4_qwH1c3zIzyBMtV4txka8PH8jirZIIdqVs1LMYQ&e=
+>>> Group Owner: yocto+owner@lists.yoctoproject.org
+>>> Unsubscribe:
+>>> https://urldefense.proofpoint.com/v2/url?u=https-3A__lists.yoctoproject.org_g_yocto_unsub&d=DwIFaQ&c=_sEr5x9kUWhuk4_nFwjJtA&r=LYjLexDn7rXIzVmkNPvw5ymA1XTSqHGq8yBP6m6qZZ4njZguQhZhkI_-172IIy1t&m=KVxrF11PIYLER0S0KZ5nJTg8Ut1pYlTpWVAglebyRABm3CAb_QrF6YGl4ooo6kcf&s=Gf_Ak0q1f16Vu8TA-X4Yd_5xO059CVsSDHjYzWtpe4g&e=
+>>> [quentin.schulz@theobroma-systems.com]
+>>> -=-=-=-=-=-=-=-=-=-=-=-
+>>>
+> 
+
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+* Re: [yocto] Problems with recipe for our Rust-Software
+  2022-05-13  9:44           ` Quentin Schulz
+@ 2022-05-13 10:33             ` Felix Knorr
+  0 siblings, 0 replies; 10+ messages in thread
+From: Felix Knorr @ 2022-05-13 10:33 UTC (permalink / raw)
+  To: Quentin Schulz, Alex Kiernan; +Cc: yocto
+
+Hey,
+
+thanks for the great explanation!
+
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+end of thread, other threads:[~2022-05-13 10:33 UTC | newest]
+
+Thread overview: 10+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+     [not found] <CGME20220512130957epcas2p47a753e9c7aca42eb59e9f2ec9ba97e12@epcas2p4.samsung.com>
+2022-05-12 13:09 ` Problems with recipe for our Rust-Software Felix Knorr
+2022-05-12 13:15   ` [yocto] " Alexander Kanavin
+2022-05-12 13:23     ` Felix Knorr
+2022-05-12 13:28   ` Alex Kiernan
+2022-05-13  7:56     ` Felix Knorr
+2022-05-13  8:03       ` Quentin Schulz
+2022-05-13  9:25         ` Felix Knorr
+2022-05-13  9:44           ` Quentin Schulz
+2022-05-13 10:33             ` Felix Knorr
+2022-05-12 13:32   ` Chanho Park
+

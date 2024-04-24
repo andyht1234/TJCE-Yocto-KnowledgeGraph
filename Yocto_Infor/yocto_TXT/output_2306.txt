@@ -1,0 +1,164 @@
+* [PATCH yocto-autobuilder-helper] run-docs-build: fix checkout of releases.rst from master
+@ 2022-01-25 16:45 Michael Opdenacker
+  2022-01-26  8:11 ` [yocto] " Quentin Schulz
+  0 siblings, 1 reply; 2+ messages in thread
+From: Michael Opdenacker @ 2022-01-25 16:45 UTC (permalink / raw)
+  To: yocto; +Cc: Michael Opdenacker
+
+A wrong path was given given the working directory.
+
+Also revert the changes with "git reset --hard" to
+have a clean state before further branch switches.
+
+Signed-off-by: Michael Opdenacker <michael.opdenacker@bootlin.com>
+---
+ scripts/run-docs-build | 9 ++++++---
+ 1 file changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/scripts/run-docs-build b/scripts/run-docs-build
+index 5d6d24a..c93b3e6 100755
+--- a/scripts/run-docs-build
++++ b/scripts/run-docs-build
+@@ -43,11 +43,12 @@ cp -r ./_build/final/* $outputdir/bitbake/next
+ # see the latest releases.
+ for branch in 1.46 1.48 1.50 1.52; do
+     git checkout $branch
+-    git checkout master doc/releases.rst
++    git checkout master releases.rst
+     make clean
+     make publish
+     mkdir $outputdir/bitbake/$branch
+     cp -r ./_build/final/* $outputdir/bitbake/$branch
++    git reset --hard
+ done
+ 
+ # only sync bitbake folder for now. We need bitbake to be published first
+@@ -79,11 +80,12 @@ cp -r ./_build/final/* $outputdir/next
+ for branch in dunfell gatesgarth hardknott honister; do
+     cd $ypdocs
+     git checkout $branch
+-    git checkout master documentation/releases.rst
++    git checkout master releases.rst
+     make clean
+     make publish
+     mkdir $outputdir/$branch
+     cp -r ./_build/final/* $outputdir/$branch
++    git reset --hard
+ done
+ 
+ # Yocto Project releases/tags
+@@ -101,12 +103,13 @@ for tag in $(git tag --list 'yocto-*'); do
+         if [ "$tag" = "yocto-3.3" ] || [ "$tag" = "yocto-3.4" ]; then
+             git am "${scriptdir}/${tag}/0001-conf-update-for-release.patch"
+         fi
+-        git checkout master documentation/releases.rst
++        git checkout master releases.rst
+         make clean
+         make publish
+         version=$(echo $tag | cut -c7-)
+         mkdir $outputdir/$version
+         cp -r ./_build/final/* $outputdir/$version
++        git reset --hard
+     fi
+ done
+ 
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 2+ messages in thread
+* Re: [yocto] [PATCH yocto-autobuilder-helper] run-docs-build: fix checkout of releases.rst from master
+  2022-01-25 16:45 [PATCH yocto-autobuilder-helper] run-docs-build: fix checkout of releases.rst from master Michael Opdenacker
+@ 2022-01-26  8:11 ` Quentin Schulz
+  0 siblings, 0 replies; 2+ messages in thread
+From: Quentin Schulz @ 2022-01-26  8:11 UTC (permalink / raw)
+  To: yocto, Michael Opdenacker
+
+Hi Michael,
+
+On January 25, 2022 5:45:46 PM GMT+01:00, Michael Opdenacker <michael.opdenacker@bootlin.com> wrote:
+>A wrong path was given given the working directory.
+>
+>Also revert the changes with "git reset --hard" to
+>have a clean state before further branch switches.
+>
+
+One change at a time please ☺️
+
+>Signed-off-by: Michael Opdenacker <michael.opdenacker@bootlin.com>
+>---
+> scripts/run-docs-build | 9 ++++++---
+> 1 file changed, 6 insertions(+), 3 deletions(-)
+>
+>diff --git a/scripts/run-docs-build b/scripts/run-docs-build
+>index 5d6d24a..c93b3e6 100755
+>--- a/scripts/run-docs-build
+>+++ b/scripts/run-docs-build
+>@@ -43,11 +43,12 @@ cp -r ./_build/final/* $outputdir/bitbake/next
+> # see the latest releases.
+> for branch in 1.46 1.48 1.50 1.52; do
+>     git checkout $branch
+>-    git checkout master doc/releases.rst
+>+    git checkout master releases.rst
+>     make clean
+>     make publish
+>     mkdir $outputdir/bitbake/$branch
+>     cp -r ./_build/final/* $outputdir/bitbake/$branch
+>+    git reset --hard
+
+This should be done right after the git checkout. It's better to ensure what you build is clean that try to ensure the next oneto build has a clean env. Especially since checkouts can dirty the git repo I think (I've had this issue multiple times when switching between kernel branches far enough from one another).
+
+Also git reset --hard is not enough. I use git clean -ffdx instead usually. Didn't have a problem with this one for a while now.
+
+> done
+> 
+> # only sync bitbake folder for now. We need bitbake to be published first
+>@@ -79,11 +80,12 @@ cp -r ./_build/final/* $outputdir/next
+> for branch in dunfell gatesgarth hardknott honister; do
+>     cd $ypdocs
+>     git checkout $branch
+>-    git checkout master documentation/releases.rst
+>+    git checkout master releases.rst
+>     make clean
+>     make publish
+>     mkdir $outputdir/$branch
+>     cp -r ./_build/final/* $outputdir/$branch
+>+    git reset --hard
+
+Ditto.
+
+> done
+> 
+> # Yocto Project releases/tags
+>@@ -101,12 +103,13 @@ for tag in $(git tag --list 'yocto-*'); do
+>         if [ "$tag" = "yocto-3.3" ] || [ "$tag" = "yocto-3.4" ]; then
+>             git am "${scriptdir}/${tag}/0001-conf-update-for-release.patch"
+>         fi
+>-        git checkout master documentation/releases.rst
+>+        git checkout master releases.rst
+>         make clean
+>         make publish
+>         version=$(echo $tag | cut -c7-)
+>         mkdir $outputdir/$version
+>         cp -r ./_build/final/* $outputdir/$version
+>+        git reset --hard
+
+Ditto.
+
+Cheers,
+Quentin
+
+>     fi
+> done
+> 
+
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2022-01-26  8:11 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-01-25 16:45 [PATCH yocto-autobuilder-helper] run-docs-build: fix checkout of releases.rst from master Michael Opdenacker
+2022-01-26  8:11 ` [yocto] " Quentin Schulz
+

@@ -1,0 +1,63 @@
+* How to properly modify/patch source of a Cargo Crate dependency
+@ 2023-01-14  3:43 Jerry Kefas
+  2023-01-15 16:03 ` [yocto] " Alex Kiernan
+  0 siblings, 1 reply; 2+ messages in thread
+From: Jerry Kefas @ 2023-01-14  3:43 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 589 bytes --]
+
+When creating recipes for Rust projects, all of the required crates are included in SRC_URI. I need to patch the source of several crates. I've tried creating individual recipes, but that does not really help.
+
+I've managed to get a hacky fix to work, however it involves having recipes copy source from the tmp/work directory, which is not ideal. It patches the Cargo.toml to replace the version of the dependency with a local path to expect the sources in.
+
+Is there a good way to do the patches necessary within bitbake, or should I be creating my own forks of all these packages?
+
+[-- Attachment #2: Type: text/html, Size: 636 bytes --]
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+* Re: [yocto] How to properly modify/patch source of a Cargo Crate dependency
+  2023-01-14  3:43 How to properly modify/patch source of a Cargo Crate dependency Jerry Kefas
+@ 2023-01-15 16:03 ` Alex Kiernan
+  0 siblings, 0 replies; 2+ messages in thread
+From: Alex Kiernan @ 2023-01-15 16:03 UTC (permalink / raw)
+  To: jekefas508; +Cc: yocto
+
+On Sat, Jan 14, 2023 at 3:43 AM Jerry Kefas via lists.yoctoproject.org
+<jekefas508=tingn.com@lists.yoctoproject.org> wrote:
+>
+> When creating recipes for Rust projects, all of the required crates are included in SRC_URI. I need to patch the source of several crates. I've tried creating individual recipes, but that does not really help.
+>
+
+If you're just patching in later versions of the crates, this should work:
+
+SRC_URI += "crate://crates.io/<target>/<version>"
+EXTRA_OECARGO_PATHS = "${CARGO_VENDORING_DIRECTORY}/<target>-<version>"
+
+or if you have them patched in a git repo:
+
+SRC_URI += "git://.../<target>"
+EXTRA_OECARGO_PATHS = "${WORKDIR}/<target>"
+
+Only works if they're already in crates.io though
+(https://doc.rust-lang.org/cargo/reference/overriding-dependencies.html)
+and you'll probably run into
+https://github.com/rust-lang/rust/issues/98185
+
+> I've managed to get a hacky fix to work, however it involves having recipes copy source from the tmp/work directory, which is not ideal. It patches the Cargo.toml to replace the version of the dependency with a local path to expect the sources in.
+>
+
+I suspect we really need some standard machinery here.
+
+--
+Alex Kiernan
+
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2023-01-15 16:03 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-01-14  3:43 How to properly modify/patch source of a Cargo Crate dependency Jerry Kefas
+2023-01-15 16:03 ` [yocto] " Alex Kiernan
+

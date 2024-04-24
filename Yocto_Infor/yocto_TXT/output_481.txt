@@ -1,0 +1,198 @@
+* #fakeroot #pseudo-native #xattr #attr-native #yocto
+@ 2023-06-13 17:55 jbarnesweb
+  2023-06-13 20:56 ` [yocto] " Richard Purdie
+  0 siblings, 1 reply; 4+ messages in thread
+From: jbarnesweb @ 2023-06-13 17:55 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2672 bytes --]
+
+I'm trying to understand why I get an Operation not permitted error (errno EPERM) with a fakeroot function that calls setfattr.
+Using yocto packages pseudo-native/attr-native
+
+In my recipe, this function is called
+
+fakeroot label_sign_verity() {
+...
+ls -l  ${FITIMAGE_PATH} >>${WORKDIR}/socosupdate_sign_and_package.txt
+#prints -rw-r--r-- 2 1000 1000 55097242 Jun 12 20:35 tmp/deploy/images/fitImage-initramfs-nested-rootfs-overlake-overlake
+#1000 is the $USER uid
+
+${DUMPIMAGE} -T flat_dt -p 0 -o ${SOCOS_IMAGEDIR}/Image ${FITIMAGE_PATH}
+
+...
+
+echo $(ls -l ${SOCOS_IMAGEDIR}/Image) >>${WORKDIR}/socosupdate_sign_and_package.txt
+#prints -rw-r--r-- 2 1000 1000 55097242 Jun 12 20:35 tmp/deploy/images/Image
+
+echo PSEUDO_PREFIX=${PSEUDO_PREFIX} PSEUDO_LOCALSTATEDIR=${PSEUDO_LOCALSTATEDIR} ${FAKEROOTCMD} ${SETFATTR} -n security.ima -v ${IMA_HEADER}${HASH_ALGO}${KEY_ID}${SIG_LENGTH}${IMAGE_SIG} ${SOCOS_IMAGEDIR}/Image >>${WORKDIR}/socosupdate_sign_and_package.txt
+
+#prints
+PSEUDO_PREFIX=/datadisk/LSG/main/LSG-linux-yocto/tmp/sysroots-components/x86_64/pseudo-native/usr PSEUDO_LOCALSTATEDIR=/datadisk/LSG/main/LSG-linux-yocto/tmp/work/aarch64-msft-linux/socosupdate/1.0-r0/pseudo/ /datadisk/LSG/main/LSG-linux-yocto/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo /datadisk/LSG/main/LSG-linux-yocto/tmp/sysroots-components/x86_64/attr-native/usr/bin/setfattr -n security.ima -v 03020462ff80020100077DC6A2B32D1313FE072B1A44C10CC94C5FDE507A1B8A16ED5836E49A95EB4C1AC53D7A2E2D5E74F2C972B033F83FD405A5AD68DF6B8954EBB8803AF7A774D4573283A1AA0694B38379E8BF94E0B4378EF865E6606BB3E9534A0B916813F6C64DE53AB2B1B7CE579B54ADBA702BA7CF3F60B17769318642804950EADB2E6417F24FFA88F8684B5F319D9731AC07B9B3BD82A52BFDFAD4D6212C5E5D9BA3F4249385F3DC67E21DEA99B00FDECE224B99142FCB81840D93A6AE007F799484B70B1399A674378C4001D03F7529A69F851E642374118E53AC24F1E8849ECD1BC69E75A120E5408E3B73C26D47C658DEA3A3BC1EF7B7738AB75B94B3B6DC06155EEF /datadisk/LSG/main/LSG-linux-y
+octo/tmp/work/aarch64-msft-linux/socosupdate/1.0-r0/deploy-socosupdate/socosupdate1908//squashfs-root/opt/msft/ap/app/SocOsUpdate/images/Image
+#If I run the above in the same shell that I ran bitbake, it succeeds.
+
+${SETFATTR} -n security.ima -v ${IMA_HEADER}${HASH_ALGO}${KEY_ID}${SIG_LENGTH}${INITRD_SIG} ${SOCOS_IMAGEDIR}/Image
+# above fails with Operation not permitted, with or without fakeroot decoration in function signature.
+
+I've also tried running the command with the pseudo preamble directly inside the recipe with and without the fakeroot decoration in the function signature. Fails the same way. When I echo $(whoami), it says root when fakeroot is used and $USER when not.
+
+[-- Attachment #2: Type: text/html, Size: 3128 bytes --]
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] #fakeroot #pseudo-native #xattr #attr-native #yocto
+  2023-06-13 17:55 #fakeroot #pseudo-native #xattr #attr-native #yocto jbarnesweb
+@ 2023-06-13 20:56 ` Richard Purdie
+  2023-06-14 15:48   ` jbarnesweb
+  0 siblings, 1 reply; 4+ messages in thread
+From: Richard Purdie @ 2023-06-13 20:56 UTC (permalink / raw)
+  To: jbarnesweb, yocto
+
+On Tue, 2023-06-13 at 10:55 -0700, jbarnesweb via lists.yoctoproject.org wrote:
+> I'm trying to understand why I get an Operation not permitted error (errno EPERM) with a fakeroot function that calls setfattr.
+> Using yocto packages pseudo-native/attr-native
+>  
+> In my recipe, this function is called
+>  
+> fakeroot label_sign_verity() {
+> ...
+>     ls -l  ${FITIMAGE_PATH} >>${WORKDIR}/socosupdate_sign_and_package.txt
+> #prints -rw-r--r-- 2 1000 1000 55097242 Jun 12 20:35 tmp/deploy/images/fitImage-initramfs-nested-rootfs-overlake-overlake
+> #1000 is the $USER uid
+>  
+>     ${DUMPIMAGE} -T flat_dt -p 0 -o ${SOCOS_IMAGEDIR}/Image ${FITIMAGE_PATH}
+>  
+> ...
+>  
+>     echo $(ls -l ${SOCOS_IMAGEDIR}/Image) >>${WORKDIR}/socosupdate_sign_and_package.txt
+> #prints -rw-r--r-- 2 1000 1000 55097242 Jun 12 20:35 tmp/deploy/images/Image
+>  
+> echo PSEUDO_PREFIX=${PSEUDO_PREFIX} PSEUDO_LOCALSTATEDIR=${PSEUDO_LOCALSTATEDIR} ${FAKEROOTCMD} ${SETFATTR} -n security.ima -v ${IMA_HEADER}${HASH_ALGO}${KEY_ID}${SIG_LENGTH}${IMAGE_SIG} ${SOCOS_IMAGEDIR}/Image >>${WORKDIR}/socosupdate_sign_and_package.txt
+>  
+> #prints 
+> PSEUDO_PREFIX=/datadisk/LSG/main/LSG-linux-yocto/tmp/sysroots-components/x86_64/pseudo-native/usr PSEUDO_LOCALSTATEDIR=/datadisk/LSG/main/LSG-linux-yocto/tmp/work/aarch64-msft-linux/socosupdate/1.0-r0/pseudo/ /datadisk/LSG/main/LSG-linux-yocto/tmp/sysroots-components/x86_64/pseudo-native/usr/bin/pseudo /datadisk/LSG/main/LSG-linux-yocto/tmp/sysroots-components/x86_64/attr-native/usr/bin/setfattr -n security.ima -v 03020462ff80020100077DC6A2B32D1313FE072B1A44C10CC94C5FDE507A1B8A16ED5836E49A95EB4C1AC53D7A2E2D5E74F2C972B033F83FD405A5AD68DF6B8954EBB8803AF7A774D4573283A1AA0694B38379E8BF94E0B4378EF865E6606BB3E9534A0B916813F6C64DE53AB2B1B7CE579B54ADBA702BA7CF3F60B17769318642804950EADB2E6417F24FFA88F8684B5F319D9731AC07B9B3BD82A52BFDFAD4D6212C5E5D9BA3F4249385F3DC67E21DEA99B00FDECE224B99142FCB81840D93A6AE007F799484B70B1399A674378C4001D03F7529A69F851E642374118E53AC24F1E8849ECD1BC69E75A120E5408E3B73C26D47C658DEA3A3BC1EF7B7738AB75B94B3B6DC06155EEF /datadisk/LSG/main/LSG-linux-y
+> octo/tmp/work/aarch64-msft-linux/socosupdate/1.0-r0/deploy-socosupdate/socosupdate1908//squashfs-root/opt/msft/ap/app/SocOsUpdate/images/Image
+> #If I run the above in the same shell that I ran bitbake, it succeeds.
+>  
+> ${SETFATTR} -n security.ima -v ${IMA_HEADER}${HASH_ALGO}${KEY_ID}${SIG_LENGTH}${INITRD_SIG} ${SOCOS_IMAGEDIR}/Image 
+> # above fails with Operation not permitted, with or without fakeroot decoration in function signature.
+>  
+> I've also tried running the command with the pseudo preamble directly
+> inside the recipe with and without the fakeroot decoration in the
+> function signature. Fails the same way. When I echo $(whoami), it
+> says root when fakeroot is used and $USER when not.
+
+fakeroot context is a task level operation, not a function specific
+one. Have you tried running the task calling this function under
+fakeroot?
+
+Cheers,
+
+Richard
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: #fakeroot #pseudo-native #xattr #attr-native #yocto
+  2023-06-13 20:56 ` [yocto] " Richard Purdie
+@ 2023-06-14 15:48   ` jbarnesweb
+  2023-06-14 16:13     ` [yocto] " Richard Purdie
+  0 siblings, 1 reply; 4+ messages in thread
+From: jbarnesweb @ 2023-06-14 15:48 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 796 bytes --]
+
+Thanks for your reply, Richard.
+
+The  task was elided above. Here's what the recipe looks like now. (I removed the fakeroot decorator from the function signature). It still stops with Operation not permitted.
+
+label_sign_verity() {
+...
+${DUMPIMAGE} -T flat_dt -p 0 -o ${SOCOS_IMAGEDIR}/Image ${FITIMAGE_PATH} #Does this contribute to the error?
+...
+echo ${WHOAMI} >>${WORKDIR}/socosupdate_sign_and_package.txt # prints root
+...
+${SETFATTR} -n security.ima -v 0x${IMA_HEADER}${HASH_ALGO}${KEY_ID}${SIG_LENGTH}${DTB_SIG} ${SOCOS_IMAGEDIR}/Image # Operation not permitted.
+}
+...
+fakeroot do_sign_and_package() {
+...
+label_sign_verity ${SOCOSUPDATEDIR}/ ${FITIMAGE_PATH} >>${WORKDIR}/socosupdate_sign_and_package.txt
+}
+...
+addtask sign_and_package after do_deploy before do_build
+
+[-- Attachment #2: Type: text/html, Size: 1060 bytes --]
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] #fakeroot #pseudo-native #xattr #attr-native #yocto
+  2023-06-14 15:48   ` jbarnesweb
+@ 2023-06-14 16:13     ` Richard Purdie
+  0 siblings, 0 replies; 4+ messages in thread
+From: Richard Purdie @ 2023-06-14 16:13 UTC (permalink / raw)
+  To: jbarnesweb, yocto
+
+On Wed, 2023-06-14 at 08:48 -0700, jbarnesweb via lists.yoctoproject.org wrote:
+> Thanks for your reply, Richard.
+> 
+> The  task was elided above. Here's what the recipe looks like now. (I removed the fakeroot decorator from the function signature). It still stops with Operation not permitted.
+> 
+> label_sign_verity() {
+> ...
+>     ${DUMPIMAGE} -T flat_dt -p 0 -o ${SOCOS_IMAGEDIR}/Image ${FITIMAGE_PATH} #Does this contribute to the error? 
+> ...
+>     echo ${WHOAMI} >>${WORKDIR}/socosupdate_sign_and_package.txt # prints root
+> ...
+>     ${SETFATTR} -n security.ima -v 0x${IMA_HEADER}${HASH_ALGO}${KEY_ID}${SIG_LENGTH}${DTB_SIG} ${SOCOS_IMAGEDIR}/Image # Operation not permitted.
+> }
+> ...
+> fakeroot do_sign_and_package() {
+> ...
+>     label_sign_verity ${SOCOSUPDATEDIR}/ ${FITIMAGE_PATH} >>${WORKDIR}/socosupdate_sign_and_package.txt
+> }
+> ...
+> addtask sign_and_package after do_deploy before do_build
+
+
+Extended attributes aren't something we've done a lot of work with. In
+theory pseudo does have support for them but it does get complicated as
+there are things we need to emulate and things we shouldn't as they
+relate to the host system.
+
+It looks like pseudo does have xattr enabled by default. it is possible
+setfattr is calling some glibc function we don't intercept, or it is
+calling a syscall directly and bypassing glibc.
+
+The code in pseudo is here:
+
+https://git.yoctoproject.org/pseudo/tree/ports/linux/xattr/pseudo_wrappers.c#n155
+
+called from here:
+
+https://git.yoctoproject.org/pseudo/tree/ports/linux/xattr/guts/fsetxattr.c
+
+
+You could put:
+
+export PSEUDO_DEBUG = "nfoPdeViDxywc"
+
+into the recipe in question and have a look at what the pseudo logfile
+says (${WORKDIR}/pseudo/pseudo.log), see if it is catching this at all.
+It will log a lot of info with that.
+
+Cheers,
+
+Richard
+
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+end of thread, other threads:[~2023-06-14 16:14 UTC | newest]
+
+Thread overview: 4+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-06-13 17:55 #fakeroot #pseudo-native #xattr #attr-native #yocto jbarnesweb
+2023-06-13 20:56 ` [yocto] " Richard Purdie
+2023-06-14 15:48   ` jbarnesweb
+2023-06-14 16:13     ` [yocto] " Richard Purdie
+

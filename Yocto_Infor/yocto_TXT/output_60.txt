@@ -1,0 +1,478 @@
+* [yocto-autobuilder-helper][PATCH] config.json : reproducible-meta-oe build fixes
+@ 2023-10-10 10:07 Fabien Thomas
+  2023-10-10 13:14 ` [yocto] " Richard Purdie
+  0 siblings, 1 reply; 3+ messages in thread
+From: Fabien Thomas @ 2023-10-10 10:07 UTC (permalink / raw)
+  To: yocto; +Cc: Fabien Thomas, Yoann Congal
+
+- Distro has been changed to Poky so exclude Poky's layers from world to
+limit reproducibility tests to the targeted layer only.
+- Execution on autobuilder shows that addlayer steps often fail :
+reorder layer in ADDLAYER list regarding their dependencies.
+- Fix shortid building issues by setting USERADD_U(G)ID_TABLES to
+passwd and group files. These files must exist in meta-openmbedded.
+- Shorten the steps shortnames to improve readability on UI.
+- Add a directory level for output reports, for convenience.
+
+Signed-off-by: Fabien Thomas <fabien.thomas@smile.fr>
+Reviewed-by: Yoann Congal <yoann.congal@smile.fr>
+---
+ config.json | 107 ++++++++++++++++++++++++++++++++++------------------
+ 1 file changed, 70 insertions(+), 37 deletions(-)
+
+diff --git a/config.json b/config.json
+index df3493b..af4ab39 100644
+--- a/config.json
++++ b/config.json
+@@ -296,116 +296,149 @@
+             ],
+             "extravars" : [
+                 "EXCLUDE_FROM_WORLD:layer-core = '1'",
++                "EXCLUDE_FROM_WORLD:layer-yocto = '1'",
++                "EXCLUDE_FROM_WORLD:layer-yoctobsp = '1'",
+                 "EXCLUDE_FROM_WORLD:layer-selftest = '1'",
+                 "OEQA_REPRODUCIBLE_TEST_TARGET = 'world'"
+             ],
+             "step1" : {
+-                "shortname" : "Reproducible Selftest for openembedded meta-filesystems layer",
+-                "EXTRACMDS" : ["${SCRIPTSDIR}/checkvnc; OEQA_DEBUGGING_SAVED_OUTPUT=${BASE_SHAREDDIR}/pub/repro-fail-openembedded-meta-filesystems/ DISPLAY=:1 oe-selftest -r reproducible"],
++                "shortname" : "Repro test OE meta-filesystems",
++                "EXTRACMDS" : ["${SCRIPTSDIR}/checkvnc; OEQA_DEBUGGING_SAVED_OUTPUT=${BASE_SHAREDDIR}/pub/repro-fail-openembedded/meta-filesystems/ DISPLAY=:1 oe-selftest -r reproducible"],
+                 "ADDLAYER" : [
+-                    "${BUILDDIR}/../meta-openembedded/meta-filesystems",
+                     "${BUILDDIR}/../meta-openembedded/meta-oe"
++                    "${BUILDDIR}/../meta-openembedded/meta-networking",
++                    "${BUILDDIR}/../meta-openembedded/meta-filesystems",
+                 ],
+                 "extravars" : [
+-                    "EXCLUDE_FROM_WORLD:layer-openembedded-layer = '1'"
++                    "EXCLUDE_FROM_WORLD:layer-openembedded-layer = '1'",
++                    "EXCLUDE_FROM_WORLD:layer-networking-layer = '1'",
++                    "USERADD_UID_TABLES:append = ' files/static-passwd-meta-filesystems'",
++                    "USERADD_GID_TABLES:append = ' files/static-group-meta-networking'",
++                    "USERADD_UID_TABLES:append = ' files/static-passwd-meta-networking'",
++                    "USERADD_GID_TABLES:append = ' files/static-group-meta-oe'",
++                    "USERADD_UID_TABLES:append = ' files/static-passwd-meta-oe'"
+                 ]
+             },
+             "step2" : {
+-                "shortname" : "Reproducible Selftest for openembedded meta-gnome layer",
+-                "EXTRACMDS" : ["${SCRIPTSDIR}/checkvnc; OEQA_DEBUGGING_SAVED_OUTPUT=${BASE_SHAREDDIR}/pub/repro-fail-openembedded-meta-gnome/ DISPLAY=:1 oe-selftest -r reproducible"],
++                "shortname" : "Repro test OE meta-gnome",
++                "EXTRACMDS" : ["${SCRIPTSDIR}/checkvnc; OEQA_DEBUGGING_SAVED_OUTPUT=${BASE_SHAREDDIR}/pub/repro-fail-openembedded/meta-gnome/ DISPLAY=:1 oe-selftest -r reproducible"],
+                 "ADDLAYER" : [
+-                    "${BUILDDIR}/../meta-openembedded/meta-gnome",
+                     "${BUILDDIR}/../meta-openembedded/meta-oe",
+-                    "${BUILDDIR}/../meta-openembedded/meta-networking",
+                     "${BUILDDIR}/../meta-openembedded/meta-python"
++                    "${BUILDDIR}/../meta-openembedded/meta-networking",
++                    "${BUILDDIR}/../meta-openembedded/meta-gnome",
+                 ],
+                 "extravars" : [
+                     "EXCLUDE_FROM_WORLD:layer-openembedded-layer = '1'",
+                     "EXCLUDE_FROM_WORLD:layer-networking-layer = '1'",
+-                    "EXCLUDE_FROM_WORLD:layer-meta-python = '1'"
++                    "EXCLUDE_FROM_WORLD:layer-meta-python = '1'",
++                    "USERADD_UID_TABLES:append = ' files/static-passwd-meta-gnome'",
++                    "USERADD_GID_TABLES:append = ' files/static-group-meta-networking'",
++                    "USERADD_UID_TABLES:append = ' files/static-passwd-meta-networking'",
++                    "USERADD_GID_TABLES:append = ' files/static-group-meta-oe'",
++                    "USERADD_UID_TABLES:append = ' files/static-passwd-meta-oe'"
+                 ]
+             },
+             "step3" : {
+-                "shortname" : "Reproducible Selftest for openembedded meta-initramfs layer",
+-                "EXTRACMDS" : ["${SCRIPTSDIR}/checkvnc; OEQA_DEBUGGING_SAVED_OUTPUT=${BASE_SHAREDDIR}/pub/repro-fail-openembedded-meta-initramfs/ DISPLAY=:1 oe-selftest -r reproducible"],
++                "shortname" : "Repro test OE meta-initramfs",
++                "EXTRACMDS" : ["${SCRIPTSDIR}/checkvnc; OEQA_DEBUGGING_SAVED_OUTPUT=${BASE_SHAREDDIR}/pub/repro-fail-openembedded/meta-initramfs/ DISPLAY=:1 oe-selftest -r reproducible"],
+                 "ADDLAYER" : [
+                     "${BUILDDIR}/../meta-openembedded/meta-initramfs"
+                 ]
+             },
+             "step4" : {
+-                "shortname" : "Reproducible Selftest for openembedded meta-multimedia layer",
+-                "EXTRACMDS" : ["${SCRIPTSDIR}/checkvnc; OEQA_DEBUGGING_SAVED_OUTPUT=${BASE_SHAREDDIR}/pub/repro-fail-openembedded-meta-multimedia/ DISPLAY=:1 oe-selftest -r reproducible"],
++                "shortname" : "Repro test OE meta-multimedia",
++                "EXTRACMDS" : ["${SCRIPTSDIR}/checkvnc; OEQA_DEBUGGING_SAVED_OUTPUT=${BASE_SHAREDDIR}/pub/repro-fail-openembedded/meta-multimedia/ DISPLAY=:1 oe-selftest -r reproducible"],
+                 "ADDLAYER" : [
+-                    "${BUILDDIR}/../meta-openembedded/meta-multimedia",
+                     "${BUILDDIR}/../meta-openembedded/meta-oe",
+                     "${BUILDDIR}/../meta-openembedded/meta-python"
++                    "${BUILDDIR}/../meta-openembedded/meta-multimedia",
+                 ],
+                 "extravars" : [
+                     "EXCLUDE_FROM_WORLD:layer-openembedded-layer = '1'",
+-                    "EXCLUDE_FROM_WORLD:layer-meta-python = '1'"
++                    "EXCLUDE_FROM_WORLD:layer-meta-python = '1'",
++                    "USERADD_GID_TABLES:append = ' files/static-group-meta-multimedia'",
++                    "USERADD_UID_TABLES:append = ' files/static-passwd-meta-multimedia'",
++                    "USERADD_GID_TABLES:append = ' files/static-group-meta-oe'",
++                    "USERADD_UID_TABLES:append = ' files/static-passwd-meta-oe'"
+                 ]
+             },
+             "step5" : {
+-                "shortname" : "Reproducible Selftest for openembedded meta-networking layer",
+-                "EXTRACMDS" : ["${SCRIPTSDIR}/checkvnc; OEQA_DEBUGGING_SAVED_OUTPUT=${BASE_SHAREDDIR}/pub/repro-fail-openembedded-meta-networking/ DISPLAY=:1 oe-selftest -r reproducible"],
++                "shortname" : "Repro test OE meta-networking",
++                "EXTRACMDS" : ["${SCRIPTSDIR}/checkvnc; OEQA_DEBUGGING_SAVED_OUTPUT=${BASE_SHAREDDIR}/pub/repro-fail-openembedded/meta-networking/ DISPLAY=:1 oe-selftest -r reproducible"],
+                 "ADDLAYER" : [
+-                    "${BUILDDIR}/../meta-openembedded/meta-networking",
+                     "${BUILDDIR}/../meta-openembedded/meta-oe"
++                    "${BUILDDIR}/../meta-openembedded/meta-networking",
+                 ],
+                 "extravars" : [
+-                    "EXCLUDE_FROM_WORLD:layer-openembedded-layer = '1'"
++                    "EXCLUDE_FROM_WORLD:layer-openembedded-layer = '1'",
++                    "USERADD_GID_TABLES:append = ' files/static-group-meta-networking'",
++                    "USERADD_UID_TABLES:append = ' files/static-passwd-meta-networking'",
++                    "USERADD_GID_TABLES:append = ' files/static-group-meta-oe'",
++                    "USERADD_UID_TABLES:append = ' files/static-passwd-meta-oe'"
+                 ]
+             },
+             "step6" : {
+-                "shortname" : "Reproducible Selftest for openembedded meta-oe layer",
+-                "EXTRACMDS" : ["${SCRIPTSDIR}/checkvnc; OEQA_DEBUGGING_SAVED_OUTPUT=${BASE_SHAREDDIR}/pub/repro-fail-openembedded-meta-oe/ DISPLAY=:1 oe-selftest -r reproducible"],
++                "shortname" : "Repro test OE meta-oe",
++                "EXTRACMDS" : ["${SCRIPTSDIR}/checkvnc; OEQA_DEBUGGING_SAVED_OUTPUT=${BASE_SHAREDDIR}/pub/repro-fail-openembedded/meta-oe/ DISPLAY=:1 oe-selftest -r reproducible"],
+                 "ADDLAYER" : [
+                     "${BUILDDIR}/../meta-openembedded/meta-oe"
++                ],
++                "extravars" : [
++                    "USERADD_UID_TABLES:append = ' files/static-passwd-meta-oe'",
++                    "USERADD_GID_TABLES:append = ' files/static-group-meta-oe'"
+                 ]
+             },
+             "step7" : {
+-                "shortname" : "Reproducible Selftest for openembedded meta-perl layer",
+-                "EXTRACMDS" : ["${SCRIPTSDIR}/checkvnc; OEQA_DEBUGGING_SAVED_OUTPUT=${BASE_SHAREDDIR}/pub/repro-fail-openembedded-meta-perl/ DISPLAY=:1 oe-selftest -r reproducible"],
++                "shortname" : "Repro test OE meta-perl",
++                "EXTRACMDS" : ["${SCRIPTSDIR}/checkvnc; OEQA_DEBUGGING_SAVED_OUTPUT=${BASE_SHAREDDIR}/pub/repro-fail-openembedded/meta-perl/ DISPLAY=:1 oe-selftest -r reproducible"],
+                 "ADDLAYER" : [
+-                    "${BUILDDIR}/../meta-openembedded/meta-perl",
+                     "${BUILDDIR}/../meta-openembedded/meta-oe"
++                    "${BUILDDIR}/../meta-openembedded/meta-perl",
+                 ],
+                 "extravars" : [
+-                    "EXCLUDE_FROM_WORLD:layer-openembedded-layer = '1'"
++                    "EXCLUDE_FROM_WORLD:layer-openembedded-layer = '1'",
++                    "USERADD_GID_TABLES:append = ' files/static-group-meta-perl'",
++                    "USERADD_UID_TABLES:append = ' files/static-passwd-meta-perl'",
++                    "USERADD_GID_TABLES:append = ' files/static-group-meta-oe'",
++                    "USERADD_UID_TABLES:append = ' files/static-passwd-meta-oe'"
+                 ]
+             },
+             "step8" : {
+-                "shortname" : "Reproducible Selftest for openembedded meta-python layer",
+-                "EXTRACMDS" : ["${SCRIPTSDIR}/checkvnc; OEQA_DEBUGGING_SAVED_OUTPUT=${BASE_SHAREDDIR}/pub/repro-fail-openembedded-meta-python/ DISPLAY=:1 oe-selftest -r reproducible"],
++                "shortname" : "Repro test OE meta-python",
++                "EXTRACMDS" : ["${SCRIPTSDIR}/checkvnc; OEQA_DEBUGGING_SAVED_OUTPUT=${BASE_SHAREDDIR}/pub/repro-fail-openembedded/meta-python/ DISPLAY=:1 oe-selftest -r reproducible"],
+                 "ADDLAYER" : [
+-                    "${BUILDDIR}/../meta-openembedded/meta-python",
+                     "${BUILDDIR}/../meta-openembedded/meta-oe"
++                    "${BUILDDIR}/../meta-openembedded/meta-python",
+                 ],
+                 "extravars" : [
+                     "EXCLUDE_FROM_WORLD:layer-openembedded-layer = '1'"
+                 ]
+             },
+             "step9" : {
+-                "shortname" : "Reproducible Selftest for openembedded meta-webserver layer",
+-                "EXTRACMDS" : ["${SCRIPTSDIR}/checkvnc; OEQA_DEBUGGING_SAVED_OUTPUT=${BASE_SHAREDDIR}/pub/repro-fail-openembedded-meta-webserver/ DISPLAY=:1 oe-selftest -r reproducible"],
++                "shortname" : "Repro test OE meta-webserver",
++                "EXTRACMDS" : ["${SCRIPTSDIR}/checkvnc; OEQA_DEBUGGING_SAVED_OUTPUT=${BASE_SHAREDDIR}/pub/repro-fail-openembedded/meta-webserver/ DISPLAY=:1 oe-selftest -r reproducible"],
+                 "ADDLAYER" : [
+-                    "${BUILDDIR}/../meta-openembedded/meta-webserver",
+                     "${BUILDDIR}/../meta-openembedded/meta-oe"
++                    "${BUILDDIR}/../meta-openembedded/meta-webserver",
+                 ],
+                 "extravars" : [
+-                    "EXCLUDE_FROM_WORLD:layer-openembedded-layer = '1'"
++                    "EXCLUDE_FROM_WORLD:layer-openembedded-layer = '1'",
++                    "USERADD_UID_TABLES:append = ' files/static-passwd-meta-webserver'",
++                    "USERADD_GID_TABLES:append = ' files/static-group-meta-oe'",
++                    "USERADD_UID_TABLES:append = ' files/static-passwd-meta-oe'"
+                 ]
+             },
+             "step10" : {
+-                "shortname" : "Reproducible Selftest for openembedded meta-xfce layer",
+-                "EXTRACMDS" : ["${SCRIPTSDIR}/checkvnc; OEQA_DEBUGGING_SAVED_OUTPUT=${BASE_SHAREDDIR}/pub/repro-fail-openembedded-meta-xfce/ DISPLAY=:1 oe-selftest -r reproducible"],
++                "shortname" : "Repro test OE meta-xfce",
++                "EXTRACMDS" : ["${SCRIPTSDIR}/checkvnc; OEQA_DEBUGGING_SAVED_OUTPUT=${BASE_SHAREDDIR}/pub/repro-fail-openembedded/meta-xfce/ DISPLAY=:1 oe-selftest -r reproducible"],
+                 "ADDLAYER" : [
+-                    "${BUILDDIR}/../meta-openembedded/meta-xfce",
+                     "${BUILDDIR}/../meta-openembedded/meta-oe",
+-                    "${BUILDDIR}/../meta-openembedded/meta-gnome",
+-                    "${BUILDDIR}/../meta-openembedded/meta-multimedia",
+                     "${BUILDDIR}/../meta-openembedded/meta-python",
+                     "${BUILDDIR}/../meta-openembedded/meta-networking"
++                    "${BUILDDIR}/../meta-openembedded/meta-multimedia",
++                    "${BUILDDIR}/../meta-openembedded/meta-gnome",
++                    "${BUILDDIR}/../meta-openembedded/meta-xfce",
+                 ],
+                 "extravars" : [
+                     "EXCLUDE_FROM_WORLD:layer-openembedded-layer = '1'",
+-- 
+2.34.1
+
+
+
+^ permalink raw reply related	[flat|nested] 3+ messages in thread
+* Re: [yocto] [yocto-autobuilder-helper][PATCH] config.json : reproducible-meta-oe build fixes
+  2023-10-10 10:07 [yocto-autobuilder-helper][PATCH] config.json : reproducible-meta-oe build fixes Fabien Thomas
+@ 2023-10-10 13:14 ` Richard Purdie
+  2023-10-10 13:22   ` Yoann CONGAL
+  0 siblings, 1 reply; 3+ messages in thread
+From: Richard Purdie @ 2023-10-10 13:14 UTC (permalink / raw)
+  To: Fabien Thomas, yocto; +Cc: Yoann Congal
+
+On Tue, 2023-10-10 at 12:07 +0200, Fabien Thomas wrote:
+> - Distro has been changed to Poky so exclude Poky's layers from world to
+> limit reproducibility tests to the targeted layer only.
+> - Execution on autobuilder shows that addlayer steps often fail :
+> reorder layer in ADDLAYER list regarding their dependencies.
+> - Fix shortid building issues by setting USERADD_U(G)ID_TABLES to
+> passwd and group files. These files must exist in meta-openmbedded.
+> - Shorten the steps shortnames to improve readability on UI.
+> - Add a directory level for output reports, for convenience.
+> 
+> Signed-off-by: Fabien Thomas <fabien.thomas@smile.fr>
+> Reviewed-by: Yoann Congal <yoann.congal@smile.fr>
+> ---
+>  config.json | 107 ++++++++++++++++++++++++++++++++++------------------
+>  1 file changed, 70 insertions(+), 37 deletions(-)
+> 
+> diff --git a/config.json b/config.json
+> index df3493b..af4ab39 100644
+> --- a/config.json
+> +++ b/config.json
+> @@ -296,116 +296,149 @@
+>              ],
+>              "extravars" : [
+>                  "EXCLUDE_FROM_WORLD:layer-core = '1'",
+> +                "EXCLUDE_FROM_WORLD:layer-yocto = '1'",
+> +                "EXCLUDE_FROM_WORLD:layer-yoctobsp = '1'",
+>                  "EXCLUDE_FROM_WORLD:layer-selftest = '1'",
+>                  "OEQA_REPRODUCIBLE_TEST_TARGET = 'world'"
+>              ],
+>              "step1" : {
+> -                "shortname" : "Reproducible Selftest for openembedded meta-filesystems layer",
+> -                "EXTRACMDS" : ["${SCRIPTSDIR}/checkvnc; OEQA_DEBUGGING_SAVED_OUTPUT=${BASE_SHAREDDIR}/pub/repro-fail-openembedded-meta-filesystems/ DISPLAY=:1 oe-selftest -r reproducible"],
+> +                "shortname" : "Repro test OE meta-filesystems",
+> +                "EXTRACMDS" : ["${SCRIPTSDIR}/checkvnc; OEQA_DEBUGGING_SAVED_OUTPUT=${BASE_SHAREDDIR}/pub/repro-fail-openembedded/meta-filesystems/ DISPLAY=:1 oe-selftest -r reproducible"],
+>                  "ADDLAYER" : [
+> -                    "${BUILDDIR}/../meta-openembedded/meta-filesystems",
+>                      "${BUILDDIR}/../meta-openembedded/meta-oe"
+> +                    "${BUILDDIR}/../meta-openembedded/meta-networking",
+> +                    "${BUILDDIR}/../meta-openembedded/meta-filesystems",
+>                  ],
+>                  "extravars" : [
+> -                    "EXCLUDE_FROM_WORLD:layer-openembedded-layer = '1'"
+> +                    "EXCLUDE_FROM_WORLD:layer-openembedded-layer = '1'",
+> +                    "EXCLUDE_FROM_WORLD:layer-networking-layer = '1'",
+> +                    "USERADD_UID_TABLES:append = ' files/static-passwd-meta-filesystems'",
+> +                    "USERADD_GID_TABLES:append = ' files/static-group-meta-networking'",
+> +                    "USERADD_UID_TABLES:append = ' files/static-passwd-meta-networking'",
+> +                    "USERADD_GID_TABLES:append = ' files/static-group-meta-oe'",
+> +                    "USERADD_UID_TABLES:append = ' files/static-passwd-meta-oe'"
+>                  ]
+>              },
+>              "step2" : {
+> -                "shortname" : "Reproducible Selftest for openembedded meta-gnome layer",
+> -                "EXTRACMDS" : ["${SCRIPTSDIR}/checkvnc; OEQA_DEBUGGING_SAVED_OUTPUT=${BASE_SHAREDDIR}/pub/repro-fail-openembedded-meta-gnome/ DISPLAY=:1 oe-selftest -r reproducible"],
+> +                "shortname" : "Repro test OE meta-gnome",
+> +                "EXTRACMDS" : ["${SCRIPTSDIR}/checkvnc; OEQA_DEBUGGING_SAVED_OUTPUT=${BASE_SHAREDDIR}/pub/repro-fail-openembedded/meta-gnome/ DISPLAY=:1 oe-selftest -r reproducible"],
+>                  "ADDLAYER" : [
+> -                    "${BUILDDIR}/../meta-openembedded/meta-gnome",
+>                      "${BUILDDIR}/../meta-openembedded/meta-oe",
+> -                    "${BUILDDIR}/../meta-openembedded/meta-networking",
+>                      "${BUILDDIR}/../meta-openembedded/meta-python"
+> +                    "${BUILDDIR}/../meta-openembedded/meta-networking",
+> +                    "${BUILDDIR}/../meta-openembedded/meta-gnome",
+>                  ],
+>                  "extravars" : [
+>                      "EXCLUDE_FROM_WORLD:layer-openembedded-layer = '1'",
+>                      "EXCLUDE_FROM_WORLD:layer-networking-layer = '1'",
+> -                    "EXCLUDE_FROM_WORLD:layer-meta-python = '1'"
+> +                    "EXCLUDE_FROM_WORLD:layer-meta-python = '1'",
+> +                    "USERADD_UID_TABLES:append = ' files/static-passwd-meta-gnome'",
+> +                    "USERADD_GID_TABLES:append = ' files/static-group-meta-networking'",
+> +                    "USERADD_UID_TABLES:append = ' files/static-passwd-meta-networking'",
+> +                    "USERADD_GID_TABLES:append = ' files/static-group-meta-oe'",
+> +                    "USERADD_UID_TABLES:append = ' files/static-passwd-meta-oe'"
+>                  ]
+>              },
+>              "step3" : {
+> -                "shortname" : "Reproducible Selftest for openembedded meta-initramfs layer",
+> -                "EXTRACMDS" : ["${SCRIPTSDIR}/checkvnc; OEQA_DEBUGGING_SAVED_OUTPUT=${BASE_SHAREDDIR}/pub/repro-fail-openembedded-meta-initramfs/ DISPLAY=:1 oe-selftest -r reproducible"],
+> +                "shortname" : "Repro test OE meta-initramfs",
+> +                "EXTRACMDS" : ["${SCRIPTSDIR}/checkvnc; OEQA_DEBUGGING_SAVED_OUTPUT=${BASE_SHAREDDIR}/pub/repro-fail-openembedded/meta-initramfs/ DISPLAY=:1 oe-selftest -r reproducible"],
+>                  "ADDLAYER" : [
+>                      "${BUILDDIR}/../meta-openembedded/meta-initramfs"
+>                  ]
+>              },
+>              "step4" : {
+> -                "shortname" : "Reproducible Selftest for openembedded meta-multimedia layer",
+> -                "EXTRACMDS" : ["${SCRIPTSDIR}/checkvnc; OEQA_DEBUGGING_SAVED_OUTPUT=${BASE_SHAREDDIR}/pub/repro-fail-openembedded-meta-multimedia/ DISPLAY=:1 oe-selftest -r reproducible"],
+> +                "shortname" : "Repro test OE meta-multimedia",
+> +                "EXTRACMDS" : ["${SCRIPTSDIR}/checkvnc; OEQA_DEBUGGING_SAVED_OUTPUT=${BASE_SHAREDDIR}/pub/repro-fail-openembedded/meta-multimedia/ DISPLAY=:1 oe-selftest -r reproducible"],
+>                  "ADDLAYER" : [
+> -                    "${BUILDDIR}/../meta-openembedded/meta-multimedia",
+>                      "${BUILDDIR}/../meta-openembedded/meta-oe",
+>                      "${BUILDDIR}/../meta-openembedded/meta-python"
+> +                    "${BUILDDIR}/../meta-openembedded/meta-multimedia",
+>                  ],
+>                  "extravars" : [
+>                      "EXCLUDE_FROM_WORLD:layer-openembedded-layer = '1'",
+> -                    "EXCLUDE_FROM_WORLD:layer-meta-python = '1'"
+> +                    "EXCLUDE_FROM_WORLD:layer-meta-python = '1'",
+> +                    "USERADD_GID_TABLES:append = ' files/static-group-meta-multimedia'",
+> +                    "USERADD_UID_TABLES:append = ' files/static-passwd-meta-multimedia'",
+> +                    "USERADD_GID_TABLES:append = ' files/static-group-meta-oe'",
+> +                    "USERADD_UID_TABLES:append = ' files/static-passwd-meta-oe'"
+>                  ]
+>              },
+>              "step5" : {
+> -                "shortname" : "Reproducible Selftest for openembedded meta-networking layer",
+> -                "EXTRACMDS" : ["${SCRIPTSDIR}/checkvnc; OEQA_DEBUGGING_SAVED_OUTPUT=${BASE_SHAREDDIR}/pub/repro-fail-openembedded-meta-networking/ DISPLAY=:1 oe-selftest -r reproducible"],
+> +                "shortname" : "Repro test OE meta-networking",
+> +                "EXTRACMDS" : ["${SCRIPTSDIR}/checkvnc; OEQA_DEBUGGING_SAVED_OUTPUT=${BASE_SHAREDDIR}/pub/repro-fail-openembedded/meta-networking/ DISPLAY=:1 oe-selftest -r reproducible"],
+>                  "ADDLAYER" : [
+> -                    "${BUILDDIR}/../meta-openembedded/meta-networking",
+>                      "${BUILDDIR}/../meta-openembedded/meta-oe"
+> +                    "${BUILDDIR}/../meta-openembedded/meta-networking",
+>                  ],
+>                  "extravars" : [
+> -                    "EXCLUDE_FROM_WORLD:layer-openembedded-layer = '1'"
+> +                    "EXCLUDE_FROM_WORLD:layer-openembedded-layer = '1'",
+> +                    "USERADD_GID_TABLES:append = ' files/static-group-meta-networking'",
+> +                    "USERADD_UID_TABLES:append = ' files/static-passwd-meta-networking'",
+> +                    "USERADD_GID_TABLES:append = ' files/static-group-meta-oe'",
+> +                    "USERADD_UID_TABLES:append = ' files/static-passwd-meta-oe'"
+>                  ]
+>              },
+>              "step6" : {
+> -                "shortname" : "Reproducible Selftest for openembedded meta-oe layer",
+> -                "EXTRACMDS" : ["${SCRIPTSDIR}/checkvnc; OEQA_DEBUGGING_SAVED_OUTPUT=${BASE_SHAREDDIR}/pub/repro-fail-openembedded-meta-oe/ DISPLAY=:1 oe-selftest -r reproducible"],
+> +                "shortname" : "Repro test OE meta-oe",
+> +                "EXTRACMDS" : ["${SCRIPTSDIR}/checkvnc; OEQA_DEBUGGING_SAVED_OUTPUT=${BASE_SHAREDDIR}/pub/repro-fail-openembedded/meta-oe/ DISPLAY=:1 oe-selftest -r reproducible"],
+>                  "ADDLAYER" : [
+>                      "${BUILDDIR}/../meta-openembedded/meta-oe"
+> +                ],
+> +                "extravars" : [
+> +                    "USERADD_UID_TABLES:append = ' files/static-passwd-meta-oe'",
+> +                    "USERADD_GID_TABLES:append = ' files/static-group-meta-oe'"
+>                  ]
+>              },
+>              "step7" : {
+> -                "shortname" : "Reproducible Selftest for openembedded meta-perl layer",
+> -                "EXTRACMDS" : ["${SCRIPTSDIR}/checkvnc; OEQA_DEBUGGING_SAVED_OUTPUT=${BASE_SHAREDDIR}/pub/repro-fail-openembedded-meta-perl/ DISPLAY=:1 oe-selftest -r reproducible"],
+> +                "shortname" : "Repro test OE meta-perl",
+> +                "EXTRACMDS" : ["${SCRIPTSDIR}/checkvnc; OEQA_DEBUGGING_SAVED_OUTPUT=${BASE_SHAREDDIR}/pub/repro-fail-openembedded/meta-perl/ DISPLAY=:1 oe-selftest -r reproducible"],
+>                  "ADDLAYER" : [
+> -                    "${BUILDDIR}/../meta-openembedded/meta-perl",
+>                      "${BUILDDIR}/../meta-openembedded/meta-oe"
+> +                    "${BUILDDIR}/../meta-openembedded/meta-perl",
+>                  ],
+>                  "extravars" : [
+> -                    "EXCLUDE_FROM_WORLD:layer-openembedded-layer = '1'"
+> +                    "EXCLUDE_FROM_WORLD:layer-openembedded-layer = '1'",
+> +                    "USERADD_GID_TABLES:append = ' files/static-group-meta-perl'",
+> +                    "USERADD_UID_TABLES:append = ' files/static-passwd-meta-perl'",
+> +                    "USERADD_GID_TABLES:append = ' files/static-group-meta-oe'",
+> +                    "USERADD_UID_TABLES:append = ' files/static-passwd-meta-oe'"
+>                  ]
+>              },
+>              "step8" : {
+> -                "shortname" : "Reproducible Selftest for openembedded meta-python layer",
+> -                "EXTRACMDS" : ["${SCRIPTSDIR}/checkvnc; OEQA_DEBUGGING_SAVED_OUTPUT=${BASE_SHAREDDIR}/pub/repro-fail-openembedded-meta-python/ DISPLAY=:1 oe-selftest -r reproducible"],
+> +                "shortname" : "Repro test OE meta-python",
+> +                "EXTRACMDS" : ["${SCRIPTSDIR}/checkvnc; OEQA_DEBUGGING_SAVED_OUTPUT=${BASE_SHAREDDIR}/pub/repro-fail-openembedded/meta-python/ DISPLAY=:1 oe-selftest -r reproducible"],
+>                  "ADDLAYER" : [
+> -                    "${BUILDDIR}/../meta-openembedded/meta-python",
+>                      "${BUILDDIR}/../meta-openembedded/meta-oe"
+> +                    "${BUILDDIR}/../meta-openembedded/meta-python",
+>                  ],
+>                  "extravars" : [
+>                      "EXCLUDE_FROM_WORLD:layer-openembedded-layer = '1'"
+>                  ]
+>              },
+>              "step9" : {
+> -                "shortname" : "Reproducible Selftest for openembedded meta-webserver layer",
+> -                "EXTRACMDS" : ["${SCRIPTSDIR}/checkvnc; OEQA_DEBUGGING_SAVED_OUTPUT=${BASE_SHAREDDIR}/pub/repro-fail-openembedded-meta-webserver/ DISPLAY=:1 oe-selftest -r reproducible"],
+> +                "shortname" : "Repro test OE meta-webserver",
+> +                "EXTRACMDS" : ["${SCRIPTSDIR}/checkvnc; OEQA_DEBUGGING_SAVED_OUTPUT=${BASE_SHAREDDIR}/pub/repro-fail-openembedded/meta-webserver/ DISPLAY=:1 oe-selftest -r reproducible"],
+>                  "ADDLAYER" : [
+> -                    "${BUILDDIR}/../meta-openembedded/meta-webserver",
+>                      "${BUILDDIR}/../meta-openembedded/meta-oe"
+> +                    "${BUILDDIR}/../meta-openembedded/meta-webserver",
+>                  ],
+>                  "extravars" : [
+> -                    "EXCLUDE_FROM_WORLD:layer-openembedded-layer = '1'"
+> +                    "EXCLUDE_FROM_WORLD:layer-openembedded-layer = '1'",
+> +                    "USERADD_UID_TABLES:append = ' files/static-passwd-meta-webserver'",
+> +                    "USERADD_GID_TABLES:append = ' files/static-group-meta-oe'",
+> +                    "USERADD_UID_TABLES:append = ' files/static-passwd-meta-oe'"
+>                  ]
+>              },
+>              "step10" : {
+> -                "shortname" : "Reproducible Selftest for openembedded meta-xfce layer",
+> -                "EXTRACMDS" : ["${SCRIPTSDIR}/checkvnc; OEQA_DEBUGGING_SAVED_OUTPUT=${BASE_SHAREDDIR}/pub/repro-fail-openembedded-meta-xfce/ DISPLAY=:1 oe-selftest -r reproducible"],
+> +                "shortname" : "Repro test OE meta-xfce",
+> +                "EXTRACMDS" : ["${SCRIPTSDIR}/checkvnc; OEQA_DEBUGGING_SAVED_OUTPUT=${BASE_SHAREDDIR}/pub/repro-fail-openembedded/meta-xfce/ DISPLAY=:1 oe-selftest -r reproducible"],
+>                  "ADDLAYER" : [
+> -                    "${BUILDDIR}/../meta-openembedded/meta-xfce",
+>                      "${BUILDDIR}/../meta-openembedded/meta-oe",
+> -                    "${BUILDDIR}/../meta-openembedded/meta-gnome",
+> -                    "${BUILDDIR}/../meta-openembedded/meta-multimedia",
+>                      "${BUILDDIR}/../meta-openembedded/meta-python",
+>                      "${BUILDDIR}/../meta-openembedded/meta-networking"
+> +                    "${BUILDDIR}/../meta-openembedded/meta-multimedia",
+> +                    "${BUILDDIR}/../meta-openembedded/meta-gnome",
+> +                    "${BUILDDIR}/../meta-openembedded/meta-xfce",
+>                  ],
+>                  "extravars" : [
+>                      "EXCLUDE_FROM_WORLD:layer-openembedded-layer = '1'",
+
+That isn't actually valid json but I fixed it and will schedule a test
+build. I also tweaked the shortnames to make it clear it is meta-OE as
+"OE" isn't very specific.
+
+Cheers,
+
+Richard
+
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] [yocto-autobuilder-helper][PATCH] config.json : reproducible-meta-oe build fixes
+  2023-10-10 13:14 ` [yocto] " Richard Purdie
+@ 2023-10-10 13:22   ` Yoann CONGAL
+  0 siblings, 0 replies; 3+ messages in thread
+From: Yoann CONGAL @ 2023-10-10 13:22 UTC (permalink / raw)
+  To: Richard Purdie; +Cc: Fabien Thomas, yocto
+
+Le mar. 10 oct. 2023 à 15:14, Richard Purdie
+<richard.purdie@linuxfoundation.org> a écrit :
+> That isn't actually valid json but I fixed it and will schedule a test
+> build.
+
+Huh, sorry about that :(
+
+> I also tweaked the shortnames to make it clear it is meta-OE as
+> "OE" isn't very specific.
+
+Thanks!
+-- 
+Yoann Congal
+Smile ECS - Tech expert
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2023-10-10 13:22 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-10-10 10:07 [yocto-autobuilder-helper][PATCH] config.json : reproducible-meta-oe build fixes Fabien Thomas
+2023-10-10 13:14 ` [yocto] " Richard Purdie
+2023-10-10 13:22   ` Yoann CONGAL
+

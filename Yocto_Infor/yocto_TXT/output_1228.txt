@@ -1,0 +1,125 @@
+* Shell function not expanding variable
+@ 2022-11-10 15:18 Maik Vermeulen
+  2022-11-11 11:24 ` [yocto] " Ross Burton
+  0 siblings, 1 reply; 2+ messages in thread
+From: Maik Vermeulen @ 2022-11-10 15:18 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1480 bytes --]
+
+Hi,
+
+We have a shell function that's being called from a do_install task:
+custom_install() {
+    DIR=$1
+    echo "Operating on '${DIR}'"
+
+    install <some params> -m 0644 ${S}/$DIR/<some file> \
+
+ ${D}${some_path}/<some_file>
+}
+
+do_install() {
+    custom_install "dev"
+}
+
+The output of the above is:
+Operating on 'dev'
+
+exit 1 from 'install <some params> -m 0644 <recipe path>/1.0-r0/<expanded S
+folder>/${DIR}/<some file>
+<recipe path>/image/<some_path>/<some_file>'
+
+Why is ${DIR} expanded inside the echo, but not in the install command? I
+also tried with and without quotes, and with and without curly braces..
+We are on poky sumo.
+
+Thanks,
+Kind regards,
+
+Maik Vermeulen
+
+Embedded Software Engineer — Lightyear <https://www.lightyear.one/>
++31 6 16 82 73 79 <+31616827379>
+
+-- 
+ 
+<https://lightyear.one/careers?utm_source=signature&utm_campaign=spotlightroles&utm_medium=email#vacancies>
+
+-- 
+
+
+Automotive Campus 70 —5708 JZ Helmond, the Netherlands
+www.lightyear.one 
+<https://lightyear.one/>
+ <https://www.linkedin.com/company/lightyear.one/>
+
+This email may contain information which is privileged and/or 
+confidential. If you received this e-mail in error, please notify us 
+immediately by e-mail and delete the email without copying or disclosing 
+its contents to any other person. Lightyear is a trade name of Atlas 
+Technologies B.V. and is registered at the Dutch Chamber of Commerce under 
+number 67264298. 
+
+[-- Attachment #2: Type: text/html, Size: 3069 bytes --]
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+* Re: [yocto] Shell function not expanding variable
+  2022-11-10 15:18 Shell function not expanding variable Maik Vermeulen
+@ 2022-11-11 11:24 ` Ross Burton
+  0 siblings, 0 replies; 2+ messages in thread
+From: Ross Burton @ 2022-11-11 11:24 UTC (permalink / raw)
+  To: maik.vermeulen; +Cc: yocto
+
+On 10 Nov 2022, at 15:18, Maik Vermeulen via lists.yoctoproject.org <maik.vermeulen=lightyear.one@lists.yoctoproject.org> wrote:
+> 
+> Hi,
+> 
+> We have a shell function that's being called from a do_install task:
+> custom_install() {
+>     DIR=$1
+>     echo "Operating on '${DIR}'"
+> 
+>     install <some params> -m 0644 ${S}/$DIR/<some file> \
+>                                                        ${D}${some_path}/<some_file>
+> }
+> 
+> do_install() {
+>     custom_install "dev"
+> }
+> 
+> The output of the above is:
+> Operating on 'dev'
+> 
+> exit 1 from 'install <some params> -m 0644 <recipe path>/1.0-r0/<expanded S folder>/${DIR}/<some file>
+> <recipe path>/image/<some_path>/<some_file>'
+> 
+> Why is ${DIR} expanded inside the echo, but not in the install command? I also tried with and without quotes, and with and without curly braces..
+> We are on poky sumo.
+
+First, Sumo was last updated in 2019 and is very dead, please move to a supported release: https://wiki.yoctoproject.org/wiki/Releases
+
+I’m not convinced that your shell example and the error message match exactly: the error says ${DIR} but sh would have expanded that to either the value, or the empty string.
+
+The problem is most likely that you’re using single quotes when you shouldn't.  These disable expansion:
+
+$ FOO=42
+$ echo $FOO
+42
+$ echo "$FOO"
+42
+$ echo '$FOO'
+$FOO
+
+Also note that because bitbake’s parse and then sh’s parse can both use ${FOO} for variable expansion, it’s convention to use ${FOO} for *bitbake* variables and then just $FOO for sh variables, as bitbake only expands ${FOO} but sh will expand both ${FOO} and $FOO.  If you do ${FOO} and bitbake doesn’t know the variable, it doesn’t get replaced with the empty string (contrary to sh behaviour) so that sh can have a go.
+
+Ross
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2022-11-11 11:24 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-11-10 15:18 Shell function not expanding variable Maik Vermeulen
+2022-11-11 11:24 ` [yocto] " Ross Burton
+

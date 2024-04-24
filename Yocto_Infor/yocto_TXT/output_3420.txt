@@ -1,0 +1,275 @@
+* Make do_image_complete wait for an earlier task
+@ 2021-05-18  6:15 Mikko Murto
+  2021-05-18  6:56 ` [yocto] " Richard Purdie
+  0 siblings, 1 reply; 5+ messages in thread
+From: Mikko Murto @ 2021-05-18  6:15 UTC (permalink / raw)
+  To: yocto
+
+Hi,
+
+I've created a task do_create_spdx that gets some data from packages after do_package. The task is currently added with `addtask do_create_spdx after do_package before do_packagedata` The data is then enriched and combined in do_image_complete by adding the combining function to IMAGE_POSTPROCESS_COMMAND. For the most part everything works as expected, but for some packages do_create_spdx does not complete in time for the combination step in do_image_complete. Is there a way for me force do_image_complete to wait for do_create_spdx to have been completed for all packages?
+
+Best regards,
+Mikko Murto
+
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] Make do_image_complete wait for an earlier task
+  2021-05-18  6:15 Make do_image_complete wait for an earlier task Mikko Murto
+@ 2021-05-18  6:56 ` Richard Purdie
+  2021-05-18  7:09   ` VS: " Mikko Murto
+  0 siblings, 1 reply; 5+ messages in thread
+From: Richard Purdie @ 2021-05-18  6:56 UTC (permalink / raw)
+  To: Mikko Murto, yocto
+
+On Tue, 2021-05-18 at 06:15 +0000, Mikko Murto wrote:
+> Hi,
+> 
+> I've created a task do_create_spdx that gets some data from packages after 
+> do_package. The task is currently added with `addtask do_create_spdx after 
+> do_package before do_packagedata` The data is then enriched and combined in 
+> do_image_complete by adding the combining function to IMAGE_POSTPROCESS_COMMAND. 
+> For the most part everything works as expected, but for some packages 
+> do_create_spdx does not complete in time for the combination step in do_image_complete. 
+> Is there a way for me force do_image_complete to wait for do_create_spdx to have been 
+> completed for all packages?
+
+This seems a little odd since image.bbclass has:
+
+do_rootfs[recrdeptask] += "do_packagedata"
+
+which means do_rootfs should only happen after all do_packagedata have run.
+Your task is added before do_packagedata.
+do_image and do_image_complete should run after do_rootfs.
+
+I'm wondering if the issue is more to do with reuse of previous build artefacts where
+sstate is involved. Does your added task account for sstate?
+
+I've been giving some thought to SDPX and SBOM during our build process
+so I am curious what you're doing, is the work public anywhere?
+
+Cheers,
+
+Richard
+
+
+
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* VS: [yocto] Make do_image_complete wait for an earlier task
+  2021-05-18  6:56 ` [yocto] " Richard Purdie
+@ 2021-05-18  7:09   ` Mikko Murto
+  2021-05-18  9:18     ` Richard Purdie
+  0 siblings, 1 reply; 5+ messages in thread
+From: Mikko Murto @ 2021-05-18  7:09 UTC (permalink / raw)
+  To: Richard Purdie, yocto
+
+> Lähettäjä: Richard Purdie <richard.purdie@linuxfoundation.org>
+> Lähetetty: tiistai 18. toukokuuta 2021 9.57
+> 
+> On Tue, 2021-05-18 at 06:15 +0000, Mikko Murto wrote:
+> > Hi,
+> >
+> > I've created a task do_create_spdx that gets some data from packages
+> > after do_package. The task is currently added with `addtask
+> > do_create_spdx after do_package before do_packagedata` The data is
+> > then enriched and combined in do_image_complete by adding the combining
+> function to IMAGE_POSTPROCESS_COMMAND.
+> > For the most part everything works as expected, but for some packages
+> > do_create_spdx does not complete in time for the combination step in
+> do_image_complete.
+> > Is there a way for me force do_image_complete to wait for
+> > do_create_spdx to have been completed for all packages?
+> 
+> This seems a little odd since image.bbclass has:
+> 
+> do_rootfs[recrdeptask] += "do_packagedata"
+> 
+> which means do_rootfs should only happen after all do_packagedata have run.
+> Your task is added before do_packagedata.
+> do_image and do_image_complete should run after do_rootfs.
+> 
+> I'm wondering if the issue is more to do with reuse of previous build artefacts
+> where sstate is involved. Does your added task account for sstate?
+
+That is odd indeed. I need to give it another go. As for accounting for sstate, no, at least not intentionally. 
+
+> I've been giving some thought to SDPX and SBOM during our build process so I
+> am curious what you're doing, is the work public anywhere?
+
+Public at https://github.com/doubleopen-project/meta-doubleopen. The usual disclaimers about PoC-level spaghetti apply; all questions and comments very much appreciated! 😊
+
+Mikko
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: VS: [yocto] Make do_image_complete wait for an earlier task
+  2021-05-18  7:09   ` VS: " Mikko Murto
+@ 2021-05-18  9:18     ` Richard Purdie
+  2021-05-18 12:31       ` VS: " Mikko Murto
+  0 siblings, 1 reply; 5+ messages in thread
+From: Richard Purdie @ 2021-05-18  9:18 UTC (permalink / raw)
+  To: Mikko Murto, yocto
+
+On Tue, 2021-05-18 at 07:09 +0000, Mikko Murto wrote:
+> > Lähettäjä: Richard Purdie <richard.purdie@linuxfoundation.org>
+> > Lähetetty: tiistai 18. toukokuuta 2021 9.57
+> > 
+> > On Tue, 2021-05-18 at 06:15 +0000, Mikko Murto wrote:
+> > > Hi,
+> > > 
+> > > I've created a task do_create_spdx that gets some data from packages
+> > > after do_package. The task is currently added with `addtask
+> > > do_create_spdx after do_package before do_packagedata` The data is
+> > > then enriched and combined in do_image_complete by adding the combining
+> > function to IMAGE_POSTPROCESS_COMMAND.
+> > > For the most part everything works as expected, but for some packages
+> > > do_create_spdx does not complete in time for the combination step in
+> > do_image_complete.
+> > > Is there a way for me force do_image_complete to wait for
+> > > do_create_spdx to have been completed for all packages?
+> > 
+> > This seems a little odd since image.bbclass has:
+> > 
+> > do_rootfs[recrdeptask] += "do_packagedata"
+> > 
+> > which means do_rootfs should only happen after all do_packagedata have run.
+> > Your task is added before do_packagedata.
+> > do_image and do_image_complete should run after do_rootfs.
+> > 
+> > I'm wondering if the issue is more to do with reuse of previous build artefacts
+> > where sstate is involved. Does your added task account for sstate?
+> 
+> That is odd indeed. I need to give it another go. As for accounting for sstate, 
+> no, at least not intentionally. 
+
+I don't have much to go on but guessing, if you run some test and then rerun that
+test, the second build would come from sstate. If a build comes from sstate, it will 
+skip tasks that precede the sstate artefact.
+
+More specifically, if sstate exists for do_packagedata, it would skip any tasks 
+preceeding that task including your do_create_spdx task.
+
+There is no direct dependency from do_image_complete on the do_create_spdx tasks.
+
+You can add:
+
+do_rootfs[recrdeptask] += "do_create_spdx"
+
+but this will have the side effect that the build will never use sstate and always
+rebuild since that task isn't an sstate task.
+
+> > I've been giving some thought to SDPX and SBOM during our build process so I
+> > am curious what you're doing, is the work public anywhere?
+> 
+> Public at https://github.com/doubleopen-project/meta-doubleopen. The usual 
+> disclaimers about PoC-level spaghetti apply; all questions and comments 
+> very much appreciated! 😊
+
+I did have a quick look and you're going further than I'd been thinking of, at 
+least initially.
+
+What I'm thinking of in core YP initially is to have do_packagedata generate SPDX 
+data for the output packaged files in do_package/do_packagedata. I noticed you go
+further and process all the input sources and I'm not sure we're ready to do that
+yet.
+
+Doing it at do_package/do_packagedata time would still access any of the sources
+included from a debug perspective, hence it should correctly find the shipped 
+manifest/license info without the complexity of having to scan all the sources
+
+For your level of source scanning, I'd look at the existing do_populate_lic task
+which is sstate and generates license info. I think I'd be in favour of totally 
+replacing that with something generating spdx output...
+
+I'm actually hoping we could simply what we're doing today however the more I look
+at all the information you can put into SPDX, the more I worry that whilst we can
+generate tons of data and huge SPDX files, I'm not sure they're actually useful
+to anyone to actually use :/.
+
+For the SBOM information, we do need to somehow make something as useful as our
+normal manifest to people for this to be useful and adopted, at least from my 
+perspective.
+
+Cheers,
+
+Richard
+
+
+
+
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* VS: VS: [yocto] Make do_image_complete wait for an earlier task
+  2021-05-18  9:18     ` Richard Purdie
+@ 2021-05-18 12:31       ` Mikko Murto
+  0 siblings, 0 replies; 5+ messages in thread
+From: Mikko Murto @ 2021-05-18 12:31 UTC (permalink / raw)
+  To: Richard Purdie, yocto
+
+
+
+> -----Alkuperäinen viesti-----
+> Lähettäjä: Richard Purdie <richard.purdie@linuxfoundation.org>
+> Lähetetty: tiistai 18. toukokuuta 2021 12.19
+> There is no direct dependency from do_image_complete on the do_create_spdx
+> tasks.
+> 
+> You can add:
+> 
+> do_rootfs[recrdeptask] += "do_create_spdx"
+> 
+> but this will have the side effect that the build will never use sstate and always
+> rebuild since that task isn't an sstate task.
+
+Thanks, I'll give that a go!
+
+> I did have a quick look and you're going further than I'd been thinking of, at least
+> initially.
+> 
+> What I'm thinking of in core YP initially is to have do_packagedata generate
+> SPDX data for the output packaged files in do_package/do_packagedata. I
+> noticed you go further and process all the input sources and I'm not sure we're
+> ready to do that yet.
+> 
+> Doing it at do_package/do_packagedata time would still access any of the
+> sources included from a debug perspective, hence it should correctly find the
+> shipped manifest/license info without the complexity of having to scan all the
+> sources
+> 
+> For your level of source scanning, I'd look at the existing do_populate_lic task
+> which is sstate and generates license info. I think I'd be in favour of totally
+> replacing that with something generating spdx output...
+
+I'll give do_populate_lic task a look.
+
+> I'm actually hoping we could simply what we're doing today however the more I
+> look at all the information you can put into SPDX, the more I worry that whilst
+> we can generate tons of data and huge SPDX files, I'm not sure they're actually
+> useful to anyone to actually use :/.
+
+We're working on this as a part of a workflow that utilizes the SPDX files. Our tool uploads the source code archived by the layer to a Fossology instance, after which it queries Fossology's API for the file level license and copyright data. We then utilize OSS Review Toolkit by converting the SPDX file to ORT's data format and use ORT's Evaluator and Reporter to evaluate license compliance and create notice files and other reports.
+
+This is done to evaluate the image not based on the declared licenses of packages, which may omit some licenses of individual files, but those individual files. 
+
+> For the SBOM information, we do need to somehow make something as useful
+> as our normal manifest to people for this to be useful and adopted, at least from
+> my perspective.
+
+The huge SPDX files created might indeed not be super useful for all use cases. Long term, some kind of configurability regarding e.g. the level of granularity (packages vs. files) could enable the layer to be used for more use cases than the one we're currently working on.
+
+Mikko
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+end of thread, other threads:[~2021-05-18 12:31 UTC | newest]
+
+Thread overview: 5+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-05-18  6:15 Make do_image_complete wait for an earlier task Mikko Murto
+2021-05-18  6:56 ` [yocto] " Richard Purdie
+2021-05-18  7:09   ` VS: " Mikko Murto
+2021-05-18  9:18     ` Richard Purdie
+2021-05-18 12:31       ` VS: " Mikko Murto
+

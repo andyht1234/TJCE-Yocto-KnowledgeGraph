@@ -1,0 +1,501 @@
+* Re: [yocto] pseudo error building master with kas-container
+       [not found] <20220104192528.GA25696@localhost>
+@ 2022-01-04 23:08 ` Quentin Schulz
+  2022-01-06 13:50   ` Trevor Woerner
+  0 siblings, 1 reply; 8+ messages in thread
+From: Quentin Schulz @ 2022-01-04 23:08 UTC (permalink / raw)
+  To: yocto, Trevor Woerner
+
+Hi Trevor,
+
+On January 4, 2022 8:25:28 PM GMT+01:00, Trevor Woerner <twoerner@gmail.com> wrote:
+>Hi,
+>
+>I'm seeing a build failure with pseudo performing a qemux86 build using
+>kas-container. Note that I'm using kas-container, and not using kas inside a
+>container of my own making.
+>
+>build host: openSUSE 15.3
+>container tool: podman
+>steps:
+>	$ git clone https://github.com/siemens/kas.git
+>	$ mkdir layers
+>	$ git clone git://git.openembedded.org/bitbake layers/bitbake
+>	$ git clone git://git.openembedded.org/openembedded-core layers/openembedded-core
+>	create the file "simple.yml" containing -----------------+
+>        | header:                                                |
+>        |        version: 11                                     |
+>        | machine: qemux86                                       |
+>        | distro: nodistro                                       |
+>        | target:                                                |
+>        |        - core-image-base                               |
+>        | repos:                                                 |
+>        |         bitbake:                                       |
+>        |                 path: layers/bitbake                   |
+>        |                 layers:                                |
+>        |                         conf: disabled                 |
+>        |         openembedded-core:                             |
+>        |                 path: layers/openembedded-core         |
+>        |                 layers:                                |
+>        |                         meta:                          |
+>        +--------------------------------------------------------+
+>→ NOTE: do not use real tabs in the yml file
+>→ NOTE: if this is your first time using kas-container and/or podman you'll
+>        probably have to do some one-time/first-time setup of podman in order
+>        to use containers as a non-root user
+>→ NOTE: the head revisions of the following repos are as follows:
+>  kas: 75d1a5cce49f363b4dacd702a48d3b11195a353c
+>  layers/bitbake: bdf5739c5d831dc97a7d81568f94a0953c71017f
+>  layers/openembedded-core: 24c1b8346a2ab8bdea2e140282e33814166d9113
+>
+>	$ DL_DIR=/path/to/your/DL_DIR kas/kas-container build simple.yml
+>
+>the above steps always result in the following build error for me:
+>
+>	ERROR: Task (/work/layers/openembedded-core/meta/recipes-support/icu/icu_70.1.bb:do_install) failed with exit code '1'
+>	Pseudo log:
+>	path mismatch [1 link]: ino 47078782 db '/tmp/sh-thd.8MYMaq' req '/tmp/sh-thd.s6sVVG'.
+>	Setup complete, sending SIGUSR1 to pid 5494.
+
+I've had similar issues recently with kas-container and podman. What was required were two things:
+ - passing --tmpfs /tmp to podman run,
+ - increase pids_limit in container.conf (your system's), we've set it to 1000000 abritrarily for now and it seems to run fine for the few builds we've made so far),
+
+Hope this helps,
+Cheers,
+Quentin
+
+
+
+^ permalink raw reply	[flat|nested] 8+ messages in thread
+* Re: [yocto] pseudo error building master with kas-container
+  2022-01-04 23:08 ` [yocto] pseudo error building master with kas-container Quentin Schulz
+@ 2022-01-06 13:50   ` Trevor Woerner
+  2022-01-06 14:28     ` Jan Kiszka
+  2022-01-06 19:28     ` Quentin Schulz
+  0 siblings, 2 replies; 8+ messages in thread
+From: Trevor Woerner @ 2022-01-06 13:50 UTC (permalink / raw)
+  To: Quentin Schulz; +Cc: yocto, kas-devel
+
+Hey Quentin,
+
+On Wed 2022-01-05 @ 12:08:15 AM, Quentin Schulz wrote:
+> I've had similar issues recently with kas-container and podman. What was
+> required were two things:
+>  - passing --tmpfs /tmp to podman run,
+
+I don't think --tmpfs is an option, but I modified my kas-container script to
+add a "--tmpdir /tmp" option (and verified it with ps while running)
+
+>  - increase pids_limit in container.conf (your system's), we've set it to
+>  1000000 abritrarily for now and it seems to run fine for the few builds
+>  we've made so far),
+
+There seem to be a couple places to update the uid/gid mappings. Originally,
+following the podman docs, I created /etc/subuid and /etc/subgid and had them
+both contain:
+
+	trevor:100000:123456
+
+I wasn't seeing any problems with the couple builds that I did, but based
+on your suggestion I had a look at /etc/containers/storage.conf and added
+(uncommented):
+
+	remap-uids = "0:1668442479:1000000"
+	remap-gids = "0:1668442479:1000000"
+
+I also bumped /etc/sub{gu}id to:
+
+	trevor:100000:1000000
+
+but I'm still seeing pseudo failures even after incorporating both of your
+suggestions.
+
+I expanded my testing and discovered that using kas-container with podman on
+my openSUSE 15.3 machine I can't build qemux86 for anything including and past
+dunfell. All failures are due to pseudo.
+
+qemux86 builds using kas-container with podman on openSUSE 15.3:
+	working:
+	- thud (2.6)
+	- warrior (2.7)
+	- zeus (3.0)
+
+	not working:
+	- dunfell (3.1)
+	- gatesgarth (3.2)
+	- hardknott (3.3)
+	- honister (3.4)
+	- master
+
+I did a kas-container build on my Ubuntu 18.04 machine using docker of qemux86
+on master and it worked.
+
+I suspect something changed with pseudo in 3.1 and beyond that either isn't
+working well with openSUSE 15.3 or isn't working well with podman.
+
+Next I'll try using docker instead of podman.
+
+
+^ permalink raw reply	[flat|nested] 8+ messages in thread
+* Re: [yocto] pseudo error building master with kas-container
+  2022-01-06 13:50   ` Trevor Woerner
+@ 2022-01-06 14:28     ` Jan Kiszka
+  2022-01-06 19:28     ` Quentin Schulz
+  1 sibling, 0 replies; 8+ messages in thread
+From: Jan Kiszka @ 2022-01-06 14:28 UTC (permalink / raw)
+  To: Trevor Woerner, Quentin Schulz; +Cc: yocto, kas-devel
+
+On 06.01.22 14:50, Trevor Woerner wrote:
+> Hey Quentin,
+> 
+> On Wed 2022-01-05 @ 12:08:15 AM, Quentin Schulz wrote:
+>> I've had similar issues recently with kas-container and podman. What was
+>> required were two things:
+>>  - passing --tmpfs /tmp to podman run,
+> 
+> I don't think --tmpfs is an option, but I modified my kas-container script to
+> add a "--tmpdir /tmp" option (and verified it with ps while running)
+> 
+>>  - increase pids_limit in container.conf (your system's), we've set it to
+>>  1000000 abritrarily for now and it seems to run fine for the few builds
+>>  we've made so far),
+> 
+> There seem to be a couple places to update the uid/gid mappings. Originally,
+> following the podman docs, I created /etc/subuid and /etc/subgid and had them
+> both contain:
+> 
+> 	trevor:100000:123456
+> 
+> I wasn't seeing any problems with the couple builds that I did, but based
+> on your suggestion I had a look at /etc/containers/storage.conf and added
+> (uncommented):
+> 
+> 	remap-uids = "0:1668442479:1000000"
+> 	remap-gids = "0:1668442479:1000000"
+> 
+> I also bumped /etc/sub{gu}id to:
+> 
+> 	trevor:100000:1000000
+> 
+> but I'm still seeing pseudo failures even after incorporating both of your
+> suggestions.
+> 
+> I expanded my testing and discovered that using kas-container with podman on
+> my openSUSE 15.3 machine I can't build qemux86 for anything including and past
+> dunfell. All failures are due to pseudo.
+> 
+> qemux86 builds using kas-container with podman on openSUSE 15.3:
+> 	working:
+> 	- thud (2.6)
+> 	- warrior (2.7)
+> 	- zeus (3.0)
+> 
+> 	not working:
+> 	- dunfell (3.1)
+> 	- gatesgarth (3.2)
+> 	- hardknott (3.3)
+> 	- honister (3.4)
+> 	- master
+> 
+> I did a kas-container build on my Ubuntu 18.04 machine using docker of qemux86
+> on master and it worked.
+> 
+> I suspect something changed with pseudo in 3.1 and beyond that either isn't
+> working well with openSUSE 15.3 or isn't working well with podman.
+> 
+> Next I'll try using docker instead of podman.
+> 
+
+It's good to see people stressing kas-container with podman - but it's
+likely still under-tested. Nevertheless, I'm happy to help if you want
+to improve this path.
+
+Jan
+
+-- 
+Siemens AG, Technology
+Competence Center Embedded Linux
+
+
+^ permalink raw reply	[flat|nested] 8+ messages in thread
+* Re: [yocto] pseudo error building master with kas-container
+  2022-01-06 13:50   ` Trevor Woerner
+  2022-01-06 14:28     ` Jan Kiszka
+@ 2022-01-06 19:28     ` Quentin Schulz
+       [not found]       ` <20220107201240.GA13417@localhost>
+  1 sibling, 1 reply; 8+ messages in thread
+From: Quentin Schulz @ 2022-01-06 19:28 UTC (permalink / raw)
+  To: Trevor Woerner; +Cc: yocto, kas-devel
+
+Hi Trevor,
+
+On January 6, 2022 2:50:47 PM GMT+01:00, Trevor Woerner <twoerner@gmail.com> wrote:
+>Hey Quentin,
+>
+>On Wed 2022-01-05 @ 12:08:15 AM, Quentin Schulz wrote:
+>> I've had similar issues recently with kas-container and podman. What was
+>> required were two things:
+>>  - passing --tmpfs /tmp to podman run,
+>
+>I don't think --tmpfs is an option, but I modified my kas-container script to
+>add a "--tmpdir /tmp" option (and verified it with ps while running)
+>
+
+https://docs.podman.io/en/latest/markdown/podman-run.1.html#tmpfs-fs
+
+>>  - increase pids_limit in container.conf (your system's), we've set it to
+>>  1000000 abritrarily for now and it seems to run fine for the few builds
+>>  we've made so far),
+>
+>There seem to be a couple places to update the uid/gid mappings. Originally,
+>following the podman docs, I created /etc/subuid and /etc/subgid and had them
+>both contain:
+>
+>	trevor:100000:123456
+>
+>I wasn't seeing any problems with the couple builds that I did, but based
+>on your suggestion I had a look at /etc/containers/storage.conf and added
+>(uncommented):
+>
+>	remap-uids = "0:1668442479:1000000"
+>	remap-gids = "0:1668442479:1000000"
+>
+>I also bumped /etc/sub{gu}id to:
+>
+>	trevor:100000:1000000
+>
+>but I'm still seeing pseudo failures even after incorporating both of your
+>suggestions.
+>
+
+I wasn't talking about uids or gids, but pids_limit in containers.conf for podman on your host. See: 
+https://man.archlinux.org/man/containers.conf.5.en
+
+We discovered that it just had nothing to do with Bitbake/pseudo or whatever, because with a fork bomb we reached the max of 2048 processes (within the container) before the container started to fail us.
+
+Without those two changes, I've never been able to successfully build even core-image-minimal for qemu-x86_64.
+
+Cheers,
+Quentin
+
+>I expanded my testing and discovered that using kas-container with podman on
+>my openSUSE 15.3 machine I can't build qemux86 for anything including and past
+>dunfell. All failures are due to pseudo.
+>
+>qemux86 builds using kas-container with podman on openSUSE 15.3:
+>	working:
+>	- thud (2.6)
+>	- warrior (2.7)
+>	- zeus (3.0)
+>
+>	not working:
+>	- dunfell (3.1)
+>	- gatesgarth (3.2)
+>	- hardknott (3.3)
+>	- honister (3.4)
+>	- master
+>
+>I did a kas-container build on my Ubuntu 18.04 machine using docker of qemux86
+>on master and it worked.
+>
+>I suspect something changed with pseudo in 3.1 and beyond that either isn't
+>working well with openSUSE 15.3 or isn't working well with podman.
+>
+>Next I'll try using docker instead of podman.
+
+
+^ permalink raw reply	[flat|nested] 8+ messages in thread
+* Re: [yocto] pseudo error building master with kas-container
+       [not found]       ` <20220107201240.GA13417@localhost>
+@ 2022-01-07 22:21         ` Quentin Schulz
+  2022-01-08  2:13           ` Trevor Woerner
+  0 siblings, 1 reply; 8+ messages in thread
+From: Quentin Schulz @ 2022-01-07 22:21 UTC (permalink / raw)
+  To: yocto, Trevor Woerner; +Cc: kas-devel
+
+Hi Trevor,
+
+On January 7, 2022 9:12:41 PM GMT+01:00, Trevor Woerner <twoerner@gmail.com> wrote:
+>Hey Quentin,
+>
+>Wow not bad, I'm batting 0/2 so far… lol!
+>
+
+To be fair, I didn't take the time to formulate correctly and point to the docs ☺️
+
+>On Thu 2022-01-06 @ 08:28:36 PM, Quentin Schulz wrote:
+>> On January 6, 2022 2:50:47 PM GMT+01:00, Trevor Woerner <twoerner@gmail.com> wrote:
+>> >On Wed 2022-01-05 @ 12:08:15 AM, Quentin Schulz wrote:
+>> >> I've had similar issues recently with kas-container and podman. What was
+>> >> required were two things:
+>> >>  - passing --tmpfs /tmp to podman run,
+>> >
+>> >I don't think --tmpfs is an option, but I modified my kas-container script to
+>> >add a "--tmpdir /tmp" option (and verified it with ps while running)
+>> >
+>> 
+>> https://docs.podman.io/en/latest/markdown/podman-run.1.html#tmpfs-fs
+>
+>Curious. When I run "podman -h" on the cmdline it only shows a --tmpdir option
+>
+>	$ podman -h | grep tmp
+>		--tmpdir string		Path to the tmp directory for libpod state content.
+>					Note: use the environment variable 'TMPDIR' to change the temporary storage location for container images, '/var/tmp'.
+>
+
+podman run --help | grep tmp
+
+Does return it though. It's just that some options are specific to subcommands and not the whole set of supported subcommands. The docs.podman.io website is a gold mine, I only ever go to that place to find about parameters ☺️
+
+>> I wasn't talking about uids or gids, but pids_limit in containers.conf for podman on your host. See: 
+>> https://man.archlinux.org/man/containers.conf.5.en
+>> 
+>> We discovered that it just had nothing to do with Bitbake/pseudo or
+>> whatever, because with a fork bomb we reached the max of 2048 processes
+>> (within the container) before the container started to fail us.
+>> 
+>> Without those two changes, I've never been able to successfully build even
+>> core-image-minimal for qemu-x86_64.
+>
+>Very nice, thanks for the info :-)
+>
+>In my experiments it seems like all I need is the update to kas-container to
+>add "--tmpfs /tmp" to KAS_RUNTIME_ARGS (around line 125). Are you going to
+>submit a patch to kas upstream?
+
+Feel free to do it, I don't use kas-container, I use the kas container from ghcr.io directly so this won't impact me and I wouldn't be able to "maintain" this part and see if something breaks it. I anyway have as many clues as you have on why this fixes pseudo issues so I wouldn't be able to write a better commit log than you'd do.
+
+I'll read the script though to see if I've missed any important parameter to set.
+
+Re: not needing the pids_limit. It seemed to be ok at first but I'd have intermittent fails much later in the build. Increasing it made all my problems go away (well.. for now 😁).
+
+Cheers,
+Quentin
+
+
+^ permalink raw reply	[flat|nested] 8+ messages in thread
+* Re: [yocto] pseudo error building master with kas-container
+  2022-01-07 22:21         ` Quentin Schulz
+@ 2022-01-08  2:13           ` Trevor Woerner
+  2022-01-08 15:32             ` Quentin Schulz
+  0 siblings, 1 reply; 8+ messages in thread
+From: Trevor Woerner @ 2022-01-08  2:13 UTC (permalink / raw)
+  To: Quentin Schulz; +Cc: yocto, kas-devel
+
+On Fri 2022-01-07 @ 11:21:38 PM, Quentin Schulz wrote:
+> On January 7, 2022 9:12:41 PM GMT+01:00, Trevor Woerner <twoerner@gmail.com> wrote:
+> >In my experiments it seems like all I need is the update to kas-container to
+> >add "--tmpfs /tmp" to KAS_RUNTIME_ARGS (around line 125). Are you going to
+> >submit a patch to kas upstream?
+> 
+> Feel free to do it, I don't use kas-container, I use the kas container
+> from ghcr.io directly so this won't impact me and I wouldn't be able to
+> "maintain" this part and see if something breaks it. I anyway have as many
+> clues as you have on why this fixes pseudo issues so I wouldn't be able to
+> write a better commit log than you'd do.
+
+Okay. Can I add your SOB line to the patch?
+
+
+^ permalink raw reply	[flat|nested] 8+ messages in thread
+* Re: [yocto] pseudo error building master with kas-container
+  2022-01-08  2:13           ` Trevor Woerner
+@ 2022-01-08 15:32             ` Quentin Schulz
+       [not found]               ` <20220108191515.GA21494@localhost>
+  0 siblings, 1 reply; 8+ messages in thread
+From: Quentin Schulz @ 2022-01-08 15:32 UTC (permalink / raw)
+  To: yocto, Trevor Woerner; +Cc: kas-devel
+
+
+
+On January 8, 2022 3:13:17 AM GMT+01:00, Trevor Woerner <twoerner@gmail.com> wrote:
+>On Fri 2022-01-07 @ 11:21:38 PM, Quentin Schulz wrote:
+>> On January 7, 2022 9:12:41 PM GMT+01:00, Trevor Woerner <twoerner@gmail.com> wrote:
+>> >In my experiments it seems like all I need is the update to kas-container to
+>> >add "--tmpfs /tmp" to KAS_RUNTIME_ARGS (around line 125). Are you going to
+>> >submit a patch to kas upstream?
+>> 
+>> Feel free to do it, I don't use kas-container, I use the kas container
+>> from ghcr.io directly so this won't impact me and I wouldn't be able to
+>> "maintain" this part and see if something breaks it. I anyway have as many
+>> clues as you have on why this fixes pseudo issues so I wouldn't be able to
+>> write a better commit log than you'd do.
+>
+>Okay. Can I add your SOB line to the patch?
+
+Thanks for asking. I wouldn't have minded were you to send this patch without my SoB but if you want you can use foss+yocto@0leil.net.
+
+The important being that it's fixed ☺️
+
+Cheers,
+Quentin
+
+
+^ permalink raw reply	[flat|nested] 8+ messages in thread
+* Re: [yocto] pseudo error building master with kas-container
+       [not found]               ` <20220108191515.GA21494@localhost>
+@ 2022-01-09 11:16                 ` Jan Kiszka
+  0 siblings, 0 replies; 8+ messages in thread
+From: Jan Kiszka @ 2022-01-09 11:16 UTC (permalink / raw)
+  To: Trevor Woerner, Quentin Schulz; +Cc: yocto, kas-devel
+
+On 08.01.22 20:15, Trevor Woerner wrote:
+> On Sat 2022-01-08 @ 04:32:21 PM, Quentin Schulz wrote:
+>> On January 8, 2022 3:13:17 AM GMT+01:00, Trevor Woerner <twoerner@gmail.com> wrote:
+>>> On Fri 2022-01-07 @ 11:21:38 PM, Quentin Schulz wrote:
+>>>> On January 7, 2022 9:12:41 PM GMT+01:00, Trevor Woerner <twoerner@gmail.com> wrote:
+>>>>> In my experiments it seems like all I need is the update to kas-container to
+>>>>> add "--tmpfs /tmp" to KAS_RUNTIME_ARGS (around line 125). Are you going to
+>>>>> submit a patch to kas upstream?
+>>>>
+>>>> Feel free to do it, I don't use kas-container, I use the kas container
+>>>> from ghcr.io directly so this won't impact me and I wouldn't be able to
+>>>> "maintain" this part and see if something breaks it. I anyway have as many
+>>>> clues as you have on why this fixes pseudo issues so I wouldn't be able to
+>>>> write a better commit log than you'd do.
+>>>
+>>> Okay. Can I add your SOB line to the patch?
+>>
+>> Thanks for asking. I wouldn't have minded were you to send this patch
+>> without my SoB but if you want you can use foss+yocto@0leil.net.
+>>
+>> The important being that it's fixed ☺️
+> 
+> I wouldn't do something like that on purpose :-)
+> Let's see where this goes:
+> 	https://github.com/siemens/kas/pull/76/commits/eb8f5c90804dee5a1a649883e1d400d1058639b3
+> 
+
+Could you send your patch to the kas mailing list for discussion? It
+will probably just need a bit tuning on the reasoning:
+
+Rootless podman uses fuse-overlayfs for the rootfs, and that seems to be
+incomplete or otherwise incompatible with pseudo. When starting in
+--isar mode, thus privileged, a real overlayfs is used, and that works.
+And the build folder is not affected by this as it is mounted from the host.
+
+Jan
+
+-- 
+Siemens AG, Technology
+Competence Center Embedded Linux
+
+
+^ permalink raw reply	[flat|nested] 8+ messages in thread
+end of thread, other threads:[~2022-01-09 11:16 UTC | newest]
+
+Thread overview: 8+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+     [not found] <20220104192528.GA25696@localhost>
+2022-01-04 23:08 ` [yocto] pseudo error building master with kas-container Quentin Schulz
+2022-01-06 13:50   ` Trevor Woerner
+2022-01-06 14:28     ` Jan Kiszka
+2022-01-06 19:28     ` Quentin Schulz
+     [not found]       ` <20220107201240.GA13417@localhost>
+2022-01-07 22:21         ` Quentin Schulz
+2022-01-08  2:13           ` Trevor Woerner
+2022-01-08 15:32             ` Quentin Schulz
+     [not found]               ` <20220108191515.GA21494@localhost>
+2022-01-09 11:16                 ` Jan Kiszka
+

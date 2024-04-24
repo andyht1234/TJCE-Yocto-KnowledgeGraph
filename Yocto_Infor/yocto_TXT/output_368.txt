@@ -1,0 +1,166 @@
+* libgcc dependency
+@ 2023-07-17 13:37 Martin Townsend
+  2023-07-17 15:02 ` [yocto] " Ross Burton
+  2023-07-17 17:34 ` Khem Raj
+  0 siblings, 2 replies; 3+ messages in thread
+From: Martin Townsend @ 2023-07-17 13:37 UTC (permalink / raw)
+  To: yocto
+
+Hi,
+
+I am trying to remove all GPLv3 packages from my image.  The clang
+toolchain is used where possible and currently there are no
+dependencies on libstdc++ and as far as I can see none on libgcc but
+this library is installed in the rootfs.  I've created a script to
+parse all elf binaries to see which one dynamically links against
+libgcc but none do.  I think it's being installed due to libgcc being
+in the BASEDEPENDS but I can't see what is adding libgcc to this
+variable.  I'm using the dunfell version of yocto and base.bbclass has
+
+def base_dep_prepend(d):
+    if d.getVar('INHIBIT_DEFAULT_DEPS', False):
+        return ""
+    return "${BASE_DEFAULT_DEPS}"
+
+BASE_DEFAULT_DEPS = "virtual/${TARGET_PREFIX}gcc
+virtual/${TARGET_PREFIX}compilerlibs virtual/libc"
+
+BASEDEPENDS = ""
+BASEDEPENDS_class-target = "${@base_dep_prepend(d)}"
+BASEDEPENDS_class-nativesdk = "${@base_dep_prepend(d)}"
+
+but when I check the BASEDEPENDS for various recipes I get
+
+BASEDEPENDS=" clang-cross-aarch64 virtual/libc  libgcc
+virtual/aarch64-poky-linux-compilerlibs  gettext-native"
+BASEDEPENDS_class-nativesdk=" clang-cross-aarch64 virtual/libc  libgcc
+ virtual/aarch64-poky-linux-compilerlibs "
+BASEDEPENDS_class-target=" clang-cross-aarch64 virtual/libc  libgcc
+virtual/aarch64-poky-linux-compilerlibs "
+
+Is it possible to remove libgcc from the BASEDEPENDS somehow?
+Although we are using Dunfell I'm happy to move to another release if
+it's easier to achieve this.
+
+Best Regards,
+Martin.
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] libgcc dependency
+  2023-07-17 13:37 libgcc dependency Martin Townsend
+@ 2023-07-17 15:02 ` Ross Burton
+  2023-07-17 17:34 ` Khem Raj
+  1 sibling, 0 replies; 3+ messages in thread
+From: Ross Burton @ 2023-07-17 15:02 UTC (permalink / raw)
+  To: mtownsend1973; +Cc: Yocto-mailing-list
+
+On 17 Jul 2023, at 14:37, Martin Townsend via lists.yoctoproject.org <mtownsend1973=gmail.com@lists.yoctoproject.org> wrote:
+> I am trying to remove all GPLv3 packages from my image. 
+
+I’ve never encountered anyone consider the license of libgcc to be an issue here because it has the ‘GCC exception’ clauses.  I suggest you speak to your lawyers.
+
+Ross
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] libgcc dependency
+  2023-07-17 13:37 libgcc dependency Martin Townsend
+  2023-07-17 15:02 ` [yocto] " Ross Burton
+@ 2023-07-17 17:34 ` Khem Raj
+  1 sibling, 0 replies; 3+ messages in thread
+From: Khem Raj @ 2023-07-17 17:34 UTC (permalink / raw)
+  To: Martin Townsend; +Cc: yocto
+
+On Mon, Jul 17, 2023 at 6:38 AM Martin Townsend <mtownsend1973@gmail.com> wrote:
+>
+> Hi,
+>
+> I am trying to remove all GPLv3 packages from my image.  The clang
+> toolchain is used where possible and currently there are no
+> dependencies on libstdc++ and as far as I can see none on libgcc but
+> this library is installed in the rootfs.  I've created a script to
+> parse all elf binaries to see which one dynamically links against
+> libgcc but none do.  I think it's being installed due to libgcc being
+> in the BASEDEPENDS but I can't see what is adding libgcc to this
+> variable.  I'm using the dunfell version of yocto and base.bbclass has
+>
+> def base_dep_prepend(d):
+>     if d.getVar('INHIBIT_DEFAULT_DEPS', False):
+>         return ""
+>     return "${BASE_DEFAULT_DEPS}"
+>
+> BASE_DEFAULT_DEPS = "virtual/${TARGET_PREFIX}gcc
+> virtual/${TARGET_PREFIX}compilerlibs virtual/libc"
+>
+> BASEDEPENDS = ""
+> BASEDEPENDS_class-target = "${@base_dep_prepend(d)}"
+> BASEDEPENDS_class-nativesdk = "${@base_dep_prepend(d)}"
+>
+> but when I check the BASEDEPENDS for various recipes I get
+>
+> BASEDEPENDS=" clang-cross-aarch64 virtual/libc  libgcc
+> virtual/aarch64-poky-linux-compilerlibs  gettext-native"
+> BASEDEPENDS_class-nativesdk=" clang-cross-aarch64 virtual/libc  libgcc
+>  virtual/aarch64-poky-linux-compilerlibs "
+> BASEDEPENDS_class-target=" clang-cross-aarch64 virtual/libc  libgcc
+> virtual/aarch64-poky-linux-compilerlibs "
+>
+> Is it possible to remove libgcc from the BASEDEPENDS somehow?
+> Although we are using Dunfell I'm happy to move to another release if
+> it's easier to achieve this.
+
+Things are better with master and perhaps kirkstone too ( but did not try )
+in yoe we use
+
+RUNTIME = "llvm"
+TC_CXX_RUNTIME = "llvm"
+TOOLCHAIN = "clang"
+CLANGSDK = "1"
+
+and libgcc is not used. e.g. see below. however it still uses crt
+files which maybe from gcc/glibc you might have to check
+that I am talking about crtstuff
+
+% bitbake-getvar BASEDEPENDS
+NOTE: Starting bitbake server...
+NOTE: Started PRServer with DBfile:
+/mnt/b/yoe/master/cache/prserv.sqlite3, Address: 127.0.0.1:37359, PID:
+713437
+#
+# $BASEDEPENDS [3 operations]
+#   set /mnt/b/yoe/master/sources/poky/meta/classes-global/base.bbclass:53
+#     ""
+#   override[class-target]:set
+/mnt/b/yoe/master/sources/poky/meta/classes-global/base.bbclass:54
+#     "${@get_base_dep(d)}"
+#   override[class-nativesdk]:set
+/mnt/b/yoe/master/sources/poky/meta/classes-global/base.bbclass:55
+#     "${@get_base_dep(d)}"
+# pre-expansion value:
+#   "${@get_base_dep(d)}"
+BASEDEPENDS=" clang-cross-riscv64 virtual/libc  compiler-rt libcxx"
+
+>
+> Best Regards,
+> Martin.
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> You automatically follow any topics you start or reply to.
+> View/Reply Online (#60587): https://lists.yoctoproject.org/g/yocto/message/60587
+> Mute This Topic: https://lists.yoctoproject.org/mt/100194492/1997914
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [raj.khem@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2023-07-17 17:35 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-07-17 13:37 libgcc dependency Martin Townsend
+2023-07-17 15:02 ` [yocto] " Ross Burton
+2023-07-17 17:34 ` Khem Raj
+

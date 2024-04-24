@@ -1,0 +1,84 @@
+* [meta-zephyr][PATCH 0/1] Partially fix tests failure with 2.6.0 kernel
+@ 2021-06-11  8:44 Wojciech Zmuda
+  2021-06-11  8:44 ` [meta-zephyr][PATCH 1/1] zephyr-kernel-test: fix Cortex-M " Wojciech Zmuda
+  0 siblings, 1 reply; 2+ messages in thread
+From: Wojciech Zmuda @ 2021-06-11  8:44 UTC (permalink / raw)
+  To: yocto; +Cc: Wojciech Zmuda
+
+From: Wojciech Zmuda <wojciech.zmuda@huawei.com>
+
+Transition to Zephyr 2.6.0 broke meta-zephyr test suite. This patch fixes
+QEMU Cortex-M3 test suite (MACHINE=qemu-cortex-m3 bitbake zephyr-kernel-test-all -c testimage).
+
+The reason of failure is that the `obj_tracing` test suite has been removed from
+Zephyr sources, but it still is referenced in zephyr-kernel-test.inc.
+
+Unfortunately, there are other problems in this area not solved in this path. We'd
+like to take the opportunity to report it anyway. The QEMU x86 test suite build
+fails because of unimplemented instructions:
+
+  | /build/work/i586-yocto-elf/interrupt/2.6.0+gitAUTOINC+79a6c07536_c3bd2094f9-r0/git/tests/kernel/interrupt/src/direct_isr.c: In function 'direct_isr1':
+  | /build/work/i586-yocto-elf/interrupt/2.6.0+gitAUTOINC+79a6c07536_c3bd2094f9-r0/git/tests/kernel/interrupt/src/direct_isr.c:47:1: sorry, unimplemented: 80387 instructions aren't allowed in an interrupt service routine
+  |    47 | ISR_DIRECT_DECLARE(direct_isr1)
+  |       | ^~~~~~~~~~~~~~~~~~
+  | /build/work/i586-yocto-elf/interrupt/2.6.0+gitAUTOINC+79a6c07536_c3bd2094f9-r0/git/tests/kernel/interrupt/src/direct_isr.c: In function 'direct_isr2':
+  | /build/work/i586-yocto-elf/interrupt/2.6.0+gitAUTOINC+79a6c07536_c3bd2094f9-r0/git/tests/kernel/interrupt/src/direct_isr.c:54:1: sorry, unimplemented: 80387 instructions aren't allowed in an interrupt service routine
+  |    54 | ISR_DIRECT_DECLARE(direct_isr2)
+  |       | ^~~~~~~~~~~~~~~~~~
+
+The problem above does not occur in case of Cortex-M3 QEMU tests - `interrupt` builds and passes
+just fine. We have not investigated this one further.
+
+Nagesh shamnur (1):
+  zephyr-kernel-test: fix Cortex-M tests failure with 2.6.0 kernel
+
+ recipes-kernel/zephyr-kernel/zephyr-kernel-test.inc | 1 -
+ 1 file changed, 1 deletion(-)
+
+-- 
+2.25.1
+
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+* [meta-zephyr][PATCH 1/1] zephyr-kernel-test: fix Cortex-M tests failure with 2.6.0 kernel
+  2021-06-11  8:44 [meta-zephyr][PATCH 0/1] Partially fix tests failure with 2.6.0 kernel Wojciech Zmuda
+@ 2021-06-11  8:44 ` Wojciech Zmuda
+  0 siblings, 0 replies; 2+ messages in thread
+From: Wojciech Zmuda @ 2021-06-11  8:44 UTC (permalink / raw)
+  To: yocto; +Cc: Nagesh shamnur, Wojciech Zmuda
+
+From: Nagesh shamnur <nagesh.shamnur@huawei.com>
+
+Edit the test recipe removing obj_tracing tests that have
+been removed from Zephyr 2.6.0 release.
+
+Signed-off-by: Nagesh Shamnur <nagesh.shamnur@huawei.com>
+Signed-off-by: Wojciech Zmuda <wojciech.zmuda@huawei.com>
+---
+ recipes-kernel/zephyr-kernel/zephyr-kernel-test.inc | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/recipes-kernel/zephyr-kernel/zephyr-kernel-test.inc b/recipes-kernel/zephyr-kernel/zephyr-kernel-test.inc
+index b6b4766..78747f9 100644
+--- a/recipes-kernel/zephyr-kernel/zephyr-kernel-test.inc
++++ b/recipes-kernel/zephyr-kernel/zephyr-kernel-test.inc
+@@ -36,7 +36,6 @@ ZEPHYRTESTS = " \
+     mp \
+     msgq \
+     mutex \
+-    obj_tracing \
+     pending \
+     pipe \
+     poll \
+-- 
+2.25.1
+
+
+^ permalink raw reply related	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2021-06-11  8:44 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-06-11  8:44 [meta-zephyr][PATCH 0/1] Partially fix tests failure with 2.6.0 kernel Wojciech Zmuda
+2021-06-11  8:44 ` [meta-zephyr][PATCH 1/1] zephyr-kernel-test: fix Cortex-M " Wojciech Zmuda
+

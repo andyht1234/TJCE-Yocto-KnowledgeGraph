@@ -1,0 +1,251 @@
+* User configuration & host contamination
+       [not found] <AM0PR0702MB3761032325B33A543A700244FE8D9@AM0PR0702MB3761.eurprd07.prod.outlook.com>
+@ 2021-11-04 11:16 ` Jeffrey Simons
+  2021-11-11 13:06 ` [yocto] " Manuel Wagesreither
+  1 sibling, 0 replies; 4+ messages in thread
+From: Jeffrey Simons @ 2021-11-04 11:16 UTC (permalink / raw)
+  To: yocto
+
+Hi all,
+
+I'm having some difficulty with setting up users and the respective application user assignments. I have a generic recipe which inherits useradd and sets a user, this works great for my purpose without one exception. I can't assign the user in my other recipe where the application is build.
+
+Snippet from my user add (based on the useradd-example):
+	USERADD_PARAM_${PN} = "--uid 1200 \
+                      	--home-dir /home/user1 \
+                       	--groups dialout \
+                       	--user-group \
+                       	--password '********' \
+                       	--shell /bin/bash user1"
+
+Snippet from my application which wants to assign the user1:
+	do_install () {
+		chown -R user1 ${D}/usr/local/bin/test_app/
+	}
+It fails with the message:
+"WARNING: test_app-1.0-12-r0 do_package_qa: QA Issue: test_app: /usr/local/bin/test_app/some_script.py is owned by uid 1000, which is the same as the user running bitbake. This may be due to host contamination"
+
+Any pointers/thoughts in how I can resolve this issue?
+
+With kind regards,
+
+Jeffrey Simons
+
+Software Engineer
+Royal Boon Edam International B.V.         
+
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] User configuration & host contamination
+       [not found] <AM0PR0702MB3761032325B33A543A700244FE8D9@AM0PR0702MB3761.eurprd07.prod.outlook.com>
+  2021-11-04 11:16 ` User configuration & host contamination Jeffrey Simons
+@ 2021-11-11 13:06 ` Manuel Wagesreither
+  2021-11-11 14:33   ` Jeffrey Simons
+  1 sibling, 1 reply; 4+ messages in thread
+From: Manuel Wagesreither @ 2021-11-11 13:06 UTC (permalink / raw)
+  To: Jeffrey Simons, yocto
+
+Hi Jeffrey,
+
+Am Do, 4. Nov 2021, um 11:00, schrieb Jeffrey Simons:
+> Hi all,
+>
+> I'm having some difficulty with setting up users and the respective 
+> application user assignments. I have a generic recipe which inherits 
+> useradd and sets a user, this
+> works great for my purpose without one exception. I can't assign the 
+> user in my other recipe where the application is build.
+>
+> Snippet from my user add (based on the useradd-example):
+> 	USERADD_PARAM_${PN} = "--uid 1200 \
+>                       	--home-dir /home/user1 \
+>                        	--groups dialout \
+>                        	--user-group \
+>                        	--password '********' \
+>                        	--shell /bin/bash user1"
+>
+> Snippet from my application which wants to assign the user1:
+> 	do_install () {
+> 		chown -R user1 ${D}/usr/local/bin/test_app/
+> 	}
+> It fails with the message:
+> "WARNING: test_app-1.0-12-r0 do_package_qa: QA Issue: test_app: 
+> /usr/local/bin/test_app/some_script.py is owned by uid 1000, which is 
+> the same as the user running bitbake. This may be due to host 
+> contamination"
+>
+> Any pointers/thoughts in how I can resolve this issue?
+
+Does the recipe which builds the application DEPEND on the recipe which sets up the user? This is what I would try. If I understand things correctly, Yocto/Bitbake provides every recipe a pristine environment unnaffected from other recipes going into the same image. For example, if you want to link your application against some libraries provided by other recipes, you need to add them to DEPENDS. That populates your build environment with that other recipes output. I'm not sure this applies to user accounts as well, but I guess it's worth a try.
+
+Please note I probably used the termins "recipe" and "package" incorrectly.
+
+Hope this helps,
+Manuel
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* RE: [yocto] User configuration & host contamination
+  2021-11-11 13:06 ` [yocto] " Manuel Wagesreither
+@ 2021-11-11 14:33   ` Jeffrey Simons
+  2021-11-24 14:05     ` Jeffrey Simons
+  0 siblings, 1 reply; 4+ messages in thread
+From: Jeffrey Simons @ 2021-11-11 14:33 UTC (permalink / raw)
+  To: Manuel Wagesreither, yocto
+
+Hi Manuel,
+
+> Subject: Re: [yocto] User configuration & host contamination
+>
+> Hi Jeffrey,
+>
+> Does the recipe which builds the application DEPEND on the recipe which sets up the user? This is what I would try. If I understand 
+> things correctly, Yocto/Bitbake provides every recipe a pristine environment unnaffected from other recipes going into the same image. 
+> For example, if you want to link your application against some libraries provided by other recipes, you need to add them to DEPENDS. 
+> That populates your build environment with that other recipes output. I'm not sure this applies to user accounts as well, but I guess it's worth a try.
+>
+> Please note I probably used the termins "recipe" and "package" incorrectly.
+>
+> Hope this helps,
+> Manuel
+
+Thank you for your reply and suggestion.
+I already have a dependency on the user-configuration script, see the below snippet from my recipe.
+
+	# Compile-time dependencies for testapp
+	DEPENDS = "user-configuration"
+
+	# Run-time dependencies for testapp
+	RDEPENDS_${PN} += "rsyslog \
+
+Unfortunately that did not work, I have seen some suggestions on stack-overflow where they added the user multiple times per recipe by using extrauseradd (I believe).
+That seems a bit weird to me to add every time the same user, also the drawback is that if the user changes then I have to adjust all recipes that rely on that specific user.
+What I did today to circumvent the issue is to assign the user by reference of UID and GID, but I'm not sure if this is the intended Yocto way. As you stated before
+Yocto presents you with a pristine environment with all information present, so I would expect that my user is there. Perhaps I did not include the user-configuration
+correctly?
+I did include the user-configuration by adding it into our distribution description, see the next coding snippet.
+
+	#
+	# Usernames that will be used within the distro.
+	# Can be changed when desired, each recipe must use this user for the application.
+	#
+	TEST_USER = "testuser"
+	TEST_USER_UID = "1200"
+
+	DISTRO_EXTRA_RDEPENDS += "user-configuration" 
+
+Can you or any one else clarify if this is the correct way or not?
+
+Thank you in advance.
+
+Jeffrey Simons
+
+Software Engineer
+Royal Boon Edam International B.V.
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: User configuration & host contamination
+  2021-11-11 14:33   ` Jeffrey Simons
+@ 2021-11-24 14:05     ` Jeffrey Simons
+  0 siblings, 0 replies; 4+ messages in thread
+From: Jeffrey Simons @ 2021-11-24 14:05 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2702 bytes --]
+
+On Thu, Nov 11, 2021 at 03:34 PM, Jeffrey Simons wrote:
+
+> 
+> Hi Manuel,
+> 
+> 
+>> Subject: Re: [yocto] User configuration & host contamination
+>> 
+>> Hi Jeffrey,
+>> 
+>> Does the recipe which builds the application DEPEND on the recipe which
+>> sets up the user? This is what I would try. If I understand
+>> things correctly, Yocto/Bitbake provides every recipe a pristine
+>> environment unnaffected from other recipes going into the same image.
+>> For example, if you want to link your application against some libraries
+>> provided by other recipes, you need to add them to DEPENDS.
+>> That populates your build environment with that other recipes output. I'm
+>> not sure this applies to user accounts as well, but I guess it's worth a
+>> try.
+>> 
+>> Please note I probably used the termins "recipe" and "package"
+>> incorrectly.
+>> 
+>> Hope this helps,
+>> Manuel
+> 
+> Thank you for your reply and suggestion.
+> I already have a dependency on the user-configuration script, see the
+> below snippet from my recipe.
+> 
+> # Compile-time dependencies for testapp
+> DEPENDS = "user-configuration"
+> 
+> # Run-time dependencies for testapp
+> RDEPENDS_${PN} += "rsyslog \
+> 
+> Unfortunately that did not work, I have seen some suggestions on
+> stack-overflow where they added the user multiple times per recipe by
+> using extrauseradd (I believe).
+> That seems a bit weird to me to add every time the same user, also the
+> drawback is that if the user changes then I have to adjust all recipes
+> that rely on that specific user.
+> What I did today to circumvent the issue is to assign the user by
+> reference of UID and GID, but I'm not sure if this is the intended Yocto
+> way. As you stated before
+> Yocto presents you with a pristine environment with all information
+> present, so I would expect that my user is there. Perhaps I did not
+> include the user-configuration
+> correctly?
+> I did include the user-configuration by adding it into our distribution
+> description, see the next coding snippet.
+> 
+> #
+> # Usernames that will be used within the distro.
+> # Can be changed when desired, each recipe must use this user for the
+> application.
+> #
+> TEST_USER = "testuser"
+> TEST_USER_UID = "1200"
+> 
+> DISTRO_EXTRA_RDEPENDS += "user-configuration"
+> 
+> Can you or any one else clarify if this is the correct way or not?
+> 
+> Thank you in advance.
+> 
+> Jeffrey Simons
+> 
+> Software Engineer
+> Royal Boon Edam International B.V.
+
+Hi All,
+
+Can anyone elaborate on my fix if this is the correct way, or point me in the correct direction.
+
+With kind regards,
+Jeffrey Simons
+
+Software Engineer
+Royal Boon Edam International B.V.
+
+[-- Attachment #2: Type: text/html, Size: 3027 bytes --]
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+end of thread, other threads:[~2021-11-24 14:05 UTC | newest]
+
+Thread overview: 4+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+     [not found] <AM0PR0702MB3761032325B33A543A700244FE8D9@AM0PR0702MB3761.eurprd07.prod.outlook.com>
+2021-11-04 11:16 ` User configuration & host contamination Jeffrey Simons
+2021-11-11 13:06 ` [yocto] " Manuel Wagesreither
+2021-11-11 14:33   ` Jeffrey Simons
+2021-11-24 14:05     ` Jeffrey Simons
+

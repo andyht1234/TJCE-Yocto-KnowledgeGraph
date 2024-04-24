@@ -1,0 +1,144 @@
+* RE: [yocto] IGC build issue with devtoolset-8 (GNU 8.3.1)
+       [not found] <MADEUP.16D049F9426BE7DA.22774@lists.yoctoproject.org>
+@ 2022-02-03 13:51 ` Monsees, Steven C (US)
+  0 siblings, 0 replies; only message in thread
+From: Monsees, Steven C (US) @ 2022-02-03 13:51 UTC (permalink / raw)
+  To: Monsees, Steven C (US), yocto
+
+[-- Attachment #1: Type: text/plain, Size: 5237 bytes --]
+
+
+Is there a CPP conflict due to :
+
+./tmp/work/corei7-64-poky-linux/intel-graphics-compiler/1.0.11-r0/git/inc/common/UFO/portable_compiler.h
+
+Is this a name space issue ?
+
+From: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org> On Behalf Of Monsees, Steven C (US) via lists.yoctoproject.org
+Sent: Thursday, February 3, 2022 8:33 AM
+To: yocto@lists.yoctoproject.org
+Subject: Re: [yocto] IGC build issue with devtoolset-8 (GNU 8.3.1)
+
+External Email Alert
+
+This email has been sent from an account outside of the BAE Systems network.
+Please treat the email with caution, especially if you are requested to click on a link, decrypt/open an attachment, or enable macros.  For further information on how to spot phishing, access “Cybersecurity OneSpace Page” and report phishing by clicking the button “Report Phishing” on the Outlook toolbar.
+
+
+
+Anybody ?
+
+It appears to be a CPP issue in the IGC code… but not sure why.
+The “__syscall_slong_t” definition appears to be getting resolved out correctly when I replace the array with individual variables of the same type (and the IGC is working)…
+
+I’d feel more comfortable patching the IGC, but am still trying to fully understand the root cause…
+
+/usr/include/bits>diff stat.h stat.h_HOLD
+106c106,108
+<     __syscall_slong_t __unused[3];
+---
+>     __syscall_slong_t __unused1;
+>     __syscall_slong_t __unused2;
+>     __syscall_slong_t __unused3;
+164c166,168
+<     __syscall_slong_t __unused[3];
+---
+>     __syscall_slong_t __unused1;
+>     __syscall_slong_t __unused2;
+>     __syscall_slong_t __unused3;
+08:29 smonsees@yix465383 /usr/include/bits>
+
+Note:
+
+tmp/work/x86_64-linux/intel-graphics-compiler-native/1.0.11-r0/git/3d/common/iStdLib/File.h:
+
+#elif defined(__GNUC__)
+#   include <libgen.h>
+#   include <sys/stat.h> <<<---Line #47
+#endif
+
+sys/stat.h:
+
+#include <bits/types.h>         /* For __mode_t and __dev_t.  */
+
+#include <bits/stat.h>
+
+
+bits/stat.h:    __syscall_slong_t __unused[3];
+
+bits/types.h:__STD_TYPE __SYSCALL_SLONG_TYPE __syscall_slong_t;
+
+                #if defined __x86_64__ && defined __ILP32__
+                                bits/typesizes.h:# define __SYSCALL_SLONG_TYPE            __SQUAD_TYPE
+                #else
+                                bits/typesizes.h:# define __SYSCALL_SLONG_TYPE            __SLONGWORD_TYPE
+
+                #if __WORDSIZE == 32
+                                bits/types.h:# define __SQUAD_TYPE                     __quad_t
+                #elif __WORDSIZE == 64
+                                bits/types.h:# define __SQUAD_TYPE                     long int
+
+bits/types.h:
+
+#define __SLONGWORD_TYPE   long int
+
+
+From: Monsees, Steven C (US)
+Sent: Wednesday, February 2, 2022 8:55 AM
+To: yocto@lists.yoctoproject.org<mailto:yocto@lists.yoctoproject.org>
+Subject: IGC build issue with devtoolset-8 (GNU 8.3.1)
+
+
+I am building zeus with basic OpenCL support for centos 7.x, and using GNU 8.3.1 compiler and see the following Error when IGC is built, I see the same error when building with GNU 5.3.1…
+
+Is this a known issue, is a patch available ?
+Any ideas why I might be seeing this ?
+
+cpp.o -MF IGC/Compiler/CMakeFiles/Compiler.dir/CISACodeGen/DebugInfo.cpp.o.d -o IGC/Compiler/CMakeFiles/Compiler.dir/CISACodeGen/DebugInfo.cpp.o -c /disk0/scratch/yocto_user/yocto/workspace_zeus/builds/sbcb-default/tmp/work/x86_64-linux/intel-graphics-compiler-native/1.0.11-r0/git/IGC/Compiler/CISACodeGen/DebugInfo.cpp
+| In file included from /usr/include/sys/stat.h:106,
+|                  from /disk0/scratch/yocto_user/yocto/workspace_zeus/builds/sbcb-default/tmp/work/x86_64-linux/intel-graphics-compiler-native/1.0.11-r0/git/IGC/../3d/common/iStdLib/File.h:47,
+|                  from /disk0/scratch/yocto_user/yocto/workspace_zeus/builds/sbcb-default/tmp/work/x86_64-linux/intel-graphics-compiler-native/1.0.11-r0/git/IGC/Compiler/CISACodeGen/DebugInfo.hpp:42,
+|                  from /disk0/scratch/yocto_user/yocto/workspace_zeus/builds/sbcb-default/tmp/work/x86_64-linux/intel-graphics-compiler-native/1.0.11-r0/git/IGC/Compiler/CISACodeGen/DebugInfo.cpp:26:
+| /usr/include/bits/stat.h:106:31: error: expected unqualified-id before ‘[’ token
+|      __syscall_slong_t __unused[3];
+|                                ^
+| /usr/include/bits/stat.h:164:31: error: expected unqualified-id before ‘[’ token
+|      __syscall_slong_t __unused[3];
+|
+
+I am using bitbake –k, and everything else builds correctly, and no other components references this…
+
+If I modify the header like so:
+
+/usr/include/bits>diff stat.h stat.h_HOLD
+106c106,108
+<     __syscall_slong_t __unused[3];
+---
+>     __syscall_slong_t __unused1;
+>     __syscall_slong_t __unused2;
+>     __syscall_slong_t __unused3;
+164c166,168
+<     __syscall_slong_t __unused[3];
+---
+>     __syscall_slong_t __unused1;
+>     __syscall_slong_t __unused2;
+>     __syscall_slong_t __unused3;
+08:29 smonsees@yix465383 /usr/include/bits>
+
+IGC builds clean, and test show it appears to working correctly…
+
+I really shouldn’t be modifying the header, and would like to know what the real issue issue is…
+
+Thanks,
+Steve
+
+[-- Attachment #2: Type: text/html, Size: 17364 bytes --]
+
+^ permalink raw reply	[flat|nested] only message in thread
+only message in thread, other threads:[~2022-02-03 13:51 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+     [not found] <MADEUP.16D049F9426BE7DA.22774@lists.yoctoproject.org>
+2022-02-03 13:51 ` [yocto] IGC build issue with devtoolset-8 (GNU 8.3.1) Monsees, Steven C (US)
+

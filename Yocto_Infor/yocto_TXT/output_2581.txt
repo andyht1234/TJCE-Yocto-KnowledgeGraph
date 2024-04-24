@@ -1,0 +1,71 @@
+* Re: [meta-security][hardknott][PATCH] sssd: re-package to fix QA issues
+       [not found] <20211116035054.13447-1-jpuhlman@mvista.com>
+@ 2021-11-16  3:56 ` Jeremy Puhlman
+  0 siblings, 0 replies; only message in thread
+From: Jeremy Puhlman @ 2021-11-16  3:56 UTC (permalink / raw)
+  To: yocto; +Cc: Kai Kang, Armin Kuster
+
+Hold up, there is a problem with these.
+On 11/15/2021 7:50 PM, Jeremy A. Puhlman wrote:
+> It packages all file in ${libdir} to package sssd, including the .so
+> symlink files. Then it causes QA issues:
+>
+> | ERROR: QA Issue: sssd rdepends on dbus-dev [dev-deps]
+> | ERROR: QA Issue: sssd rdepends on ding-libs-dev [dev-deps]
+>
+> So re-package sssd then the .so symlink files and .pc files are packaged
+> to sssd-dev which should be.
+>
+> File ${libdir}/libsss_sudo.so is not a symlink file but packaged to
+> sssd-dev too. Then causes another QA issue:
+>
+> | ERROR: sssd-2.5.2-r0 do_package_qa: QA Issue:
+>      -dev package sssd-dev contains non-symlink .so '/usr/lib/libsss_sudo.so' [dev-elf]
+>
+> So create a new sub-package libsss-sudo to package file libsss_sudo.so
+> and make sssd rdepends on it.
+>
+> Signed-off-by: Kai Kang <kai.kang@windriver.com>
+> Signed-off-by: Armin Kuster <akuster808@gmail.com>
+> (cherry picked from commit e81c15f851ca5396c78c8737967ee38db0ebe0cd)
+> Signed-off-by: Jeremy A. Puhlman <jpuhlman@mvista.com>
+> ---
+>   recipes-security/sssd/sssd_1.16.5.bb | 15 ++++++++++-----
+>   1 file changed, 10 insertions(+), 5 deletions(-)
+>
+> diff --git a/recipes-security/sssd/sssd_1.16.5.bb b/recipes-security/sssd/sssd_1.16.5.bb
+> index 02d0837..01ee88b 100644
+> --- a/recipes-security/sssd/sssd_1.16.5.bb
+> +++ b/recipes-security/sssd/sssd_1.16.5.bb
+> @@ -120,10 +120,15 @@ SYSTEMD_SERVICE_${PN} = " \
+>   "
+>   SYSTEMD_AUTO_ENABLE = "disable"
+>   
+> -FILES_${PN} += "${libdir} ${datadir} ${base_libdir}/security/pam_sss.so"
+> -FILES_${PN}-dev = " ${includedir}/* ${libdir}/*la ${libdir}/*/*la"
+> +PACKAGES =+ "libsss-sudo"
+> +ALLOW_EMPTY_libsss-sudo = "1"
+>   
+> -# The package contains symlinks that trip up insane
+> -INSANE_SKIP_${PN} = "dev-so"
+> +FILES_${PN} += "${base_libdir}/security/pam_sss*.so  \
+> +                ${datadir}/dbus-1/system-services/*.service \
+> +                ${libdir}/krb5/* \
+> +                ${libdir}/ldb/* \
+> +                "
+>   
+> -RDEPENDS_${PN} = "bind dbus libldb libpam"
+> +FILES_libsss-sudo = "${libdir}/libsss_sudo.so"
+> +
+> +RDEPENDS_${PN} = "bind dbus libldb libpam libsss-sudo"
+
+
+
+^ permalink raw reply	[flat|nested] only message in thread
+only message in thread, other threads:[~2021-11-16  3:56 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+     [not found] <20211116035054.13447-1-jpuhlman@mvista.com>
+2021-11-16  3:56 ` [meta-security][hardknott][PATCH] sssd: re-package to fix QA issues Jeremy Puhlman
+

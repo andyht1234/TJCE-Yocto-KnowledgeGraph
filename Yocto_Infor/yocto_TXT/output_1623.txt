@@ -1,0 +1,150 @@
+* [AUH][PATCH 1/2] emailhandler: correctly send binary attachments
+@ 2022-07-19 10:50 Alexander Kanavin
+  2022-07-19 10:50 ` [AUH][PATCH 2/2] upgrade-helper: attach a tarball with patches and other artefacts to summary emails Alexander Kanavin
+  0 siblings, 1 reply; 2+ messages in thread
+From: Alexander Kanavin @ 2022-07-19 10:50 UTC (permalink / raw)
+  To: yocto; +Cc: Alexander Kanavin
+
+MIMEBase should not be used directly and results in
+sending raw binary data without encoding it with base64.
+
+Signed-off-by: Alexander Kanavin <alex@linutronix.de>
+---
+ modules/utils/emailhandler.py | 6 ++----
+ 1 file changed, 2 insertions(+), 4 deletions(-)
+
+diff --git a/modules/utils/emailhandler.py b/modules/utils/emailhandler.py
+index 8c8b85b..1ed4bfc 100644
+--- a/modules/utils/emailhandler.py
++++ b/modules/utils/emailhandler.py
+@@ -30,7 +30,7 @@ from logging import info as I
+ from smtplib import SMTP
+ import mimetypes
+ from email.mime.text import MIMEText
+-from email.mime.base import MIMEBase
++from email.mime.application import MIMEApplication
+ from email.mime.multipart import MIMEMultipart
+ from email.generator import Generator
+ import shutil
+@@ -89,8 +89,7 @@ class Email(object):
+             if maintype == "text":
+                 attachment = MIMEText(open(file).read(), _subtype=subtype)
+             else:
+-                attachment = MIMEBase(maintype, _subtype=subtype)
+-                attachment.set_payload(open(file, 'rb').read())
++                attachment = MIMEApplication(open(file, 'rb').read(), _subtype=subtype)
+ 
+             attachment.add_header('Content-Disposition', 'attachment; filename="%s"'
+                                   % os.path.basename(file))
+@@ -108,4 +107,3 @@ class Email(object):
+             smtp.close()
+         except Exception as e:
+             E("Could not send email: %s" % str(e))
+-
+-- 
+2.30.2
+
+
+
+^ permalink raw reply related	[flat|nested] 2+ messages in thread
+* [AUH][PATCH 2/2] upgrade-helper: attach a tarball with patches and other artefacts to summary emails
+  2022-07-19 10:50 [AUH][PATCH 1/2] emailhandler: correctly send binary attachments Alexander Kanavin
+@ 2022-07-19 10:50 ` Alexander Kanavin
+  0 siblings, 0 replies; 2+ messages in thread
+From: Alexander Kanavin @ 2022-07-19 10:50 UTC (permalink / raw)
+  To: yocto; +Cc: Alexander Kanavin
+
+This is optional, enabled by default, and allows easy extraction of patches
+and other information to one's local disk (no need to go over individual maintainer
+emails).
+
+Signed-off-by: Alexander Kanavin <alex@linutronix.de>
+---
+ upgrade-helper.conf |  4 ++++
+ upgrade-helper.py   | 14 ++++++++++----
+ 2 files changed, 14 insertions(+), 4 deletions(-)
+
+diff --git a/upgrade-helper.conf b/upgrade-helper.conf
+index 5696564..251c36a 100644
+--- a/upgrade-helper.conf
++++ b/upgrade-helper.conf
+@@ -57,6 +57,10 @@
+ # public url with AUH results to include in statistics summary (optional)
+ #publish_work_url=http://auh.somehost.com/work
+ 
++# whether to attach a tarball with AUH artefacts (patches, log, buildhistory, etc.)
++# to the summary email
++#summary_includes_tarball=True
++
+ # clean sstate directory before upgrading
+ # Generally not necessary, as bitbake can handle this automatically.
+ #clean_sstate=no
+diff --git a/upgrade-helper.py b/upgrade-helper.py
+index ecdabb0..4393589 100755
+--- a/upgrade-helper.py
++++ b/upgrade-helper.py
+@@ -411,7 +411,7 @@ class Updater(object):
+             I(" %s: %s" % (pkg_ctx['PN'], e.stdout))
+             raise e
+ 
+-    def send_status_mail(self, statistics_summary):
++    def send_status_mail(self, statistics_summary, attachments):
+         if "status_recipients" not in settings:
+             E(" Could not send status email, no recipients set!")
+             return -1
+@@ -425,7 +425,7 @@ class Updater(object):
+             subject = "[AUH] Upgrade status: " + date.isoformat(date.today())
+ 
+         if self.statistics.total_attempted:
+-            self.email_handler.send_email(to_list, subject, statistics_summary)
++            self.email_handler.send_email(to_list, subject, statistics_summary, attachments)
+         else:
+             W("No recipes attempted, not sending status mail!")
+ 
+@@ -536,9 +536,10 @@ class Updater(object):
+ 
+         if attempted_pkgs > 0:
+             publish_work_url = settings.get('publish_work_url', '')
++            attach_tarball = settings.get('summary_includes_tarball', True)
+             work_tarball = os.path.join(self.uh_base_work_dir,
+                     os.path.basename(self.uh_work_dir) + '.tar.gz')
+-            if publish_work_url:
++            if publish_work_url or attach_tarball:
+                 I(" Generating work tarball in %s ..." % work_tarball)
+                 tar_cmd = ["tar", "-chzf", work_tarball, "-C", self.uh_base_work_dir, os.path.basename(self.uh_work_dir)]
+                 import subprocess
+@@ -546,6 +547,7 @@ class Updater(object):
+                     E(" Work tarball (%s) generation failed..." % (work_tarball))
+                     E(" Tar command: %s" % (" ".join(tar_cmd)))
+                     publish_work_url = ''
++                    attach_tarball = False
+ 
+             statistics_summary = self.statistics.get_summary(
+                     publish_work_url, os.path.basename(self.uh_work_dir))
+@@ -557,8 +559,12 @@ class Updater(object):
+ 
+             I(" %s" % statistics_summary)
+ 
++            attachments = []
++            if attach_tarball:
++                attachments.append(work_tarball)
++
+             if self.opts['send_email']:
+-                self.send_status_mail(statistics_summary)
++                self.send_status_mail(statistics_summary, attachments)
+ 
+ class UniverseUpdater(Updater):
+     def __init__(self, args):
+-- 
+2.30.2
+
+
+
+^ permalink raw reply related	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2022-07-19 10:51 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-07-19 10:50 [AUH][PATCH 1/2] emailhandler: correctly send binary attachments Alexander Kanavin
+2022-07-19 10:50 ` [AUH][PATCH 2/2] upgrade-helper: attach a tarball with patches and other artefacts to summary emails Alexander Kanavin
+

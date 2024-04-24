@@ -1,0 +1,308 @@
+* installed and not shipped files. [installed-vs-shipped]
+@ 2022-04-01 12:50 Konstantin Kletschke
+  2022-04-02 10:13 ` [yocto] " Quentin Schulz
+  0 siblings, 1 reply; 3+ messages in thread
+From: Konstantin Kletschke @ 2022-04-01 12:50 UTC (permalink / raw)
+  To: yocto
+
+I am currently trying to extend the meta-java framework with an
+openjdk-18 recipe.
+I encounter a problem with the [installed-vs-shipped] QA check which I
+can't cope with, I admit.
+
+The autotolls and crosscompile seems to work fine, the install is
+overridden with this:
+
+do_install() {
+    rm -rf ${D}/${JAVA_HOME}
+    mkdir -p ${D}/${JAVA_HOME}
+    echo "THIS IS D: "${D} > ${D}/${JAVA_HOME}/THE_D
+    if [[ "${PN}" = openjre* ]]; then
+        # cp -rp ${B}/images/jre/* ${D}/${JAVA_HOME}
+        cp -rp ${B}/jdk/* ${D}${JAVA_HOME}
+    else
+        # cp -rp ${B}/images/jdk/* ${D}/${JAVA_HOME}
+        cp -rp ${B}/jdk/* ${D}${JAVA_HOME}
+    fi
+    chown -R root:root ${D}${JAVA_HOME}
+    #install -m644 ${WORKDIR}/jvm.cfg  ${D}${JAVA_HOME}/jre/lib/${JDK_ARCH}/
+    find ${D}/${JAVA_HOME} -name "*.debuginfo" -exec rm {} \;
+}
+
+To verify ${D} there is this "echo [...] THE_D" part in the install step
+to look, what's happening.
+
+After this stage I have the following file
+
+/home/konsti/yocto/build/tmp/work/cortexa8hf-neon-poky-linux-gnueabi/openjdk-18/18+37+gitAUTOINC+0f2113cee7-r0/image/usr/lib/jvm/openjdk-18/THE_D
+
+with contents
+
+THIS IS D: /home/konsti/yocto/build/tmp/work/cortexa8hf-neon-poky-linux-gnueabi/openjdk-18/18+37+gitAUTOINC+0f2113cee7-r0/image
+
+What I suppose is ${D} looks like this:
+
+~/yocto/build   honister ?1 ❯ ls -la /home/konsti/yocto/build/tmp/work/cortexa8hf-neon-poky-linux-gnueabi/openjdk-18/18+37+gitAUTOINC+0f2113cee7-r0/image                             
+total 12
+drwxr-xr-x  3 konsti konsti 4096 Apr  1 14:24 .
+drwxr-xr-x 17 konsti konsti 4096 Apr  1 14:24 ..
+drwxr-xr-x  3 konsti konsti 4096 Apr  1 14:24 usr
+
+${JAVA_HOME} expands to /usr/lib/jvm/openjdk-18:
+
+~/yocto/build   honister ?1 ❯ ls -la /home/konsti/yocto/build/tmp/work/cortexa8hf-neon-poky-linux-gnueabi/openjdk-18/18+37+gitAUTOINC+0f2113cee7-r0/image/usr/lib/jvm/openjdk-18/
+total 36
+drwxr-xr-x  7 konsti konsti 4096 Apr  1 14:24 .
+drwxr-xr-x  3 konsti konsti 4096 Apr  1 14:24 ..
+-rw-r--r--  3 konsti konsti  128 Apr  1 14:24 THE_D
+drwxr-xr-x  2 konsti konsti 4096 Apr  1 14:24 bin
+drwxr-xr-x  5 konsti konsti 4096 Apr  1 14:22 conf
+drwxr-xr-x  3 konsti konsti 4096 Apr  1 14:22 include
+drwxr-xr-x  5 konsti konsti 4096 Apr  1 14:24 lib
+drwxr-xr-x 69 konsti konsti 4096 Apr  1 14:23 modules
+-rw-r--r--  3 konsti konsti  129 Apr  1 14:22 release
+
+So accordingly the recipe continues with extending the FILES to do
+packaging this way:
+
+FILES_${PN} += "\
+    ${JAVA_HOME}/bin/[a-z]* \
+    ${JAVA_HOME}/lib/[a-z]* \
+    ${JAVA_HOME}/modules \
+    ${JAVA_HOME}/release \
+    ${JAVA_HOME}/conf \
+    ${JAVA_HOME}/include \
+    ${JAVA_HOME}/THE_D \
+"
+
+When I do "bitbake -e openjdk-18 |grep FILES_openjdk-18=" I get this:
+
+FILES_openjdk-18="     /usr/lib/jvm/openjdk-18/bin/[a-z]*     /usr/lib/jvm/openjdk-18/lib/[a-z]*     /usr/lib/jvm/openjdk-18/modules     /usr/lib/jvm/openjdk-18/release     /usr/lib/jvm/openjdk-18/conf     /usr/lib/jvm/openjdk-18/include     /usr/lib/jvm/openjdk-18/THE_D "
+
+When bitbake tries to package, I get this error:
+
+ERROR: openjdk-18-18+37+gitAUTOINC+0f2113cee7-r0 do_package: QA Issue: openjdk-18: Files/directories were installed but not shipped in any package:
+  /usr/lib/jvm/openjdk-18/release
+  /usr/lib/jvm/openjdk-18/THE_D
+  /usr/lib/jvm/openjdk-18/conf
+  /usr/lib/jvm/openjdk-18/include
+  /usr/lib/jvm/openjdk-18/lib/libj2gss.so
+[...]
+  /usr/lib/jvm/openjdk-18/modules/jdk.internal.le/jdk/internal/org/jline/keymap/BindingReader.class
+  /usr/lib/jvm/openjdk-18/modules/jdk.internal.le/jdk/internal/org/jline/keymap/KeyMap.class
+Please set FILES such that these items are packaged. Alternatively if they are unneeded, avoid installing them or delete them within do_install.
+openjdk-18: 28751 installed and not shipped files. [installed-vs-shipped]
+ERROR: openjdk-18-18+37+gitAUTOINC+0f2113cee7-r0 do_package: Fatal QA errors found, failing task.
+ERROR: Logfile of failure stored in: /home/konsti/yocto/build/tmp/work/cortexa8hf-neon-poky-linux-gnueabi/openjdk-18/18+37+gitAUTOINC+0f2113cee7-r0/temp/log.do_package.3424506
+ERROR: Task (/home/konsti/yocto/meta-insidem2m/recipes-core/openjdk/openjdk-18_18+37.bb:do_package) failed with exit code '1'
+
+Well, I am pretty shure the FILES_${PN} refers relative to ${D}, where
+is my stupid misunderstanding?
+
+Side-Quest: In do install the destination is referred as
+${D}${JAVA_HOME}. Why does this not need to be ${D}/${JAVA_HOME}?
+
+Kind Regards
+Konstantin Kletschke
+
+-- 
+INSIDE M2M GmbH
+Konstantin Kletschke
+Berenbosteler Straße 76 B
+30823 Garbsen
+
+Telefon: +49 (0) 5137 90950136
+Mobil: +49 (0) 151 15256238
+Fax: +49 (0) 5137 9095010
+
+konstantin.kletschke@inside-m2m.de
+http://www.inside-m2m.de 
+
+Geschäftsführung: Michael Emmert, Ingo Haase, Dr. Fred Könemann, Derek Uhlig
+HRB: 111204, AG Hannover
+
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] installed and not shipped files. [installed-vs-shipped]
+  2022-04-01 12:50 installed and not shipped files. [installed-vs-shipped] Konstantin Kletschke
+@ 2022-04-02 10:13 ` Quentin Schulz
+  2022-04-02 16:57   ` Konstantin Kletschke
+  0 siblings, 1 reply; 3+ messages in thread
+From: Quentin Schulz @ 2022-04-02 10:13 UTC (permalink / raw)
+  To: yocto, Konstantin Kletschke
+
+Hi Konstantin,
+
+On April 1, 2022 2:50:13 PM GMT+02:00, Konstantin Kletschke <konstantin.kletschke@inside-m2m.de> wrote:
+>I am currently trying to extend the meta-java framework with an
+>openjdk-18 recipe.
+>I encounter a problem with the [installed-vs-shipped] QA check which I
+>can't cope with, I admit.
+>
+>The autotolls and crosscompile seems to work fine, the install is
+>overridden with this:
+>
+>do_install() {
+>    rm -rf ${D}/${JAVA_HOME}
+>    mkdir -p ${D}/${JAVA_HOME}
+>    echo "THIS IS D: "${D} > ${D}/${JAVA_HOME}/THE_D
+>    if [[ "${PN}" = openjre* ]]; then
+>        # cp -rp ${B}/images/jre/* ${D}/${JAVA_HOME}
+>        cp -rp ${B}/jdk/* ${D}${JAVA_HOME}
+>    else
+>        # cp -rp ${B}/images/jdk/* ${D}/${JAVA_HOME}
+>        cp -rp ${B}/jdk/* ${D}${JAVA_HOME}
+>    fi
+>    chown -R root:root ${D}${JAVA_HOME}
+>    #install -m644 ${WORKDIR}/jvm.cfg  ${D}${JAVA_HOME}/jre/lib/${JDK_ARCH}/
+>    find ${D}/${JAVA_HOME} -name "*.debuginfo" -exec rm {} \;
+>}
+>
+>To verify ${D} there is this "echo [...] THE_D" part in the install step
+>to look, what's happening.
+>
+>After this stage I have the following file
+>
+>/home/konsti/yocto/build/tmp/work/cortexa8hf-neon-poky-linux-gnueabi/openjdk-18/18+37+gitAUTOINC+0f2113cee7-r0/image/usr/lib/jvm/openjdk-18/THE_D
+>
+>with contents
+>
+>THIS IS D: /home/konsti/yocto/build/tmp/work/cortexa8hf-neon-poky-linux-gnueabi/openjdk-18/18+37+gitAUTOINC+0f2113cee7-r0/image
+>
+>What I suppose is ${D} looks like this:
+>
+>~/yocto/build   honister ?1 ❯ ls -la /home/konsti/yocto/build/tmp/work/cortexa8hf-neon-poky-linux-gnueabi/openjdk-18/18+37+gitAUTOINC+0f2113cee7-r0/image                             
+>total 12
+>drwxr-xr-x  3 konsti konsti 4096 Apr  1 14:24 .
+>drwxr-xr-x 17 konsti konsti 4096 Apr  1 14:24 ..
+>drwxr-xr-x  3 konsti konsti 4096 Apr  1 14:24 usr
+>
+>${JAVA_HOME} expands to /usr/lib/jvm/openjdk-18:
+>
+>~/yocto/build   honister ?1 ❯ ls -la /home/konsti/yocto/build/tmp/work/cortexa8hf-neon-poky-linux-gnueabi/openjdk-18/18+37+gitAUTOINC+0f2113cee7-r0/image/usr/lib/jvm/openjdk-18/
+>total 36
+>drwxr-xr-x  7 konsti konsti 4096 Apr  1 14:24 .
+>drwxr-xr-x  3 konsti konsti 4096 Apr  1 14:24 ..
+>-rw-r--r--  3 konsti konsti  128 Apr  1 14:24 THE_D
+>drwxr-xr-x  2 konsti konsti 4096 Apr  1 14:24 bin
+>drwxr-xr-x  5 konsti konsti 4096 Apr  1 14:22 conf
+>drwxr-xr-x  3 konsti konsti 4096 Apr  1 14:22 include
+>drwxr-xr-x  5 konsti konsti 4096 Apr  1 14:24 lib
+>drwxr-xr-x 69 konsti konsti 4096 Apr  1 14:23 modules
+>-rw-r--r--  3 konsti konsti  129 Apr  1 14:22 release
+>
+>So accordingly the recipe continues with extending the FILES to do
+>packaging this way:
+>
+>FILES_${PN} += "\
+>    ${JAVA_HOME}/bin/[a-z]* \
+>    ${JAVA_HOME}/lib/[a-z]* \
+
+FILES variables is compatible with glob from Python so that should work but that's really the first time I see this, usually it's just the directory or dir/*. Learned something new today :)
+
+>    ${JAVA_HOME}/modules \
+>    ${JAVA_HOME}/release \
+>    ${JAVA_HOME}/conf \
+>    ${JAVA_HOME}/include \
+>    ${JAVA_HOME}/THE_D \
+>"
+>
+>When I do "bitbake -e openjdk-18 |grep FILES_openjdk-18=" I get this:
+>
+
+Are you on honister (or master/soon kirkstone) release? If so, it's FILES:${PN} and not FILES_${PN}.
+
+Try to avoid using hardcoded names instead of ${PN} because it breaks multilib (probably not a problem for many, I can concede :) ).
+
+Make sure that openjdk-18 is actually a valid package name too by running bitbake -e <recipe-name> | grep "^PACKAGES=".
+
+>FILES_openjdk-18="     /usr/lib/jvm/openjdk-18/bin/[a-z]*     /usr/lib/jvm/openjdk-18/lib/[a-z]*     /usr/lib/jvm/openjdk-18/modules     /usr/lib/jvm/openjdk-18/release     /usr/lib/jvm/openjdk-18/conf     /usr/lib/jvm/openjdk-18/include     /usr/lib/jvm/openjdk-18/THE_D "
+>
+>When bitbake tries to package, I get this error:
+>
+>ERROR: openjdk-18-18+37+gitAUTOINC+0f2113cee7-r0 do_package: QA Issue: openjdk-18: Files/directories were installed but not shipped in any package:
+>  /usr/lib/jvm/openjdk-18/release
+>  /usr/lib/jvm/openjdk-18/THE_D
+>  /usr/lib/jvm/openjdk-18/conf
+>  /usr/lib/jvm/openjdk-18/include
+>  /usr/lib/jvm/openjdk-18/lib/libj2gss.so
+>[...]
+>  /usr/lib/jvm/openjdk-18/modules/jdk.internal.le/jdk/internal/org/jline/keymap/BindingReader.class
+>  /usr/lib/jvm/openjdk-18/modules/jdk.internal.le/jdk/internal/org/jline/keymap/KeyMap.class
+>Please set FILES such that these items are packaged. Alternatively if they are unneeded, avoid installing them or delete them within do_install.
+>openjdk-18: 28751 installed and not shipped files. [installed-vs-shipped]
+>ERROR: openjdk-18-18+37+gitAUTOINC+0f2113cee7-r0 do_package: Fatal QA errors found, failing task.
+>ERROR: Logfile of failure stored in: /home/konsti/yocto/build/tmp/work/cortexa8hf-neon-poky-linux-gnueabi/openjdk-18/18+37+gitAUTOINC+0f2113cee7-r0/temp/log.do_package.3424506
+>ERROR: Task (/home/konsti/yocto/meta-insidem2m/recipes-core/openjdk/openjdk-18_18+37.bb:do_package) failed with exit code '1'
+>
+>Well, I am pretty shure the FILES_${PN} refers relative to ${D}, where
+>is my stupid misunderstanding?
+>
+>Side-Quest: In do install the destination is referred as
+>${D}${JAVA_HOME}. Why does this not need to be ${D}/${JAVA_HOME}?
+>
+
+To quote yourself:
+>${JAVA_HOME} expands to /usr/lib/jvm/openjdk-18
+
+Cheers,
+Quentin
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] installed and not shipped files. [installed-vs-shipped]
+  2022-04-02 10:13 ` [yocto] " Quentin Schulz
+@ 2022-04-02 16:57   ` Konstantin Kletschke
+  0 siblings, 0 replies; 3+ messages in thread
+From: Konstantin Kletschke @ 2022-04-02 16:57 UTC (permalink / raw)
+  To: Quentin Schulz; +Cc: yocto
+
+On Sat, Apr 02, 2022 at 12:13:26PM +0200, Quentin Schulz wrote:
+
+> FILES variables is compatible with glob from Python so that should work but that's really the first time I see this, usually it's just the directory or dir/*. Learned something new today :)
+
+:-)
+
+> Are you on honister (or master/soon kirkstone) release? If so, it's FILES:${PN} and not FILES_${PN}.
+
+That's it! 
+I wasn't aware of this change, could have searched for another couple of
+days!
+
+Thank.
+you.
+very.
+much.
+
+Kind Regards
+Konsti
+
+
+-- 
+INSIDE M2M GmbH
+Konstantin Kletschke
+Berenbosteler Straße 76 B
+30823 Garbsen
+
+Telefon: +49 (0) 5137 90950136
+Mobil: +49 (0) 151 15256238
+Fax: +49 (0) 5137 9095010
+
+konstantin.kletschke@inside-m2m.de
+http://www.inside-m2m.de 
+
+Geschäftsführung: Michael Emmert, Ingo Haase, Dr. Fred Könemann, Derek Uhlig
+HRB: 111204, AG Hannover
+
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2022-04-04 18:46 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-04-01 12:50 installed and not shipped files. [installed-vs-shipped] Konstantin Kletschke
+2022-04-02 10:13 ` [yocto] " Quentin Schulz
+2022-04-02 16:57   ` Konstantin Kletschke
+

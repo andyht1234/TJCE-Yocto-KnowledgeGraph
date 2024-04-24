@@ -1,0 +1,209 @@
+* libnss-resolve not automatically installed
+@ 2022-08-03 17:30 embedded (VIVAVIS AG)
+  2022-08-04 11:19 ` [yocto] " Khem Raj
+  0 siblings, 1 reply; 4+ messages in thread
+From: embedded (VIVAVIS AG) @ 2022-08-03 17:30 UTC (permalink / raw)
+  To: yocto
+
+Hi,
+
+I'm currently on branch dunfell and using systemd-resolved.
+
+I want to have glibc's NSS resolver functions using systemd-resolved.
+I've noticed that the plugin libnss-resolve.so.2 was not in my image
+by default.
+
+In systemd_244.5.bb, nss-resolve is in PACKAGECONFIG by default.
+libnss-resolve is build and packaged, but not installed by default.
+
+To install the missing library libnss-resolve.so.2, I've added
+  IMAGE_INSTALL_append = " libnss-resolve"
+to my image recipe, but I wonder, if this is the right place or necessary
+at all.
+ 
+My assumption was that having nss-resolve in PACKAGECONFIG will
+also install the related library, which is obviously not the case.
+
+Furthermore, I had to write an append-file for base-files, such that
+/etc/nsswitch.conf contains the following line
+  hosts: resolve [!UNAVAIL=return] files dns myhostname
+
+Possibly, I've overlooked something essential.
+I'd be very happy, if someone can shed some light on this issue.
+
+Best regards,
+
+Carsten Stelling
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] libnss-resolve not automatically installed
+  2022-08-03 17:30 libnss-resolve not automatically installed embedded (VIVAVIS AG)
+@ 2022-08-04 11:19 ` Khem Raj
+  2022-08-04 12:35   ` AW: " embedded (VIVAVIS AG)
+  0 siblings, 1 reply; 4+ messages in thread
+From: Khem Raj @ 2022-08-04 11:19 UTC (permalink / raw)
+  To: embedded; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2102 bytes --]
+
+On Wed, Aug 3, 2022 at 6:30 PM VIVAVIS AG via lists.yoctoproject.org
+<embedded=vivavis.com@lists.yoctoproject.org> wrote:
+
+> Hi,
+>
+> I'm currently on branch dunfell and using systemd-resolved.
+>
+> I want to have glibc's NSS resolver functions using systemd-resolved.
+> I've noticed that the plugin libnss-resolve.so.2 was not in my image
+> by default.
+>
+> In systemd_244.5.bb, nss-resolve is in PACKAGECONFIG by default.
+> libnss-resolve is build and packaged, but not installed by default.
+>
+> To install the missing library libnss-resolve.so.2, I've added
+>   IMAGE_INSTALL_append = " libnss-resolve"
+> to my image recipe, but I wonder, if this is the right place or necessary
+> at all.
+>
+> My assumption was that having nss-resolve in PACKAGECONFIG will
+> also install the related library, which is obviously not the case.
+>
+
+Packageconfigs are about what you would like to build it’s still another
+step what you would like to bundle in your image which is what
+IMAGE_INSTALL does. At times this is already done because whatever the
+packagrconfig is enabling is already part of a output package that’s in
+your IMAGE_INSTALL dependencies and gets pulled in indirectly but that’s
+not the case here. Therefore you have to do it in both places
+
+
+> Furthermore, I had to write an append-file for base-files, such that
+> /etc/nsswitch.conf contains the following line
+>   hosts: resolve [!UNAVAIL=return] files dns myhostname
+>
+> Possibly, I've overlooked something essential.
+> I'd be very happy, if someone can shed some light on this issue.
+>
+> Best regards,
+>
+> Carsten Stelling
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> You automatically follow any topics you start or reply to.
+> View/Reply Online (#57772):
+> https://lists.yoctoproject.org/g/yocto/message/57772
+> Mute This Topic: https://lists.yoctoproject.org/mt/92797309/1997914
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> raj.khem@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 3207 bytes --]
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* AW: [yocto] libnss-resolve not automatically installed
+  2022-08-04 11:19 ` [yocto] " Khem Raj
+@ 2022-08-04 12:35   ` embedded (VIVAVIS AG)
+  2022-08-04 13:38     ` Khem Raj
+  0 siblings, 1 reply; 4+ messages in thread
+From: embedded (VIVAVIS AG) @ 2022-08-04 12:35 UTC (permalink / raw)
+  To: Khem Raj; +Cc: yocto
+
+Hi Khem,
+
+> Von: Khem Raj <raj.khem@gmail.com> 
+> Gesendet: Donnerstag, 4. August 2022 13:20
+>>
+>> To install the missing library libnss-resolve.so.2, I've added
+>>   IMAGE_INSTALL_append = " libnss-resolve"
+>> to my image recipe, but I wonder, if this is the right place or necessary
+>> at all.
+>>
+>> My assumption was that having nss-resolve in PACKAGECONFIG will
+>> also install the related library, which is obviously not the case.
+>
+> Packageconfigs are about what you would like to build it’s still another step what you would like to bundle in your image which is what IMAGE_INSTALL does. At times this is already done because whatever the packagrconfig is enabling is already part of a output package that’s in your IMAGE_INSTALL dependencies and gets pulled in indirectly but that’s not the case here. Therefore you have to do it in both places
+>
+>>
+>> Furthermore, I had to write an append-file for base-files, such that
+>> /etc/nsswitch.conf contains the following line
+>>   hosts: resolve [!UNAVAIL=return] files dns myhostname
+>>
+
+Ok, there's nothing to worry about.
+Adding libnss-resolve to IMAGE_INSTALL and overwriting nsswitch.conf in
+the append-file ist he correct procedure here.
+
+Thanks for clarification.
+
+Carsten
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] libnss-resolve not automatically installed
+  2022-08-04 12:35   ` AW: " embedded (VIVAVIS AG)
+@ 2022-08-04 13:38     ` Khem Raj
+  0 siblings, 0 replies; 4+ messages in thread
+From: Khem Raj @ 2022-08-04 13:38 UTC (permalink / raw)
+  To: embedded (VIVAVIS AG); +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1439 bytes --]
+
+On Thu, Aug 4, 2022 at 1:35 PM embedded (VIVAVIS AG) <embedded@vivavis.com>
+wrote:
+
+> Hi Khem,
+>
+> > Von: Khem Raj <raj.khem@gmail.com>
+> > Gesendet: Donnerstag, 4. August 2022 13:20
+> >>
+> >> To install the missing library libnss-resolve.so.2, I've added
+> >>   IMAGE_INSTALL_append = " libnss-resolve"
+> >> to my image recipe, but I wonder, if this is the right place or
+> necessary
+> >> at all.
+> >>
+> >> My assumption was that having nss-resolve in PACKAGECONFIG will
+> >> also install the related library, which is obviously not the case.
+> >
+> > Packageconfigs are about what you would like to build it’s still another
+> step what you would like to bundle in your image which is what
+> IMAGE_INSTALL does. At times this is already done because whatever the
+> packagrconfig is enabling is already part of a output package that’s in
+> your IMAGE_INSTALL dependencies and gets pulled in indirectly but that’s
+> not the case here. Therefore you have to do it in both places
+> >
+> >>
+> >> Furthermore, I had to write an append-file for base-files, such that
+> >> /etc/nsswitch.conf contains the following line
+> >>   hosts: resolve [!UNAVAIL=return] files dns myhostname
+> >>
+>
+> Ok, there's nothing to worry about.
+> Adding libnss-resolve to IMAGE_INSTALL and overwriting nsswitch.conf in
+> the append-file ist he correct procedure here.
+>
+
+Yes
+
+
+> Thanks for clarification.
+>
+> Carsten
+>
+
+[-- Attachment #2: Type: text/html, Size: 2102 bytes --]
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+end of thread, other threads:[~2022-08-04 13:38 UTC | newest]
+
+Thread overview: 4+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-08-03 17:30 libnss-resolve not automatically installed embedded (VIVAVIS AG)
+2022-08-04 11:19 ` [yocto] " Khem Raj
+2022-08-04 12:35   ` AW: " embedded (VIVAVIS AG)
+2022-08-04 13:38     ` Khem Raj
+

@@ -1,0 +1,106 @@
+* [meta-security][PATCH 1/2] crowdsec: add pkg
+@ 2021-07-27  5:10 Armin Kuster
+  2021-07-27  5:10 ` [meta-security][PATCH 2/2] packagegroup-core-security.bb: fix suricat-ptest inclusion Armin Kuster
+  0 siblings, 1 reply; 2+ messages in thread
+From: Armin Kuster @ 2021-07-27  5:10 UTC (permalink / raw)
+  To: yocto
+
+Signed-off-by: Armin Kuster <akuster808@gmail.com>
+---
+ recipes-ids/crowdsec/crowdsec_1.1.1.bb | 42 ++++++++++++++++++++++++++
+ 1 file changed, 42 insertions(+)
+ create mode 100644 recipes-ids/crowdsec/crowdsec_1.1.1.bb
+
+diff --git a/recipes-ids/crowdsec/crowdsec_1.1.1.bb b/recipes-ids/crowdsec/crowdsec_1.1.1.bb
+new file mode 100644
+index 0000000..1243a3c
+--- /dev/null
++++ b/recipes-ids/crowdsec/crowdsec_1.1.1.bb
+@@ -0,0 +1,42 @@
++SUMMARY = "CrowdSec is a free, modern & collaborative behavior detection engine, coupled with a global IP reputation network."
++
++LICENSE = "MIT"
++LIC_FILES_CHKSUM = "file://src/import/LICENSE;md5=105e75b680b2ab82fa5718661b41f3bf"
++
++SRC_URI = "git://github.com/crowdsecurity/crowdsec.git;branch=master"
++SRCREV = "73e0bbaf93070f4a640eb5a22212b5dcf26699de"
++
++DEPENDS = "jq-native"
++
++GO_IMPORT = "import"
++
++inherit go
++
++S = "${WORKDIR}/git"
++
++do_compile() {
++    export GOARCH="${TARGET_GOARCH}"
++    export GOROOT="${STAGING_LIBDIR_NATIVE}/${TARGET_SYS}/go"
++
++    # Pass the needed cflags/ldflags so that cgo
++    # can find the needed headers files and libraries
++    export CGO_ENABLED="1"
++    export CFLAGS=""
++    export LDFLAGS=""
++    export CGO_CFLAGS="${BUILDSDK_CFLAGS} --sysroot=${STAGING_DIR_TARGET}"
++    export CGO_LDFLAGS="${BUILDSDK_LDFLAGS} --sysroot=${STAGING_DIR_TARGET}"
++
++    cd ${S}/src/import
++    oe_runmake release
++}
++
++do_install_ () {
++   chmod +x -R --silent ${B}/pkg
++}
++
++
++INSANE_SKIP_${PN} = "already-stripped"
++INSANE_SKIP_${PN}-dev = "ldflags"
++
++RDEPENDS_${PN} = "go"
++RDEPENDS_${PN}-dev = "bash"
+-- 
+2.25.1
+
+
+^ permalink raw reply related	[flat|nested] 2+ messages in thread
+* [meta-security][PATCH 2/2] packagegroup-core-security.bb: fix suricat-ptest inclusion
+  2021-07-27  5:10 [meta-security][PATCH 1/2] crowdsec: add pkg Armin Kuster
+@ 2021-07-27  5:10 ` Armin Kuster
+  0 siblings, 0 replies; 2+ messages in thread
+From: Armin Kuster @ 2021-07-27  5:10 UTC (permalink / raw)
+  To: yocto
+
+drop libseccomp ptest
+
+Signed-off-by: Armin Kuster <akuster808@gmail.com>
+---
+ recipes-core/packagegroup/packagegroup-core-security.bb | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/recipes-core/packagegroup/packagegroup-core-security.bb b/recipes-core/packagegroup/packagegroup-core-security.bb
+index 8e06f30..37473d1 100644
+--- a/recipes-core/packagegroup/packagegroup-core-security.bb
++++ b/recipes-core/packagegroup/packagegroup-core-security.bb
+@@ -88,8 +88,7 @@ RDEPENDS_packagegroup-security-mac_remove_mipsarch = "apparmor"
+ RDEPENDS_packagegroup-meta-security-ptest-packages = "\
+     ptest-runner \
+     samhain-standalone-ptest \
+-    libseccomp-ptest \
+-    suricata-ptest \
++    ${@bb.utils.contains_any("TUNE_FEATURES", "ppc7400 riscv32 riscv64", "", " suricata-ptest",d)} \
+     python3-fail2ban-ptest \
+     ${@bb.utils.contains("DISTRO_FEATURES", "smack", "smack-ptest", "",d)} \
+ "
+-- 
+2.25.1
+
+
+^ permalink raw reply related	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2021-07-27  5:10 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-07-27  5:10 [meta-security][PATCH 1/2] crowdsec: add pkg Armin Kuster
+2021-07-27  5:10 ` [meta-security][PATCH 2/2] packagegroup-core-security.bb: fix suricat-ptest inclusion Armin Kuster
+

@@ -1,0 +1,412 @@
+* Custom DISTRO_VERSION with git describe
+@ 2022-04-28 11:04 Ayoub Zaki
+  2022-04-28 11:15 ` [yocto] " Mikko.Rapeli
+  0 siblings, 1 reply; 6+ messages in thread
+From: Ayoub Zaki @ 2022-04-28 11:04 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2046 bytes --]
+
+hello,
+
+
+I would like to have a custom DISTRO_VERSION based on "git describe" of my
+layer:
+
+
+1) In my layer meta-mylayer/conf/layer.conf, I defined the following:
+
+# Set variable to get the location of the layer
+> MY_LAYER_BASE := '${LAYERDIR}'
+
+
+
+2) I created a my_distro_version.bbclass with following:
+
+def my_distro_version(d):
+>     import subprocess
+>     project_path = d.getVar('MY_LAYER_BASE', True)
+>     cmd = "git describe --tags"
+>     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True,
+> cwd=project_path)
+>     out, err =  proc.communicate()
+>     return out.decode("utf-8").rstrip()
+
+
+3)  Then I inherited it my  meta-mylayer/conf/distro/my_distro.conf :
+
+INHERIT += "my_distro_version"
+> DISTRO_VERSION = "${@my_distro_version(d)}"
+
+
+>
+
+so far so good I can see that DISTRO_VERSION is following the git describe :
+
+
+NOTE: Resolving any missing task queue dependencies
+
+MACHINE = "beaglebone-yocto"
+> DISTRO = "my-distro"
+> DISTRO_VERSION = "v1.4-rc14"
+> TUNE_FEATURES = "arm vfp cortexa8 neon callconvention-hard"
+> TARGET_FPU = "hard"
+> meta-mylayer = "HEAD:ca8a5390db5e5280c3b178097ad36900c97160a8"
+> meta-swupdate = "HEAD:2e08de8582aa18871657ea8283ea35a050927d4f"
+> meta-qt5 = "HEAD:6bfe29d9e8fdd5c2fd17c736814b6df859b3af50"
+
+
+
+But I'm getting a lot of errors :
+
+
+
+the basehash value changed from
+efc66702573a04ced9af3be8902d643f8709969ad8cdf19b822e9bd14910c755 to
+d24664027a632185bda9807951586efdf9b9160bb7cef2524d7c9d577cc6f527. The
+metadata is not deterministic and this needs to be fixed.
+> ERROR: The following commands may help:
+> ERROR: $ bitbake my-image -cdo_image_wic -Snone
+> ERROR: Then:
+> ERROR: $ bitbake my-image -cdo_image_wic -Sprintdiff
+
+
+
+and some of the recipes don't get the right  DISTRO_VERSION.
+
+probably a multi processing problem in yocto since I used
+
+INHERIT += "my_distro_version" all recipes will want to execute
+DISTRO_VERSION = "${@my_distro_version(d)}".
+
+
+
+I didn't find a way to get  DISTRO_VERSION =
+"${@my_distro_version(d)}" executed only once!
+
+
+Any suggestions ?
+
+
+Thanks
+
+[-- Attachment #2: Type: text/html, Size: 5406 bytes --]
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] Custom DISTRO_VERSION with git describe
+  2022-04-28 11:04 Custom DISTRO_VERSION with git describe Ayoub Zaki
+@ 2022-04-28 11:15 ` Mikko.Rapeli
+  2022-04-28 11:25   ` Ayoub Zaki
+  0 siblings, 1 reply; 6+ messages in thread
+From: Mikko.Rapeli @ 2022-04-28 11:15 UTC (permalink / raw)
+  To: ayoub.zaki; +Cc: yocto
+
+Hi,
+
+On Thu, Apr 28, 2022 at 01:04:22PM +0200, Ayoub Zaki via lists.yoctoproject.org wrote:
+> hello,
+> 
+> 
+> I would like to have a custom DISTRO_VERSION based on "git describe" of my
+> layer:
+> 
+> 
+> 1) In my layer meta-mylayer/conf/layer.conf, I defined the following:
+> 
+> # Set variable to get the location of the layer
+> > MY_LAYER_BASE := '${LAYERDIR}'
+> 
+> 
+> 
+> 2) I created a my_distro_version.bbclass with following:
+> 
+> def my_distro_version(d):
+> >     import subprocess
+> >     project_path = d.getVar('MY_LAYER_BASE', True)
+> >     cmd = "git describe --tags"
+
+I would also add --always and --dirty to be sure non-tagged clones
+of repo work and builds with local modifications get marked as such.
+
+> >     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True,
+> > cwd=project_path)
+> >     out, err =  proc.communicate()
+> >     return out.decode("utf-8").rstrip()
+> 
+> 
+> 3)  Then I inherited it my  meta-mylayer/conf/distro/my_distro.conf :
+> 
+> INHERIT += "my_distro_version"
+> > DISTRO_VERSION = "${@my_distro_version(d)}"
+
+DISTRO_VERSION := "${@my_distro_version(d)}"
+
+That should do it :)
+
+Cheers,
+
+-Mikko
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] Custom DISTRO_VERSION with git describe
+  2022-04-28 11:15 ` [yocto] " Mikko.Rapeli
+@ 2022-04-28 11:25   ` Ayoub Zaki
+  2022-04-28 11:32     ` Mikko.Rapeli
+  0 siblings, 1 reply; 6+ messages in thread
+From: Ayoub Zaki @ 2022-04-28 11:25 UTC (permalink / raw)
+  To: Mikko.Rapeli; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1742 bytes --]
+
+Hi,
+
+thanks for the quick reply I tried your suggestion but I get:
+
+ERROR: Unable to parse Var <DISTRO_VERSION[:=]>
+Traceback (most recent call last):
+  File "Var <DISTRO_VERSION[:=]>", line 1, in <module>
+bb.data_smart.ExpansionError: Failure expanding variable
+DISTRO_VERSION[:=], expression was ${@my_distro_version(d)} which triggered
+exception NameError: name 'my_distro_version' is not defined
+
+I think in this case the INHERIT doesn't work !
+
+
+Best regards,
+
+
+On Thu, Apr 28, 2022 at 1:15 PM <Mikko.Rapeli@bmw.de> wrote:
+
+> Hi,
+>
+> On Thu, Apr 28, 2022 at 01:04:22PM +0200, Ayoub Zaki via
+> lists.yoctoproject.org wrote:
+> > hello,
+> >
+> >
+> > I would like to have a custom DISTRO_VERSION based on "git describe" of
+> my
+> > layer:
+> >
+> >
+> > 1) In my layer meta-mylayer/conf/layer.conf, I defined the following:
+> >
+> > # Set variable to get the location of the layer
+> > > MY_LAYER_BASE := '${LAYERDIR}'
+> >
+> >
+> >
+> > 2) I created a my_distro_version.bbclass with following:
+> >
+> > def my_distro_version(d):
+> > >     import subprocess
+> > >     project_path = d.getVar('MY_LAYER_BASE', True)
+> > >     cmd = "git describe --tags"
+>
+> I would also add --always and --dirty to be sure non-tagged clones
+> of repo work and builds with local modifications get marked as such.
+>
+> > >     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True,
+> > > cwd=project_path)
+> > >     out, err =  proc.communicate()
+> > >     return out.decode("utf-8").rstrip()
+> >
+> >
+> > 3)  Then I inherited it my  meta-mylayer/conf/distro/my_distro.conf :
+> >
+> > INHERIT += "my_distro_version"
+> > > DISTRO_VERSION = "${@my_distro_version(d)}"
+>
+> DISTRO_VERSION := "${@my_distro_version(d)}"
+>
+> That should do it :)
+>
+> Cheers,
+>
+> -Mikko
+
+[-- Attachment #2: Type: text/html, Size: 2626 bytes --]
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] Custom DISTRO_VERSION with git describe
+  2022-04-28 11:25   ` Ayoub Zaki
+@ 2022-04-28 11:32     ` Mikko.Rapeli
+  2022-04-28 11:38       ` Ayoub Zaki
+  0 siblings, 1 reply; 6+ messages in thread
+From: Mikko.Rapeli @ 2022-04-28 11:32 UTC (permalink / raw)
+  To: ayoub.zaki; +Cc: yocto
+
+On Thu, Apr 28, 2022 at 01:25:03PM +0200, Ayoub Zaki wrote:
+> Hi,
+> 
+> thanks for the quick reply I tried your suggestion but I get:
+> 
+> ERROR: Unable to parse Var <DISTRO_VERSION[:=]>
+> Traceback (most recent call last):
+>   File "Var <DISTRO_VERSION[:=]>", line 1, in <module>
+> bb.data_smart.ExpansionError: Failure expanding variable
+> DISTRO_VERSION[:=], expression was ${@my_distro_version(d)} which triggered
+> exception NameError: name 'my_distro_version' is not defined
+
+Did you include the bbclass?
+
+> I think in this case the INHERIT doesn't work !
+
+Well I have in distro config:
+
+require classes/distroversion.bbclass
+
+which has a single python function
+
+def get_distro_version(d, dirty=True, abbrev=None):
+
+which basically calls "git describe --always --dirty --abbrev=8",
+the last one was added when git versions started behaving differently
+and breaking reproducibility.
+
+And then distro config also has:
+
+DISTRO_VERSION := "${@get_distro_version(d)}"
+
+This works for me up to yocto 3.1 dunfell at least.
+
+Cheers,
+
+-Mikko
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] Custom DISTRO_VERSION with git describe
+  2022-04-28 11:32     ` Mikko.Rapeli
+@ 2022-04-28 11:38       ` Ayoub Zaki
+  2022-04-28 11:52         ` Mikko.Rapeli
+  0 siblings, 1 reply; 6+ messages in thread
+From: Ayoub Zaki @ 2022-04-28 11:38 UTC (permalink / raw)
+  To: Mikko.Rapeli; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1821 bytes --]
+
+I'm also suing dunfell branch, I did a small modification in
+my_distro_version.bbclass:
+
+def my_distro_version(d):
+>     import subprocess
+>     project_path = d.getVar('MY_LAYER_BASE', True)
+>     cmd = "git describe --tags"
+>     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True,
+> cwd=project_path)
+>     out, err =  proc.communicate()
+>     return out.decode("utf-8").rstrip()
+> MY_DISTRO_VERSION := "${@my_distro_version(d)}"
+
+
+
+Then in meta-mylayer/conf/distro/my_distro.conf I used:
+
+> INHERIT += "my_distro_version"
+> DISTRO_VERSION := "${MY_DISTRO_VERSION}"
+
+
+It seems to be working now :-)
+
+
+Thank you for the support :-)
+
+
+cheers,
+
+
+On Thu, Apr 28, 2022 at 1:32 PM <Mikko.Rapeli@bmw.de> wrote:
+
+> On Thu, Apr 28, 2022 at 01:25:03PM +0200, Ayoub Zaki wrote:
+> > Hi,
+> >
+> > thanks for the quick reply I tried your suggestion but I get:
+> >
+> > ERROR: Unable to parse Var <DISTRO_VERSION[:=]>
+> > Traceback (most recent call last):
+> >   File "Var <DISTRO_VERSION[:=]>", line 1, in <module>
+> > bb.data_smart.ExpansionError: Failure expanding variable
+> > DISTRO_VERSION[:=], expression was ${@my_distro_version(d)} which
+> triggered
+> > exception NameError: name 'my_distro_version' is not defined
+>
+> Did you include the bbclass?
+>
+> > I think in this case the INHERIT doesn't work !
+>
+> Well I have in distro config:
+>
+> require classes/distroversion.bbclass
+>
+> which has a single python function
+>
+> def get_distro_version(d, dirty=True, abbrev=None):
+>
+> which basically calls "git describe --always --dirty --abbrev=8",
+> the last one was added when git versions started behaving differently
+> and breaking reproducibility.
+>
+> And then distro config also has:
+>
+> DISTRO_VERSION := "${@get_distro_version(d)}"
+>
+> This works for me up to yocto 3.1 dunfell at least.
+>
+> Cheers,
+>
+> -Mikko
+
+[-- Attachment #2: Type: text/html, Size: 2798 bytes --]
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] Custom DISTRO_VERSION with git describe
+  2022-04-28 11:38       ` Ayoub Zaki
+@ 2022-04-28 11:52         ` Mikko.Rapeli
+  0 siblings, 0 replies; 6+ messages in thread
+From: Mikko.Rapeli @ 2022-04-28 11:52 UTC (permalink / raw)
+  To: ayoub.zaki; +Cc: yocto
+
+Hi,
+
+On Thu, Apr 28, 2022 at 01:38:35PM +0200, Ayoub Zaki wrote:
+> I'm also suing dunfell branch, I did a small modification in
+> my_distro_version.bbclass:
+> 
+> def my_distro_version(d):
+> >     import subprocess
+> >     project_path = d.getVar('MY_LAYER_BASE', True)
+> >     cmd = "git describe --tags"
+> >     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True,
+> > cwd=project_path)
+> >     out, err =  proc.communicate()
+> >     return out.decode("utf-8").rstrip()
+> > MY_DISTRO_VERSION := "${@my_distro_version(d)}"
+> 
+> 
+> 
+> Then in meta-mylayer/conf/distro/my_distro.conf I used:
+> 
+> > INHERIT += "my_distro_version"
+> > DISTRO_VERSION := "${MY_DISTRO_VERSION}"
+> 
+> 
+> It seems to be working now :-)
+
+Good! Just a hint that you might want to set SDK_VERSION to the same.
+
+Cheers,
+
+-Mikko
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+end of thread, other threads:[~2022-04-28 11:52 UTC | newest]
+
+Thread overview: 6+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-04-28 11:04 Custom DISTRO_VERSION with git describe Ayoub Zaki
+2022-04-28 11:15 ` [yocto] " Mikko.Rapeli
+2022-04-28 11:25   ` Ayoub Zaki
+2022-04-28 11:32     ` Mikko.Rapeli
+2022-04-28 11:38       ` Ayoub Zaki
+2022-04-28 11:52         ` Mikko.Rapeli
+

@@ -1,0 +1,663 @@
+* How to switch yocto INIT_MANAGER from systemd to sysvinit #dunfell
+@ 2021-05-27 22:04 sayinswapna
+  2021-05-27 22:12 ` [yocto] " Robert P. J. Day
+  2021-05-27 23:28 ` Khem Raj
+  0 siblings, 2 replies; 12+ messages in thread
+From: sayinswapna @ 2021-05-27 22:04 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 724 bytes --]
+
+Hello Yocto team:
+
+I just started with yocto and would like to know the process for switching the init manager from systemd to sysvinit.
+
+I tried this options in config file
+VIRTUAL-RUNTIME_init_manager = "busybox"
+PREFERRED_PROVIDER_udev = "sysvinit"
+PREFERRED_PROVIDER_udev-utils = "sysvinit"
+DISTRO_FEATURES_BACKFILL_CONSIDERED = "sysvinit"
+DEFAULT_DISTRO_FEATURES += " sysvinit"
+
+I see a warning when building my machine:
+
+No recipe for target:
+/recipes-core/sysvinit/sysvinit_2.88dsf.bbappend
+
+When I run this build on my target it still shows me systemd init manager...
+
+Not sure if I am missing any options.
+Could you please let me know if there are any pointers I can refer to?
+
+Thanks,
+Priya
+
+[-- Attachment #2: Type: text/html, Size: 888 bytes --]
+
+^ permalink raw reply	[flat|nested] 12+ messages in thread
+* Re: [yocto] How to switch yocto INIT_MANAGER from systemd to sysvinit #dunfell
+  2021-05-27 22:04 How to switch yocto INIT_MANAGER from systemd to sysvinit #dunfell sayinswapna
+@ 2021-05-27 22:12 ` Robert P. J. Day
+  2021-05-27 23:24   ` Khem Raj
+  2021-05-27 23:28 ` Khem Raj
+  1 sibling, 1 reply; 12+ messages in thread
+From: Robert P. J. Day @ 2021-05-27 22:12 UTC (permalink / raw)
+  To: sayinswapna; +Cc: yocto
+
+On Thu, 27 May 2021, sayinswapna@gmail.com wrote:
+
+> Hello Yocto team:
+>
+> I just started with yocto and would like to know the process for switching the init
+> manager from systemd to sysvinit.
+>
+> I tried this options in config file
+> VIRTUAL-RUNTIME_init_manager = "busybox"
+> PREFERRED_PROVIDER_udev = "sysvinit"
+> PREFERRED_PROVIDER_udev-utils = "sysvinit"
+> DISTRO_FEATURES_BACKFILL_CONSIDERED = "sysvinit"
+> DEFAULT_DISTRO_FEATURES += " sysvinit"
+
+  as i recall, all of the above can be replaced by a single assignment
+to the INIT_MANAGER variable.
+
+rday
+
+^ permalink raw reply	[flat|nested] 12+ messages in thread
+* Re: [yocto] How to switch yocto INIT_MANAGER from systemd to sysvinit #dunfell
+  2021-05-27 22:12 ` [yocto] " Robert P. J. Day
+@ 2021-05-27 23:24   ` Khem Raj
+  0 siblings, 0 replies; 12+ messages in thread
+From: Khem Raj @ 2021-05-27 23:24 UTC (permalink / raw)
+  To: Robert P. J. Day, sayinswapna; +Cc: yocto
+
+
+
+On 5/27/21 3:12 PM, Robert P. J. Day wrote:
+> On Thu, 27 May 2021, sayinswapna@gmail.com wrote:
+> 
+>> Hello Yocto team:
+>>
+>> I just started with yocto and would like to know the process for switching the init
+>> manager from systemd to sysvinit.
+>>
+>> I tried this options in config file
+>> VIRTUAL-RUNTIME_init_manager = "busybox"
+>> PREFERRED_PROVIDER_udev = "sysvinit"
+>> PREFERRED_PROVIDER_udev-utils = "sysvinit"
+>> DISTRO_FEATURES_BACKFILL_CONSIDERED = "sysvinit"
+>> DEFAULT_DISTRO_FEATURES += " sysvinit"
+> 
+>    as i recall, all of the above can be replaced by a single assignment
+> to the INIT_MANAGER variable.
+
+it will depend on release, if you are on 3.0+ then yes single setting 
+will work, older releases would mean above is needed. see
+
+https://docs.yoctoproject.org/ref-manual/migration-3.0.html?highlight=init_manager#init-system-selection
+
+
+
+> 
+> rday
+> 
+> 
+> 
+> 
+> 
+
+^ permalink raw reply	[flat|nested] 12+ messages in thread
+* Re: [yocto] How to switch yocto INIT_MANAGER from systemd to sysvinit #dunfell
+  2021-05-27 22:04 How to switch yocto INIT_MANAGER from systemd to sysvinit #dunfell sayinswapna
+  2021-05-27 22:12 ` [yocto] " Robert P. J. Day
+@ 2021-05-27 23:28 ` Khem Raj
+  2021-05-28 10:39   ` Zoran
+  2021-05-28 11:47   ` sayinswapna
+  1 sibling, 2 replies; 12+ messages in thread
+From: Khem Raj @ 2021-05-27 23:28 UTC (permalink / raw)
+  To: sayinswapna, yocto
+
+
+
+On 5/27/21 3:04 PM, sayinswapna@gmail.com wrote:
+> Hello Yocto team:
+> 
+> I just started with yocto and would like to know the process for 
+> switching the init manager from systemd to sysvinit.
+> 
+> I tried this options in config file
+> VIRTUAL-RUNTIME_init_manager = "busybox"
+> PREFERRED_PROVIDER_udev = "sysvinit"
+> PREFERRED_PROVIDER_udev-utils = "sysvinit"
+> DISTRO_FEATURES_BACKFILL_CONSIDERED = "sysvinit"
+> DEFAULT_DISTRO_FEATURES += " sysvinit"
+> 
+> I see a warning when building my machine:
+> 
+> No recipe for target:
+> /recipes-core/sysvinit/sysvinit_2.88dsf.bbappend
+
+Please find out which layer is adding this bbappend you could use
+
+bitbake-layers show-appends sysvinit
+
+It seems recipe version is newer perhaps and the bbappend is still made 
+for older recipe, these things happen when you mix release branches for 
+different layers.
+
+> 
+> When I run this build on my target it still shows me systemd init manager...
+> 
+> Not sure if I am missing any options.
+> Could you please let me know if there are any pointers I can refer to?
+> 
+> Thanks,
+> Priya
+> 
+> 
+> 
+> 
+> 
+> 
+
+^ permalink raw reply	[flat|nested] 12+ messages in thread
+* Re: [yocto] How to switch yocto INIT_MANAGER from systemd to sysvinit #dunfell
+  2021-05-27 23:28 ` Khem Raj
+@ 2021-05-28 10:39   ` Zoran
+  2021-05-28 11:47   ` sayinswapna
+  1 sibling, 0 replies; 12+ messages in thread
+From: Zoran @ 2021-05-28 10:39 UTC (permalink / raw)
+  To: Khem Raj, rpjday; +Cc: sayinswapna, Yocto-mailing-list
+
+Why do I (always) point out the obvious?
+
+And I do need... Geniuses are not meant to fix The World to understand them!?
+
+Geniuses should understand The World (and act properly)!
+
+Extras to geniality, do you, YOCTO primes, think?
+_______
+
+Robert... If I am correct, i'm I?
+
+Should you include in docs some examples??? Yes, U should!
+As for an example fix:
+poky/meta/conf/distro/include/init-manager-*.con, NOT
+conf/distro/include/init-manager-*.conf
+
+(full path is more explicit, isn't it?)
+
+And some local.conf examples/snippets (since all descriptions are here
+and there very dry):
+
+## Add systemd service
+INIT_MANAGER = "systemd"
+## DISTRO_FEATURES_append = " systemd"
+## DISTRO_FEATURES_BACKFILL_CONSIDERED += "sysvinit"
+## VIRTUAL-RUNTIME_init_manager = "systemd"
+## VIRTUAL-RUNTIME_dev_manager = "systemd"
+## VIRTUAL-RUNTIME_initscripts = ""
+
+Where INIT_MANAGER = "systemd" replaces all commented commands below....
+
+My two cent advice,
+Zee
+_______
+
+On Fri, May 28, 2021 at 1:28 AM Khem Raj <raj.khem@gmail.com> wrote:
+>
+>
+>
+> On 5/27/21 3:04 PM, sayinswapna@gmail.com wrote:
+> > Hello Yocto team:
+> >
+> > I just started with yocto and would like to know the process for
+> > switching the init manager from systemd to sysvinit.
+> >
+> > I tried this options in config file
+> > VIRTUAL-RUNTIME_init_manager = "busybox"
+> > PREFERRED_PROVIDER_udev = "sysvinit"
+> > PREFERRED_PROVIDER_udev-utils = "sysvinit"
+> > DISTRO_FEATURES_BACKFILL_CONSIDERED = "sysvinit"
+> > DEFAULT_DISTRO_FEATURES += " sysvinit"
+> >
+> > I see a warning when building my machine:
+> >
+> > No recipe for target:
+> > /recipes-core/sysvinit/sysvinit_2.88dsf.bbappend
+>
+> Please find out which layer is adding this bbappend you could use
+>
+> bitbake-layers show-appends sysvinit
+>
+> It seems recipe version is newer perhaps and the bbappend is still made
+> for older recipe, these things happen when you mix release branches for
+> different layers.
+>
+> >
+> > When I run this build on my target it still shows me systemd init manager...
+> >
+> > Not sure if I am missing any options.
+> > Could you please let me know if there are any pointers I can refer to?
+> >
+> > Thanks,
+> > Priya
+> >
+> >
+> >
+> >
+> >
+> >
+>
+> 
+>
+
+^ permalink raw reply	[flat|nested] 12+ messages in thread
+* Re: [yocto] How to switch yocto INIT_MANAGER from systemd to sysvinit #dunfell
+  2021-05-27 23:28 ` Khem Raj
+  2021-05-28 10:39   ` Zoran
+@ 2021-05-28 11:47   ` sayinswapna
+  2021-05-28 12:28     ` Zoran
+  1 sibling, 1 reply; 12+ messages in thread
+From: sayinswapna @ 2021-05-28 11:47 UTC (permalink / raw)
+  To: Khem Raj; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1641 bytes --]
+
+Thanks Robert and Raj!!
+
+I am using Yocto 3.1 Dunfell release.
+
+You are right about the .bbappend file. Changed the name in the overlay to
+new-ver.bbappend  and no longer see the warning.
+
+Tried setting  INIT_MANAGER  = " sysvinit" in build/conf/local.conf but
+looks like generated rootfs has init file pointing to init ->
+../lib/systemd/systemd
+
+Priya.
+
+On Thu, May 27, 2021 at 7:28 PM Khem Raj <raj.khem@gmail.com> wrote:
+
+>
+>
+> On 5/27/21 3:04 PM, sayinswapna@gmail.com wrote:
+> > Hello Yocto team:
+> >
+> > I just started with yocto and would like to know the process for
+> > switching the init manager from systemd to sysvinit.
+> >
+> > I tried this options in config file
+> > VIRTUAL-RUNTIME_init_manager = "busybox"
+> > PREFERRED_PROVIDER_udev = "sysvinit"
+> > PREFERRED_PROVIDER_udev-utils = "sysvinit"
+> > DISTRO_FEATURES_BACKFILL_CONSIDERED = "sysvinit"
+> > DEFAULT_DISTRO_FEATURES += " sysvinit"
+> >
+> > I see a warning when building my machine:
+> >
+> > No recipe for target:
+> > /recipes-core/sysvinit/sysvinit_2.88dsf.bbappend
+>
+> Please find out which layer is adding this bbappend you could use
+>
+> bitbake-layers show-appends sysvinit
+>
+> It seems recipe version is newer perhaps and the bbappend is still made
+> for older recipe, these things happen when you mix release branches for
+> different layers.
+>
+> >
+> > When I run this build on my target it still shows me systemd init
+> manager...
+> >
+> > Not sure if I am missing any options.
+> > Could you please let me know if there are any pointers I can refer to?
+> >
+> > Thanks,
+> > Priya
+> >
+> >
+> >
+> >
+> > 
+> >
+>
+
+[-- Attachment #2: Type: text/html, Size: 2321 bytes --]
+
+^ permalink raw reply	[flat|nested] 12+ messages in thread
+* Re: [yocto] How to switch yocto INIT_MANAGER from systemd to sysvinit #dunfell
+  2021-05-28 11:47   ` sayinswapna
+@ 2021-05-28 12:28     ` Zoran
+  2021-05-28 12:45       ` Robert P. J. Day
+  0 siblings, 1 reply; 12+ messages in thread
+From: Zoran @ 2021-05-28 12:28 UTC (permalink / raw)
+  To: Swapna Nannapaneni; +Cc: Khem Raj, Yocto-mailing-list
+
+> Tried setting  INIT_MANAGER  = " sysvinit" in build/conf/local.conf
+
+Is it INIT_MANAGER  = " sysvinit" , or INIT_MANAGER  = "sysvinit" (no
+blank at the beginning)?
+
+Thank you,
+Zee
+_______
+
+On Fri, May 28, 2021 at 1:47 PM Swapna Nannapaneni
+<sayinswapna@gmail.com> wrote:
+>
+> Thanks Robert and Raj!!
+>
+> I am using Yocto 3.1 Dunfell release.
+>
+> You are right about the .bbappend file. Changed the name in the overlay to new-ver.bbappend  and no longer see the warning.
+>
+> Tried setting  INIT_MANAGER  = " sysvinit" in build/conf/local.conf but looks like generated rootfs has init file pointing to init -> ../lib/systemd/systemd
+>
+> Priya.
+>
+> On Thu, May 27, 2021 at 7:28 PM Khem Raj <raj.khem@gmail.com> wrote:
+>>
+>>
+>>
+>> On 5/27/21 3:04 PM, sayinswapna@gmail.com wrote:
+>> > Hello Yocto team:
+>> >
+>> > I just started with yocto and would like to know the process for
+>> > switching the init manager from systemd to sysvinit.
+>> >
+>> > I tried this options in config file
+>> > VIRTUAL-RUNTIME_init_manager = "busybox"
+>> > PREFERRED_PROVIDER_udev = "sysvinit"
+>> > PREFERRED_PROVIDER_udev-utils = "sysvinit"
+>> > DISTRO_FEATURES_BACKFILL_CONSIDERED = "sysvinit"
+>> > DEFAULT_DISTRO_FEATURES += " sysvinit"
+>> >
+>> > I see a warning when building my machine:
+>> >
+>> > No recipe for target:
+>> > /recipes-core/sysvinit/sysvinit_2.88dsf.bbappend
+>>
+>> Please find out which layer is adding this bbappend you could use
+>>
+>> bitbake-layers show-appends sysvinit
+>>
+>> It seems recipe version is newer perhaps and the bbappend is still made
+>> for older recipe, these things happen when you mix release branches for
+>> different layers.
+>>
+>> >
+>> > When I run this build on my target it still shows me systemd init manager...
+>> >
+>> > Not sure if I am missing any options.
+>> > Could you please let me know if there are any pointers I can refer to?
+>> >
+>> > Thanks,
+>> > Priya
+>> >
+>> >
+>> >
+>> >
+>> >
+>> >
+>
+>
+> 
+>
+
+^ permalink raw reply	[flat|nested] 12+ messages in thread
+* Re: [yocto] How to switch yocto INIT_MANAGER from systemd to sysvinit #dunfell
+  2021-05-28 12:28     ` Zoran
+@ 2021-05-28 12:45       ` Robert P. J. Day
+  2021-05-28 12:55         ` Zoran
+  0 siblings, 1 reply; 12+ messages in thread
+From: Robert P. J. Day @ 2021-05-28 12:45 UTC (permalink / raw)
+  To: Zoran; +Cc: Swapna Nannapaneni, Khem Raj, Yocto-mailing-list
+
+On Fri, 28 May 2021, Zoran wrote:
+
+> > Tried setting  INIT_MANAGER  = " sysvinit" in build/conf/local.conf
+>
+> Is it INIT_MANAGER  = " sysvinit" , or INIT_MANAGER  = "sysvinit" (no
+> blank at the beginning)?
+>
+> Thank you,
+> Zee
+
+  you don't want the leading space.
+
+rday
+
+^ permalink raw reply	[flat|nested] 12+ messages in thread
+* Re: [yocto] How to switch yocto INIT_MANAGER from systemd to sysvinit #dunfell
+  2021-05-28 12:45       ` Robert P. J. Day
+@ 2021-05-28 12:55         ` Zoran
+  2021-05-28 13:02           ` Swapna Nannapaneni
+  0 siblings, 1 reply; 12+ messages in thread
+From: Zoran @ 2021-05-28 12:55 UTC (permalink / raw)
+  To: Robert P. J. Day; +Cc: Swapna Nannapaneni, Khem Raj, Yocto-mailing-list
+
+> you don't want the leading space.
+
+I got the idea from reading
+https://docs.yoctoproject.org/ref-manual/migration-3.0.html?highlight=init_manager#init-system-selection
+
+But this is exactly why we need some explicit examples. :-)
+
+Zee
+_______
+
+On Fri, May 28, 2021 at 2:45 PM Robert P. J. Day <rpjday@crashcourse.ca> wrote:
+>
+> On Fri, 28 May 2021, Zoran wrote:
+>
+> > > Tried setting  INIT_MANAGER  = " sysvinit" in build/conf/local.conf
+> >
+> > Is it INIT_MANAGER  = " sysvinit" , or INIT_MANAGER  = "sysvinit" (no
+> > blank at the beginning)?
+> >
+> > Thank you,
+> > Zee
+>
+>   you don't want the leading space.
+>
+> rday
+
+^ permalink raw reply	[flat|nested] 12+ messages in thread
+* Re: [yocto] How to switch yocto INIT_MANAGER from systemd to sysvinit #dunfell
+  2021-05-28 12:55         ` Zoran
+@ 2021-05-28 13:02           ` Swapna Nannapaneni
+  2021-05-31  6:04             ` Zoran
+  0 siblings, 1 reply; 12+ messages in thread
+From: Swapna Nannapaneni @ 2021-05-28 13:02 UTC (permalink / raw)
+  To: Zoran Stojsavljevic; +Cc: Robert P. J. Day, Khem Raj, Yocto-mailing-list
+
+[-- Attachment #1: Type: text/plain, Size: 871 bytes --]
+
+Typo. No leading space  INIT_MANAGER = "sysvinit".
+
+Thanks,
+Priya.
+
+On Fri, May 28, 2021 at 8:55 AM Zoran Stojsavljevic <
+zoran.stojsavljevic@gmail.com> wrote:
+
+> > you don't want the leading space.
+>
+> I got the idea from reading
+>
+> https://docs.yoctoproject.org/ref-manual/migration-3.0.html?highlight=init_manager#init-system-selection
+>
+> But this is exactly why we need some explicit examples. :-)
+>
+> Zee
+> _______
+>
+> On Fri, May 28, 2021 at 2:45 PM Robert P. J. Day <rpjday@crashcourse.ca>
+> wrote:
+> >
+> > On Fri, 28 May 2021, Zoran wrote:
+> >
+> > > > Tried setting  INIT_MANAGER  = " sysvinit" in build/conf/local.conf
+> > >
+> > > Is it INIT_MANAGER  = " sysvinit" , or INIT_MANAGER  = "sysvinit" (no
+> > > blank at the beginning)?
+> > >
+> > > Thank you,
+> > > Zee
+> >
+> >   you don't want the leading space.
+> >
+> > rday
+>
+
+[-- Attachment #2: Type: text/html, Size: 1663 bytes --]
+
+^ permalink raw reply	[flat|nested] 12+ messages in thread
+* Re: [yocto] How to switch yocto INIT_MANAGER from systemd to sysvinit #dunfell
+  2021-05-28 13:02           ` Swapna Nannapaneni
+@ 2021-05-31  6:04             ` Zoran
+  2021-06-02  1:16               ` Swapna Nannapaneni
+  0 siblings, 1 reply; 12+ messages in thread
+From: Zoran @ 2021-05-31  6:04 UTC (permalink / raw)
+  To: Robert P. J. Day; +Cc: Yocto-mailing-list
+
+What about the following:
+https://docs.yoctoproject.org/ref-manual/migration-3.0.html?highlight=init_manager#init-system-selection
+
+To be enhanced/added with the following:
+https://github.com/ZoranStojsavljevic/bbb-yocto/blob/master/bbb-releases/bbb-hardknott/README.md
+
+Best Regards,
+Zee
+_______
+
+On Fri, May 28, 2021 at 3:02 PM Swapna Nannapaneni
+<sayinswapna@gmail.com> wrote:
+>
+> Typo. No leading space  INIT_MANAGER = "sysvinit".
+>
+> Thanks,
+> Priya.
+>
+> On Fri, May 28, 2021 at 8:55 AM Zoran Stojsavljevic <zoran.stojsavljevic@gmail.com> wrote:
+>>
+>> > you don't want the leading space.
+>>
+>> I got the idea from reading
+>> https://docs.yoctoproject.org/ref-manual/migration-3.0.html?highlight=init_manager#init-system-selection
+>>
+>> But this is exactly why we need some explicit examples. :-)
+>>
+>> Zee
+>> _______
+>>
+>> On Fri, May 28, 2021 at 2:45 PM Robert P. J. Day <rpjday@crashcourse.ca> wrote:
+>> >
+>> > On Fri, 28 May 2021, Zoran wrote:
+>> >
+>> > > > Tried setting  INIT_MANAGER  = " sysvinit" in build/conf/local.conf
+>> > >
+>> > > Is it INIT_MANAGER  = " sysvinit" , or INIT_MANAGER  = "sysvinit" (no
+>> > > blank at the beginning)?
+>> > >
+>> > > Thank you,
+>> > > Zee
+>> >
+>> >   you don't want the leading space.
+>> >
+>> > rday
+
+^ permalink raw reply	[flat|nested] 12+ messages in thread
+* Re: [yocto] How to switch yocto INIT_MANAGER from systemd to sysvinit #dunfell
+  2021-05-31  6:04             ` Zoran
+@ 2021-06-02  1:16               ` Swapna Nannapaneni
+  0 siblings, 0 replies; 12+ messages in thread
+From: Swapna Nannapaneni @ 2021-06-02  1:16 UTC (permalink / raw)
+  To: Zoran; +Cc: Robert P. J. Day, Yocto-mailing-list
+
+[-- Attachment #1: Type: text/plain, Size: 1523 bytes --]
+
+Example helps. Thanks!!
+
+
+On Mon, May 31, 2021 at 2:05 AM Zoran <zoran.stojsavljevic@gmail.com> wrote:
+
+> What about the following:
+>
+> https://docs.yoctoproject.org/ref-manual/migration-3.0.html?highlight=init_manager#init-system-selection
+>
+> To be enhanced/added with the following:
+>
+> https://github.com/ZoranStojsavljevic/bbb-yocto/blob/master/bbb-releases/bbb-hardknott/README.md
+>
+> Best Regards,
+> Zee
+> _______
+>
+> On Fri, May 28, 2021 at 3:02 PM Swapna Nannapaneni
+> <sayinswapna@gmail.com> wrote:
+> >
+> > Typo. No leading space  INIT_MANAGER = "sysvinit".
+> >
+> > Thanks,
+> > Priya.
+> >
+> > On Fri, May 28, 2021 at 8:55 AM Zoran Stojsavljevic <
+> zoran.stojsavljevic@gmail.com> wrote:
+> >>
+> >> > you don't want the leading space.
+> >>
+> >> I got the idea from reading
+> >>
+> https://docs.yoctoproject.org/ref-manual/migration-3.0.html?highlight=init_manager#init-system-selection
+> >>
+> >> But this is exactly why we need some explicit examples. :-)
+> >>
+> >> Zee
+> >> _______
+> >>
+> >> On Fri, May 28, 2021 at 2:45 PM Robert P. J. Day <rpjday@crashcourse.ca>
+> wrote:
+> >> >
+> >> > On Fri, 28 May 2021, Zoran wrote:
+> >> >
+> >> > > > Tried setting  INIT_MANAGER  = " sysvinit" in
+> build/conf/local.conf
+> >> > >
+> >> > > Is it INIT_MANAGER  = " sysvinit" , or INIT_MANAGER  = "sysvinit"
+> (no
+> >> > > blank at the beginning)?
+> >> > >
+> >> > > Thank you,
+> >> > > Zee
+> >> >
+> >> >   you don't want the leading space.
+> >> >
+> >> > rday
+>
+> 
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 2876 bytes --]
+
+^ permalink raw reply	[flat|nested] 12+ messages in thread
+end of thread, other threads:[~2021-06-02  1:16 UTC | newest]
+
+Thread overview: 12+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-05-27 22:04 How to switch yocto INIT_MANAGER from systemd to sysvinit #dunfell sayinswapna
+2021-05-27 22:12 ` [yocto] " Robert P. J. Day
+2021-05-27 23:24   ` Khem Raj
+2021-05-27 23:28 ` Khem Raj
+2021-05-28 10:39   ` Zoran
+2021-05-28 11:47   ` sayinswapna
+2021-05-28 12:28     ` Zoran
+2021-05-28 12:45       ` Robert P. J. Day
+2021-05-28 12:55         ` Zoran
+2021-05-28 13:02           ` Swapna Nannapaneni
+2021-05-31  6:04             ` Zoran
+2021-06-02  1:16               ` Swapna Nannapaneni
+

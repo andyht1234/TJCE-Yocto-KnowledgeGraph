@@ -1,0 +1,318 @@
+* [PATCH yocto-autobuilder-helper v7] Add a banner on the old documentation docs.
+@ 2022-04-22 14:46 Abongwa Bonalais Amahnui
+  2022-04-22 15:07 ` [yocto] " Quentin Schulz
+  0 siblings, 1 reply; 4+ messages in thread
+From: Abongwa Bonalais Amahnui @ 2022-04-22 14:46 UTC (permalink / raw)
+  To: yocto; +Cc: Abongwa Bonalais Amahnui
+
+Also added a command in the run-docs-build file to run the python script once  in the extracted tarball directory.
+
+Signed-off-by: Abongwa Bonalais Amahnui <abongwabonalais@gmail.com>
+---
+ docs_fix_all_html_css.py | 79 ++++++++++++++++++++++++++++++++++++++++
+ run-docs-build           |  2 +
+ 2 files changed, 81 insertions(+)
+ create mode 100755 docs_fix_all_html_css.py
+
+diff --git a/docs_fix_all_html_css.py b/docs_fix_all_html_css.py
+new file mode 100755
+index 0000000..7693b04
+--- /dev/null
++++ b/docs_fix_all_html_css.py
+@@ -0,0 +1,79 @@
++#!/usr/bin/env python3
++#
++# SPDX-License-Identifier: GPL-2.0-only
++#
++#Signed-off-by: Abongwa Bonalais Amahnui <abongwabonalais@gmail.com>
++#
++#
++# function to append to the content of a html file below the body tag
++#
++#
++import os
++
++
++html_content = '''
++<div id="outdated-warning">This document is outdated, you should select the <a href="https://docs.yoctoproject.org/">latest release version</a> in this series.</div>
++<div xml:lang="en" class="body" lang="en">
++'''
++last_div = '''
++</div>
++
++'''
++
++css_replacement_content = '''
++ 
++  font-family: Verdana, Sans, sans-serif;
++
++  /*min-width: 640px;*/
++  width: 100%;
++  margin:  0;
++  padding: 0;
++  color: #333;
++  overflow-x: hidden;
++  }
++ 
++ /*added books too*/
++.body{
++margin:  0 auto;
++min-width: 640px;
++padding: 0 5em 5em 5em;
++}
++/* added the id below to make the banner show and be fixed*/
++#outdated-warning{
++text-align: center;
++background-color: rgb(255, 186, 186); 
++color: rgb(106, 14, 14); 
++padding: 0.5em 0; 
++width: 100%;
++position: fixed;
++top: 0;
++
++
++'''
++
++def loop_through_html_directories(dir):
++    for dirpath, dirnames, filenames in os.walk(dir):
++    # loop through all files in the directory
++        for filename in filenames:
++            # check if the file is an html file
++            if filename.endswith('.html'):
++                # open the html file in read mode
++                with open(os.path.join(dirpath, filename), 'r', encoding="ISO-8859-1") as f:
++                    # read the content of the html file
++                    current_content = f.read()
++                # open the html file in write mode
++                with open(os.path.join(dirpath, filename), 'w') as f:
++                    # write the content of the html file
++                    f.write(current_content.replace('<body>', '<body>' + html_content))
++                    f.write(current_content.replace('</body>', last_div + '</body>'))
++            if filename.endswith('.css'):
++                # open the css file in read mode
++                with open(os.path.join(dirpath, filename), 'r', encoding="ISO-8859-1") as f:
++                    # read the content of the css file
++                   css_content = f.read()
++                # open the css file in write mode
++                with open(os.path.join(dirpath, filename), 'w') as f:
++                    # write the content of the css file
++                    f.write(css_content.replace(css_content[css_content.find('body {'):css_content.find('}'[0])], 'body {' + css_replacement_content ))
++loop_through_html_directories('.')
++
+diff --git a/run-docs-build b/run-docs-build
+index ecc5332..307ac19 100755
+--- a/run-docs-build
++++ b/run-docs-build
+@@ -37,6 +37,8 @@ cd $outputdir
+ echo Extracing old content from archive
+ tar -xJf $docbookarchive
+ 
++$scriptdir/docs_fix_all_html_css.py
++
+ cd $bbdocs
+ mkdir $outputdir/bitbake
+ 
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 4+ messages in thread
+* Re: [yocto] [PATCH yocto-autobuilder-helper v7] Add a banner on the old documentation docs.
+  2022-04-22 14:46 [PATCH yocto-autobuilder-helper v7] Add a banner on the old documentation docs Abongwa Bonalais Amahnui
+@ 2022-04-22 15:07 ` Quentin Schulz
+  2022-04-22 19:10   ` Abongwa Amahnui Bonalais
+  0 siblings, 1 reply; 4+ messages in thread
+From: Quentin Schulz @ 2022-04-22 15:07 UTC (permalink / raw)
+  To: Abongwa Amahnui Bonalais, yocto
+
+Hi Amahnui,
+
+We're making progress in the right direction :)
+
+On 4/22/22 16:46, Abongwa Amahnui Bonalais wrote:
+> Also added a command in the run-docs-build file to run the python script once  in the extracted tarball directory.
+> 
+> Signed-off-by: Abongwa Bonalais Amahnui <abongwabonalais@gmail.com>
+> ---
+>   docs_fix_all_html_css.py | 79 ++++++++++++++++++++++++++++++++++++++++
+>   run-docs-build           |  2 +
+
+This is still not a valid path for the yocto-autobuilder-helper git 
+repo. It should say scripts/docs_fix_all_html_css.py and 
+scripts/run-docs-build (do not modify it by hand :) ).
+
+See for yourself:
+https://git.yoctoproject.org/yocto-autobuilder-helper/tree/
+This is the root of the directory, where your patch would be applied. 
+You can see that no run-docs-build file exists there so your patch will 
+not work.
+
+However, in 
+https://git.yoctoproject.org/yocto-autobuilder-helper/tree/scripts, the 
+scripts directory, does have a run-docs-build script so your patch would 
+apply nicely there.
+
+Would you mind telling us how you created your patch from a commit so we 
+can help you fix the issue there?
+
+A simple test to do to check if your patch can be applied is to try to 
+apply it yourself.
+
+Provided you have your patch file (the one you sent with git 
+send-email!) named my.patch and located in /path/to/, run:
+
+git clone https://git.yoctoproject.org/yocto-autobuilder-helper
+cd https://git.yoctoproject.org/yocto-autobuilder-helper
+git am /path/to/my.patch
+
+If it works, all good!
+If it does not, something needs to be fixed.
+
+>   2 files changed, 81 insertions(+)
+>   create mode 100755 docs_fix_all_html_css.py
+> 
+> diff --git a/docs_fix_all_html_css.py b/docs_fix_all_html_css.py
+> new file mode 100755
+> index 0000000..7693b04
+> --- /dev/null
+> +++ b/docs_fix_all_html_css.py
+> @@ -0,0 +1,79 @@
+> +#!/usr/bin/env python3
+> +#
+> +# SPDX-License-Identifier: GPL-2.0-only
+> +#
+> +#Signed-off-by: Abongwa Bonalais Amahnui <abongwabonalais@gmail.com>
+> +#
+> +#
+> +# function to append to the content of a html file below the body tag
+> +#
+> +#
+> +import os
+> +
+> +
+> +html_content = '''
+> +<div id="outdated-warning">This document is outdated, you should select the <a href="https://urldefense.proofpoint.com/v2/url?u=https-3A__docs.yoctoproject.org_&amp;d=DwMDAg&amp;c=_sEr5x9kUWhuk4_nFwjJtA&amp;r=LYjLexDn7rXIzVmkNPvw5ymA1XTSqHGq8yBP6m6qZZ4njZguQhZhkI_-172IIy1t&amp;m=-ULgl-z1-zhWlVwi9is-bYWx7lKkN4sSFIjTA5iLznFlf3FeAUGfaMjacPXNWRLq&amp;s=EM6Y0EHYD3ploYECnvyUDTcYIhz2jGXOgFD_q0_8A7Q&amp;e=">latest release version</a> in this series.</div>
+
+I'm not sure how picky we want to be, but I imagine we want anything 
+that is not dunfell (so anything not from 3.1.x release) to display that 
+it is obsolete and the user should consider upgrading to a newer release.
+For dunfell, the message above is fine (because dunfell is still 
+supported, and all other releases in those old docs aren't anymore).
+
+> +<div xml:lang="en" class="body" lang="en">
+> +'''
+> +last_div = '''
+> +</div>
+> +
+> +'''
+> +
+> +css_replacement_content = '''
+> +
+> +  font-family: Verdana, Sans, sans-serif;
+> +
+> +  /*min-width: 640px;*/
+> +  width: 100%;
+> +  margin:  0;
+> +  padding: 0;
+> +  color: #333;
+> +  overflow-x: hidden;
+> +  }
+> +
+> + /*added books too*/
+> +.body{
+> +margin:  0 auto;
+> +min-width: 640px;
+> +padding: 0 5em 5em 5em;
+> +}
+> +/* added the id below to make the banner show and be fixed*/
+> +#outdated-warning{
+> +text-align: center;
+> +background-color: rgb(255, 186, 186);
+> +color: rgb(106, 14, 14);
+> +padding: 0.5em 0;
+> +width: 100%;
+> +position: fixed;
+> +top: 0;
+> +
+> +
+> +'''
+> +
+> +def loop_through_html_directories(dir):
+> +    for dirpath, dirnames, filenames in os.walk(dir):
+> +    # loop through all files in the directory
+> +        for filename in filenames:
+> +            # check if the file is an html file
+> +            if filename.endswith('.html'):
+> +                # open the html file in read mode
+> +                with open(os.path.join(dirpath, filename), 'r', encoding="ISO-8859-1") as f:
+> +                    # read the content of the html file
+> +                    current_content = f.read()
+> +                # open the html file in write mode
+> +                with open(os.path.join(dirpath, filename), 'w') as f:
+> +                    # write the content of the html file
+> +                    f.write(current_content.replace('<body>', '<body>' + html_content))
+> +                    f.write(current_content.replace('</body>', last_div + '</body>'))
+> +            if filename.endswith('.css'):
+This used to modify only style.css but now it tries to modify all css 
+files. Did you test this version of the script? Are you sure it does not 
+break other css files?
+
+Cheers,
+Quentin
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [PATCH yocto-autobuilder-helper v7] Add a banner on the old documentation docs.
+  2022-04-22 15:07 ` [yocto] " Quentin Schulz
+@ 2022-04-22 19:10   ` Abongwa Amahnui Bonalais
+  2022-04-23 12:25     ` Abongwa Amahnui Bonalais
+  0 siblings, 1 reply; 4+ messages in thread
+From: Abongwa Amahnui Bonalais @ 2022-04-22 19:10 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1089 bytes --]
+
+On Fri, Apr 22, 2022 at 04:07 PM, Quentin Schulz wrote:
+
+> 
+> Would you mind telling us how you created your patch from a commit so we
+> can help you fix the issue there?
+
+I'm sorry I added the run-docs-build manually to another folder after testing it so that I could easily track it, I did not send the patch from the script/run-docs-build and script/docs_fix_all_html_css.py directory, but I had it run from there, the thing is I had made many commits which I felt will not be included in the latest patch, so I initialized a new folder so I can easily hard reset it. But I could send a patch that takes into consideration the actual path from which I tested the script.
+
+> 
+> This used to modify only style.css but now it tries to modify all css
+> files. Did you test this version of the script? Are you sure it does not
+> break other css files?
+
+Yes actually I don't think break the other css files as I have check and all the other css files end with style.css, but I will replace it with style.css just in case I missed a file that ends with .css but is not style.css
+
+[-- Attachment #2: Type: text/html, Size: 1172 bytes --]
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [PATCH yocto-autobuilder-helper v7] Add a banner on the old documentation docs.
+  2022-04-22 19:10   ` Abongwa Amahnui Bonalais
+@ 2022-04-23 12:25     ` Abongwa Amahnui Bonalais
+  0 siblings, 0 replies; 4+ messages in thread
+From: Abongwa Amahnui Bonalais @ 2022-04-23 12:25 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 147 bytes --]
+
+Hi Quentin,
+I'm sorry for taking so long
+I'm still trying to figure out how to prevent the script from writing into the 3.1 versions and above.
+
+[-- Attachment #2: Type: text/html, Size: 162 bytes --]
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+end of thread, other threads:[~2022-04-25 19:26 UTC | newest]
+
+Thread overview: 4+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-04-22 14:46 [PATCH yocto-autobuilder-helper v7] Add a banner on the old documentation docs Abongwa Bonalais Amahnui
+2022-04-22 15:07 ` [yocto] " Quentin Schulz
+2022-04-22 19:10   ` Abongwa Amahnui Bonalais
+2022-04-23 12:25     ` Abongwa Amahnui Bonalais
+

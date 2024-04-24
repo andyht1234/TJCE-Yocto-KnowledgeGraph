@@ -1,0 +1,167 @@
+* task do_patch does not exist
+@ 2021-09-02  8:10 Ivan Riabtsov
+  2021-09-02  8:24 ` [yocto] " Alexander Kanavin
+  0 siblings, 1 reply; 2+ messages in thread
+From: Ivan Riabtsov @ 2021-09-02  8:10 UTC (permalink / raw)
+  To: Yocto-mailing-list
+
+Hello. I created a recipe with the following command:
+
+$ devtool add  mosquitto
+https://mosquitto.org/files/source/mosquitto-2.0.11.tar.gz
+
+i got the file:
+
+ivr@home-machine:~/work/yocto/build
+$ cat workspace/recipes/mosquitto/mosquitto_2.0.11.bb
+# Recipe created by recipetool
+# This is the basis of a recipe and may need further editing in order
+to be fully functional.
+# (Feel free to remove these comments when editing.)
+
+# WARNING: the following LICENSE and LIC_FILES_CHKSUM values are best
+guesses - it is
+# your responsibility to verify that the values are complete and correct.
+#
+# The following license files were not able to be identified and are
+# represented as "Unknown" below, you will need to check them yourself:
+#   LICENSE.txt
+#
+LICENSE = "Unknown"
+LIC_FILES_CHKSUM = "file://LICENSE.txt;md5=ca9a8f366c6babf593e374d0d7d58749"
+
+
+SRC_URI = "https://mosquitto.org/files/source/mosquitto-${PV}.tar.gz"
+SRC_URI[md5sum] = "638d801e6aac611b41de76d030951612"
+SRC_URI[sha256sum] =
+"7b36a7198bce85cf31b132f5c6ee36dcf5dadf86fb768501eb1e11ce95d4f78a"
+SRC_URI += " file://0001-arch-makefile-variable.patch"
+
+# NOTE: unable to map the following CMake package dependencies: cJSON
+libwebsockets
+# NOTE: the following library dependencies are unknown, ignoring: systemd
+#       (this is based on recipes that have previously been built and packaged)
+DEPENDS = "openssl"
+
+inherit cmake pkgconfig
+
+# Specify any options you want to pass to cmake using EXTRA_OECMAKE:
+EXTRA_OECMAKE = ""
+
+do_patch() {
+    patch -p1 -d ${WORKDIR} < ${WORKDIR}/0001-arch-makefile-variable.patch
+}
+
+i added the line:
+SRC_URI += " file://0001-arch-makefile-variable.patch"
+and i try to run bitbake -c patch mosquitto
+i got the ERROR: Task do_patch does not exist for target mosquitto
+I added the lines:
+do_patch() {
+    patch -p1 -d ${WORKDIR} < ${WORKDIR}/0001-arch-makefile-variable.patch
+}
+
+but i got the same error.
+
+Please tell me what I am doing wrong? Before, when I created recipes
+by hand, it was enough for me to add the line SRC_URI + =
+"file://some-patch.patch" and the do_patch task itself appeared and
+was executed
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+* Re: [yocto] task do_patch does not exist
+  2021-09-02  8:10 task do_patch does not exist Ivan Riabtsov
+@ 2021-09-02  8:24 ` Alexander Kanavin
+  0 siblings, 0 replies; 2+ messages in thread
+From: Alexander Kanavin @ 2021-09-02  8:24 UTC (permalink / raw)
+  To: Ivan Riabtsov; +Cc: Yocto-mailing-list
+
+[-- Attachment #1: Type: text/plain, Size: 2610 bytes --]
+
+I think you need to move the recipe from a workspace to the layer first
+with 'devtool finish'. When the recipe is in a workspace, it's taking the
+source code from the workspace as well, and additional patches aren't used.
+
+Alex
+
+On Thu, 2 Sept 2021 at 10:10, Ivan Riabtsov <ivriabtsov@gmail.com> wrote:
+
+> Hello. I created a recipe with the following command:
+>
+> $ devtool add  mosquitto
+> https://mosquitto.org/files/source/mosquitto-2.0.11.tar.gz
+>
+> i got the file:
+>
+> ivr@home-machine:~/work/yocto/build
+> $ cat workspace/recipes/mosquitto/mosquitto_2.0.11.bb
+> # Recipe created by recipetool
+> # This is the basis of a recipe and may need further editing in order
+> to be fully functional.
+> # (Feel free to remove these comments when editing.)
+>
+> # WARNING: the following LICENSE and LIC_FILES_CHKSUM values are best
+> guesses - it is
+> # your responsibility to verify that the values are complete and correct.
+> #
+> # The following license files were not able to be identified and are
+> # represented as "Unknown" below, you will need to check them yourself:
+> #   LICENSE.txt
+> #
+> LICENSE = "Unknown"
+> LIC_FILES_CHKSUM =
+> "file://LICENSE.txt;md5=ca9a8f366c6babf593e374d0d7d58749"
+>
+>
+> SRC_URI = "https://mosquitto.org/files/source/mosquitto-${PV}.tar.gz"
+> SRC_URI[md5sum] = "638d801e6aac611b41de76d030951612"
+> SRC_URI[sha256sum] =
+> "7b36a7198bce85cf31b132f5c6ee36dcf5dadf86fb768501eb1e11ce95d4f78a"
+> SRC_URI += " file://0001-arch-makefile-variable.patch"
+>
+> # NOTE: unable to map the following CMake package dependencies: cJSON
+> libwebsockets
+> # NOTE: the following library dependencies are unknown, ignoring: systemd
+> #       (this is based on recipes that have previously been built and
+> packaged)
+> DEPENDS = "openssl"
+>
+> inherit cmake pkgconfig
+>
+> # Specify any options you want to pass to cmake using EXTRA_OECMAKE:
+> EXTRA_OECMAKE = ""
+>
+> do_patch() {
+>     patch -p1 -d ${WORKDIR} < ${WORKDIR}/0001-arch-makefile-variable.patch
+> }
+>
+> i added the line:
+> SRC_URI += " file://0001-arch-makefile-variable.patch"
+> and i try to run bitbake -c patch mosquitto
+> i got the ERROR: Task do_patch does not exist for target mosquitto
+> I added the lines:
+> do_patch() {
+>     patch -p1 -d ${WORKDIR} < ${WORKDIR}/0001-arch-makefile-variable.patch
+> }
+>
+> but i got the same error.
+>
+> Please tell me what I am doing wrong? Before, when I created recipes
+> by hand, it was enough for me to add the line SRC_URI + =
+> "file://some-patch.patch" and the do_patch task itself appeared and
+> was executed
+>
+> 
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 3489 bytes --]
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2021-09-02  8:25 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-09-02  8:10 task do_patch does not exist Ivan Riabtsov
+2021-09-02  8:24 ` [yocto] " Alexander Kanavin
+

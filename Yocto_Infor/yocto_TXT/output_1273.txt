@@ -1,0 +1,233 @@
+* patching of device tree from layer
+@ 2022-10-27  0:59 ron.eggler
+  2022-10-27 19:00 ` [yocto] " Rudolf J Streif
+  0 siblings, 1 reply; 3+ messages in thread
+From: ron.eggler @ 2022-10-27  0:59 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1133 bytes --]
+
+Hi,
+
+I'm new here and relatively new to working with Yocto (creating my own layers anyways). I'm working on developing a SOM platform based on Renesas RZ series of MPUs.
+
+I've followed the guide on Digikey by Shawn Hymel to learn about device tree patching ( https://www.digikey.ca/en/maker/projects/intro-to-embedded-linux-part-5-how-to-enable-i2c-in-the-yocto-project/6843bbf9a83c4c96888fccada1e7aedf ). I assume many of you know about it as well.
+It does a good job in describing how to add changes in a dts file. In the example, a i2c5 node is added in the dts, overwriting what had been defined in the original dtsi file and I'm doubting the cleanliness of it.
+Would it not be better, to patch the node in the dtsi file and add the required changes there instead of adding them to the dts file essentially overwriting what was set previously? I imagine this will essentially lead to two nodes being defined with the same name, the latter just overwriting the former, is that so?
+How would one go about patching the dtsi and making sure that the patch is applied before ther file is included?
+
+Thank you all,
+Mistyron
+
+[-- Attachment #2: Type: text/html, Size: 1368 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] patching of device tree from layer
+  2022-10-27  0:59 patching of device tree from layer ron.eggler
+@ 2022-10-27 19:00 ` Rudolf J Streif
+  2022-10-27 21:20   ` Ron Eggler
+  0 siblings, 1 reply; 3+ messages in thread
+From: Rudolf J Streif @ 2022-10-27 19:00 UTC (permalink / raw)
+  To: ron.eggler, yocto
+
+Ron,
+
+On 10/26/22 17:59, ron.eggler@mistywest.com wrote:
+>
+> Hi,
+>
+> I'm new here and relatively new to working with Yocto (creating my own 
+> layers anyways). I'm working on developing a SOM platform based on 
+> Renesas RZ series of MPUs.
+>
+Welcome. When asking a question on a mailing list it is always advisable 
+to put all relevant information pertaining to the question into the 
+email and be specific about what you think the problem is. It alleviates 
+people from having to collect additional data to understand the problem.
+>
+> I've followed the guide on Digikey by Shawn Hymel to learn about 
+> device tree patching 
+> (https://www.digikey.ca/en/maker/projects/intro-to-embedded-linux-part-5-how-to-enable-i2c-in-the-yocto-project/6843bbf9a83c4c96888fccada1e7aedf). 
+> I assume many of you know about it as well.
+>
+Not necessarily. There are so many different devices and there's 
+probably nobody who knows them all. :)
+>
+> It does a good job in describing how to add changes in a dts file. In 
+> the example, a i2c5 node is added in the dts, overwriting what had 
+> been defined in the original dtsi file and I'm doubting the 
+> cleanliness of it.
+>
+It is good practice to override definitions from a dtsi in a dts. That 
+is the entire idea of the device tree include file which is what the 'i' 
+suggests. The idea is to use dtsi to define device nodes that are shared 
+between different platforms. Some of them are always enabled since all 
+platforms use them. Others, like the i2c bus in question, may only be 
+used on some devices and hence they are disabled. Some nodes might only 
+be templates and the platform's dts needs to complete them if they are used.
+
+In this particular case it would have been better to simply add
+
+&i2c5 {
+    status = "ok";
+};
+
+to the dts as the other definitions were already present as such in the 
+dtsi stm32mp15xx-dkx.dtsi
+
+> Would it not be better, to patch the node in the dtsi file and add the 
+> required changes there instead of adding them to the dts file 
+> essentially overwriting what was set previously? I imagine this will 
+> essentially lead to two nodes being defined with the same name, the 
+> latter just overwriting the former, is that so?
+>
+Nope, that is the idea of using the & before the device node name. All 
+of the &'s and the node's root definition will be merged by the device 
+tree compiler into the resulting device node definition. In this case 
+the i2c5 node's root definition is in stm32mp151.dtsi which is included 
+by stm32mp153.dts which is in turn included by stm32mp157.dtsi which is 
+included by stm32157d-dk1.dts. (I might be wrong with the details of the 
+chain as just browsed through it quickly but you get the idea.)
+>
+> How would one go about patching the dtsi and making sure that the 
+> patch is applied before ther file is included?
+>
+I don't recommend doing this but the example explains how to patch the 
+dts file. It works the same way for the dtsi.
+>
+>
+> Thank you all,
+> Mistyron
+>
+>
+:rjs
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#58421): https://lists.yoctoproject.org/g/yocto/message/58421
+> Mute This Topic: https://lists.yoctoproject.org/mt/94595311/3617932
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [rudolf.streif@ibeeto.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+-- 
+Rudolf J Streif
+CEO/CTO
+1.855.442.3386
+
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] patching of device tree from layer
+  2022-10-27 19:00 ` [yocto] " Rudolf J Streif
+@ 2022-10-27 21:20   ` Ron Eggler
+  0 siblings, 0 replies; 3+ messages in thread
+From: Ron Eggler @ 2022-10-27 21:20 UTC (permalink / raw)
+  To: Rudolf J Streif, yocto
+
+On 2022-10-27 12:00, Rudolf J Streif wrote:
+> Ron,
+>
+> On 10/26/22 17:59, ron.eggler@mistywest.com wrote:
+>>
+>> Hi,
+>>
+>> I'm new here and relatively new to working with Yocto (creating my 
+>> own layers anyways). I'm working on developing a SOM platform based 
+>> on Renesas RZ series of MPUs.
+>>
+> Welcome. When asking a question on a mailing list it is always 
+> advisable to put all relevant information pertaining to the question 
+> into the email and be specific about what you think the problem is. It 
+> alleviates people from having to collect additional data to understand 
+> the problem.
+
+Thanks and yes makes sense, I'll do my best!
+
+>>
+>> I've followed the guide on Digikey by Shawn Hymel to learn about 
+>> device tree patching 
+>> (https://www.digikey.ca/en/maker/projects/intro-to-embedded-linux-part-5-how-to-enable-i2c-in-the-yocto-project/6843bbf9a83c4c96888fccada1e7aedf). 
+>> I assume many of you know about it as well.
+>>
+> Not necessarily. There are so many different devices and there's 
+> probably nobody who knows them all. :)
+
+Yes, I see my statement was not clear, I referred to the tutorial but 
+you're right, nobody knows them all!
+
+>>
+>> It does a good job in describing how to add changes in a dts file. In 
+>> the example, a i2c5 node is added in the dts, overwriting what had 
+>> been defined in the original dtsi file and I'm doubting the 
+>> cleanliness of it.
+>>
+> It is good practice to override definitions from a dtsi in a dts. That 
+> is the entire idea of the device tree include file which is what the 
+> 'i' suggests. The idea is to use dtsi to define device nodes that are 
+> shared between different platforms. Some of them are always enabled 
+> since all platforms use them. Others, like the i2c bus in question, 
+> may only be used on some devices and hence they are disabled. Some 
+> nodes might only be templates and the platform's dts needs to complete 
+> them if they are used.
+>
+> In this particular case it would have been better to simply add
+>
+> &i2c5 {
+>    status = "ok";
+> };
+>
+> to the dts as the other definitions were already present as such in 
+> the dtsi stm32mp15xx-dkx.dtsi
+
+Oh yeah, that makes better sense now!
+
+>
+>
+>> Would it not be better, to patch the node in the dtsi file and add 
+>> the required changes there instead of adding them to the dts file 
+>> essentially overwriting what was set previously? I imagine this will 
+>> essentially lead to two nodes being defined with the same name, the 
+>> latter just overwriting the former, is that so?
+>>
+> Nope, that is the idea of using the & before the device node name. All 
+> of the &'s and the node's root definition will be merged by the device 
+> tree compiler into the resulting device node definition. In this case 
+> the i2c5 node's root definition is in stm32mp151.dtsi which is 
+> included by stm32mp153.dts which is in turn included by 
+> stm32mp157.dtsi which is included by stm32157d-dk1.dts. (I might be 
+> wrong with the details of the chain as just browsed through it quickly 
+> but you get the idea.)
+
+Oh okay, yeah, I get it! Thanks for the clarification
+
+>>
+>> How would one go about patching the dtsi and making sure that the 
+>> patch is applied before ther file is included?
+>>
+> I don't recommend doing this but the example explains how to patch the 
+> dts file. It works the same way for the dtsi.
+Yes, I realize now that it's a bad idea!
+>>
+>>
+>> Thank you all,
+>> Mistyron
+>>
+>>
+> :rjs
+
+I learnt a bunch from your response, Thank you!
+
+Mistyron
+
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2022-10-27 21:20 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-10-27  0:59 patching of device tree from layer ron.eggler
+2022-10-27 19:00 ` [yocto] " Rudolf J Streif
+2022-10-27 21:20   ` Ron Eggler
+

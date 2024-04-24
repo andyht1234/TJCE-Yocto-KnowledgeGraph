@@ -1,0 +1,375 @@
+* Honister broken WiFi communication
+@ 2022-01-18  9:53 Jupiter
+  2022-01-18 15:31 ` [yocto] " Rudolf Streif
+  0 siblings, 1 reply; 6+ messages in thread
+From: Jupiter @ 2022-01-18  9:53 UTC (permalink / raw)
+  To: yocto; +Cc: oe-core
+
+Hi,
+
+Has anyone successfully built a Linux image by Honister to run WiFi
+driver, connman and wpa_supplicant for WiFi interface?
+
+I could build an image by Zeus to run WiFi driver, wpa_supplicant,
+connman and dbus well, but after upgrading to Honister, the Linux
+image building was fie, but the WiFi is now broken, the WiFi failed to
+respond DHCP the WiFi could not connect to Internet, something is
+broken between wpa_supplicant and connman which setting kernel WiFi
+driver, WiFi interface and connection. I don't see any issues in
+kernel WiFi driver, connman and wpa_supplicant, something missing in
+the Linux image failing to set up the WiF network interface.
+
+Appreciate your comments.
+
+Thank you.
+
+Kind regards,
+
+- jupiter
+
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] Honister broken WiFi communication
+  2022-01-18  9:53 Honister broken WiFi communication Jupiter
+@ 2022-01-18 15:31 ` Rudolf Streif
+  2022-01-19  1:45   ` Jupiter
+  0 siblings, 1 reply; 6+ messages in thread
+From: Rudolf Streif @ 2022-01-18 15:31 UTC (permalink / raw)
+  To: JH; +Cc: yocto, oe-core
+
+[-- Attachment #1: Type: text/plain, Size: 1799 bytes --]
+
+Hi JH,
+
+On Tue, Jan 18, 2022, 01:54 JH <jupiter.hce@gmail.com> wrote:
+
+> Hi,
+>
+> Has anyone successfully built a Linux image by Honister to run WiFi
+> driver, connman and wpa_supplicant for WiFi interface?
+>
+
+Yes, I have, but with Network Manager instead of connman. WiFi works
+just fine.
+
+>
+> I could build an image by Zeus to run WiFi driver, wpa_supplicant,
+> connman and dbus well, but after upgrading to Honister, the Linux
+> image building was fie, but the WiFi is now broken, the WiFi failed to
+> respond DHCP the WiFi could not connect to Internet, something is
+> broken between wpa_supplicant and connman which setting kernel WiFi
+> driver, WiFi interface and connection. I don't see any issues in
+> kernel WiFi driver, connman and wpa_supplicant, something missing in
+> the Linux image failing to set up the WiF network interface.
+>
+
+There are a lot of pieces in the chain and it is not obvious from your
+description where it is broken.
+
+If you run ifconfig -a does your WiFi interface show up? If not there is an
+issue with the driver. Use dmesg and filter for the driver. Often a driver
+cannot load the firmware. What is your WiFi hardware?
+
+Did you install the regulatory database?
+
+What error messages are you seeing when attempting to connect to a WiFi
+network? Did you look at the connman logs?
+
+
+>
+>
+> Appreciate your comments.
+>
+> Thank you.
+>
+> Kind regards,
+>
+> - jupiter
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#55897):
+> https://lists.yoctoproject.org/g/yocto/message/55897
+> Mute This Topic: https://lists.yoctoproject.org/mt/88505893/3617932
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> rudolf.streif@ibeeto.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 3257 bytes --]
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] Honister broken WiFi communication
+  2022-01-18 15:31 ` [yocto] " Rudolf Streif
+@ 2022-01-19  1:45   ` Jupiter
+  2022-01-19  5:55     ` tomzy
+  2022-01-20  1:01     ` Rudolf J Streif
+  0 siblings, 2 replies; 6+ messages in thread
+From: Jupiter @ 2022-01-19  1:45 UTC (permalink / raw)
+  To: Rudolf Streif; +Cc: yocto, oe-core
+
+Hi Rudolf,
+
+Thanks for your response and comments.
+
+> If you run ifconfig -a does your WiFi interface show up? If not there is an
+> issue with the driver. Use dmesg and filter for the driver. Often a driver
+> cannot load the firmware. What is your WiFi hardware?
+
+Not that bad, the WiFi interfaces was fine, but it could not get dhcp
+response and IP address so an automatic private IP address 169.254 was
+assigned
+
+mlan0     Link encap:Ethernet  HWaddr D4:CA:6E:A4:E8:B4
+          inet addr:169.254.193.101  Bcast:169.254.255.255  Mask:255.255.0.0
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:2 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:56 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:1000
+          RX bytes:330 (330.0 B)  TX bytes:16392 (16.0 KiB)
+
+I could see WiFi information well, it is not a major problem, but the
+subtle issues are connman and wpa_supplicant did not set up the WiFi
+driver correctly.
+
+Connected to 34:08:04:12:b1:a2 (on mlan0)
+        SSID: JupiterIoT
+        freq: 2437
+        RX: 660 bytes (4 packets)
+        TX: 46622 bytes (129 packets)
+        signal: -57 dBm
+        rx bitrate: 1.0 MBit/s
+        tx bitrate: 72.2 MBit/s MCS 7 short GI
+
+        bss flags:      short-slot-time
+        dtim period:    1
+        beacon int:     100
+
+> Did you install the regulatory database?
+
+Did you mean to enable CONFIG_CFG80211_INTERNAL_REGDB? No, I did not
+install it in the Zeus version either so I don't see that could be an
+issue.
+
+> What error messages are you seeing when attempting to connect to a WiFi
+> network? Did you look at the connman logs?
+
+No error in connman, I don't think it is connman or wpa_supplicant
+issue, my suspicion is something missing in Honister built image to
+prevent connman and wpa_supplicant to set up the WiFi driver
+correctly.
+
+It is not the first time I have the WiFi setup trouble to get WiFi
+169.254 address, when I upgraded from Thud to Zeus, I got the exactly
+the same problem that WiFi was assigned by a 169.254 address, no dhcp
+response, at time, I was totally convinced it was connman issue, I
+spend several months to debug connman and wpa_supplicant without any
+results, then after waiting several months to pull updated Zeus again,
+that problem was disappeared miraculous, that is why I suspect the
+same problem in oe-core and bitbake in Honister as well.
+
+Are there anyone in oe-core and bitbake tested connman, wpa_supplicant
+for the current Honister branch? I can help to test and to debug it if
+more advanced people in oe-core, bitbake, kernel, WiFi driver mwifiex
+can provide me more information.
+
+Thank you.
+
+Kind regards,
+
+- jupiter
+
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: Honister broken WiFi communication
+  2022-01-19  1:45   ` Jupiter
+@ 2022-01-19  5:55     ` tomzy
+  2022-01-19  8:14       ` [yocto] " Jupiter
+  2022-01-20  1:01     ` Rudolf J Streif
+  1 sibling, 1 reply; 6+ messages in thread
+From: tomzy @ 2022-01-19  5:55 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 218 bytes --]
+
+Hi JH,
+
+Are you using custom Linux kernel / custom device tree? Maybe there is
+some issue there?
+
+Kind regards,
+Tomasz Żyjewski
+Embedded Systems Engineer
+GPG: 5C495EA3EBEECA59
+https://3mdeb.com | @3mdeb_com
+
+[-- Attachment #2: Type: text/html, Size: 297 bytes --]
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] Honister broken WiFi communication
+  2022-01-19  5:55     ` tomzy
+@ 2022-01-19  8:14       ` Jupiter
+  0 siblings, 0 replies; 6+ messages in thread
+From: Jupiter @ 2022-01-19  8:14 UTC (permalink / raw)
+  To: tomzy; +Cc: yocto
+
+Hi Tomasz,
+
+Thanks for your response.
+
+> Are you using custom Linux kernel / custom device tree? Maybe there is
+> some issue there?
+
+Yes, but the Zeus build image uses the same device tree that could run
+WiFi connection without any issues, I am comparing the same source and
+configuration between Zeus and Honister, the only difference is the
+two different OE Yocto versions.
+
+Thank you.
+
+Kind regards,
+
+- jh
+
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] Honister broken WiFi communication
+  2022-01-19  1:45   ` Jupiter
+  2022-01-19  5:55     ` tomzy
+@ 2022-01-20  1:01     ` Rudolf J Streif
+  1 sibling, 0 replies; 6+ messages in thread
+From: Rudolf J Streif @ 2022-01-20  1:01 UTC (permalink / raw)
+  To: Jupiter; +Cc: yocto, oe-core
+
+
+[-- Attachment #1.1.1: Type: text/plain, Size: 4143 bytes --]
+
+Hi JH,
+
+On 1/18/22 5:45 PM, Jupiter wrote:
+> Hi Rudolf,
+>
+> Thanks for your response and comments.
+>
+>> If you run ifconfig -a does your WiFi interface show up? If not there is an
+>> issue with the driver. Use dmesg and filter for the driver. Often a driver
+>> cannot load the firmware. What is your WiFi hardware?
+> Not that bad, the WiFi interfaces was fine, but it could not get dhcp
+> response and IP address so an automatic private IP address 169.254 was
+> assigned
+>
+> mlan0     Link encap:Ethernet  HWaddr D4:CA:6E:A4:E8:B4
+>            inet addr:169.254.193.101  Bcast:169.254.255.255  Mask:255.255.0.0
+>            UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+>            RX packets:2 errors:0 dropped:0 overruns:0 frame:0
+>            TX packets:56 errors:0 dropped:0 overruns:0 carrier:0
+>            collisions:0 txqueuelen:1000
+>            RX bytes:330 (330.0 B)  TX bytes:16392 (16.0 KiB)
+
+This would typically mean that you are actually connected to a wifi 
+network but the interface did not receive a DHCP lease for the IP 
+address. the 169.254. is local IPv4 IP address which the interface would 
+typically get if the DHCP client times out.
+
+> I could see WiFi information well, it is not a major problem, but the
+> subtle issues are connman and wpa_supplicant did not set up the WiFi
+> driver correctly.
+>
+> Connected to 34:08:04:12:b1:a2 (on mlan0)
+>          SSID: JupiterIoT
+>          freq: 2437
+>          RX: 660 bytes (4 packets)
+>          TX: 46622 bytes (129 packets)
+>          signal: -57 dBm
+>          rx bitrate: 1.0 MBit/s
+>          tx bitrate: 72.2 MBit/s MCS 7 short GI
+>
+>          bss flags:      short-slot-time
+>          dtim period:    1
+>          beacon int:     100
+
+I don't think that this is a wpa_supplicant issue. However, you can use 
+connmanctl to manually connect to a wifi network:
+
+$ connmanctl
+connmanctl> enable wifi
+connmanctl> scan wifi
+San completed for wifi
+connmanctl> services
+[service list follows]
+connmanctl> agent on
+Agent registered
+connmanctl> connect wifi_xxxxxx
+Agent RequestInput wifi_xxxxx
+    Passphrase = [ Type=psk, Requirement=mandatory ]
+Passphrase? ********
+Connected wifi_xxxxxx
+conmanctl> quit
+
+If that works the wifi authentication is OK.
+
+>> Did you install the regulatory database?
+> Did you mean to enable CONFIG_CFG80211_INTERNAL_REGDB? No, I did not
+> install it in the Zeus version either so I don't see that could be an
+> issue.
+Only a wag on my side. Should be ok since the wifi driver is working.
+>> What error messages are you seeing when attempting to connect to a WiFi
+>> network? Did you look at the connman logs?
+> No error in connman, I don't think it is connman or wpa_supplicant
+> issue, my suspicion is something missing in Honister built image to
+> prevent connman and wpa_supplicant to set up the WiFi driver
+> correctly.
+>
+> It is not the first time I have the WiFi setup trouble to get WiFi
+> 169.254 address, when I upgraded from Thud to Zeus, I got the exactly
+> the same problem that WiFi was assigned by a 169.254 address, no dhcp
+> response, at time, I was totally convinced it was connman issue, I
+> spend several months to debug connman and wpa_supplicant without any
+> results, then after waiting several months to pull updated Zeus again,
+> that problem was disappeared miraculous, that is why I suspect the
+> same problem in oe-core and bitbake in Honister as well.
+
+Well, ok then it looks like a dhcp issue. Did you attempt to set a 
+static IP to test connectivity?
+
+Eventually it could be a router issue. Maybe the router blocks unknown 
+devices?
+
+> Are there anyone in oe-core and bitbake tested connman, wpa_supplicant
+> for the current Honister branch? I can help to test and to debug it if
+> more advanced people in oe-core, bitbake, kernel, WiFi driver mwifiex
+> can provide me more information.
+Honestly, I don't think the issue is related to connman or 
+wpa_supplicant at all but on the dhcp level.
+> Thank you.
+>
+> Kind regards,
+>
+> - jupiter
+
+-- 
+Rudolf J Streif
+CEO/CTO ibeeto
++1.855.442.3386 x700
+
+
+[-- Attachment #1.1.2: OpenPGP public key --]
+[-- Type: application/pgp-keys, Size: 1717 bytes --]
+
+[-- Attachment #2: OpenPGP digital signature --]
+[-- Type: application/pgp-signature, Size: 495 bytes --]
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+end of thread, other threads:[~2022-01-20  1:01 UTC | newest]
+
+Thread overview: 6+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-01-18  9:53 Honister broken WiFi communication Jupiter
+2022-01-18 15:31 ` [yocto] " Rudolf Streif
+2022-01-19  1:45   ` Jupiter
+2022-01-19  5:55     ` tomzy
+2022-01-19  8:14       ` [yocto] " Jupiter
+2022-01-20  1:01     ` Rudolf J Streif
+

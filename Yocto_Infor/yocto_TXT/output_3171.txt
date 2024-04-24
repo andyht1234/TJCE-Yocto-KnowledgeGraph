@@ -1,0 +1,113 @@
+* #archiver Archiver not archiving sources from Mirror
+@ 2021-07-09 10:21 Seipel, Christoph
+  2021-07-09 11:11 ` [yocto] " Paul Barker
+  0 siblings, 1 reply; 2+ messages in thread
+From: Seipel, Christoph @ 2021-07-09 10:21 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2360 bytes --]
+
+Hello,
+
+I have a problem with the archiver. I want to use it to export the sources used in our image for license compliance (GPL etc.).
+We have a BSP supplier that supplies the Yocto system and the sources to build it in a mirror directory.
+
+Now, when I use the archiver (mode: original) the exported sources don't contain the sources from the mirror, but only other files like patches.
+
+To analyse this problem I put some extra logging into the archiver.bbclass to inspect the variable contents, and it seems the "local" variable where the archiver is looking for the sources to export doesn't fit with the path of the actual sources. This leads to the archiver just skipping that URL and proceeding.
+
+For example for the systemd recipe it has the variable URL="git://github.com/systemd/systemd.git;protocol=git" and therefore it decides to look at local="<builddir>/downloads/git2/github.com.systemd.systemd.git"
+But that file doesn't exist.
+I inspected the do_fetch and do_unpack logs to find that the fetcher resolves "git://github.com/systemd/systemd.git;protocol=git" with returning the corresponding file from the mirror file:///<mirrorpath>/gitshallow_github.com.systemd.systemd.git_46659f7-1_master.tar.gz<file:///%3cmirrorpath%3e/gitshallow_github.com.systemd.systemd.git_46659f7-1_master.tar.gz>
+The do_unpack task then unpacks tar -xzf <builddir>/downloads/gitshallow_github.com.systemd.systemd.git_46659f7-1_master.tar.gz
+Which is possible because there is a symlink, I guess that was created by the fetcher
+<builddir>/downloads/gitshallow_github.com.systemd.systemd.git_46659f7-1_master.tar.gz -> <mirror>/gitshallow_github.com.systemd.systemd.git_46659f7-1_master.tar.gz
+
+So the problem seems to be that the archiver expects the sources in downloads/git2 but the fetcher creates the symlink in downloads and with additional pre- and postfiexes on the filename.
+
+Sadly we are still on sumo, but at least for the archiver class there isn't any relevant change to hardknott. At least a dunfell upgrade is incoming in the next weeks.
+
+Best regards,
+
+Christoph
+_____________________________________________________
+Christoph Seipel
+
+CLAAS E-Systems GmbH
+System & Software Displays, Operator Panels & Mobile Apps
+Sommerkämpen 11
+49201 Dissen a.T.W.
+Germany
+
+Phone +49 5421 9311-8762
+Mail christoph.seipel@claas.com
+
+
+[-- Attachment #2: Type: text/html, Size: 7718 bytes --]
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+* Re: [yocto] #archiver Archiver not archiving sources from Mirror
+  2021-07-09 10:21 #archiver Archiver not archiving sources from Mirror Seipel, Christoph
+@ 2021-07-09 11:11 ` Paul Barker
+  0 siblings, 0 replies; 2+ messages in thread
+From: Paul Barker @ 2021-07-09 11:11 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2960 bytes --]
+
+On Fri, 9 Jul 2021 10:21:56 +0000
+"Seipel, Christoph" <Christoph.Seipel@claas.com> wrote:
+
+> Hello,
+> 
+> I have a problem with the archiver. I want to use it to export the sources used in our image for license compliance (GPL etc.).
+> We have a BSP supplier that supplies the Yocto system and the sources to build it in a mirror directory.
+> 
+> Now, when I use the archiver (mode: original) the exported sources don't contain the sources from the mirror, but only other files like patches.
+> 
+> To analyse this problem I put some extra logging into the archiver.bbclass to inspect the variable contents, and it seems the "local" variable where the archiver is looking for the sources to export doesn't fit with the path of the actual sources. This leads to the archiver just skipping that URL and proceeding.
+> 
+> For example for the systemd recipe it has the variable URL="git://github.com/systemd/systemd.git;protocol=git" and therefore it decides to look at local="<builddir>/downloads/git2/github.com.systemd.systemd.git"
+> But that file doesn't exist.
+> I inspected the do_fetch and do_unpack logs to find that the fetcher resolves "git://github.com/systemd/systemd.git;protocol=git" with returning the corresponding file from the mirror file:///<mirrorpath>/gitshallow_github.com.systemd.systemd.git_46659f7-1_master.tar.gz<file:///%3cmirrorpath%3e/gitshallow_github.com.systemd.systemd.git_46659f7-1_master.tar.gz>
+> The do_unpack task then unpacks tar -xzf <builddir>/downloads/gitshallow_github.com.systemd.systemd.git_46659f7-1_master.tar.gz
+> Which is possible because there is a symlink, I guess that was created by the fetcher
+> <builddir>/downloads/gitshallow_github.com.systemd.systemd.git_46659f7-1_master.tar.gz -> <mirror>/gitshallow_github.com.systemd.systemd.git_46659f7-1_master.tar.gz
+> 
+> So the problem seems to be that the archiver expects the sources in downloads/git2 but the fetcher creates the symlink in downloads and with additional pre- and postfiexes on the filename.
+> 
+> Sadly we are still on sumo, but at least for the archiver class there isn't any relevant change to hardknott. At least a dunfell upgrade is incoming in the next weeks.
+
+If the archives you've been given have names starting with
+'gitshallow_' then it's likely that the following variables were set in
+local.conf or in a distro conf file to generate them:
+
+    BB_GENERATE_MIRROR_TARBALLS = "1"
+    BB_GENERATE_SHALLOW_TARBALLS = "1"
+    BB_GIT_SHALLOW = "1"
+    
+Could you make sure those are set in your configuration? If they're not
+then the archiver may not be looking for the file names you have.
+
+If things still don't work after that you could try backporting the
+archiver class from hardknott and using the mirror archiver mode. That
+mode is written to pick up the mirror tarballs from the downloads
+directory so it should be able to handle your situation.
+
+Thanks,
+
+-- 
+Paul Barker
+https://pbarker.dev/
+
+[-- Attachment #2: OpenPGP digital signature --]
+[-- Type: application/pgp-signature, Size: 235 bytes --]
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2021-07-09 11:11 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-07-09 10:21 #archiver Archiver not archiving sources from Mirror Seipel, Christoph
+2021-07-09 11:11 ` [yocto] " Paul Barker
+

@@ -1,0 +1,88 @@
+* Can the Linux kernel reuse the barebox device tree? #kernel
+@ 2021-06-04  9:00 florian.kauer
+  2021-06-04 13:03 ` [yocto] " Bruce Ashfield
+  0 siblings, 1 reply; 3+ messages in thread
+From: florian.kauer @ 2021-06-04  9:00 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1090 bytes --]
+
+Hi,
+I made the following observation in my custom Yocto system:
+The device tree loaded by the Linux kernel is one that is only available in the barebox directory, but not available in the kernel sources. In fact, it is quite similar, but I made some changes to it in the device tree provided to the kernel. Especially the machine model that is shown during kernel boot is a string that can only be found in the compiled barebox image, but not in the dtb files (where I can find the correct machine model string) or anywhere else in the compilation results. But also other messages indicate that the wrong device tree is loaded.
+
+It was correct before, and I am not really sure what triggered that (just upgraded from zeus, but it might or might not be triggered by that) and I wouldn't expect that anyone could guess what I have done wrong without debugging my setup in depth. But, my general question is: Is there any mechanism that could explain such a behavior? Any configuration that means "extract the device tree from the bootloader" or something similar?
+
+Greetings,
+Florian
+
+[-- Attachment #2: Type: text/html, Size: 1118 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] Can the Linux kernel reuse the barebox device tree? #kernel
+  2021-06-04  9:00 Can the Linux kernel reuse the barebox device tree? #kernel florian.kauer
+@ 2021-06-04 13:03 ` Bruce Ashfield
+  2021-06-09 16:14   ` florian.kauer
+  0 siblings, 1 reply; 3+ messages in thread
+From: Bruce Ashfield @ 2021-06-04 13:03 UTC (permalink / raw)
+  To: florian.kauer; +Cc: yocto
+
+On Fri, Jun 4, 2021 at 5:00 AM <florian.kauer@koalo.de> wrote:
+>
+> Hi,
+> I made the following observation in my custom Yocto system:
+> The device tree loaded by the Linux kernel is one that is only available in the barebox directory, but not available in the kernel sources. In fact, it is quite similar, but I made some changes to it in the device tree provided to the kernel. Especially the machine model that is shown during kernel boot is a string that can only be found in the compiled barebox image, but not in the dtb files (where I can find the correct machine model string) or anywhere else in the compilation results. But also other messages indicate that the wrong device tree is loaded.
+>
+> It was correct before, and I am not really sure what triggered that (just upgraded from zeus, but it might or might not be triggered by that) and I wouldn't expect that anyone could guess what I have done wrong without debugging my setup in depth. But, my general question is: Is there any mechanism that could explain such a behavior? Any configuration that means "extract the device tree from the bootloader" or something similar?
+>
+
+In your upgrade, did the bootloader/initramfs/kernel version change ?
+The passing of the device tree to the kernel is (commonly) part of the
+bootflow, so changes to any of the components in that flow could cause
+the different device tree usage you are seeing.
+
+The bbclass and recipes involved wouldn't have been packaging up the
+barebox tree and pulling it into the kernel in zeus, so while it isn't
+impossible, it isn't likely to be in the build or packaging changes.
+
+Bruce
+
+> Greetings,
+> Florian
+> 
+>
+
+
+-- 
+- Thou shalt not follow the NULL pointer, for chaos and madness await
+thee at its end
+- "Use the force Harry" - Gandalf, Star Trek II
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: Can the Linux kernel reuse the barebox device tree? #kernel
+  2021-06-04 13:03 ` [yocto] " Bruce Ashfield
+@ 2021-06-09 16:14   ` florian.kauer
+  0 siblings, 0 replies; 3+ messages in thread
+From: florian.kauer @ 2021-06-09 16:14 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 480 bytes --]
+
+Thanks a lot for the pointers! I had a deeper look and that is apparently completely expected behavior that barebox uses the internal device tree for booting the kernel as long as global.bootm.oftree is not set.
+
+So I somehow misconfigured barebox so that global.bootm.oftree was not set. I just expected that it fails then and does not silently boot the internal device tree. Entirely my fault, but maybe someone runs into a similar problem in the future.
+
+Thanks,
+Florian
+
+[-- Attachment #2: Type: text/html, Size: 504 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2021-06-09 16:14 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-06-04  9:00 Can the Linux kernel reuse the barebox device tree? #kernel florian.kauer
+2021-06-04 13:03 ` [yocto] " Bruce Ashfield
+2021-06-09 16:14   ` florian.kauer
+

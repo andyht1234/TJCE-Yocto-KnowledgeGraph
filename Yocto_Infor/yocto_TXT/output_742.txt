@@ -1,0 +1,265 @@
+* Give access token to yocto build. (pass environment variable to bitbake)
+@ 2023-04-13 19:54 Philippe Lafontaine
+  2023-04-13 20:14 ` [yocto] " Leon Woestenberg
+                   ` (2 more replies)
+  0 siblings, 3 replies; 6+ messages in thread
+From: Philippe Lafontaine @ 2023-04-13 19:54 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 718 bytes --]
+
+Greeting,
+
+I have a recipe that fetch a pre-built binary from a build machine using an access token. Every developer will have different access token, for obvious reason. Therefore, the token cannot be hard coded in the recipe.
+
+
+
+Our current build setup uses a docker container (crops/poky). Our current solution looks like this:
+
+
+
+The host OS has an environment variable containing the access token. This token is then shared with the docker container.
+
+
+
+Once the yocto environment is source we:
+
+export ="$BB_ENV_PASSTHROUGH_ADDITIONS PRIVATE_TOKEN_GIT"
+
+where PRIVATE_TOKEN_GIT is the access token
+
+While this strategy does work. We were wondering if there was a better way of doing this.
+
+
+[-- Attachment #2: Type: text/html, Size: 2616 bytes --]
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] Give access token to yocto build. (pass environment variable to bitbake)
+  2023-04-13 19:54 Give access token to yocto build. (pass environment variable to bitbake) Philippe Lafontaine
+@ 2023-04-13 20:14 ` Leon Woestenberg
+  2023-04-13 20:16 ` Alexander Kanavin
+  2023-04-14  7:24 ` Mikko Rapeli
+  2 siblings, 0 replies; 6+ messages in thread
+From: Leon Woestenberg @ 2023-04-13 20:14 UTC (permalink / raw)
+  To: philippe; +Cc: yocto
+
+Hello Philippe,
+
+On Thu, Apr 13, 2023 at 9:54 PM Philippe Lafontaine via
+lists.yoctoproject.org <philippe=rmds.ca@lists.yoctoproject.org>
+wrote:
+
+> I have a recipe that fetch a pre-built binary from a build machine using an access token. Every developer will have different access token, for obvious reason. Therefore, the token cannot be hard coded in the recipe.
+>
+The question seems off-topic and CI/CD related, but unrelated to Yocto
+Project in general. Although you may find experience here, I would
+search on StackOverflow or the support forums on your CI/CD of choice.
+
+GitLab supports (project) group access tokens. I have used those
+instead of user access tokens in projects.
+
+> While this strategy does work. We were wondering if there was a better way of doing this.
+>
+I think recent CI/CD tools have support for secrets that are not
+exposed, also for during docker based builds.
+
+Regards,
+
+Leon.
+
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] Give access token to yocto build. (pass environment variable to bitbake)
+  2023-04-13 19:54 Give access token to yocto build. (pass environment variable to bitbake) Philippe Lafontaine
+  2023-04-13 20:14 ` [yocto] " Leon Woestenberg
+@ 2023-04-13 20:16 ` Alexander Kanavin
+  2023-04-14  7:24 ` Mikko Rapeli
+  2 siblings, 0 replies; 6+ messages in thread
+From: Alexander Kanavin @ 2023-04-13 20:16 UTC (permalink / raw)
+  To: philippe; +Cc: yocto
+
+Such access tokens are best placed into files which can be accessed
+only by processes that need them, same as private ssh keys. What
+executable is using it, specifically and with which protocol?
+
+Alex
+
+On Thu, 13 Apr 2023 at 21:54, Philippe Lafontaine via
+lists.yoctoproject.org <philippe=rmds.ca@lists.yoctoproject.org>
+wrote:
+>
+> Greeting,
+>
+> I have a recipe that fetch a pre-built binary from a build machine using an access token. Every developer will have different access token, for obvious reason. Therefore, the token cannot be hard coded in the recipe.
+>
+>
+>
+> Our current build setup uses a docker container (crops/poky). Our current solution looks like this:
+>
+>
+>
+> The host OS has an environment variable containing the access token. This token is then shared with the docker container.
+>
+>
+>
+> Once the yocto environment is source we:
+>
+> export ="$BB_ENV_PASSTHROUGH_ADDITIONS PRIVATE_TOKEN_GIT"
+>
+> where PRIVATE_TOKEN_GIT is the access token
+>
+> While this strategy does work. We were wondering if there was a better way of doing this.
+>
+>
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#59708): https://lists.yoctoproject.org/g/yocto/message/59708
+> Mute This Topic: https://lists.yoctoproject.org/mt/98248615/1686489
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] Give access token to yocto build. (pass environment variable to bitbake)
+  2023-04-13 19:54 Give access token to yocto build. (pass environment variable to bitbake) Philippe Lafontaine
+  2023-04-13 20:14 ` [yocto] " Leon Woestenberg
+  2023-04-13 20:16 ` Alexander Kanavin
+@ 2023-04-14  7:24 ` Mikko Rapeli
+  2023-04-14  7:37   ` Leon Woestenberg
+  2 siblings, 1 reply; 6+ messages in thread
+From: Mikko Rapeli @ 2023-04-14  7:24 UTC (permalink / raw)
+  To: philippe; +Cc: yocto
+
+Hi,
+
+On Thu, Apr 13, 2023 at 07:54:13PM +0000, Philippe Lafontaine via lists.yoctoproject.org wrote:
+> Greeting,
+> 
+> I have a recipe that fetch a pre-built binary from a build machine using an access token. Every developer will have different access token, for obvious reason. Therefore, the token cannot be hard coded in the recipe.
+> 
+> Our current build setup uses a docker container (crops/poky). Our current solution looks like this:
+> 
+> The host OS has an environment variable containing the access token. This token is then shared with the docker container.
+> 
+> Once the yocto environment is source we:
+> 
+> export ="$BB_ENV_PASSTHROUGH_ADDITIONS PRIVATE_TOKEN_GIT"
+> 
+> where PRIVATE_TOKEN_GIT is the access token
+> While this strategy does work. We were wondering if there was a better way of doing this.
+
+The environment variables and thus secrets are easily leaking into build
+logs so I would not use them.
+
+Instead, I would use .netrc for git and anything using curl (http
+fetcher). subversion caches passwords into ~/.subversion directory once
+the password has been given once.
+
+In CI, these can be deployed automatically using ansible etc and
+developers should setup these for their own machines.
+
+Hope this helps,
+
+-Mikko
+
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] Give access token to yocto build. (pass environment variable to bitbake)
+  2023-04-14  7:24 ` Mikko Rapeli
+@ 2023-04-14  7:37   ` Leon Woestenberg
+  2023-04-14  7:49     ` Mikko Rapeli
+  0 siblings, 1 reply; 6+ messages in thread
+From: Leon Woestenberg @ 2023-04-14  7:37 UTC (permalink / raw)
+  To: Mikko Rapeli; +Cc: philippe, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 866 bytes --]
+
+On Fri, Apr 14, 2023 at 9:24 AM Mikko Rapeli <mikko.rapeli@linaro.org>
+wrote:
+
+>
+> The environment variables and thus secrets are easily leaking into build
+> logs so I would not use them.
+>
+> Instead, I would use .netrc for git and anything using curl (http
+> fetcher). subversion caches passwords into ~/.subversion directory once
+> the password has been given once.
+>
+> In CI, these can be deployed automatically using ansible etc and
+> developers should setup these for their own machines.
+>
+> Hope this helps,
+>
+> I think this is wrong advice, we switched away from this years ago as with
+docker and CI/CD, as the security implications are easily exposable.
+There is not enough info in OP and I persist this is off-topic here, so no
+answer can be good. See:
+
+docker secret
+
+https://blog.gitguardian.com/how-to-handle-secrets-in-docker/
+
+[-- Attachment #2: Type: text/html, Size: 1393 bytes --]
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] Give access token to yocto build. (pass environment variable to bitbake)
+  2023-04-14  7:37   ` Leon Woestenberg
+@ 2023-04-14  7:49     ` Mikko Rapeli
+  0 siblings, 0 replies; 6+ messages in thread
+From: Mikko Rapeli @ 2023-04-14  7:49 UTC (permalink / raw)
+  To: Leon Woestenberg; +Cc: philippe, yocto
+
+Hi,
+
+On Fri, Apr 14, 2023 at 09:37:05AM +0200, Leon Woestenberg wrote:
+> On Fri, Apr 14, 2023 at 9:24 AM Mikko Rapeli <mikko.rapeli@linaro.org>
+> wrote:
+> 
+> >
+> > The environment variables and thus secrets are easily leaking into build
+> > logs so I would not use them.
+> >
+> > Instead, I would use .netrc for git and anything using curl (http
+> > fetcher). subversion caches passwords into ~/.subversion directory once
+> > the password has been given once.
+> >
+> > In CI, these can be deployed automatically using ansible etc and
+> > developers should setup these for their own machines.
+> >
+> > Hope this helps,
+> >
+> I think this is wrong advice, we switched away from this years ago as with
+> docker and CI/CD, as the security implications are easily exposable.
+> There is not enough info in OP and I persist this is off-topic here, so no
+> answer can be good. See:
+> 
+> docker secret
+> 
+> https://blog.gitguardian.com/how-to-handle-secrets-in-docker/
+
+Yes, with docker this is much better. Without docker options may be more
+limited and also depend heavily on IT infrastructure which in real life
+has meant .netrc for me. This is no means secure or even best practice
+but just works. ssh keys are much better, if that is an option.
+
+Cheers,
+
+-Mikko
+
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+end of thread, other threads:[~2023-04-14  7:49 UTC | newest]
+
+Thread overview: 6+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-04-13 19:54 Give access token to yocto build. (pass environment variable to bitbake) Philippe Lafontaine
+2023-04-13 20:14 ` [yocto] " Leon Woestenberg
+2023-04-13 20:16 ` Alexander Kanavin
+2023-04-14  7:24 ` Mikko Rapeli
+2023-04-14  7:37   ` Leon Woestenberg
+2023-04-14  7:49     ` Mikko Rapeli
+

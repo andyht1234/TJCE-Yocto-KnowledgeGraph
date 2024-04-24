@@ -1,0 +1,331 @@
+* QA change - reduced number of reproducibility builds tests?
+@ 2022-02-25 18:09 Richard Purdie
+  2022-02-25 18:50 ` Steve Sakoman
+  2022-02-25 21:06 ` Khem Raj
+  0 siblings, 2 replies; 7+ messages in thread
+From: Richard Purdie @ 2022-02-25 18:09 UTC (permalink / raw)
+  To: <yocto@lists.yoctoproject.org>
+  Cc: Steve Sakoman, Mittal, Anuj, Joshua Watt
+
+Hi All,
+
+As the project develops, some tests are valuable and some become less valuable
+over time.
+
+When we first started reproducible builds work, testing reproducibility heavily
+across multiple distros highlighted some unusual bugs and let us improve things.
+We therefore currently run a-full with the targets:
+
+reproducibile-centos
+reproducibile-debian
+reproducibile-fedora
+reproducibile-ubuntu
+
+I've noticed we pretty much always see the same set of failures with these
+targets now, i.e. if one fails, they all fail the same way.
+
+Those targets are heavy builds which don't reuse sstate for one of the build
+streams and hence load the autobuilder heavily.
+
+I'm thinking they've served their purpose and that a-full should go back to just
+the randomly selected reproduiclbe target.
+
+Does anyone feel we shouldn't do that?
+
+Cheers,
+
+Richard
+
+
+
+
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: QA change - reduced number of reproducibility builds tests?
+  2022-02-25 18:09 QA change - reduced number of reproducibility builds tests? Richard Purdie
+@ 2022-02-25 18:50 ` Steve Sakoman
+  2022-02-25 19:58   ` Joshua Watt
+  2022-02-25 21:06 ` Khem Raj
+  1 sibling, 1 reply; 7+ messages in thread
+From: Steve Sakoman @ 2022-02-25 18:50 UTC (permalink / raw)
+  To: Richard Purdie
+  Cc: <yocto@lists.yoctoproject.org>, Mittal, Anuj, Joshua Watt
+
+On Fri, Feb 25, 2022 at 8:09 AM Richard Purdie
+<richard.purdie@linuxfoundation.org> wrote:
+>
+> Hi All,
+>
+> As the project develops, some tests are valuable and some become less valuable
+> over time.
+>
+> When we first started reproducible builds work, testing reproducibility heavily
+> across multiple distros highlighted some unusual bugs and let us improve things.
+> We therefore currently run a-full with the targets:
+>
+> reproducibile-centos
+> reproducibile-debian
+> reproducibile-fedora
+> reproducibile-ubuntu
+>
+> I've noticed we pretty much always see the same set of failures with these
+> targets now, i.e. if one fails, they all fail the same way.
+>
+> Those targets are heavy builds which don't reuse sstate for one of the build
+> streams and hence load the autobuilder heavily.
+>
+> I'm thinking they've served their purpose and that a-full should go back to just
+> the randomly selected reproduiclbe target.
+>
+> Does anyone feel we shouldn't do that?
+
+I support this.  It has been quite some time since dunfell encountered
+a distro specific reproducibility issue.
+
+Steve
+
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: QA change - reduced number of reproducibility builds tests?
+  2022-02-25 18:50 ` Steve Sakoman
+@ 2022-02-25 19:58   ` Joshua Watt
+  2022-02-25 20:55     ` Richard Purdie
+  0 siblings, 1 reply; 7+ messages in thread
+From: Joshua Watt @ 2022-02-25 19:58 UTC (permalink / raw)
+  To: Steve Sakoman
+  Cc: Richard Purdie, <yocto@lists.yoctoproject.org>, Mittal, Anuj
+
+On Fri, Feb 25, 2022 at 12:50 PM Steve Sakoman <steve@sakoman.com> wrote:
+>
+> On Fri, Feb 25, 2022 at 8:09 AM Richard Purdie
+> <richard.purdie@linuxfoundation.org> wrote:
+> >
+> > Hi All,
+> >
+> > As the project develops, some tests are valuable and some become less valuable
+> > over time.
+> >
+> > When we first started reproducible builds work, testing reproducibility heavily
+> > across multiple distros highlighted some unusual bugs and let us improve things.
+> > We therefore currently run a-full with the targets:
+> >
+> > reproducibile-centos
+> > reproducibile-debian
+> > reproducibile-fedora
+> > reproducibile-ubuntu
+> >
+> > I've noticed we pretty much always see the same set of failures with these
+> > targets now, i.e. if one fails, they all fail the same way.
+> >
+> > Those targets are heavy builds which don't reuse sstate for one of the build
+> > streams and hence load the autobuilder heavily.
+> >
+> > I'm thinking they've served their purpose and that a-full should go back to just
+> > the randomly selected reproduiclbe target.
+> >
+> > Does anyone feel we shouldn't do that?
+>
+> I support this.  It has been quite some time since dunfell encountered
+> a distro specific reproducibility issue.
+
+I agree. I assume the change is simple enough to make that we can
+bring them back easily if we think it might be helpful is some
+scenario?
+
+Also, just to clarify, those workers will still contribute to the
+initial sstate, so they will still help find cross-host reproducible
+problems, they just might not find it themselves?
+
+>
+> Steve
+
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: QA change - reduced number of reproducibility builds tests?
+  2022-02-25 19:58   ` Joshua Watt
+@ 2022-02-25 20:55     ` Richard Purdie
+  2022-02-25 21:00       ` [yocto] " Alexander Kanavin
+  0 siblings, 1 reply; 7+ messages in thread
+From: Richard Purdie @ 2022-02-25 20:55 UTC (permalink / raw)
+  To: Joshua Watt, Steve Sakoman
+  Cc: <yocto@lists.yoctoproject.org>, Mittal, Anuj
+
+On Fri, 2022-02-25 at 13:58 -0600, Joshua Watt wrote:
+> On Fri, Feb 25, 2022 at 12:50 PM Steve Sakoman <steve@sakoman.com> wrote:
+> > 
+> > On Fri, Feb 25, 2022 at 8:09 AM Richard Purdie
+> > <richard.purdie@linuxfoundation.org> wrote:
+> > > 
+> > > Hi All,
+> > > 
+> > > As the project develops, some tests are valuable and some become less valuable
+> > > over time.
+> > > 
+> > > When we first started reproducible builds work, testing reproducibility heavily
+> > > across multiple distros highlighted some unusual bugs and let us improve things.
+> > > We therefore currently run a-full with the targets:
+> > > 
+> > > reproducibile-centos
+> > > reproducibile-debian
+> > > reproducibile-fedora
+> > > reproducibile-ubuntu
+> > > 
+> > > I've noticed we pretty much always see the same set of failures with these
+> > > targets now, i.e. if one fails, they all fail the same way.
+> > > 
+> > > Those targets are heavy builds which don't reuse sstate for one of the build
+> > > streams and hence load the autobuilder heavily.
+> > > 
+> > > I'm thinking they've served their purpose and that a-full should go back to just
+> > > the randomly selected reproduiclbe target.
+> > > 
+> > > Does anyone feel we shouldn't do that?
+> > 
+> > I support this.  It has been quite some time since dunfell encountered
+> > a distro specific reproducibility issue.
+> 
+> I agree. I assume the change is simple enough to make that we can
+> bring them back easily if we think it might be helpful is some
+> scenario?
+
+Yes, I'll leave the targets available, we'd just run them manually or re-enable
+them but I'd take them off a-full for now.
+
+> Also, just to clarify, those workers will still contribute to the
+> initial sstate, so they will still help find cross-host reproducible
+> problems, they just might not find it themselves?
+
+Correct, yes.
+
+Cheers,
+
+Richard
+
+
+
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] QA change - reduced number of reproducibility builds tests?
+  2022-02-25 20:55     ` Richard Purdie
+@ 2022-02-25 21:00       ` Alexander Kanavin
+  2022-02-25 21:50         ` Richard Purdie
+  0 siblings, 1 reply; 7+ messages in thread
+From: Alexander Kanavin @ 2022-02-25 21:00 UTC (permalink / raw)
+  To: Richard Purdie
+  Cc: Joshua Watt, Steve Sakoman, <yocto@lists.yoctoproject.org>,
+	Mittal, Anuj
+
+On Fri, 25 Feb 2022 at 21:55, Richard Purdie
+<richard.purdie@linuxfoundation.org> wrote:
+> Yes, I'll leave the targets available, we'd just run them manually or re-enable
+> them but I'd take them off a-full for now.
+
+With this change, what are the remaining differences between a-full and a-quick?
+
+Alex
+
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] QA change - reduced number of reproducibility builds tests?
+  2022-02-25 18:09 QA change - reduced number of reproducibility builds tests? Richard Purdie
+  2022-02-25 18:50 ` Steve Sakoman
+@ 2022-02-25 21:06 ` Khem Raj
+  1 sibling, 0 replies; 7+ messages in thread
+From: Khem Raj @ 2022-02-25 21:06 UTC (permalink / raw)
+  To: Richard Purdie
+  Cc: <yocto@lists.yoctoproject.org>,
+	Steve Sakoman, Mittal, Anuj, Joshua Watt
+
+On Fri, Feb 25, 2022 at 10:10 AM Richard Purdie
+<richard.purdie@linuxfoundation.org> wrote:
+>
+> Hi All,
+>
+> As the project develops, some tests are valuable and some become less valuable
+> over time.
+>
+> When we first started reproducible builds work, testing reproducibility heavily
+> across multiple distros highlighted some unusual bugs and let us improve things.
+> We therefore currently run a-full with the targets:
+>
+> reproducibile-centos
+> reproducibile-debian
+> reproducibile-fedora
+> reproducibile-ubuntu
+>
+> I've noticed we pretty much always see the same set of failures with these
+> targets now, i.e. if one fails, they all fail the same way.
+>
+> Those targets are heavy builds which don't reuse sstate for one of the build
+> streams and hence load the autobuilder heavily.
+>
+> I'm thinking they've served their purpose and that a-full should go back to just
+> the randomly selected reproduiclbe target.
+>
+> Does anyone feel we shouldn't do that?
+
++1
+
+
+>
+> Cheers,
+>
+> Richard
+>
+>
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> You automatically follow any topics you start or reply to.
+> View/Reply Online (#56284): https://lists.yoctoproject.org/g/yocto/message/56284
+> Mute This Topic: https://lists.yoctoproject.org/mt/89394327/1997914
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [raj.khem@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] QA change - reduced number of reproducibility builds tests?
+  2022-02-25 21:00       ` [yocto] " Alexander Kanavin
+@ 2022-02-25 21:50         ` Richard Purdie
+  0 siblings, 0 replies; 7+ messages in thread
+From: Richard Purdie @ 2022-02-25 21:50 UTC (permalink / raw)
+  To: Alexander Kanavin
+  Cc: Joshua Watt, Steve Sakoman, <yocto@lists.yoctoproject.org>,
+	Mittal, Anuj
+
+On Fri, 2022-02-25 at 22:00 +0100, Alexander Kanavin wrote:
+> On Fri, 25 Feb 2022 at 21:55, Richard Purdie
+> <richard.purdie@linuxfoundation.org> wrote:
+> > Yes, I'll leave the targets available, we'd just run them manually or re-enable
+> > them but I'd take them off a-full for now.
+> 
+> With this change, what are the remaining differences between a-full and a-quick?
+
+There is quite a bit of difference. oe-selftest on multiple distros vs a single
+one. It triggers several more minor builds (e.g. edrouter-alt, qemux86-world-
+alt, ltp targets), runs full ptests rather than ptest-fast, some of the other
+layers  and has the toolchain testing too.
+
+Cheers,
+
+Richard
+
+
+
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+end of thread, other threads:[~2022-02-25 21:50 UTC | newest]
+
+Thread overview: 7+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-02-25 18:09 QA change - reduced number of reproducibility builds tests? Richard Purdie
+2022-02-25 18:50 ` Steve Sakoman
+2022-02-25 19:58   ` Joshua Watt
+2022-02-25 20:55     ` Richard Purdie
+2022-02-25 21:00       ` [yocto] " Alexander Kanavin
+2022-02-25 21:50         ` Richard Purdie
+2022-02-25 21:06 ` Khem Raj
+

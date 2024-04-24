@@ -1,0 +1,176 @@
+* Re: [yocto] Help and ideas wanted - error during do_package
+       [not found] <f792c8b2-eb08-b444-3548-3280f06e4260@berginkonsult.se>
+@ 2022-09-20 22:11 ` Richard Purdie
+       [not found]   ` <9345a5a5-51af-263f-2c87-4f72dfd710e5@berginkonsult.se>
+  0 siblings, 1 reply; 2+ messages in thread
+From: Richard Purdie @ 2022-09-20 22:11 UTC (permalink / raw)
+  To: Peter Bergin, yocto
+
+On Tue, 2022-09-20 at 23:05 +0200, Peter Bergin wrote:
+> Hi,
+> 
+> I'm working on a recipe for libtraceevent 
+> (https://git.kernel.org/pub/scm/libs/libtrace/libtraceevent.git) that is 
+> needed for newer trace-cmd. I'm confused about an error I get during 
+> do_package that I want some help with.
+> 
+> File: '<snip>/sources/poky/meta/lib/oe/sstatesig.py', lineno: 587, 
+> function: process
+>       0583:                    else:
+>       0584:                        add_perm(stat.S_IXOTH, 'x')
+>       0585:
+>       0586:                    try:
+>   *** 0587:                        update_hash(" %10s" % 
+> pwd.getpwuid(s.st_uid).pw_name)
+>       0588:                        update_hash(" %10s" % 
+> grp.getgrgid(s.st_gid).gr_name)
+>       0589:                    except KeyError as e:
+>       0590:                        bb.warn("KeyError in %s" % path)
+>       0591:                        msg = ("KeyError: %s\nPath %s is 
+> owned by uid %d, gid %d, which doesn't match "
+> Exception: Exception: KeyError: 'getpwuid(): uid not found: 1000'
+> Path ./package/usr/lib/libtraceevent.a is owned by uid 1000, gid 1004, 
+> which doesn't match any user/group on target. This may be due to host 
+> contamination.
+> 
+> ERROR: Logfile of failure stored in: 
+> <snip>/build/<machine>/tmp/work/cortexa53-crypto-poky-linux/libtraceevent/1.6.2-r0/temp/log.do_package.3574262
+> ERROR: Task 
+> (<snip>/sources/meta-openembedded/meta-oe/recipes-kernel/trace-cmd/libtraceevent_1.6.2.bb:do_package) 
+> failed with exit code '1'
+> 
+> What happens is that during do_package the directory ${WORKDIR}/package 
+> is moved to ${WORKDIR}/sstate-build-package and the sstate is 
+> calculated. In that sequence in sstatesig.py the owner of the files are 
+> checked and used in the hash calculations. By adding debug prints I have 
+> seen that in normal case the s.st_uid in the code above evaluates to 0 
+> for the files and directories. When looking in the file system my user 
+> (1000/1004) owns them but I guess PSEUDO is involved here to fake root? 
+> For some reason when checking the libraries build by libtraceevent in 
+> ./usr/lib/ the files reports to be owned by uid 1000 and the exection 
+> above is raised. It is valid for ./usr/lib/libtraceevent.a and also 
+> other files in the ./usr/lib directory. Before the files in ./usr/lib is 
+> checked files from /usr/include has been checked for libtraceevent and 
+> they have s.st_uid=0.
+> 
+> I've spent some time trying to understand this. Give up now and try this 
+> forum if I can get some ideas. I share the recipe below.
+
+Have you tried putting a:
+
+chown root.root ${D}<files>
+
+into do_install and checking if you force the ownership, whether that
+helps?
+
+Cheers,
+
+Richard
+
+
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+* Re: [yocto] Help and ideas wanted - error during do_package
+       [not found]   ` <9345a5a5-51af-263f-2c87-4f72dfd710e5@berginkonsult.se>
+@ 2022-09-21  8:15     ` Richard Purdie
+  0 siblings, 0 replies; 2+ messages in thread
+From: Richard Purdie @ 2022-09-21  8:15 UTC (permalink / raw)
+  To: Peter Bergin, yocto
+
+On Wed, 2022-09-21 at 09:13 +0200, Peter Bergin wrote:
+> Hi Richard,
+> 
+> On 2022-09-21 00:11, Richard Purdie wrote:
+> > On Tue, 2022-09-20 at 23:05 +0200, Peter Bergin wrote:
+> > > Hi,
+> > > 
+> > > I'm working on a recipe for libtraceevent
+> > > (https://git.kernel.org/pub/scm/libs/libtrace/libtraceevent.git) that is
+> > > needed for newer trace-cmd. I'm confused about an error I get during
+> > > do_package that I want some help with.
+> > > 
+> > > File: '<snip>/sources/poky/meta/lib/oe/sstatesig.py', lineno: 587,
+> > > function: process
+> > >        0583:                    else:
+> > >        0584:                        add_perm(stat.S_IXOTH, 'x')
+> > >        0585:
+> > >        0586:                    try:
+> > >    *** 0587:                        update_hash(" %10s" %
+> > > pwd.getpwuid(s.st_uid).pw_name)
+> > >        0588:                        update_hash(" %10s" %
+> > > grp.getgrgid(s.st_gid).gr_name)
+> > >        0589:                    except KeyError as e:
+> > >        0590:                        bb.warn("KeyError in %s" % path)
+> > >        0591:                        msg = ("KeyError: %s\nPath %s is
+> > > owned by uid %d, gid %d, which doesn't match "
+> > > Exception: Exception: KeyError: 'getpwuid(): uid not found: 1000'
+> > > Path ./package/usr/lib/libtraceevent.a is owned by uid 1000, gid 1004,
+> > > which doesn't match any user/group on target. This may be due to host
+> > > contamination.
+> > > 
+> > > ERROR: Logfile of failure stored in:
+> > > <snip>/build/<machine>/tmp/work/cortexa53-crypto-poky-linux/libtraceevent/1.6.2-r0/temp/log.do_package.3574262
+> > > ERROR: Task
+> > > (<snip>/sources/meta-openembedded/meta-oe/recipes-kernel/trace-cmd/libtraceevent_1.6.2.bb:do_package)
+> > > failed with exit code '1'
+> > > 
+> > > What happens is that during do_package the directory ${WORKDIR}/package
+> > > is moved to ${WORKDIR}/sstate-build-package and the sstate is
+> > > calculated. In that sequence in sstatesig.py the owner of the files are
+> > > checked and used in the hash calculations. By adding debug prints I have
+> > > seen that in normal case the s.st_uid in the code above evaluates to 0
+> > > for the files and directories. When looking in the file system my user
+> > > (1000/1004) owns them but I guess PSEUDO is involved here to fake root?
+> > > For some reason when checking the libraries build by libtraceevent in
+> > > ./usr/lib/ the files reports to be owned by uid 1000 and the exection
+> > > above is raised. It is valid for ./usr/lib/libtraceevent.a and also
+> > > other files in the ./usr/lib directory. Before the files in ./usr/lib is
+> > > checked files from /usr/include has been checked for libtraceevent and
+> > > they have s.st_uid=0.
+> > > 
+> > > I've spent some time trying to understand this. Give up now and try this
+> > > forum if I can get some ideas. I share the recipe below.
+> > Have you tried putting a:
+> > 
+> > chown root.root ${D}<files>
+> > 
+> > into do_install and checking if you force the ownership, whether that
+> > helps?
+> 
+> It helped to add 'chown -R root.root ${D}${libdir}'. Thanks!
+> 
+> But curios to understand why. Anyway when looking into ${D} after I 
+> added chown the files is owned by the build user. I guess this is some 
+> pseudo function to have additional permission somewhere? Is is easy to 
+> explain? And normally I have a feeling that I don't need this, why is 
+> this package special?
+
+If you place a file into ${D} with something like cp, it doesn't have
+specific ownership information set. Recipes which use cp to install
+files usually have chown/chgrp calls to change the build user to root
+or other appropriate ownership.
+
+For this reason, most recipes use "install" which handles this behind
+the scenes for many cases.
+
+I'd guess the Makefile in this case uses cp rather than install.
+
+Cheers,
+
+Richard
+
+
+
+
+
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2022-09-21  8:15 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+     [not found] <f792c8b2-eb08-b444-3548-3280f06e4260@berginkonsult.se>
+2022-09-20 22:11 ` [yocto] Help and ideas wanted - error during do_package Richard Purdie
+     [not found]   ` <9345a5a5-51af-263f-2c87-4f72dfd710e5@berginkonsult.se>
+2022-09-21  8:15     ` Richard Purdie
+

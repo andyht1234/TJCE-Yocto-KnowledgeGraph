@@ -1,0 +1,338 @@
+* Setting BUILDNAME to a string broke in 3.1.12
+@ 2021-12-06 16:40 Henrik Riomar
+  2021-12-06 17:29 ` [yocto] " Daniel Gomez
+  2021-12-07  0:27 ` Steve Sakoman
+  0 siblings, 2 replies; 6+ messages in thread
+From: Henrik Riomar @ 2021-12-06 16:40 UTC (permalink / raw)
+  To: yocto
+
+Hi,
+
+We set the BUILDNAME (via local.conf) variable to the output of "git
+describe --long --always" so this info ends up in /etc/version instead
+of a date. (i.e to know the exact source version of the code
+deployed on a target)
+
+This has worked fine for us up until 3.1.12, but now we just get a
+date (201803...) in /etc/version.
+
+Note that since switching to Dunfell we were forced to set
+BUILD_REPRODUCIBLE_BINARIES to 0, so the build system would not "mess
+up" /etc/version, but not even that helps now.
+
+What's the official way to get something more useful than a date (in
+the long past) in /etc/version?
+
+Thanks,
+ Henrik
+
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] Setting BUILDNAME to a string broke in 3.1.12
+  2021-12-06 16:40 Setting BUILDNAME to a string broke in 3.1.12 Henrik Riomar
+@ 2021-12-06 17:29 ` Daniel Gomez
+  2021-12-07  0:27 ` Steve Sakoman
+  1 sibling, 0 replies; 6+ messages in thread
+From: Daniel Gomez @ 2021-12-06 17:29 UTC (permalink / raw)
+  To: Henrik Riomar; +Cc: yocto
+
+Hi,
+
+On Mon, 6 Dec 2021 at 17:40, Henrik Riomar <henrik.riomar@gmail.com> wrote:
+>
+> Hi,
+>
+> We set the BUILDNAME (via local.conf) variable to the output of "git
+> describe --long --always" so this info ends up in /etc/version instead
+> of a date. (i.e to know the exact source version of the code
+> deployed on a target)
+>
+> This has worked fine for us up until 3.1.12, but now we just get a
+> date (201803...) in /etc/version.
+>
+> Note that since switching to Dunfell we were forced to set
+> BUILD_REPRODUCIBLE_BINARIES to 0, so the build system would not "mess
+> up" /etc/version, but not even that helps now.
+>
+> What's the official way to get something more useful than a date (in
+> the long past) in /etc/version?
+We use build image-buildinfo class:
+https://www.yoctoproject.org/docs/current/mega-manual/mega-manual.html#ref-classes-image-buildinfo
+
+Just add INHERIT += "image-buildinfo" to your local.conf to get the build info.
+
+Daniel
+
+>
+> Thanks,
+>  Henrik
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#55484): https://lists.yoctoproject.org/g/yocto/message/55484
+> Mute This Topic: https://lists.yoctoproject.org/mt/87544009/1985121
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [daniel@qtec.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] Setting BUILDNAME to a string broke in 3.1.12
+  2021-12-06 16:40 Setting BUILDNAME to a string broke in 3.1.12 Henrik Riomar
+  2021-12-06 17:29 ` [yocto] " Daniel Gomez
+@ 2021-12-07  0:27 ` Steve Sakoman
+  2021-12-07  0:34   ` Richard Purdie
+  1 sibling, 1 reply; 6+ messages in thread
+From: Steve Sakoman @ 2021-12-07  0:27 UTC (permalink / raw)
+  To: Henrik Riomar; +Cc: yocto, Richard Purdie
+
+On Mon, Dec 6, 2021 at 6:40 AM Henrik Riomar <henrik.riomar@gmail.com> wrote:
+>
+> Hi,
+>
+> We set the BUILDNAME (via local.conf) variable to the output of "git
+> describe --long --always" so this info ends up in /etc/version instead
+> of a date. (i.e to know the exact source version of the code
+> deployed on a target)
+>
+> This has worked fine for us up until 3.1.12, but now we just get a
+> date (201803...) in /etc/version.
+
+After doing a bit of bisecting it appears that this commit is the culprit:
+
+reproducible_build: Remove BUILD_REPRODUCIBLE_BINARIES checking
+https://git.yoctoproject.org/poky/commit/?h=dunfell&id=0d6ebaf8ff3232248ebf0e859cd09aefaee54a8a
+
+Since this was cherry-picked from master to fix some reproducibililty
+errors I suspected that the issue might also exist in the master
+branch.
+
+A quick test with:
+
+BUILD_REPRODUCIBLE_BINARIES = "0"
+BUILDNAME = "my custom name"
+
+added to local.conf confirmed that /etc/version was indeed
+"20180309123456" instead of the expected "my custom name"
+
+I'm out of time to work on this today, but perhaps Richard might have
+some ideas on how to address this.
+
+Steve
+
+
+
+>
+> Note that since switching to Dunfell we were forced to set
+> BUILD_REPRODUCIBLE_BINARIES to 0, so the build system would not "mess
+> up" /etc/version, but not even that helps now.
+>
+> What's the official way to get something more useful than a date (in
+> the long past) in /etc/version?
+>
+> Thanks,
+>  Henrik
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#55484): https://lists.yoctoproject.org/g/yocto/message/55484
+> Mute This Topic: https://lists.yoctoproject.org/mt/87544009/3620601
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [steve@sakoman.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] Setting BUILDNAME to a string broke in 3.1.12
+  2021-12-07  0:27 ` Steve Sakoman
+@ 2021-12-07  0:34   ` Richard Purdie
+  2021-12-07 10:21     ` Henrik Riomar
+  0 siblings, 1 reply; 6+ messages in thread
+From: Richard Purdie @ 2021-12-07  0:34 UTC (permalink / raw)
+  To: Steve Sakoman, Henrik Riomar; +Cc: yocto
+
+On Mon, 2021-12-06 at 14:27 -1000, Steve Sakoman wrote:
+> On Mon, Dec 6, 2021 at 6:40 AM Henrik Riomar <henrik.riomar@gmail.com> wrote:
+> > 
+> > Hi,
+> > 
+> > We set the BUILDNAME (via local.conf) variable to the output of "git
+> > describe --long --always" so this info ends up in /etc/version instead
+> > of a date. (i.e to know the exact source version of the code
+> > deployed on a target)
+> > 
+> > This has worked fine for us up until 3.1.12, but now we just get a
+> > date (201803...) in /etc/version.
+> 
+> After doing a bit of bisecting it appears that this commit is the culprit:
+> 
+> reproducible_build: Remove BUILD_REPRODUCIBLE_BINARIES checking
+> https://git.yoctoproject.org/poky/commit/?h=dunfell&id=0d6ebaf8ff3232248ebf0e859cd09aefaee54a8a
+> 
+> Since this was cherry-picked from master to fix some reproducibililty
+> errors I suspected that the issue might also exist in the master
+> branch.
+> 
+> A quick test with:
+> 
+> BUILD_REPRODUCIBLE_BINARIES = "0"
+> BUILDNAME = "my custom name"
+> 
+> added to local.conf confirmed that /etc/version was indeed
+> "20180309123456" instead of the expected "my custom name"
+> 
+> I'm out of time to work on this today, but perhaps Richard might have
+> some ideas on how to address this.
+
+rootfs-postcommands.bbclass says:
+
+# Perform any additional adjustments needed to make rootf binary reproducible
+rootfs_reproducible () {
+        if [ "${REPRODUCIBLE_TIMESTAMP_ROOTFS}" != "" ]; then
+                # Convert UTC into %4Y%2m%2d%2H%2M%2S
+                sformatted=`date -u -d @${REPRODUCIBLE_TIMESTAMP_ROOTFS} +%4Y%2m%2d%2H%2M%2S`
+                echo $sformatted > ${IMAGE_ROOTFS}/etc/version
+                bbnote "rootfs_reproducible: set /etc/version to $sformatted"
+
+                if [ -d ${IMAGE_ROOTFS}${sysconfdir}/gconf ]; then
+                        find ${IMAGE_ROOTFS}${sysconfdir}/gconf -name '%gconf.xml' -print0 | xargs -0r \
+                        sed -i -e 's@\bmtime="[0-9][0-9]*"@mtime="'${REPRODUCIBLE_TIMESTAMP_ROOTFS}'"@g'
+                fi
+        fi
+}
+
+so I'd try setting REPRODUCIBLE_TIMESTAMP_ROOTFS to "". I suspect the change
+above started setting that to some value incidentally.
+
+Cheers,
+
+Richard
+
+
+
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] Setting BUILDNAME to a string broke in 3.1.12
+  2021-12-07  0:34   ` Richard Purdie
+@ 2021-12-07 10:21     ` Henrik Riomar
+  2021-12-07 15:13       ` Steve Sakoman
+  0 siblings, 1 reply; 6+ messages in thread
+From: Henrik Riomar @ 2021-12-07 10:21 UTC (permalink / raw)
+  To: Richard Purdie; +Cc: Steve Sakoman, yocto
+
+Hi
+
+On Tue, Dec 7, 2021 at 1:34 AM Richard Purdie
+<richard.purdie@linuxfoundation.org> wrote:
+
+> # Perform any additional adjustments needed to make rootf binary reproducible
+> rootfs_reproducible () {
+>         if [ "${REPRODUCIBLE_TIMESTAMP_ROOTFS}" != "" ]; then
+>                 # Convert UTC into %4Y%2m%2d%2H%2M%2S
+>                 sformatted=`date -u -d @${REPRODUCIBLE_TIMESTAMP_ROOTFS} +%4Y%2m%2d%2H%2M%2S`
+>                 echo $sformatted > ${IMAGE_ROOTFS}/etc/version
+>                 bbnote "rootfs_reproducible: set /etc/version to $sformatted"
+>
+>                 if [ -d ${IMAGE_ROOTFS}${sysconfdir}/gconf ]; then
+>                         find ${IMAGE_ROOTFS}${sysconfdir}/gconf -name '%gconf.xml' -print0 | xargs -0r \
+>                         sed -i -e 's@\bmtime="[0-9][0-9]*"@mtime="'${REPRODUCIBLE_TIMESTAMP_ROOTFS}'"@g'
+>                 fi
+>         fi
+> }
+>
+> so I'd try setting REPRODUCIBLE_TIMESTAMP_ROOTFS to "". I suspect the change
+> above started setting that to some value incidentally.
+
+confirmed by commenting out the echo above that that "solves the
+issue", so it's in fact this code that is now wrongfully triggered.
+
+/ Henrik
+
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] Setting BUILDNAME to a string broke in 3.1.12
+  2021-12-07 10:21     ` Henrik Riomar
+@ 2021-12-07 15:13       ` Steve Sakoman
+  0 siblings, 0 replies; 6+ messages in thread
+From: Steve Sakoman @ 2021-12-07 15:13 UTC (permalink / raw)
+  To: Henrik Riomar; +Cc: Richard Purdie, yocto, Mark Hatle
+
+On Tue, Dec 7, 2021 at 12:21 AM Henrik Riomar <henrik.riomar@gmail.com> wrote:
+>
+> Hi
+>
+> On Tue, Dec 7, 2021 at 1:34 AM Richard Purdie
+> <richard.purdie@linuxfoundation.org> wrote:
+>
+> > # Perform any additional adjustments needed to make rootf binary reproducible
+> > rootfs_reproducible () {
+> >         if [ "${REPRODUCIBLE_TIMESTAMP_ROOTFS}" != "" ]; then
+> >                 # Convert UTC into %4Y%2m%2d%2H%2M%2S
+> >                 sformatted=`date -u -d @${REPRODUCIBLE_TIMESTAMP_ROOTFS} +%4Y%2m%2d%2H%2M%2S`
+> >                 echo $sformatted > ${IMAGE_ROOTFS}/etc/version
+> >                 bbnote "rootfs_reproducible: set /etc/version to $sformatted"
+> >
+> >                 if [ -d ${IMAGE_ROOTFS}${sysconfdir}/gconf ]; then
+> >                         find ${IMAGE_ROOTFS}${sysconfdir}/gconf -name '%gconf.xml' -print0 | xargs -0r \
+> >                         sed -i -e 's@\bmtime="[0-9][0-9]*"@mtime="'${REPRODUCIBLE_TIMESTAMP_ROOTFS}'"@g'
+> >                 fi
+> >         fi
+> > }
+> >
+> > so I'd try setting REPRODUCIBLE_TIMESTAMP_ROOTFS to "". I suspect the change
+> > above started setting that to some value incidentally.
+>
+> confirmed by commenting out the echo above that that "solves the
+> issue", so it's in fact this code that is now wrongfully triggered.
+
+I think Richard was suggesting that you add
+REPRODUCIBLE_TIMESTAMP_ROOTFS to "" to your local.conf.
+
+I did so and confirmed that /etc/version now has BUILDNAME for its
+contents as expected.
+
+Richard is correct that the patch was setting
+REPRODUCIBLE_TIMESTAMP_ROOTFS incidentally.  This part of Mark's patch
+seems to be the cause:
+
+-inherit ${@oe.utils.ifelse(d.getVar('BUILD_REPRODUCIBLE_BINARIES') ==
+'1', 'reproducible_build_simple', '')}
++inherit reproducible_build_simple
+
+And reproducible_build_simple does:
+
+BUILD_REPRODUCIBLE_BINARIES = "1"
+
+export PYTHONHASHSEED = "0"
+export PERL_HASH_SEED = "0"
+export SOURCE_DATE_EPOCH ??= "1520598896"
+
+REPRODUCIBLE_TIMESTAMP_ROOTFS ??= "1520598896"
+
+So it is now overwriting what you've set in local.conf for
+BUILD_REPRODUCIBLE_BINARIES. And if you look at your rootfs, you'll
+probably see that all of the files are dated March 2019.
+
+Master branch has restructured the code, but retained this behavior.
+
+I'm not sure what the right answer is for dealing with the BUILDNAME
+issue.  Richard and Mark understand the reproducible build code far
+better than I,  perhaps they can offer an opinion on what to do here.
+
+Steve
+
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+end of thread, other threads:[~2021-12-07 15:13 UTC | newest]
+
+Thread overview: 6+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-12-06 16:40 Setting BUILDNAME to a string broke in 3.1.12 Henrik Riomar
+2021-12-06 17:29 ` [yocto] " Daniel Gomez
+2021-12-07  0:27 ` Steve Sakoman
+2021-12-07  0:34   ` Richard Purdie
+2021-12-07 10:21     ` Henrik Riomar
+2021-12-07 15:13       ` Steve Sakoman
+

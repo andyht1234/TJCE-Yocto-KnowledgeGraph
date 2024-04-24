@@ -1,0 +1,122 @@
+* Setting the nodatacow flag on a BTRFS directory
+@ 2023-05-26 15:23 James Puderer
+  2023-06-05 10:29 ` [yocto] " Ross Burton
+  0 siblings, 1 reply; 3+ messages in thread
+From: James Puderer @ 2023-05-26 15:23 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 538 bytes --]
+
+Hello all,
+
+I'm trying to figure out how to set the `nodatacow` flag on a directory in
+a BTRFS image at build time.  Normally this is done by running 'chattr +c
+<dir>'.  Unfortunately, this doesn't seem to be something supported by
+fakeroot/pseudo.  I would really like to avoid doing it at runtime, or
+mounting the filesystem in loopback mode (requires root).
+
+This seems like something that Yocto *should* be able to do.  Am I missing
+something?  If not, what would be the correct place to implement something
+like this?
+
+Thanks,
+James
+
+[-- Attachment #2: Type: text/html, Size: 612 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] Setting the nodatacow flag on a BTRFS directory
+  2023-05-26 15:23 Setting the nodatacow flag on a BTRFS directory James Puderer
+@ 2023-06-05 10:29 ` Ross Burton
+  2023-06-05 20:57   ` James Puderer
+  0 siblings, 1 reply; 3+ messages in thread
+From: Ross Burton @ 2023-06-05 10:29 UTC (permalink / raw)
+  To: jpuderer; +Cc: yocto
+
+On 26 May 2023, at 16:23, James Puderer via lists.yoctoproject.org <jpuderer=littlebox.ca@lists.yoctoproject.org> wrote:
+> 
+> Hello all,
+> 
+> I'm trying to figure out how to set the `nodatacow` flag on a directory in a BTRFS image at build time.  Normally this is done by running 'chattr +c <dir>'.  Unfortunately, this doesn't seem to be something supported by fakeroot/pseudo.  I would really like to avoid doing it at runtime, or mounting the filesystem in loopback mode (requires root).
+> 
+> This seems like something that Yocto *should* be able to do.  Am I missing something?  If not, what would be the correct place to implement something like this?
+
+When and how are you trying to do this?  If it’s at rootfs time then the rootfs isn’t yet in the target btrfs format but simply a directory on in your build tree, and you’ll need to test that the attrs survive the transition from a directory to a btrfs image.
+
+Ross
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] Setting the nodatacow flag on a BTRFS directory
+  2023-06-05 10:29 ` [yocto] " Ross Burton
+@ 2023-06-05 20:57   ` James Puderer
+  0 siblings, 0 replies; 3+ messages in thread
+From: James Puderer @ 2023-06-05 20:57 UTC (permalink / raw)
+  To: Ross Burton; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2235 bytes --]
+
+On Mon, Jun 5, 2023 at 4:30 AM Ross Burton <Ross.Burton@arm.com> wrote:
+
+> On 26 May 2023, at 16:23, James Puderer via lists.yoctoproject.org
+> <jpuderer=littlebox.ca@lists.yoctoproject.org> wrote:
+> >
+> > Hello all,
+> >
+> > I'm trying to figure out how to set the `nodatacow` flag on a directory
+> in a BTRFS image at build time.  Normally this is done by running 'chattr
+> +c <dir>'.  Unfortunately, this doesn't seem to be something supported by
+> fakeroot/pseudo.  I would really like to avoid doing it at runtime, or
+> mounting the filesystem in loopback mode (requires root).
+> >
+> > This seems like something that Yocto *should* be able to do.  Am I
+> missing something?  If not, what would be the correct place to implement
+> something like this?
+>
+> When and how are you trying to do this?  If it’s at rootfs time then the
+> rootfs isn’t yet in the target btrfs format but simply a directory on in
+> your build tree, and you’ll need to test that the attrs survive the
+> transition from a directory to a btrfs image.
+>
+
+Right, I'm *trying* doing this at image build time.  I've tried doing it by
+adding file named base-files_%.bbappend to one of my layers:
+
+DEPENDS:append = " e2fsprogs-native"
+
+do_install:append() {
+    # Disable COW on journal
+    mkdir -p ${D}${localstatedir}/log/journal
+    chattr.e2fsprogs +C ${D}/var/log/journal
+}
+
+
+Now, as I said, this doesn't work, since this chattr flag isn't captured by
+pseudo, and my underlying ext4 file system doesn't support this flag either
+(so it results in an error).
+
+chattr.e2fsprogs: Operation not supported while setting flags on
+/home/jpuderer/target/build/tmp-glibc/work/nxp_s32g-wrs-linux/base-files/3.0.14-r89/image/var/log/journal
+
+
+I would *like* it if there was a way to make pseudo capture the chattr flag
+in the way similar to how pseudo currently captures extended file
+attributes (which is used by things like SELinux and IMA).  Failing that,
+I'm hoping for some guidance on what the best way to accomplish something
+like this at build time would be.
+
+Doing it at first boot is not a great solution IMHO, since you're really
+just pushing part of your build process into the first boot.
+
+-- James
+
+[-- Attachment #2: Type: text/html, Size: 3473 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2023-06-05 20:57 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-05-26 15:23 Setting the nodatacow flag on a BTRFS directory James Puderer
+2023-06-05 10:29 ` [yocto] " Ross Burton
+2023-06-05 20:57   ` James Puderer
+

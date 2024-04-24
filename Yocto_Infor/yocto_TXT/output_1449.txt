@@ -1,0 +1,103 @@
+* Re: [meta-security][PATCH resend] Parsec-service: add parsec user to teeclnt group when optee is present
+       [not found] <1468.1662031846008704501@lists.yoctoproject.org>
+@ 2022-09-01 13:44 ` Anton Antonov
+  0 siblings, 0 replies; 3+ messages in thread
+From: Anton Antonov @ 2022-09-01 13:44 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 557 bytes --]
+
+Hi Jerome,
+
+Parsec doesn't depend on optee-client and doesn't require it at all. If Parsec is built with the Trusted Services provider included  then `libts` is added into DEPENDS and RDEPENDS:
+
+https://git.yoctoproject.org/meta-security/tree/meta-parsec/recipes-parsec/parsec-service/parsec-service_1.0.0.bb#n23
+
+The libts recipe (it will be merged into meta-arm later today or tomorrow together with other generic recipes for Trusted Services Secure Partitions (SWd side) and test/demo tools (NWd side)) creates `teeclnt` group.
+
+Cheers,
+Anton
+
+[-- Attachment #2: Type: text/html, Size: 765 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [meta-security][PATCH resend] Parsec-service: add parsec user to teeclnt group when optee is present
+  2022-08-29 16:35 [yocto] " Nicolas Dechesne
+@ 2022-08-30 15:51 ` Anton Antonov
+  0 siblings, 0 replies; 3+ messages in thread
+From: Anton Antonov @ 2022-08-30 15:51 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 456 bytes --]
+
+The latest version of parsec-service recipe adds parsec into teeclnt group if Parsec is built with TS provider:
+
+https://git.yoctoproject.org/meta-security/tree/meta-parsec/recipes-parsec/parsec-service/parsec-service_1.0.0.bb#n75
+
+In this case teeclnt group is created by libts recipe (it will be merged into meat-arm later this week).
+
+With your change it's not clear what recipe will create the group. Could you point me to this recipe.
+
+Anton
+
+[-- Attachment #2: Type: text/html, Size: 655 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* [meta-security][PATCH resend] Parsec-service: add parsec user to teeclnt group when optee is present
+@ 2022-08-29 14:04 Jerome Forissier
+  0 siblings, 0 replies; 3+ messages in thread
+From: Jerome Forissier @ 2022-08-29 14:04 UTC (permalink / raw)
+  To: yocto; +Cc: Jerome Forissier
+
+The optee-client package provides a PKCS#11 interface that may be used by
+Parsec with the below configuration. For this to work, the parsec user
+needs to be a member of the teeclnt group. Therefore, add it when 'optee'
+is present in MACHINE_FEATURES.
+
+ # Provider configuration in /etc/parsec/config.toml
+ [[provider]]
+ name = "pkcs11-optee"
+ provider_type = "Pkcs11"
+ key_info_manager = "sqlite-manager"
+ library_path = "/usr/lib/libckteec.so.0"
+
+Signed-off-by: Jerome Forissier <jerome.forissier@linaro.org>
+---
+ .../recipes-parsec/parsec-service/parsec-service_1.0.0.bb        | 1 +
+ 1 file changed, 1 insertion(+)
+
+This is a resend because a few hours after my initial post I still can't
+find it at https://lists.yoctoproject.org/g/yocto/messages. I am now
+subscribed to the list so hopefully it will help (although
+https://git.yoctoproject.org/meta-security/tree/README doesn't mention
+subscription).
+
+diff --git a/meta-parsec/recipes-parsec/parsec-service/parsec-service_1.0.0.bb b/meta-parsec/recipes-parsec/parsec-service/parsec-service_1.0.0.bb
+index ad7e560..ea2b0c9 100644
+--- a/meta-parsec/recipes-parsec/parsec-service/parsec-service_1.0.0.bb
++++ b/meta-parsec/recipes-parsec/parsec-service/parsec-service_1.0.0.bb
+@@ -68,6 +68,7 @@ USERADD_PACKAGES = "${PN}"
+ USERADD_PARAM:${PN} = "-r -g parsec -s /bin/false -d ${localstatedir}/lib/parsec parsec"
+ GROUPADD_PARAM:${PN} = "-r parsec"
+ GROUPMEMS_PARAM:${PN} = "${@bb.utils.contains('PACKAGECONFIG_CONFARGS', 'tpm-provider', '-a parsec -g tss', '', d)}"
++GROUPMEMS_PARAM:${PN} = "${@bb.utils.contains('MACHINE_FEATURES', 'optee', '-a parsec -g teeclnt', '', d)}"
+ 
+ FILES:${PN} += " \
+     ${sysconfdir}/parsec/config.toml \
+-- 
+2.34.1
+
+
+
+^ permalink raw reply related	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2022-09-01 13:45 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+     [not found] <1468.1662031846008704501@lists.yoctoproject.org>
+2022-09-01 13:44 ` [meta-security][PATCH resend] Parsec-service: add parsec user to teeclnt group when optee is present Anton Antonov
+2022-08-29 16:35 [yocto] " Nicolas Dechesne
+2022-08-30 15:51 ` Anton Antonov
+  -- strict thread matches above, loose matches on Subject: below --
+2022-08-29 14:04 Jerome Forissier
+

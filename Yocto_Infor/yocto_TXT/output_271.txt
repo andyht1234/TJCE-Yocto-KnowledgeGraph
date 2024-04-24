@@ -1,0 +1,525 @@
+* How to switch between package version ?
+@ 2023-08-16 10:54 Nicolas Wirth
+  2023-08-16 11:13 ` [yocto] " Mikko Rapeli
+  0 siblings, 1 reply; 12+ messages in thread
+From: Nicolas Wirth @ 2023-08-16 10:54 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 978 bytes --]
+
+Hello everyone, I hope you're all doing well.
+
+I began learning how to use Yocto three months ago. I believe I now have a general understanding of how Yocto operates and how to integrate it into my project. However, I've encountered a question for which I'm struggling to find a straightforward answer.
+
+Imagine a scenario where, due to certain constraints, you've opted for a specific version of Yocto and have commenced work with it. As development progresses, you realize the necessity for a particular version of a library (such as boost). After searching for the recipe, you locate it within the meta layer and include it in your image. Subsequently, you realize that the version you've incorporated isn't the precise one you intended; rather, the version of the library you require is present within an older branch of Yocto.
+
+My question is as follows: Without altering your existing Yocto version, how can you utilize this "older" version of the desired library?
+
+[-- Attachment #2: Type: text/html, Size: 1073 bytes --]
+
+^ permalink raw reply	[flat|nested] 12+ messages in thread
+* Re: [yocto] How to switch between package version ?
+  2023-08-16 10:54 How to switch between package version ? Nicolas Wirth
+@ 2023-08-16 11:13 ` Mikko Rapeli
+  2023-08-16 11:55   ` Nicolas Wirth
+  0 siblings, 1 reply; 12+ messages in thread
+From: Mikko Rapeli @ 2023-08-16 11:13 UTC (permalink / raw)
+  To: nicolas.wirth; +Cc: yocto
+
+Hi,
+
+On Wed, Aug 16, 2023 at 03:54:38AM -0700, Nicolas Wirth via lists.yoctoproject.org wrote:
+> Hello everyone, I hope you're all doing well.
+> 
+> I began learning how to use Yocto three months ago. I believe I now have a general understanding of how Yocto operates and how to integrate it into my project. However, I've encountered a question for which I'm struggling to find a straightforward answer.
+> 
+> Imagine a scenario where, due to certain constraints, you've opted for a specific version of Yocto and have commenced work with it. As development progresses, you realize the necessity for a particular version of a library (such as boost). After searching for the recipe, you locate it within the meta layer and include it in your image. Subsequently, you realize that the version you've incorporated isn't the precise one you intended; rather, the version of the library you require is present within an older branch of Yocto.
+> 
+> My question is as follows: Without altering your existing Yocto version, how can you utilize this "older" version of the desired library?
+
+First, I would seriously question and fight back on requirements which dictate using
+old, possibly unmaintained SW versions with a lot of known CVE security vulnerabilities.
+Updating to a new boost version is straight forward work and almost all of the compile
+etc issues can be resolved using Internet search engines since most open source projects
+have also done the same.
+
+Second, downgrading a SW component has the same solutions as updating. Find a maintained
+layer with the SW component and version that you need. If that is not available, check if
+you can change the branch of an existing meta layer to provide what you need. Note that mixing
+layer branch names is frequently possible with minor changes, e.g. using meta-security master branch
+with kirkstone LTS poky. Then if you can't find an existing layer or branch which works, you can also
+fork the SW component recipe into your own layer by copying the recipe files over. You may need
+to apply some other patches as well to be compatible with your poky version, but those are possibly
+already available in the git repo of the source.
+
+In any case, you need to understand how layer priorities and version and provider configurations
+play together in your distro, machine, layer etc configuration. I do this by looking at
+"bitbake -e image" and buildhistory data.
+
+Just as an example, I updated my custom distro which inherits poky distro config and slightly modies it,
+from kernel 6.1.y to 6.4.x by resetting the PREFERRED_VERSION_linux-yocto to an empty string
+in my distro config. This picks up the newest linux-yocto recipe available from all of the layers in
+my configuration and that happens to be the linux-yocto_6.4.bb from poky currently.
+
+Hope this helps,
+
+-Mikko
+
+
+^ permalink raw reply	[flat|nested] 12+ messages in thread
+* Re: How to switch between package version ?
+  2023-08-16 11:13 ` [yocto] " Mikko Rapeli
+@ 2023-08-16 11:55   ` Nicolas Wirth
+  2023-08-16 12:05     ` [yocto] " Mikko Rapeli
+  0 siblings, 1 reply; 12+ messages in thread
+From: Nicolas Wirth @ 2023-08-16 11:55 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 454 bytes --]
+
+Hi Mikko, thank you for you're answer which was very insightful.
+
+> 
+> If that is not available, check if you can change the branch of an existing
+> meta layer to provide what you need. Note that mixing
+> layer branch names is frequently possible with minor changes, e.g. using
+> meta-security master branch with kirkstone LTS poky.
+
+Could I ask you to elaborate on this subject or share some resources about mixing layer branches ?
+
+-Nicolas
+
+[-- Attachment #2: Type: text/html, Size: 738 bytes --]
+
+^ permalink raw reply	[flat|nested] 12+ messages in thread
+* Re: [yocto] How to switch between package version ?
+  2023-08-16 11:55   ` Nicolas Wirth
+@ 2023-08-16 12:05     ` Mikko Rapeli
+  2023-08-16 14:45       ` Nicolas Wirth
+  2023-08-16 15:32       ` Alexander Kanavin
+  0 siblings, 2 replies; 12+ messages in thread
+From: Mikko Rapeli @ 2023-08-16 12:05 UTC (permalink / raw)
+  To: nicolas.wirth; +Cc: yocto
+
+Hi,
+
+On Wed, Aug 16, 2023 at 04:55:53AM -0700, Nicolas Wirth via lists.yoctoproject.org wrote:
+> Hi Mikko, thank you for you're answer which was very insightful.
+> 
+> > 
+> > If that is not available, check if you can change the branch of an existing
+> > meta layer to provide what you need. Note that mixing
+> > layer branch names is frequently possible with minor changes, e.g. using
+> > meta-security master branch with kirkstone LTS poky.
+> 
+> Could I ask you to elaborate on this subject or share some resources about mixing layer branches ?
+
+There isn't much documentation. It's more about just doing it and resolving any issues
+you find. For example BSP deliveries from vendors frequently only support older yocto branches.
+These should not dictate the poky release for the full SW stack when for example only kernel
+and bootloader are needed from their delivery. Thus using older BSP layer with the kernel
+and other recipes with a newer poky is a matter of configuring the build system and resolving
+any build failures from e.g. newer poky and gcc. The layer compatibility setting meant to warn
+and prohibit from doing this, but this can be overruled in other layers by setting
+e.g. LAYERSERIES_COMPAT_security-layer += "mickledore kirkstone" in layer.conf of your own
+layers. If large parts of a layer (BSP) are not needed in your configuration and cause
+build issues, then those can be hidden by setting BBMASK for those paths.
+
+Hope this helps,
+
+-Mikko
+
+
+^ permalink raw reply	[flat|nested] 12+ messages in thread
+* Re: How to switch between package version ?
+  2023-08-16 12:05     ` [yocto] " Mikko Rapeli
+@ 2023-08-16 14:45       ` Nicolas Wirth
+  2023-08-16 15:02         ` [yocto] " Alex Kiernan
+  2023-08-16 15:32       ` Alexander Kanavin
+  1 sibling, 1 reply; 12+ messages in thread
+From: Nicolas Wirth @ 2023-08-16 14:45 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 797 bytes --]
+
+I wasn't aware of BBMASK; that's useful, thank you.
+
+I find it becoming clearer for me. However, I'm wondering how to address version conflicts in the following scenario:
+
+* GCC 11.2 in the Honister branch
+* Boost 1.74 in the Gatesgarth branch
+
+I require the use of both these versions. Although they are both present in the meta layer, they exist on separate branches. What would be the solution in this case? Would it involve having two clones of the layer on my build host? Or perhaps writing my own Boost 1.74 recipe?
+
+Neither option appears to be straightforward to me. Yet, this doesn't seem like an uncommon scenario. Others must have encountered the need for different recipes from the same layer but belonging to different branches. Is there a clear workflow for handling this?
+
+[-- Attachment #2: Type: text/html, Size: 878 bytes --]
+
+^ permalink raw reply	[flat|nested] 12+ messages in thread
+* Re: [yocto] How to switch between package version ?
+  2023-08-16 14:45       ` Nicolas Wirth
+@ 2023-08-16 15:02         ` Alex Kiernan
+  2023-08-16 15:30           ` Alexander Kanavin
+  0 siblings, 1 reply; 12+ messages in thread
+From: Alex Kiernan @ 2023-08-16 15:02 UTC (permalink / raw)
+  To: nicolas.wirth; +Cc: yocto
+
+Boost is a particular pain point... I have a project where I need two
+different, incompatible versions of boost. I left the one in the
+oe-core alone, then created a new recipe boost-1.82_1.82.0 which was
+mostly copied from master with these changes to boost.inc:
+
+diff -u /home/alexk/poky/meta/recipes-support/boost/boost.inc
+recipes-support/boost/boost.inc
+--- /home/alexk/poky/meta/recipes-support/boost/boost.inc
+2023-01-12 08:25:40.990099356 +0000
++++ recipes-support/boost/boost.inc     2023-05-25 17:32:45.491123831 +0100
+@@ -69,7 +69,7 @@
+     mlprefix = d.getVar("MLPREFIX")
+     for lib in d.getVar('BOOST_LIBS').split():
+         extras.append("--with-%s" % lib)
+-        pkg = "boost-%s" % (lib.replace("_", "-"))
++        pkg = "%s-%s" % (d.getVar("BPN"), lib.replace("_", "-"))
+         if "-native" in pn:
+             pkg = pkg + "-native"
+         packages.append(mlprefix + pkg)
+@@ -86,9 +86,9 @@
+ FILES:${PN}-graph_parallel = "${libdir}/libboost_graph_parallel.so.*"
+ FILES:${PN}-locale = "${libdir}/libboost_locale.so.*"
+ FILES:${PN}-mpi = "${libdir}/mpi.so ${libdir}/libboost_mpi*.so.*"
+-FILES:boost-serialization = "${libdir}/libboost_serialization*.so.* \
++FILES:${PN}-serialization = "${libdir}/libboost_serialization*.so.* \
+        ${libdir}/libboost_wserialization*.so.*"
+-FILES:boost-test = "${libdir}/libboost_prg_exec_monitor*.so.* \
++FILES:${PN}-test = "${libdir}/libboost_prg_exec_monitor*.so.* \
+        ${libdir}/libboost_unit_test_framework*.so.*"
+
+ # -dev last to pick up the remaining stuff
+
+Depending on which versions you're trying to use, you might need something like:
+
+# We don't need old bjam-native to build, current upstream is fine and also
+# allows boost-1.82 to build
+python() {
+    raise bb.parse.SkipRecipe('Force upstream bjam-native.')
+}
+
+as a bbappend for the older version so it's skipped.
+
+On Wed, Aug 16, 2023 at 3:45 PM Nicolas Wirth via
+lists.yoctoproject.org
+<nicolas.wirth=speedgoat.ch@lists.yoctoproject.org> wrote:
+>
+> I wasn't aware of BBMASK; that's useful, thank you.
+>
+> I find it becoming clearer for me. However, I'm wondering how to address version conflicts in the following scenario:
+>
+> GCC 11.2 in the Honister branch
+> Boost 1.74 in the Gatesgarth branch
+>
+> I require the use of both these versions. Although they are both present in the meta layer, they exist on separate branches. What would be the solution in this case? Would it involve having two clones of the layer on my build host? Or perhaps writing my own Boost 1.74 recipe?
+>
+> Neither option appears to be straightforward to me. Yet, this doesn't seem like an uncommon scenario. Others must have encountered the need for different recipes from the same layer but belonging to different branches. Is there a clear workflow for handling this?
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#60809): https://lists.yoctoproject.org/g/yocto/message/60809
+> Mute This Topic: https://lists.yoctoproject.org/mt/100776894/3618097
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kiernan@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+-- 
+Alex Kiernan
+
+
+^ permalink raw reply	[flat|nested] 12+ messages in thread
+* Re: [yocto] How to switch between package version ?
+  2023-08-16 15:02         ` [yocto] " Alex Kiernan
+@ 2023-08-16 15:30           ` Alexander Kanavin
+  0 siblings, 0 replies; 12+ messages in thread
+From: Alexander Kanavin @ 2023-08-16 15:30 UTC (permalink / raw)
+  To: Alex Kiernan, nicolas.wirth; +Cc: yocto
+
+Perhaps we need to step back for a bit. Can you explain why you (i.e.
+Nicolas) need an older boost version in particular? Generally
+speaking, rolling back component versions is painful and best avoided:
+it requires advanced knowledge, you might spend a lot of time on it,
+and still don't reach a working setup.
+
+Alex
+
+
+On Wed, 16 Aug 2023 at 17:02, Alex Kiernan <alex.kiernan@gmail.com> wrote:
+>
+> Boost is a particular pain point... I have a project where I need two
+> different, incompatible versions of boost. I left the one in the
+> oe-core alone, then created a new recipe boost-1.82_1.82.0 which was
+> mostly copied from master with these changes to boost.inc:
+>
+> diff -u /home/alexk/poky/meta/recipes-support/boost/boost.inc
+> recipes-support/boost/boost.inc
+> --- /home/alexk/poky/meta/recipes-support/boost/boost.inc
+> 2023-01-12 08:25:40.990099356 +0000
+> +++ recipes-support/boost/boost.inc     2023-05-25 17:32:45.491123831 +0100
+> @@ -69,7 +69,7 @@
+>      mlprefix = d.getVar("MLPREFIX")
+>      for lib in d.getVar('BOOST_LIBS').split():
+>          extras.append("--with-%s" % lib)
+> -        pkg = "boost-%s" % (lib.replace("_", "-"))
+> +        pkg = "%s-%s" % (d.getVar("BPN"), lib.replace("_", "-"))
+>          if "-native" in pn:
+>              pkg = pkg + "-native"
+>          packages.append(mlprefix + pkg)
+> @@ -86,9 +86,9 @@
+>  FILES:${PN}-graph_parallel = "${libdir}/libboost_graph_parallel.so.*"
+>  FILES:${PN}-locale = "${libdir}/libboost_locale.so.*"
+>  FILES:${PN}-mpi = "${libdir}/mpi.so ${libdir}/libboost_mpi*.so.*"
+> -FILES:boost-serialization = "${libdir}/libboost_serialization*.so.* \
+> +FILES:${PN}-serialization = "${libdir}/libboost_serialization*.so.* \
+>         ${libdir}/libboost_wserialization*.so.*"
+> -FILES:boost-test = "${libdir}/libboost_prg_exec_monitor*.so.* \
+> +FILES:${PN}-test = "${libdir}/libboost_prg_exec_monitor*.so.* \
+>         ${libdir}/libboost_unit_test_framework*.so.*"
+>
+>  # -dev last to pick up the remaining stuff
+>
+> Depending on which versions you're trying to use, you might need something like:
+>
+> # We don't need old bjam-native to build, current upstream is fine and also
+> # allows boost-1.82 to build
+> python() {
+>     raise bb.parse.SkipRecipe('Force upstream bjam-native.')
+> }
+>
+> as a bbappend for the older version so it's skipped.
+>
+> On Wed, Aug 16, 2023 at 3:45 PM Nicolas Wirth via
+> lists.yoctoproject.org
+> <nicolas.wirth=speedgoat.ch@lists.yoctoproject.org> wrote:
+> >
+> > I wasn't aware of BBMASK; that's useful, thank you.
+> >
+> > I find it becoming clearer for me. However, I'm wondering how to address version conflicts in the following scenario:
+> >
+> > GCC 11.2 in the Honister branch
+> > Boost 1.74 in the Gatesgarth branch
+> >
+> > I require the use of both these versions. Although they are both present in the meta layer, they exist on separate branches. What would be the solution in this case? Would it involve having two clones of the layer on my build host? Or perhaps writing my own Boost 1.74 recipe?
+> >
+> > Neither option appears to be straightforward to me. Yet, this doesn't seem like an uncommon scenario. Others must have encountered the need for different recipes from the same layer but belonging to different branches. Is there a clear workflow for handling this?
+> >
+> >
+> >
+>
+>
+> --
+> Alex Kiernan
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#60810): https://lists.yoctoproject.org/g/yocto/message/60810
+> Mute This Topic: https://lists.yoctoproject.org/mt/100776894/1686489
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 12+ messages in thread
+* Re: [yocto] How to switch between package version ?
+  2023-08-16 12:05     ` [yocto] " Mikko Rapeli
+  2023-08-16 14:45       ` Nicolas Wirth
+@ 2023-08-16 15:32       ` Alexander Kanavin
+  2023-08-17  4:41         ` Mikko Rapeli
+  1 sibling, 1 reply; 12+ messages in thread
+From: Alexander Kanavin @ 2023-08-16 15:32 UTC (permalink / raw)
+  To: Mikko Rapeli; +Cc: nicolas.wirth, yocto
+
+On Wed, 16 Aug 2023 at 14:05, Mikko Rapeli <mikko.rapeli@linaro.org> wrote:
+> There isn't much documentation. It's more about just doing it and resolving any issues
+> you find. For example BSP deliveries from vendors frequently only support older yocto branches.
+> These should not dictate the poky release for the full SW stack when for example only kernel
+> and bootloader are needed from their delivery. Thus using older BSP layer with the kernel
+> and other recipes with a newer poky is a matter of configuring the build system and resolving
+> any build failures from e.g. newer poky and gcc. The layer compatibility setting meant to warn
+> and prohibit from doing this, but this can be overruled in other layers by setting
+> e.g. LAYERSERIES_COMPAT_security-layer += "mickledore kirkstone" in layer.conf of your own
+> layers. If large parts of a layer (BSP) are not needed in your configuration and cause
+> build issues, then those can be hidden by setting BBMASK for those paths.
+
+Mikko, please. Yes, you can work around all these restrictions with
+some determination, but they exist for good reasons. So can you avoid
+giving newcomers bad advice, and instead dig into the actual problem
+they have? Pretty please.
+
+Alex
+
+
+^ permalink raw reply	[flat|nested] 12+ messages in thread
+* Re: [yocto] How to switch between package version ?
+  2023-08-16 15:32       ` Alexander Kanavin
+@ 2023-08-17  4:41         ` Mikko Rapeli
+  2023-08-17  7:37           ` Alexander Kanavin
+  0 siblings, 1 reply; 12+ messages in thread
+From: Mikko Rapeli @ 2023-08-17  4:41 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: nicolas.wirth, yocto
+
+Hi,
+
+On Wed, Aug 16, 2023 at 05:32:23PM +0200, Alexander Kanavin wrote:
+> On Wed, 16 Aug 2023 at 14:05, Mikko Rapeli <mikko.rapeli@linaro.org> wrote:
+> > There isn't much documentation. It's more about just doing it and resolving any issues
+> > you find. For example BSP deliveries from vendors frequently only support older yocto branches.
+> > These should not dictate the poky release for the full SW stack when for example only kernel
+> > and bootloader are needed from their delivery. Thus using older BSP layer with the kernel
+> > and other recipes with a newer poky is a matter of configuring the build system and resolving
+> > any build failures from e.g. newer poky and gcc. The layer compatibility setting meant to warn
+> > and prohibit from doing this, but this can be overruled in other layers by setting
+> > e.g. LAYERSERIES_COMPAT_security-layer += "mickledore kirkstone" in layer.conf of your own
+> > layers. If large parts of a layer (BSP) are not needed in your configuration and cause
+> > build issues, then those can be hidden by setting BBMASK for those paths.
+> 
+> Mikko, please. Yes, you can work around all these restrictions with
+> some determination, but they exist for good reasons. So can you avoid
+> giving newcomers bad advice, and instead dig into the actual problem
+> they have? Pretty please.
+
+One of the major problems with yocto major updates is that it becomes a big bang,
+everything must be updated at once. This can be split down and individual layers updated
+one at a time while keeping poky on the old version. This requires working around
+layer compatibility, which in many cases is quite artificial and just indiciates that layer
+is not tested with the other poky versions but it might still just work.
+
+I've done this so many times now that I don't see any reason to hide it,
+also because many non-core layers are simply not maintaining other than master branch
+exposing users to obsole and insecure SW if they stick to the branch name.
+
+Cheers,
+
+-Mikko
+
+
+^ permalink raw reply	[flat|nested] 12+ messages in thread
+* Re: [yocto] How to switch between package version ?
+  2023-08-17  4:41         ` Mikko Rapeli
+@ 2023-08-17  7:37           ` Alexander Kanavin
+       [not found]             ` <177BD8C48AE805D0.8497@lists.yoctoproject.org>
+  0 siblings, 1 reply; 12+ messages in thread
+From: Alexander Kanavin @ 2023-08-17  7:37 UTC (permalink / raw)
+  To: Mikko Rapeli; +Cc: nicolas.wirth, yocto
+
+On Thu, 17 Aug 2023 at 06:41, Mikko Rapeli <mikko.rapeli@linaro.org> wrote:
+> One of the major problems with yocto major updates is that it becomes a big bang,
+> everything must be updated at once. This can be split down and individual layers updated
+> one at a time while keeping poky on the old version. This requires working around
+> layer compatibility, which in many cases is quite artificial and just indiciates that layer
+> is not tested with the other poky versions but it might still just work.
+>
+> I've done this so many times now that I don't see any reason to hide it,
+> also because many non-core layers are simply not maintaining other than master branch
+> exposing users to obsole and insecure SW if they stick to the branch name.
+
+Getting around LAYERSERIES_COMPAT or using BBMASK in order to update
+layers one at a time is not the problem here. The problem here is that
+a newcomer wants to have an older boost (which is in poky) with a
+newer everything else (which is also in poky). What I'm trying to say,
+nobody stopped and asked, what are they actually trying to do? What
+made them think they need an older boost? Why isn't a newer boost
+suitable? Maybe it is, with a bit of work?
+
+You should know very well that making two versions of the same thing
+coexist in the same build is painful and often impossible if they
+clash in sysroots or packaging. Rolling back to an older version is
+also painful, but for a different reason: the rest of the stack may
+actually have moved on, requiring newer APIs and features. Older
+version may also be insecure. So can we try to do the right thing
+first?
+
+Alex
+
+
+^ permalink raw reply	[flat|nested] 12+ messages in thread
+* Re: [yocto] How to switch between package version ?
+       [not found]             ` <177BD8C48AE805D0.8497@lists.yoctoproject.org>
+@ 2023-08-17  7:47               ` Mikko Rapeli
+  2023-08-17 10:51                 ` Nicolas Wirth
+  0 siblings, 1 reply; 12+ messages in thread
+From: Mikko Rapeli @ 2023-08-17  7:47 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: nicolas.wirth, yocto
+
+Hi,
+
+On Thu, Aug 17, 2023 at 09:37:51AM +0200, Alexander Kanavin wrote:
+> On Thu, 17 Aug 2023 at 06:41, Mikko Rapeli <mikko.rapeli@linaro.org> wrote:
+> > One of the major problems with yocto major updates is that it becomes a big bang,
+> > everything must be updated at once. This can be split down and individual layers updated
+> > one at a time while keeping poky on the old version. This requires working around
+> > layer compatibility, which in many cases is quite artificial and just indiciates that layer
+> > is not tested with the other poky versions but it might still just work.
+> >
+> > I've done this so many times now that I don't see any reason to hide it,
+> > also because many non-core layers are simply not maintaining other than master branch
+> > exposing users to obsole and insecure SW if they stick to the branch name.
+> 
+> Getting around LAYERSERIES_COMPAT or using BBMASK in order to update
+> layers one at a time is not the problem here. The problem here is that
+> a newcomer wants to have an older boost (which is in poky) with a
+> newer everything else (which is also in poky). What I'm trying to say,
+> nobody stopped and asked, what are they actually trying to do? What
+> made them think they need an older boost? Why isn't a newer boost
+> suitable? Maybe it is, with a bit of work?
+
+Yes:
+
+On Wed, Aug 16, 2023 at 02:13:39PM +0300, Mikko Rapeli via lists.yoctoproject.org wrote:
+> First, I would seriously question and fight back on requirements which dictate using
+> old, possibly unmaintained SW versions with a lot of known CVE security vulnerabilities.
+> Updating to a new boost version is straight forward work and almost all of the compile
+> etc issues can be resolved using Internet search engines since most open source projects
+> have also done the same.
+
+We agree on this.
+
+Cheers,
+
+-Mikko
+
+
+^ permalink raw reply	[flat|nested] 12+ messages in thread
+* Re: How to switch between package version ?
+  2023-08-17  7:47               ` Mikko Rapeli
+@ 2023-08-17 10:51                 ` Nicolas Wirth
+  0 siblings, 0 replies; 12+ messages in thread
+From: Nicolas Wirth @ 2023-08-17 10:51 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 401 bytes --]
+
+Thank you for all of your answers, I have a good overview of what is possible and what my role as a developer should be when using Yocto.
+
+What I take the most out of this is that even if there are some possibility to use different older versions, I should rather explain the complexity of doing so and strongly advise to use the version of the recipe that are tied to the Yocto version I'm using.
+
+[-- Attachment #2: Type: text/html, Size: 415 bytes --]
+
+^ permalink raw reply	[flat|nested] 12+ messages in thread
+end of thread, other threads:[~2023-08-17 10:51 UTC | newest]
+
+Thread overview: 12+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-08-16 10:54 How to switch between package version ? Nicolas Wirth
+2023-08-16 11:13 ` [yocto] " Mikko Rapeli
+2023-08-16 11:55   ` Nicolas Wirth
+2023-08-16 12:05     ` [yocto] " Mikko Rapeli
+2023-08-16 14:45       ` Nicolas Wirth
+2023-08-16 15:02         ` [yocto] " Alex Kiernan
+2023-08-16 15:30           ` Alexander Kanavin
+2023-08-16 15:32       ` Alexander Kanavin
+2023-08-17  4:41         ` Mikko Rapeli
+2023-08-17  7:37           ` Alexander Kanavin
+     [not found]             ` <177BD8C48AE805D0.8497@lists.yoctoproject.org>
+2023-08-17  7:47               ` Mikko Rapeli
+2023-08-17 10:51                 ` Nicolas Wirth
+

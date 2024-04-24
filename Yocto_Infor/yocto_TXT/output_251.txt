@@ -1,0 +1,131 @@
+* [meta-selinux][PATCH 1/3] selinux-python: add python3-distro and binutils to RDEPENDS
+@ 2023-08-23 15:22 Yi Zhao
+  2023-08-23 15:22 ` [meta-selinux][PATCH 2/3] libselinux-python: fix build with musl Yi Zhao
+  2023-08-23 15:22 ` [meta-selinux][PATCH 3/3] linux-yocto: drop CONFIG_SECURITY_SELINUX_DISABLE Yi Zhao
+  0 siblings, 2 replies; 3+ messages in thread
+From: Yi Zhao @ 2023-08-23 15:22 UTC (permalink / raw)
+  To: yocto, joe.macdonald, joe_macdonald
+
+Add python3-distro and binutils to RDEPENDS for sepolicy to fix runtime
+error:
+
+$ sepolicy -h
+Traceback (most recent call last):
+  File "/usr/bin/sepolicy", line 690, in <module>
+    gen_manpage_args(subparsers)
+  File "/usr/bin/sepolicy", line 375, in gen_manpage_args
+    man.add_argument("-o", "--os", dest="os", default=get_os_version(),
+
+  File "/usr/lib/python3.11/site-packages/sepolicy/__init__.py", line 1245, in get_os_version
+    import distro
+ModuleNotFoundError: No module named 'distro'
+
+$ sepolicy generate --init /usr/sbin/sshd
+/bin/sh: line 1: nm: command not found
+
+Signed-off-by: Yi Zhao <yi.zhao@windriver.com>
+---
+ recipes-security/selinux/selinux-python_3.5.bb | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/recipes-security/selinux/selinux-python_3.5.bb b/recipes-security/selinux/selinux-python_3.5.bb
+index 9ff63db..79125d0 100644
+--- a/recipes-security/selinux/selinux-python_3.5.bb
++++ b/recipes-security/selinux/selinux-python_3.5.bb
+@@ -54,8 +54,10 @@ RDEPENDS:${PN}-semanage = "\
+         ${PN} \
+ "
+ RDEPENDS:${PN}-sepolicy = "\
++        binutils \
+         python3-core \
+         python3-codecs \
++        python3-distro \
+         python3-syslog \
+         python3-multiprocessing \
+         ${PN} \
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 3+ messages in thread
+* [meta-selinux][PATCH 2/3] libselinux-python: fix build with musl
+  2023-08-23 15:22 [meta-selinux][PATCH 1/3] selinux-python: add python3-distro and binutils to RDEPENDS Yi Zhao
+@ 2023-08-23 15:22 ` Yi Zhao
+  2023-08-23 15:22 ` [meta-selinux][PATCH 3/3] linux-yocto: drop CONFIG_SECURITY_SELINUX_DISABLE Yi Zhao
+  1 sibling, 0 replies; 3+ messages in thread
+From: Yi Zhao @ 2023-08-23 15:22 UTC (permalink / raw)
+  To: yocto, joe.macdonald, joe_macdonald
+
+libselinux-python also requires the patch which provided by [1] to fix
+build with musl.
+
+[1] https://git.yoctoproject.org/meta-selinux/commit/?id=23d8e2d86317170c0a3c155640c71b83329ff726
+
+Signed-off-by: Yi Zhao <yi.zhao@windriver.com>
+---
+ recipes-security/selinux/libselinux-python_3.5.bb | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/recipes-security/selinux/libselinux-python_3.5.bb b/recipes-security/selinux/libselinux-python_3.5.bb
+index 3555a72..b382be1 100644
+--- a/recipes-security/selinux/libselinux-python_3.5.bb
++++ b/recipes-security/selinux/libselinux-python_3.5.bb
+@@ -14,6 +14,7 @@ FILESEXTRAPATHS:prepend := "${THISDIR}/libselinux:"
+ SRC_URI += "\
+         file://0001-Makefile-fix-python-modules-install-path-for-multili.patch \
+         file://0002-Do-not-use-PYCEXT-and-rely-on-the-installed-file-nam.patch \
++        file://0003-libselinux-restore-drop-the-obsolete-LSF-transitiona.patch \
+         "
+ 
+ S = "${WORKDIR}/git/libselinux"
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 3+ messages in thread
+* [meta-selinux][PATCH 3/3] linux-yocto: drop CONFIG_SECURITY_SELINUX_DISABLE
+  2023-08-23 15:22 [meta-selinux][PATCH 1/3] selinux-python: add python3-distro and binutils to RDEPENDS Yi Zhao
+  2023-08-23 15:22 ` [meta-selinux][PATCH 2/3] libselinux-python: fix build with musl Yi Zhao
+@ 2023-08-23 15:22 ` Yi Zhao
+  1 sibling, 0 replies; 3+ messages in thread
+From: Yi Zhao @ 2023-08-23 15:22 UTC (permalink / raw)
+  To: yocto, joe.macdonald, joe_macdonald
+
+CONFIG_SECURITY_SELINUX_DISABLE has been removed since kernel 6.4[1][2].
+
+[1] https://github.com/SELinuxProject/selinux-kernel/wiki/DEPRECATE-runtime-disable
+[2] https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=f22f9aaf6c3d92ebd5ad9e67acc03afebaaeb289
+
+Signed-off-by: Yi Zhao <yi.zhao@windriver.com>
+---
+ recipes-kernel/linux/files/selinux.cfg | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/recipes-kernel/linux/files/selinux.cfg b/recipes-kernel/linux/files/selinux.cfg
+index a081095..8333a05 100644
+--- a/recipes-kernel/linux/files/selinux.cfg
++++ b/recipes-kernel/linux/files/selinux.cfg
+@@ -23,7 +23,6 @@ CONFIG_SECURITYFS=y
+ CONFIG_SECURITY_NETWORK=y
+ CONFIG_SECURITY_SELINUX=y
+ CONFIG_SECURITY_SELINUX_BOOTPARAM=y
+-CONFIG_SECURITY_SELINUX_DISABLE=y
+ CONFIG_SECURITY_SELINUX_DEVELOP=y
+ CONFIG_SECURITY_SELINUX_AVC_STATS=y
+ CONFIG_AUDIT_GENERIC=y
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2023-08-23 15:22 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-08-23 15:22 [meta-selinux][PATCH 1/3] selinux-python: add python3-distro and binutils to RDEPENDS Yi Zhao
+2023-08-23 15:22 ` [meta-selinux][PATCH 2/3] libselinux-python: fix build with musl Yi Zhao
+2023-08-23 15:22 ` [meta-selinux][PATCH 3/3] linux-yocto: drop CONFIG_SECURITY_SELINUX_DISABLE Yi Zhao
+

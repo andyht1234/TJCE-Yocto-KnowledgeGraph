@@ -1,0 +1,308 @@
+* [layerindex-web][PATCH 0/3] Fixes for updates
+@ 2022-04-24 21:10 Tim Orling
+  2022-04-24 21:10 ` [layerindex-web][PATCH 1/3] layerindex/utils.py: add is_commit_ancestor check Tim Orling
+                   ` (2 more replies)
+  0 siblings, 3 replies; 5+ messages in thread
+From: Tim Orling @ 2022-04-24 21:10 UTC (permalink / raw)
+  To: yocto; +Cc: bluelightning
+
+This series includes fixes to allow update.py to run on 'master', by
+providing a check for the BB_ENV_PASSTHROUGHS_ADDITIONS variable
+renaming in bitbake 2.0+.
+
+To do so, an 'is_commit_ancestor' check is added to allow for checking
+if a particular commit hash is present in a checked out repo (e.g.
+bitbake).
+
+Also included is an improvement on the prior patch to ignore 'core' in
+BBFILES_COLLECTIONS (logging a debug message rather than a warning for
+the case where 'core' is ignored).
+
+The following changes since commit 4dd7f0ee8f31df927c3862677dc59636988d8dfd:
+
+  layerindex/models.py: add Inactive-Upstream (2022-04-18 12:56:51 -0700)
+
+are available in the Git repository at:
+
+  git://git.yoctoproject.org/layerindex-web timo/fixes2
+  http://git.yoctoproject.org/cgit.cgi/layerindex-web/log/?h=timo/fixes2
+
+Tim Orling (3):
+  layerindex/utils.py: add is_commit_ancestor check
+  recipe{desc,parse}.py: BB_ENV_PASSTHROUGH_ADDITIONS
+  layerindex/utils.py: ignore 'core' in BBFILES_COLLECTIONS
+
+ layerindex/recipedesc.py  |  8 +++++++-
+ layerindex/recipeparse.py |  7 ++++++-
+ layerindex/utils.py       | 29 ++++++++++++++++++++++++++++-
+ 3 files changed, 41 insertions(+), 3 deletions(-)
+
+-- 
+2.32.0
+
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* [layerindex-web][PATCH 1/3] layerindex/utils.py: add is_commit_ancestor check
+  2022-04-24 21:10 [layerindex-web][PATCH 0/3] Fixes for updates Tim Orling
+@ 2022-04-24 21:10 ` Tim Orling
+  2022-04-28 14:58   ` [layerindex-web][PATCH v2 " Tim Orling
+  2022-04-24 21:10 ` [layerindex-web][PATCH v2 2/3] recipe{desc,parse}.py: BB_ENV_PASSTHROUGH_ADDITIONS Tim Orling
+  2022-04-24 21:10 ` [layerindex-web][PATCH v2 3/3] layerindex/utils.py: ignore 'core' in BBFILES_COLLECTIONS Tim Orling
+  2 siblings, 1 reply; 5+ messages in thread
+From: Tim Orling @ 2022-04-24 21:10 UTC (permalink / raw)
+  To: yocto; +Cc: bluelightning
+
+Add a helper function to check if a given SHA1 hash is an ancestor in
+the currently checkout out branch, using:
+
+git merge-branch --is-ancestor <commit> HEAD
+
+NOTE: This will not match commits which have been cherry-picked.
+
+Signed-off-by: Tim Orling <tim.orling@konsulko.com>
+---
+ layerindex/utils.py | 22 ++++++++++++++++++++++
+ 1 file changed, 22 insertions(+)
+
+diff --git a/layerindex/utils.py b/layerindex/utils.py
+index 32be16d..46e109e 100644
+--- a/layerindex/utils.py
++++ b/layerindex/utils.py
+@@ -229,6 +229,28 @@ def explode_dep_versions2(bitbakepath, deps):
+     import bb.utils
+     return bb.utils.explode_dep_versions2(deps)
+ 
++def is_commit_ancestor(repodir, commit, logger):
++    """
++    Check if the given SHA1 hash is an ancestor in the currently checked out branch.
++    NOTE: This will not match commits which have been cherry-picked.
++    """
++    try:
++        # check if commit is a sha1 hash
++        if re.match('[0-9a-f]{40}', commit):
++            # check if the commit is an ancestor
++            contained = runcmd(['git', 'merge-base', '--is-ancestor', '%s' % commit, 'HEAD'], repodir, logger=logger)
++            return True
++        else:
++            raise Exception('is_commit_ancestor: "commit" must be a SHA1 hash')
++    except CalledProcessError as e:
++            if e.returncode == 1:
++                # commit is not an ancestor
++                return False
++            else:
++                raise e
++    except Exception as esc:
++        logger.warn(esc)
++
+ def checkout_repo(repodir, commit, logger, force=False):
+     """
+     Check out a revision in a repository, ensuring that untracked/uncommitted
+-- 
+2.32.0
+
+
+
+^ permalink raw reply related	[flat|nested] 5+ messages in thread
+* [layerindex-web][PATCH v2 2/3] recipe{desc,parse}.py: BB_ENV_PASSTHROUGH_ADDITIONS
+  2022-04-24 21:10 [layerindex-web][PATCH 0/3] Fixes for updates Tim Orling
+  2022-04-24 21:10 ` [layerindex-web][PATCH 1/3] layerindex/utils.py: add is_commit_ancestor check Tim Orling
+@ 2022-04-24 21:10 ` Tim Orling
+  2022-04-24 21:10 ` [layerindex-web][PATCH v2 3/3] layerindex/utils.py: ignore 'core' in BBFILES_COLLECTIONS Tim Orling
+  2 siblings, 0 replies; 5+ messages in thread
+From: Tim Orling @ 2022-04-24 21:10 UTC (permalink / raw)
+  To: yocto; +Cc: bluelightning
+
+ERROR: Variable BB_ENV_EXTRAWHITE has been renamed to BB_ENV_PASSTHROUGH_ADDITIONS
+ERROR: Variable BB_ENV_EXTRAWHITE from the shell environment has been renamed to BB_ENV_PASSTHROUGH_ADDITIONS
+ERROR: Exiting to allow enviroment variables to be corrected
+
+Replace BB_ENV_EXTRAWHITE with new variable BB_ENV_PASSTHROUGH_ADDITIONS
+
+In order to be backward compatible with older branches, we must first check
+for the presence of the bitbake commit which implemented the variable name
+change, using layerindex.utils.is_commit_ancestor().
+
+Signed-off-by: Tim Orling <tim.orling@konsulko.com>
+---
+Changes in v2:
+  * Use new is_commit_ancestor check to check for the specific bitbake
+    commit that introduced the variable renaming. This provides for backward
+    compatibility in older branches (before bitbake 2.0).
+
+ layerindex/recipedesc.py  | 8 +++++++-
+ layerindex/recipeparse.py | 7 ++++++-
+ 2 files changed, 13 insertions(+), 2 deletions(-)
+
+diff --git a/layerindex/recipedesc.py b/layerindex/recipedesc.py
+index ee7f2fe..a844186 100644
+--- a/layerindex/recipedesc.py
++++ b/layerindex/recipedesc.py
+@@ -39,6 +39,7 @@ def main():
+     from layerindex.models import LayerItem, Recipe
+     from django.db import transaction
+     import settings
++    from layerindex.utils import is_commit_ancestor
+ 
+     setup_environ(settings)
+ 
+@@ -62,8 +63,13 @@ def main():
+             print("Unable to find bitbake by searching BITBAKEDIR, specified path '%s' or its parent, or PATH" % basepath)
+             sys.exit(1)
+ 
++    # Commit "bitbake: Rename environment filtering variables"
++    bb_var_rename_commit = "87104b6a167188921da157c7dba45938849fb22a"
+     # Skip sanity checks
+-    os.environ['BB_ENV_EXTRAWHITE'] = 'DISABLE_SANITY_CHECKS'
++    if is_commit_ancestor(bitbakepath, bb_var_rename_commit, logger=logger):
++        os.environ['BB_ENV_PASSTHROUGH_ADDITIONS'] = 'DISABLE_SANITY_CHECKS'
++    else:
++        os.environ['BB_ENV_EXTRAWHITE'] = 'DISABLE_SANITY_CHECKS'
+     os.environ['DISABLE_SANITY_CHECKS'] = '1'
+ 
+     sys.path.extend([bitbakepath + '/lib'])
+diff --git a/layerindex/recipeparse.py b/layerindex/recipeparse.py
+index c918677..6202745 100644
+--- a/layerindex/recipeparse.py
++++ b/layerindex/recipeparse.py
+@@ -35,8 +35,13 @@ def init_parser(settings, branch, bitbakepath, enable_tracking=False, nocheckout
+             bitbake_ref = 'origin/%s' % branch.bitbake_branch
+         utils.checkout_repo(bitbakepath, bitbake_ref, logger=logger)
+ 
++    # Commit "bitbake: Rename environment filtering variables"
++    bb_var_rename_commit = "87104b6a167188921da157c7dba45938849fb22a"
+     # Skip sanity checks
+-    os.environ['BB_ENV_EXTRAWHITE'] = 'DISABLE_SANITY_CHECKS'
++    if utils.is_commit_ancestor(bitbakepath, bb_var_rename_commit, logger=logger):
++        os.environ['BB_ENV_PASSTHROUGH_ADDITIONS'] = 'DISABLE_SANITY_CHECKS'
++    else:
++        os.environ['BB_ENV_EXTRAWHITE'] = 'DISABLE_SANITY_CHECKS'
+     os.environ['DISABLE_SANITY_CHECKS'] = '1'
+ 
+     fetchdir = settings.LAYER_FETCH_DIR
+-- 
+2.32.0
+
+
+
+^ permalink raw reply related	[flat|nested] 5+ messages in thread
+* [layerindex-web][PATCH v2 3/3] layerindex/utils.py: ignore 'core' in BBFILES_COLLECTIONS
+  2022-04-24 21:10 [layerindex-web][PATCH 0/3] Fixes for updates Tim Orling
+  2022-04-24 21:10 ` [layerindex-web][PATCH 1/3] layerindex/utils.py: add is_commit_ancestor check Tim Orling
+  2022-04-24 21:10 ` [layerindex-web][PATCH v2 2/3] recipe{desc,parse}.py: BB_ENV_PASSTHROUGH_ADDITIONS Tim Orling
+@ 2022-04-24 21:10 ` Tim Orling
+  2 siblings, 0 replies; 5+ messages in thread
+From: Tim Orling @ 2022-04-24 21:10 UTC (permalink / raw)
+  To: yocto; +Cc: bluelightning
+
+Many layers append BBFILE_COLLECTIONS and therefore have 'core <layer>'
+
+During update.py, this means we are likely not handling the collection we
+expect:
+
+WARNING: /opt/workdir/git___git_openembedded_org_meta-openembedded/meta-oe: multiple collections found, handling first one (core) only
+BBFILE_COLLECTIONS = "core"
+
+Signed-off-by: Tim Orling <tim.orling@konsulko.com>
+---
+Changes in v2:
+  * Use logger.debug instead of warning for the case where 'core' is ignored
+
+ layerindex/utils.py | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/layerindex/utils.py b/layerindex/utils.py
+index 46e109e..414bbe5 100644
+--- a/layerindex/utils.py
++++ b/layerindex/utils.py
+@@ -44,7 +44,12 @@ def get_layer_var(config_data, var, logger):
+         collection = collection_list[0]
+         layerdir = config_data.getVar('LAYERDIR', True)
+         if len(collection_list) > 1:
+-            logger.warn('%s: multiple collections found, handling first one (%s) only' % (layerdir, collection))
++            if collection_list[0] == 'core':
++                # Many layers append BBFILE_COLLECTIONS and therefore have 'core <layer>'
++                collection = collection_list[1]
++                logger.debug('%s: multiple collections found, ignoring the first one (\'core\') and handling (%s) only' % (layerdir, collection))
++            else:
++                logger.warn('%s: multiple collections found, handling first one (%s) only' % (layerdir, collection))
+         if var == 'BBFILE_COLLECTIONS':
+             return collection
+     value = config_data.getVar('%s_%s' % (var, collection), True)
+-- 
+2.32.0
+
+
+
+^ permalink raw reply related	[flat|nested] 5+ messages in thread
+* [layerindex-web][PATCH v2 1/3] layerindex/utils.py: add is_commit_ancestor check
+  2022-04-24 21:10 ` [layerindex-web][PATCH 1/3] layerindex/utils.py: add is_commit_ancestor check Tim Orling
+@ 2022-04-28 14:58   ` Tim Orling
+  0 siblings, 0 replies; 5+ messages in thread
+From: Tim Orling @ 2022-04-28 14:58 UTC (permalink / raw)
+  To: yocto; +Cc: bluelightning, Tim Orling
+
+Add a helper function to check if a given SHA1 hash is an ancestor in
+the currently checked out branch, using:
+
+git merge-branch --is-ancestor <commit> HEAD
+
+NOTE: This will not match commits which have been cherry-picked.
+
+Signed-off-by: Tim Orling <tim.orling@konsulko.com>
+---
+Changes in v2:
+  * Fix import of (subprocess.)CalledProcessError
+
+ layerindex/utils.py | 22 ++++++++++++++++++++++
+ 1 file changed, 22 insertions(+)
+
+diff --git a/layerindex/utils.py b/layerindex/utils.py
+index 32be16d..aaf8c52 100644
+--- a/layerindex/utils.py
++++ b/layerindex/utils.py
+@@ -229,6 +229,28 @@ def explode_dep_versions2(bitbakepath, deps):
+     import bb.utils
+     return bb.utils.explode_dep_versions2(deps)
+ 
++def is_commit_ancestor(repodir, commit, logger):
++    """
++    Check if the given SHA1 hash is an ancestor in the currently checked out branch.
++    NOTE: This will not match commits which have been cherry-picked.
++    """
++    try:
++        # check if commit is a sha1 hash
++        if re.match('[0-9a-f]{40}', commit):
++            # check if the commit is an ancestor
++            contained = runcmd(['git', 'merge-base', '--is-ancestor', '%s' % commit, 'HEAD'], repodir, logger=logger)
++            return True
++        else:
++            raise Exception('is_commit_ancestor: "commit" must be a SHA1 hash')
++    except subprocess.CalledProcessError as e:
++            if e.returncode == 1:
++                # commit is not an ancestor
++                return False
++            else:
++                raise e
++    except Exception as esc:
++        logger.warn(esc)
++
+ def checkout_repo(repodir, commit, logger, force=False):
+     """
+     Check out a revision in a repository, ensuring that untracked/uncommitted
+-- 
+2.32.0
+
+
+
+^ permalink raw reply related	[flat|nested] 5+ messages in thread
+end of thread, other threads:[~2022-04-28 14:58 UTC | newest]
+
+Thread overview: 5+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-04-24 21:10 [layerindex-web][PATCH 0/3] Fixes for updates Tim Orling
+2022-04-24 21:10 ` [layerindex-web][PATCH 1/3] layerindex/utils.py: add is_commit_ancestor check Tim Orling
+2022-04-28 14:58   ` [layerindex-web][PATCH v2 " Tim Orling
+2022-04-24 21:10 ` [layerindex-web][PATCH v2 2/3] recipe{desc,parse}.py: BB_ENV_PASSTHROUGH_ADDITIONS Tim Orling
+2022-04-24 21:10 ` [layerindex-web][PATCH v2 3/3] layerindex/utils.py: ignore 'core' in BBFILES_COLLECTIONS Tim Orling
+

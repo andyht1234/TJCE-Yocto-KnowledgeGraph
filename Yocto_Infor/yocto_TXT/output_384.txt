@@ -1,0 +1,121 @@
+* [meta-tensorflow][PATCH] bazel.bbclass: Fix build with bazel from sstate-cache
+@ 2023-05-15 11:55 Tomasz Dziendzielski
+  2023-07-11  8:55 ` Tomasz Dziendzielski
+  0 siblings, 1 reply; 3+ messages in thread
+From: Tomasz Dziendzielski @ 2023-05-15 11:55 UTC (permalink / raw)
+  To: yocto; +Cc: Tomasz Dziendzielski
+
+Random errors can occur when bazel is taken from sstate-cache and the
+dynamic loader is no longer available. Setting DYNAMIC_LOADER and
+letting populate_sysroot_setscene modify the UNINATIVE_LOADER is not
+enough. That way we just modify the loader of bazel binary, but bazel is
+also a self-extracting zip file with built-in binaries that need
+dynamic loader modification to work.
+
+Eample error, as you can see it's quite misleading:
+| An error occurred during the fetch of repository 'local_config_cuda'
+| Cuda Configuration Error: Invalid cpu_value
+| Skipping 'tensorflow/lite/tools/benchmark:benchmark_model': no such package '@local_config_cuda//cuda
+
+To fix this in do_configure execute bazel version to unpack
+output_user_root and run patchelf-uninative on the ELF executables. Then
+change modification time to some future date so that bazel does not see
+the modification.
+
+Signed-off-by: Tomasz Dziendzielski <tomasz.dziendzielski@gmail.com>
+---
+ classes/bazel.bbclass | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/classes/bazel.bbclass b/classes/bazel.bbclass
+index be436ec..316dc3d 100644
+--- a/classes/bazel.bbclass
++++ b/classes/bazel.bbclass
+@@ -129,6 +129,18 @@ build --linkopt=-Wl,-latomic
+ EOF
+ 
+     sed -i "s:${WORKDIR}:${BAZEL_OUTPUTBASE_DIR}/external/yocto_compiler:g" ${S}/bazelrc
++
++    # Unzip bazel packages
++    ${BAZEL} ${BAZEL_STARTUP_OPTIONS} version
++
++    for binary in build-runfiles daemonize linux-sandbox process-wrapper; do
++        # Modify interpreter for bazel built-in binaries
++        patchelf-uninative --set-interpreter "${UNINATIVE_LOADER}" ${BAZEL_DIR}/user_root/install/*/$binary
++
++        # Set modification time somewhere in the future to avoid "corrupt installation: file PATH is missing or modified"
++        # in this case modification is required for successful build
++        touch -m -t 203712120101 ${BAZEL_DIR}/user_root/install/*/$binary
++    done
+ }
+ 
+ EXPORT_FUNCTIONS do_configure
+-- 
+2.40.1
+
+
+
+^ permalink raw reply related	[flat|nested] 3+ messages in thread
+* Re: [meta-tensorflow][PATCH] bazel.bbclass: Fix build with bazel from sstate-cache
+  2023-05-15 11:55 [meta-tensorflow][PATCH] bazel.bbclass: Fix build with bazel from sstate-cache Tomasz Dziendzielski
+@ 2023-07-11  8:55 ` Tomasz Dziendzielski
+  2023-07-12  2:54   ` Hongxu Jia
+  0 siblings, 1 reply; 3+ messages in thread
+From: Tomasz Dziendzielski @ 2023-07-11  8:55 UTC (permalink / raw)
+  To: yocto, hongxu.jia
+
+[-- Attachment #1: Type: text/plain, Size: 322 bytes --]
+
+Hi Hongxu,
+I can see you disabled the uninative back in the bazel-native recipe. Can
+you please provide steps to reproduce the "bazel/bazel.real: Input/output
+error" so we could investigate why it happens? Disabling uninative will
+cause the failure if bazel is taken from sstate-cache.
+
+Best regards,
+Tomasz Dziendzielski
+
+[-- Attachment #2: Type: text/html, Size: 936 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [meta-tensorflow][PATCH] bazel.bbclass: Fix build with bazel from sstate-cache
+  2023-07-11  8:55 ` Tomasz Dziendzielski
+@ 2023-07-12  2:54   ` Hongxu Jia
+  0 siblings, 0 replies; 3+ messages in thread
+From: Hongxu Jia @ 2023-07-12  2:54 UTC (permalink / raw)
+  To: Tomasz Dziendzielski, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 701 bytes --]
+
+On 7/11/23 16:55, Tomasz Dziendzielski wrote:
+> **
+> *CAUTION: This email comes from a non Wind River email account!*
+> Do not click links or open attachments unless you recognize the sender 
+> and know the content is safe.
+> Hi Hongxu,
+> I can see you disabled the uninative back in the bazel-native recipe. 
+> Can you please provide steps to reproduce the "bazel/bazel.real: 
+> Input/output error" so we could investigate why it happens? Disabling 
+> uninative will cause the failure if bazel is taken from sstate-cache.
+>
+It is not reproducible always, but be reproducible on specific build 
+host, it seems gcc tool chain or libc related I guess
+
+//Hongxu
+
+
+> Best regards,
+> Tomasz Dziendzielski
+
+
+[-- Attachment #2: Type: text/html, Size: 2686 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2023-07-12  2:54 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-05-15 11:55 [meta-tensorflow][PATCH] bazel.bbclass: Fix build with bazel from sstate-cache Tomasz Dziendzielski
+2023-07-11  8:55 ` Tomasz Dziendzielski
+2023-07-12  2:54   ` Hongxu Jia
+

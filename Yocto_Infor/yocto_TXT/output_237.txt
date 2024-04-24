@@ -1,0 +1,149 @@
+* [patchtest][PATCH] get-latest-series: add script
+@ 2023-08-25 17:22 Trevor Gamblin
+  0 siblings, 0 replies; only message in thread
+From: Trevor Gamblin @ 2023-08-25 17:22 UTC (permalink / raw)
+  To: yocto
+
+As a first step in replacing the non-functional poll-events script, add
+a new one that uses git-pw and the date command to download patch series
+by ID, with configurable time intervals, maximum number of series,
+download locations, log files, and Patchwork projects to query. Use a
+log file (defined as $SERIES_TEST_LOG in the script) to track
+previously-consumed series so that they don't get tested multiple times.
+
+Signed-off-by: Trevor Gamblin <tgamblin@baylibre.com>
+---
+ scripts/get-latest-series | 112 ++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 112 insertions(+)
+ create mode 100755 scripts/get-latest-series
+
+diff --git a/scripts/get-latest-series b/scripts/get-latest-series
+new file mode 100755
+index 0000000..dda4165
+--- /dev/null
++++ b/scripts/get-latest-series
+@@ -0,0 +1,112 @@
++#!/bin/bash -e
++#
++# get-latest-series: Download latest patch series from Patchwork
++#
++# Copyright (C) 2023 BayLibre Inc.
++#
++# This program is free software; you can redistribute it and/or modify
++# it under the terms of the GNU General Public License version 2 as
++# published by the Free Software Foundation.
++#
++# This program is distributed in the hope that it will be useful,
++# but WITHOUT ANY WARRANTY; without even the implied warranty of
++# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++# GNU General Public License for more details.
++#
++# You should have received a copy of the GNU General Public License along
++# with this program; if not, write to the Free Software Foundation, Inc.,
++# 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
++
++# the interval into the past which we want to check for new series, in minutes
++INTERVAL_MINUTES=30
++
++# Maximum number of series to retrieve. the Patchwork API can support up to 250
++# at once
++SERIES_LIMIT=250
++
++# Location to save patches
++DOWNLOAD_PATH="."
++
++# Name of the file to use/check as a log of previously-tested series IDs
++SERIES_TEST_LOG=".series_test.log"
++
++# Patchwork project to pull series patches from
++PROJECT="oe-core"
++
++help()
++{
++    echo "Usage: get-latest-series [ -i | --interval MINUTES ]
++        [ -d | --directory DIRECTORY ]
++        [ -l | --limit COUNT ]
++        [ -h | --help ]
++	[ -t | --tested-series LOGFILE]
++        [ -p | --project PROJECT ]"
++    exit 2
++}
++
++while [ "$1" != "" ]; do
++    case $1 in
++        -i|--interval)
++        INTERVAL_MINUTES=$2
++        shift 2
++        ;;
++    -l|--limit)
++        SERIES_LIMIT=$2
++        shift 2
++        ;;
++    -d|--directory)
++        DOWNLOAD_PATH=$2
++        shift 2
++        ;;
++    -p|--project)
++        PROJECT=$2
++        shift 2
++        ;;
++    -t|--tested-series)
++        SERIES_TEST_LOG=$2
++        shift 2
++        ;;
++    -h|--help)
++            help
++        ;;
++    *)
++        echo "Unknown option $1"
++        help
++        ;;
++    esac
++done
++
++# The time this script is running at
++START_TIME=$(date --date "now" +"%Y-%m-%dT%H:%M:%S")
++
++# the corresponding timestamp we want to check against for new patch series
++SERIES_CHECK_LIMIT=$(date --date "now - ${INTERVAL_MINUTES} minutes" +"%Y-%m-%dT%H:%M:%S")
++
++echo "Start time is $START_TIME"
++echo "Series check limit is $SERIES_CHECK_LIMIT"
++
++# Create DOWNLOAD_PATH if it doesn't exist
++if [ ! -d "$DOWNLOAD_PATH" ]; then
++    mkdir "${DOWNLOAD_PATH}"
++fi
++
++# Create SERIES_TEST_LOG if it doesn't exist
++if [ ! -f "$SERIES_TEST_LOG" ]; then
++    touch "${SERIES_TEST_LOG}"
++fi
++
++# Retrieve a list of series IDs from the 'git-pw series list' output. The API
++# supports a maximum of 250 results, so make sure we allow that when required
++SERIES_LIST=$(git-pw --project "${PROJECT}" series list --since "$(date --date "now - ${INTERVAL_MINUTES} minutes" +"%Y-%m-%dT%H:%M:%S")" --limit "${SERIES_LIMIT}" | awk '{print $2}' | xargs | cut -f 2- -d ' ')
++
++# Check each series ID
++for SERIES in $SERIES_LIST; do
++    # Download the series only if it's not found in the SERIES_TEST_LOG
++    if ! grep -w --quiet "${SERIES}" "${SERIES_TEST_LOG}"; then
++        echo "Downloading $SERIES..."
++        git-pw series download "${SERIES}" "${DOWNLOAD_PATH}"
++	echo "${SERIES}" >> "${SERIES_TEST_LOG}"
++    else
++        echo "Already tested ${SERIES}. Skipping..."
++    fi
++done
+-- 
+2.41.0
+
+
+
+^ permalink raw reply related	[flat|nested] only message in thread
+only message in thread, other threads:[~2023-08-25 17:22 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-08-25 17:22 [patchtest][PATCH] get-latest-series: add script Trevor Gamblin
+

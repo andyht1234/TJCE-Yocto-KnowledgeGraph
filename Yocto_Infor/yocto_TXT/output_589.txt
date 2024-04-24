@@ -1,0 +1,263 @@
+* core-image-weston mickledore
+@ 2023-05-22 12:25 Belisko Marek
+  2023-05-22 16:21 ` [yocto] " Khem Raj
+  0 siblings, 1 reply; 3+ messages in thread
+From: Belisko Marek @ 2023-05-22 12:25 UTC (permalink / raw)
+  To: Yocto
+
+Hi,
+
+I'm using core-image-weston and adding chromium to the final image.
+Weston is properly started on the hdmi monitor. I'm trying to start
+chromium when weston starts with following:
+
+[Unit]
+Description="Chromium browser start"
+Requires=weston.service
+After=weston.service
+
+
+[Service]
+Type=simple
+Environment=XDG_RUNTIME_DIR="/run/user/0"
+ExecStart=/usr/bin/chromium https://google.com
+Restart=always
+RestartSec=5
+
+User=weston
+Group=weston
+
+
+[Install]
+WantedBy=multi-user.target
+
+but getting this:
+
+May 22 12:23:26 orange-pi-pc2 sh[254]:
+[250:250:0522/122326.671204:ERROR:wayland_connection.cc(186)] Failed
+to connect
+to Wayland display: Permission denied (13)
+May 22 12:23:26 orange-pi-pc2 sh[254]:
+[250:250:0522/122326.674692:ERROR:ozone_platform_wayland.cc(233)]
+Failed to init
+ialize Wayland platform
+May 22 12:23:26 orange-pi-pc2 sh[254]:
+[250:250:0522/122326.674738:ERROR:env.cc(255)] The platform failed to
+initialize
+.  Exiting.
+
+When running the terminal from wayland desktop chromium works fine. Am
+I missing something to start it properly?
+
+Thanks and BR,
+
+marek
+
+-- 
+as simple and primitive as possible
+-------------------------------------------------
+Marek Belisko - OPEN-NANDRA
+Freelance Developer
+
+Ruska Nova Ves 219 | Presov, 08005 Slovak Republic
+Tel: +421 915 052 184
+skype: marekwhite
+twitter: #opennandra
+web: http://open-nandra.com
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] core-image-weston mickledore
+  2023-05-22 12:25 core-image-weston mickledore Belisko Marek
+@ 2023-05-22 16:21 ` Khem Raj
+  2023-05-23  8:40   ` Belisko Marek
+  0 siblings, 1 reply; 3+ messages in thread
+From: Khem Raj @ 2023-05-22 16:21 UTC (permalink / raw)
+  To: Marek Belisko; +Cc: Yocto
+
+On Mon, May 22, 2023 at 5:26 AM Marek Belisko <marek.belisko@gmail.com> wrote:
+>
+> Hi,
+>
+> I'm using core-image-weston and adding chromium to the final image.
+> Weston is properly started on the hdmi monitor. I'm trying to start
+> chromium when weston starts with following:
+>
+> [Unit]
+> Description="Chromium browser start"
+> Requires=weston.service
+> After=weston.service
+>
+>
+> [Service]
+> Type=simple
+> Environment=XDG_RUNTIME_DIR="/run/user/0"
+
+Make it Environment=XDG_RUNTIME_DIR="/run/user/`id -u`"
+
+also add
+
+Environment=WAYLAND_DISPLAY="`ls -1 /run/user/`id -u`/ | egrep
+'wayland-[0-9]+$'`"
+
+> ExecStart=/usr/bin/chromium https://google.com
+> Restart=always
+> RestartSec=5
+>
+> User=weston
+> Group=weston
+>
+>
+> [Install]
+> WantedBy=multi-user.target
+>
+> but getting this:
+>
+> May 22 12:23:26 orange-pi-pc2 sh[254]:
+> [250:250:0522/122326.671204:ERROR:wayland_connection.cc(186)] Failed
+> to connect
+> to Wayland display: Permission denied (13)
+> May 22 12:23:26 orange-pi-pc2 sh[254]:
+> [250:250:0522/122326.674692:ERROR:ozone_platform_wayland.cc(233)]
+> Failed to init
+> ialize Wayland platform
+> May 22 12:23:26 orange-pi-pc2 sh[254]:
+> [250:250:0522/122326.674738:ERROR:env.cc(255)] The platform failed to
+> initialize
+> .  Exiting.
+>
+> When running the terminal from wayland desktop chromium works fine. Am
+> I missing something to start it properly?
+>
+> Thanks and BR,
+>
+> marek
+>
+> --
+> as simple and primitive as possible
+> -------------------------------------------------
+> Marek Belisko - OPEN-NANDRA
+> Freelance Developer
+>
+> Ruska Nova Ves 219 | Presov, 08005 Slovak Republic
+> Tel: +421 915 052 184
+> skype: marekwhite
+> twitter: #opennandra
+> web: http://open-nandra.com
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> You automatically follow any topics you start or reply to.
+> View/Reply Online (#60079): https://lists.yoctoproject.org/g/yocto/message/60079
+> Mute This Topic: https://lists.yoctoproject.org/mt/99063456/1997914
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [raj.khem@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] core-image-weston mickledore
+  2023-05-22 16:21 ` [yocto] " Khem Raj
+@ 2023-05-23  8:40   ` Belisko Marek
+  0 siblings, 0 replies; 3+ messages in thread
+From: Belisko Marek @ 2023-05-23  8:40 UTC (permalink / raw)
+  To: Khem Raj; +Cc: Yocto
+
+On Mon, May 22, 2023 at 6:22 PM Khem Raj <raj.khem@gmail.com> wrote:
+>
+> On Mon, May 22, 2023 at 5:26 AM Marek Belisko <marek.belisko@gmail.com> wrote:
+> >
+> > Hi,
+> >
+> > I'm using core-image-weston and adding chromium to the final image.
+> > Weston is properly started on the hdmi monitor. I'm trying to start
+> > chromium when weston starts with following:
+> >
+> > [Unit]
+> > Description="Chromium browser start"
+> > Requires=weston.service
+> > After=weston.service
+> >
+> >
+> > [Service]
+> > Type=simple
+> > Environment=XDG_RUNTIME_DIR="/run/user/0"
+>
+> Make it Environment=XDG_RUNTIME_DIR="/run/user/`id -u`"
+>
+> also add
+>
+> Environment=WAYLAND_DISPLAY="`ls -1 /run/user/`id -u`/ | egrep
+> 'wayland-[0-9]+$'`"
+Tried that but it was still not working. When I move
+XDG_RUNTIME_DIR="/run/user/`id -u`" and the same for WAYLAND_DISPLAY
+to my startup script it seems it works.
+>
+> > ExecStart=/usr/bin/chromium https://google.com
+> > Restart=always
+> > RestartSec=5
+> >
+> > User=weston
+> > Group=weston
+> >
+> >
+> > [Install]
+> > WantedBy=multi-user.target
+> >
+> > but getting this:
+> >
+> > May 22 12:23:26 orange-pi-pc2 sh[254]:
+> > [250:250:0522/122326.671204:ERROR:wayland_connection.cc(186)] Failed
+> > to connect
+> > to Wayland display: Permission denied (13)
+> > May 22 12:23:26 orange-pi-pc2 sh[254]:
+> > [250:250:0522/122326.674692:ERROR:ozone_platform_wayland.cc(233)]
+> > Failed to init
+> > ialize Wayland platform
+> > May 22 12:23:26 orange-pi-pc2 sh[254]:
+> > [250:250:0522/122326.674738:ERROR:env.cc(255)] The platform failed to
+> > initialize
+> > .  Exiting.
+> >
+> > When running the terminal from wayland desktop chromium works fine. Am
+> > I missing something to start it properly?
+> >
+> > Thanks and BR,
+> >
+> > marek
+> >
+> > --
+> > as simple and primitive as possible
+> > -------------------------------------------------
+> > Marek Belisko - OPEN-NANDRA
+> > Freelance Developer
+> >
+> > Ruska Nova Ves 219 | Presov, 08005 Slovak Republic
+> > Tel: +421 915 052 184
+> > skype: marekwhite
+> > twitter: #opennandra
+> > web: http://open-nandra.com
+> >
+> > -=-=-=-=-=-=-=-=-=-=-=-
+> > Links: You receive all messages sent to this group.
+> > You automatically follow any topics you start or reply to.
+> > View/Reply Online (#60079): https://lists.yoctoproject.org/g/yocto/message/60079
+> > Mute This Topic: https://lists.yoctoproject.org/mt/99063456/1997914
+> > Group Owner: yocto+owner@lists.yoctoproject.org
+> > Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [raj.khem@gmail.com]
+> > -=-=-=-=-=-=-=-=-=-=-=-
+> >
+
+marek
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2023-05-23  8:40 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-05-22 12:25 core-image-weston mickledore Belisko Marek
+2023-05-22 16:21 ` [yocto] " Khem Raj
+2023-05-23  8:40   ` Belisko Marek
+

@@ -1,0 +1,166 @@
+* Re: [meta-security][hardknott][PATCH v2] sssd: re-package to fix QA issues
+       [not found] <20211116182829.24177-1-jpuhlman@mvista.com>
+@ 2021-11-26 18:41 ` akuster808
+  2021-12-03  2:02   ` Kai
+  0 siblings, 1 reply; 2+ messages in thread
+From: akuster808 @ 2021-11-26 18:41 UTC (permalink / raw)
+  To: Jeremy A. Puhlman, yocto; +Cc: Kai Kang
+
+merged.
+
+On 11/16/21 10:28 AM, Jeremy A. Puhlman wrote:
+> It packages all file in ${libdir} to package sssd, including the .so
+> symlink files. Then it causes QA issues:
+>
+> | ERROR: QA Issue: sssd rdepends on dbus-dev [dev-deps]
+> | ERROR: QA Issue: sssd rdepends on ding-libs-dev [dev-deps]
+>
+> So re-package sssd then the .so symlink files and .pc files are packaged
+> to sssd-dev which should be.
+>
+> File ${libdir}/libsss_sudo.so is not a symlink file but packaged to
+> sssd-dev too. Then causes another QA issue:
+>
+> | ERROR: sssd-2.5.2-r0 do_package_qa: QA Issue:
+>     -dev package sssd-dev contains non-symlink .so '/usr/lib/libsss_sudo.so' [dev-elf]
+>
+> So create a new sub-package libsss-sudo to package file libsss_sudo.so
+> and make sssd rdepends on it.
+>
+> JP: Updated for version differences.
+>
+> Signed-off-by: Kai Kang <kai.kang@windriver.com>
+> Signed-off-by: Armin Kuster <akuster808@gmail.com>
+> (cherry picked from commit e81c15f851ca5396c78c8737967ee38db0ebe0cd)
+> Signed-off-by: Jeremy A. Puhlman <jpuhlman@mvista.com>
+> ---
+>  recipes-security/sssd/sssd_1.16.5.bb | 21 ++++++++++++++-------
+>  1 file changed, 14 insertions(+), 7 deletions(-)
+>
+> diff --git a/recipes-security/sssd/sssd_1.16.5.bb b/recipes-security/sssd/sssd_1.16.5.bb
+> index 02d0837..f13fc49 100644
+> --- a/recipes-security/sssd/sssd_1.16.5.bb
+> +++ b/recipes-security/sssd/sssd_1.16.5.bb
+> @@ -120,10 +120,17 @@ SYSTEMD_SERVICE_${PN} = " \
+>  "
+>  SYSTEMD_AUTO_ENABLE = "disable"
+>  
+> -FILES_${PN} += "${libdir} ${datadir} ${base_libdir}/security/pam_sss.so"
+> -FILES_${PN}-dev = " ${includedir}/* ${libdir}/*la ${libdir}/*/*la"
+> -
+> -# The package contains symlinks that trip up insane
+> -INSANE_SKIP_${PN} = "dev-so"
+> -
+> -RDEPENDS_${PN} = "bind dbus libldb libpam"
+> +PACKAGES =+ "libsss-sudo libsss-autofs"
+> +ALLOW_EMPTY_libsss-sudo = "1"
+> +ALLOW_EMPTY_libsss-autofs = "1"
+> +
+> +FILES_${PN}-dev += "${libdir}/sssd/modules/lib*.so"
+> +FILES_${PN} += "${base_libdir}/security/pam_sss*.so  \
+> +                ${datadir}/dbus-1/system-services/*.service \
+> +                ${libdir}/krb5/* \
+> +                ${libdir}/ldb/* \
+> +                "
+> +FILES_libsss-autofs = "${libdir}/sssd/modules/libsss_autofs.so"
+> +FILES_libsss-sudo = "${libdir}/libsss_sudo.so"
+> +
+> +RDEPENDS_${PN} = "bind dbus libldb libpam libsss-sudo libsss-autofs"
+
+
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+* Re: [meta-security][hardknott][PATCH v2] sssd: re-package to fix QA issues
+  2021-11-26 18:41 ` [meta-security][hardknott][PATCH v2] sssd: re-package to fix QA issues akuster808
+@ 2021-12-03  2:02   ` Kai
+  0 siblings, 0 replies; 2+ messages in thread
+From: Kai @ 2021-12-03  2:02 UTC (permalink / raw)
+  To: akuster808, Jeremy A. Puhlman, yocto
+
+On 11/27/21 2:41 AM, akuster808 wrote:
+> merged.
+
+Hi Armin,
+
+Would you like to double check the commit, please? I don't see it in 
+branch hardknott.
+
+Regards,
+Kai
+
+>
+> On 11/16/21 10:28 AM, Jeremy A. Puhlman wrote:
+>> It packages all file in ${libdir} to package sssd, including the .so
+>> symlink files. Then it causes QA issues:
+>>
+>> | ERROR: QA Issue: sssd rdepends on dbus-dev [dev-deps]
+>> | ERROR: QA Issue: sssd rdepends on ding-libs-dev [dev-deps]
+>>
+>> So re-package sssd then the .so symlink files and .pc files are packaged
+>> to sssd-dev which should be.
+>>
+>> File ${libdir}/libsss_sudo.so is not a symlink file but packaged to
+>> sssd-dev too. Then causes another QA issue:
+>>
+>> | ERROR: sssd-2.5.2-r0 do_package_qa: QA Issue:
+>>      -dev package sssd-dev contains non-symlink .so '/usr/lib/libsss_sudo.so' [dev-elf]
+>>
+>> So create a new sub-package libsss-sudo to package file libsss_sudo.so
+>> and make sssd rdepends on it.
+>>
+>> JP: Updated for version differences.
+>>
+>> Signed-off-by: Kai Kang <kai.kang@windriver.com>
+>> Signed-off-by: Armin Kuster <akuster808@gmail.com>
+>> (cherry picked from commit e81c15f851ca5396c78c8737967ee38db0ebe0cd)
+>> Signed-off-by: Jeremy A. Puhlman <jpuhlman@mvista.com>
+>> ---
+>>   recipes-security/sssd/sssd_1.16.5.bb | 21 ++++++++++++++-------
+>>   1 file changed, 14 insertions(+), 7 deletions(-)
+>>
+>> diff --git a/recipes-security/sssd/sssd_1.16.5.bb b/recipes-security/sssd/sssd_1.16.5.bb
+>> index 02d0837..f13fc49 100644
+>> --- a/recipes-security/sssd/sssd_1.16.5.bb
+>> +++ b/recipes-security/sssd/sssd_1.16.5.bb
+>> @@ -120,10 +120,17 @@ SYSTEMD_SERVICE_${PN} = " \
+>>   "
+>>   SYSTEMD_AUTO_ENABLE = "disable"
+>>   
+>> -FILES_${PN} += "${libdir} ${datadir} ${base_libdir}/security/pam_sss.so"
+>> -FILES_${PN}-dev = " ${includedir}/* ${libdir}/*la ${libdir}/*/*la"
+>> -
+>> -# The package contains symlinks that trip up insane
+>> -INSANE_SKIP_${PN} = "dev-so"
+>> -
+>> -RDEPENDS_${PN} = "bind dbus libldb libpam"
+>> +PACKAGES =+ "libsss-sudo libsss-autofs"
+>> +ALLOW_EMPTY_libsss-sudo = "1"
+>> +ALLOW_EMPTY_libsss-autofs = "1"
+>> +
+>> +FILES_${PN}-dev += "${libdir}/sssd/modules/lib*.so"
+>> +FILES_${PN} += "${base_libdir}/security/pam_sss*.so  \
+>> +                ${datadir}/dbus-1/system-services/*.service \
+>> +                ${libdir}/krb5/* \
+>> +                ${libdir}/ldb/* \
+>> +                "
+>> +FILES_libsss-autofs = "${libdir}/sssd/modules/libsss_autofs.so"
+>> +FILES_libsss-sudo = "${libdir}/libsss_sudo.so"
+>> +
+>> +RDEPENDS_${PN} = "bind dbus libldb libpam libsss-sudo libsss-autofs"
+
+
+-- 
+Kai Kang
+Wind River Linux
+
+
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2021-12-03  2:02 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+     [not found] <20211116182829.24177-1-jpuhlman@mvista.com>
+2021-11-26 18:41 ` [meta-security][hardknott][PATCH v2] sssd: re-package to fix QA issues akuster808
+2021-12-03  2:02   ` Kai
+

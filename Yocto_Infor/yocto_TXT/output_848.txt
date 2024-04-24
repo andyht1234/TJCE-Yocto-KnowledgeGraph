@@ -1,0 +1,246 @@
+* Re: [yocto] unable to apply patch: "git am" did not work - dubious ownership
+       [not found] <174CBC963DBF1469.18629@lists.yoctoproject.org>
+@ 2023-03-16  3:15 ` Ron Eggler
+       [not found] ` <174CC7DD0B78FDCC.18629@lists.yoctoproject.org>
+  1 sibling, 0 replies; 2+ messages in thread
+From: Ron Eggler @ 2023-03-16  3:15 UTC (permalink / raw)
+  To: yocto
+
+
+On 2023-03-15 16:48, Mistyron via lists.yoctoproject.org wrote:
+> Hi,
+>
+> I'm trying to apply a patch to the kernel sources for trouble shooting 
+> a problem but the patch doesn't seem to apply, I get the following error:
+>
+> | (2/4) 0002-add-phy_debug_logs.patch
+> | [INFO]: check of 
+> .kernel-meta//patches///0002-add-phy_debug_logs.patch with "git am" 
+> did not pass, trying reduced context.
+> | [INFO]: Context reduced git-am of 
+> .kernel-meta//patches///0002-add-phy_debug_logs.patch with "git am" 
+> did not work, trying "apply".
+> | error: patch failed: drivers/net/mdio/of_mdio.c:286
+> | error: drivers/net/mdio/of_mdio.c: patch does not apply
+> | [ERROR]: Application of 
+> .kernel-meta//patches///0002-add-phy_debug_logs.patch failed.
+> |          Patch needs to be refreshed. Sample resolution script:
+> |              .git/rebase-apply/resolve_rejects
+> | ERROR: Could not apply patches for smarc-rzg2l.
+> | ERROR: Patch failures can be resolved in the linux source directory 
+> /home/yocto/rzg_vlp_v3.0.0/build/tmp/work-shared/smarc-rzg2l/kernel-source)
+> | WARNING: exit code 1 from a shell command.
+> | ERROR: Execution of 
+> '/home/yocto/rzg_vlp_v3.0.0/build/tmp/work/smarc_rzg2l-poky-linux/linux-renesas/5.10.83-cip1+gitAUTOINC+e52825e45b-r1/temp/run.do_patch.22155' 
+> failed with exit code 1
+> ERROR: Task 
+> (/home/yocto/rzg_vlp_v3.0.0/build/../meta-renesas/recipes-common/recipes-kernel/linux/linux-renesas_5.10.bb:do_patch) 
+> failed with exit code '1'
+> NOTE: Tasks Summary: Attempted 5186 tasks of which 4784 didn't need to 
+> be rerun and 1 failed.
+>
+> So I tried to launch a devshell with $ bitbake -c devshell linux-renesas
+>
+> I confirmed the availability of my patch in 
+> build/tmp/work-shared/smarc-rzg2l/kernel-source/.kernel-meta/patches/ 
+> invoked "git am" and got the following:
+>
+> # git am 0002-add-phy_debug_logs.patch
+> fatal: detected dubious ownership in repository at 
+> '/home/yocto/rzg_vlp_v3.0.0/build/tmp/work-shared/smarc-rzg2l/kernel-source'
+> To add an exception for this directory, call:
+>
+>         git config --global --add safe.directory 
+> /home/yocto/rzg_vlp_v3.0.0/build/tmp/work-shared/smarc-rzg2l/kernel-source
+>
+> I'm not sure about what would be dubious about the ownership of my 
+> files. I'm running out of a container and all files in 
+> /home/yocto/rzg_vlp_v3.0.0/build/tmp/work-shared/smarc-rzg2l/kernel-source 
+> are owned by uid 1000, I double checked that with
+>
+> # tree -upf 
+> /home/yocto/rzg_vlp_v3.0.0/build/tmp/work-shared/smarc-rzg2l/kernel-source 
+> | grep -v 1000
+>
+> For reference, the patch looks like:
+>
+> diff --git a/of_mdio.c b/of_mdio.c
+> index 4daf94bb..8ce36727 100644
+> --- a/drivers/net/mdio/of_mdio.c
+> +++ b/drivers/net/mdio/of_mdio.c
+> @@ -286,8 +286,10 @@ int of_mdiobus_register(struct mii_bus *mdio, 
+> struct device_node *np)
+>
+>                 if (of_mdiobus_child_is_phy(child))
+>                         rc = of_mdiobus_register_phy(mdio, child, addr);
+> +                       printk("of_mdiobus_child_is_phy returned true, 
+> expected! \nof_mdiobus_register_phy() rc %d", rc);
+>                 else
+>                         rc = of_mdiobus_register_device(mdio, child, 
+> addr);
+> +                       printk("of_mdiobus_child_is_phy returned 
+> false, not expected! \nof_mdiobus_register_phy()rc %d\n", rc);
+>
+>                 if (rc == -ENODEV)
+>                         dev_err(&mdio->dev,
+>
+> Can anyone help me out here to find what the problem might be?
+Oh okay,
+
+It appears like the "dubious ownership" error appears because the 
+default user in the devshell is root, changing back to the yocto user 
+(with which bitbake is run outside devshell) and reinvocation of git am 
+gives the following:
+# su yocto
+Password:
+$ git am 0002-add-phy_debug_logs.patch
+Patch format detection failed.
+
+and using git apply instead doesn't print any errorsd but the patch 
+dtill doesn't appear to be applied to the soyurce file:
+
+$ git apply 0002-add-phy_debug_logs.patch
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#59435): https://lists.yoctoproject.org/g/yocto/message/59435
+> Mute This Topic: https://lists.yoctoproject.org/mt/97640471/7254380
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [ron.eggler@mistywest.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+* Re: [yocto] unable to apply patch: "git am" did not work - dubious ownership
+       [not found] ` <174CC7DD0B78FDCC.18629@lists.yoctoproject.org>
+@ 2023-03-18  5:02   ` Ron Eggler
+  0 siblings, 0 replies; 2+ messages in thread
+From: Ron Eggler @ 2023-03-18  5:02 UTC (permalink / raw)
+  To: yocto
+
+Turns out, my patch did not apply because I used indentation with spaces 
+instead of with tabs which would cause it to stumble.
+Double check your indentation is correct if you get here with a search 
+engine!
+
+Ron
+
+On 2023-03-15 20:15, Mistyron via lists.yoctoproject.org wrote:
+> 
+> On 2023-03-15 16:48, Mistyron via lists.yoctoproject.org wrote:
+>> Hi,
+>>
+>> I'm trying to apply a patch to the kernel sources for trouble shooting 
+>> a problem but the patch doesn't seem to apply, I get the following error:
+>>
+>> | (2/4) 0002-add-phy_debug_logs.patch
+>> | [INFO]: check of 
+>> .kernel-meta//patches///0002-add-phy_debug_logs.patch with "git am" 
+>> did not pass, trying reduced context.
+>> | [INFO]: Context reduced git-am of 
+>> .kernel-meta//patches///0002-add-phy_debug_logs.patch with "git am" 
+>> did not work, trying "apply".
+>> | error: patch failed: drivers/net/mdio/of_mdio.c:286
+>> | error: drivers/net/mdio/of_mdio.c: patch does not apply
+>> | [ERROR]: Application of 
+>> .kernel-meta//patches///0002-add-phy_debug_logs.patch failed.
+>> |          Patch needs to be refreshed. Sample resolution script:
+>> |              .git/rebase-apply/resolve_rejects
+>> | ERROR: Could not apply patches for smarc-rzg2l.
+>> | ERROR: Patch failures can be resolved in the linux source directory 
+>> /home/yocto/rzg_vlp_v3.0.0/build/tmp/work-shared/smarc-rzg2l/kernel-source)
+>> | WARNING: exit code 1 from a shell command.
+>> | ERROR: Execution of 
+>> '/home/yocto/rzg_vlp_v3.0.0/build/tmp/work/smarc_rzg2l-poky-linux/linux-renesas/5.10.83-cip1+gitAUTOINC+e52825e45b-r1/temp/run.do_patch.22155' failed with exit code 1
+>> ERROR: Task 
+>> (/home/yocto/rzg_vlp_v3.0.0/build/../meta-renesas/recipes-common/recipes-kernel/linux/linux-renesas_5.10.bb:do_patch) failed with exit code '1'
+>> NOTE: Tasks Summary: Attempted 5186 tasks of which 4784 didn't need to 
+>> be rerun and 1 failed.
+>>
+>> So I tried to launch a devshell with $ bitbake -c devshell linux-renesas
+>>
+>> I confirmed the availability of my patch in 
+>> build/tmp/work-shared/smarc-rzg2l/kernel-source/.kernel-meta/patches/ 
+>> invoked "git am" and got the following:
+>>
+>> # git am 0002-add-phy_debug_logs.patch
+>> fatal: detected dubious ownership in repository at 
+>> '/home/yocto/rzg_vlp_v3.0.0/build/tmp/work-shared/smarc-rzg2l/kernel-source'
+>> To add an exception for this directory, call:
+>>
+>>         git config --global --add safe.directory 
+>> /home/yocto/rzg_vlp_v3.0.0/build/tmp/work-shared/smarc-rzg2l/kernel-source
+>>
+>> I'm not sure about what would be dubious about the ownership of my 
+>> files. I'm running out of a container and all files in 
+>> /home/yocto/rzg_vlp_v3.0.0/build/tmp/work-shared/smarc-rzg2l/kernel-source are owned by uid 1000, I double checked that with
+>>
+>> # tree -upf 
+>> /home/yocto/rzg_vlp_v3.0.0/build/tmp/work-shared/smarc-rzg2l/kernel-source | grep -v 1000
+>>
+>> For reference, the patch looks like:
+>>
+>> diff --git a/of_mdio.c b/of_mdio.c
+>> index 4daf94bb..8ce36727 100644
+>> --- a/drivers/net/mdio/of_mdio.c
+>> +++ b/drivers/net/mdio/of_mdio.c
+>> @@ -286,8 +286,10 @@ int of_mdiobus_register(struct mii_bus *mdio, 
+>> struct device_node *np)
+>>
+>>                 if (of_mdiobus_child_is_phy(child))
+>>                         rc = of_mdiobus_register_phy(mdio, child, addr);
+>> +                       printk("of_mdiobus_child_is_phy returned true, 
+>> expected! \nof_mdiobus_register_phy() rc %d", rc);
+>>                 else
+>>                         rc = of_mdiobus_register_device(mdio, child, 
+>> addr);
+>> +                       printk("of_mdiobus_child_is_phy returned 
+>> false, not expected! \nof_mdiobus_register_phy()rc %d\n", rc);
+>>
+>>                 if (rc == -ENODEV)
+>>                         dev_err(&mdio->dev,
+>>
+>> Can anyone help me out here to find what the problem might be?
+> Oh okay,
+> 
+> It appears like the "dubious ownership" error appears because the 
+> default user in the devshell is root, changing back to the yocto user 
+> (with which bitbake is run outside devshell) and reinvocation of git am 
+> gives the following:
+> # su yocto
+> Password:
+> $ git am 0002-add-phy_debug_logs.patch
+> Patch format detection failed.
+> 
+> and using git apply instead doesn't print any errorsd but the patch 
+> dtill doesn't appear to be applied to the soyurce file:
+> 
+> $ git apply 0002-add-phy_debug_logs.patch
+>>
+>>
+>>
+>>
+> 
+> 
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#59436): https://lists.yoctoproject.org/g/yocto/message/59436
+> Mute This Topic: https://lists.yoctoproject.org/mt/97640471/7254380
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [ron.eggler@mistywest.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+> 
+
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2023-03-18  5:02 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+     [not found] <174CBC963DBF1469.18629@lists.yoctoproject.org>
+2023-03-16  3:15 ` [yocto] unable to apply patch: "git am" did not work - dubious ownership Ron Eggler
+     [not found] ` <174CC7DD0B78FDCC.18629@lists.yoctoproject.org>
+2023-03-18  5:02   ` Ron Eggler
+

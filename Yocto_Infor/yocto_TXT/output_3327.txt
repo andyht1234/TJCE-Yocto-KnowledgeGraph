@@ -1,0 +1,503 @@
+* [meta-security][PATCH 0/7] YCL cleanups
+@ 2021-06-05 22:02 Armin Kuster
+  2021-06-05 22:02 ` [meta-security][PATCH 1/7] meta-security: add sanity check Armin Kuster
+                   ` (6 more replies)
+  0 siblings, 7 replies; 8+ messages in thread
+From: Armin Kuster @ 2021-06-05 22:02 UTC (permalink / raw)
+  To: yocto
+
+This series superceeds the privious set to help
+pass the check-layer scrip.
+
+Armin Kuster (7):
+  meta-security: add sanity check
+  meta-security/recipe-kernel: use sanity check
+  linux-yocto-dev: drop bbappend
+  meta-tpm: add layer sanity check
+  meta-tpm/linux-yocto: use sanity support
+  meta-integrity: add sanity check
+  meta-integrity/recipe-kernel: use sanity check
+
+ README                                        | 18 ++++++++++++++++++
+ classes/sanity-meta-security.bbclass          | 10 ++++++++++
+ conf/layer.conf                               |  4 ++++
+ meta-integrity/README.md                      | 18 +++++++++++++++++-
+ .../classes/sanity-meta-integrity.bbclass     | 10 ++++++++++
+ meta-integrity/conf/layer.conf                |  4 ++++
+ .../recipes-kernel/linux/linux-%.bbappend     |  6 +-----
+ .../recipes-kernel/linux/linux_ima.inc        |  5 +++++
+ meta-tpm/README                               | 19 +++++++++++++++++++
+ meta-tpm/classes/sanity-meta-tpm.bbclass      | 10 ++++++++++
+ meta-tpm/conf/layer.conf                      |  4 ++++
+ .../linux/linux-yocto_5.%.bbappend            | 18 +-----------------
+ .../recipes-kernel/linux/linux-yocto_tpm.inc  | 17 +++++++++++++++++
+ recipes-kernel/linux/linux-yocto_5.%.bbappend |  4 +---
+ ...-dev.bbappend => linux-yocto_security.inc} |  0
+ 15 files changed, 121 insertions(+), 26 deletions(-)
+ create mode 100644 classes/sanity-meta-security.bbclass
+ create mode 100644 meta-integrity/classes/sanity-meta-integrity.bbclass
+ create mode 100644 meta-integrity/recipes-kernel/linux/linux_ima.inc
+ create mode 100644 meta-tpm/classes/sanity-meta-tpm.bbclass
+ create mode 100644 meta-tpm/recipes-kernel/linux/linux-yocto_tpm.inc
+ rename recipes-kernel/linux/{linux-yocto-dev.bbappend => linux-yocto_security.inc} (100%)
+
+-- 
+2.25.1
+
+
+^ permalink raw reply	[flat|nested] 8+ messages in thread
+* [meta-security][PATCH 1/7] meta-security: add sanity check
+  2021-06-05 22:02 [meta-security][PATCH 0/7] YCL cleanups Armin Kuster
+@ 2021-06-05 22:02 ` Armin Kuster
+  2021-06-05 22:02 ` [meta-security][PATCH 2/7] meta-security/recipe-kernel: use " Armin Kuster
+                   ` (5 subsequent siblings)
+  6 siblings, 0 replies; 8+ messages in thread
+From: Armin Kuster @ 2021-06-05 22:02 UTC (permalink / raw)
+  To: yocto
+
+Signed-off-by: Armin Kuster <akuster808@gmail.com>
+---
+ README                               | 18 ++++++++++++++++++
+ classes/sanity-meta-security.bbclass | 10 ++++++++++
+ conf/layer.conf                      |  4 ++++
+ 3 files changed, 32 insertions(+)
+ create mode 100644 classes/sanity-meta-security.bbclass
+
+diff --git a/README b/README
+index eb15366..4047b86 100644
+--- a/README
++++ b/README
+@@ -1,6 +1,24 @@
+ Meta-security
+ =============
+ 
++The bbappend files for some recipes (e.g. linux-yocto) in this layer need
++to have 'security' in DISTRO_FEATURES to have effect.
++To enable them, add in configuration file the following line.
++
++  DISTRO_FEATURES_append = " security"
++
++If meta-security is included, but security  is not enabled as a
++distro feature a warning is printed at parse time:
++
++    You have included the meta-security layer, but
++    'security' has not been enabled in your DISTRO_FEATURES. Some bbappend files
++    and preferred version setting may not take effect.
++
++If you know what you are doing, this warning can be disabled by setting the following
++variable in your configuration:
++
++  SKIP_META_SECURITY_SANITY_CHECK = 1
++
+ This layer provides security tools, hardening tools for Linux kernels
+ and libraries for implementing security mechanisms.
+ 
+diff --git a/classes/sanity-meta-security.bbclass b/classes/sanity-meta-security.bbclass
+new file mode 100644
+index 0000000..b6c6b9c
+--- /dev/null
++++ b/classes/sanity-meta-security.bbclass
+@@ -0,0 +1,10 @@
++addhandler security_bbappend_distrocheck
++security_bbappend_distrocheck[eventmask] = "bb.event.SanityCheck"
++python security_bbappend_distrocheck() {
++    skip_check = e.data.getVar('SKIP_META_SECUIRTY_SANITY_CHECK') == "1"
++    if 'security' not in e.data.getVar('DISTRO_FEATURES').split() and not skip_check:
++        bb.warn("You have included the meta-security layer, but \
++'security' has not been enabled in your DISTRO_FEATURES. Some bbappend files \
++and preferred version setting may not take effect. See the meta-security README \
++for details on enabling security support.")
++}
+diff --git a/conf/layer.conf b/conf/layer.conf
+index 906e024..7853d6e 100644
+--- a/conf/layer.conf
++++ b/conf/layer.conf
+@@ -13,6 +13,10 @@ LAYERSERIES_COMPAT_security = "hardknott"
+ 
+ LAYERDEPENDS_security = "core openembedded-layer perl-layer networking-layer meta-python"
+ 
++# Sanity check for meta-security layer.
++# Setting SKIP_META_SECURITY_SANITY_CHECK to "1" would skip the bbappend files check.
++INHERIT += "sanity-meta-security"
++
+ BBFILES_DYNAMIC += " \
+ rust-layer:${LAYERDIR}/dynamic-layers/meta-rust/recipes-*/*/*.bb  \
+ "
+-- 
+2.25.1
+
+
+^ permalink raw reply related	[flat|nested] 8+ messages in thread
+* [meta-security][PATCH 2/7] meta-security/recipe-kernel: use sanity check
+  2021-06-05 22:02 [meta-security][PATCH 0/7] YCL cleanups Armin Kuster
+  2021-06-05 22:02 ` [meta-security][PATCH 1/7] meta-security: add sanity check Armin Kuster
+@ 2021-06-05 22:02 ` Armin Kuster
+  2021-06-05 22:02 ` [meta-security][PATCH 3/7] linux-yocto-dev: drop bbappend Armin Kuster
+                   ` (4 subsequent siblings)
+  6 siblings, 0 replies; 8+ messages in thread
+From: Armin Kuster @ 2021-06-05 22:02 UTC (permalink / raw)
+  To: yocto
+
+Signed-off-by: Armin Kuster <akuster808@gmail.com>
+---
+ recipes-kernel/linux/linux-yocto-dev.bbappend | 4 +---
+ recipes-kernel/linux/linux-yocto_5.%.bbappend | 4 +---
+ recipes-kernel/linux/linux-yocto_security.inc | 3 +++
+ 3 files changed, 5 insertions(+), 6 deletions(-)
+ create mode 100644 recipes-kernel/linux/linux-yocto_security.inc
+
+diff --git a/recipes-kernel/linux/linux-yocto-dev.bbappend b/recipes-kernel/linux/linux-yocto-dev.bbappend
+index fa536d0..1d9054f 100644
+--- a/recipes-kernel/linux/linux-yocto-dev.bbappend
++++ b/recipes-kernel/linux/linux-yocto-dev.bbappend
+@@ -1,3 +1 @@
+-KERNEL_FEATURES_append = " ${@bb.utils.contains("DISTRO_FEATURES", "apparmor", " features/apparmor/apparmor.scc", "" ,d)}"
+-KERNEL_FEATURES_append = " ${@bb.utils.contains("DISTRO_FEATURES", "smack", " features/smack/smack.scc", "" ,d)}"
+-KERNEL_FEATURES_append = " ${@bb.utils.contains("IMAGE_CLASSES", "dm-verity-img", " features/device-mapper/dm-verity.scc", "" ,d)}"
++require ${@bb.utils.contains('DISTRO_FEATURES', 'security', '${BPN}_security.inc', '', d)}
+diff --git a/recipes-kernel/linux/linux-yocto_5.%.bbappend b/recipes-kernel/linux/linux-yocto_5.%.bbappend
+index fa536d0..1d9054f 100644
+--- a/recipes-kernel/linux/linux-yocto_5.%.bbappend
++++ b/recipes-kernel/linux/linux-yocto_5.%.bbappend
+@@ -1,3 +1 @@
+-KERNEL_FEATURES_append = " ${@bb.utils.contains("DISTRO_FEATURES", "apparmor", " features/apparmor/apparmor.scc", "" ,d)}"
+-KERNEL_FEATURES_append = " ${@bb.utils.contains("DISTRO_FEATURES", "smack", " features/smack/smack.scc", "" ,d)}"
+-KERNEL_FEATURES_append = " ${@bb.utils.contains("IMAGE_CLASSES", "dm-verity-img", " features/device-mapper/dm-verity.scc", "" ,d)}"
++require ${@bb.utils.contains('DISTRO_FEATURES', 'security', '${BPN}_security.inc', '', d)}
+diff --git a/recipes-kernel/linux/linux-yocto_security.inc b/recipes-kernel/linux/linux-yocto_security.inc
+new file mode 100644
+index 0000000..fa536d0
+--- /dev/null
++++ b/recipes-kernel/linux/linux-yocto_security.inc
+@@ -0,0 +1,3 @@
++KERNEL_FEATURES_append = " ${@bb.utils.contains("DISTRO_FEATURES", "apparmor", " features/apparmor/apparmor.scc", "" ,d)}"
++KERNEL_FEATURES_append = " ${@bb.utils.contains("DISTRO_FEATURES", "smack", " features/smack/smack.scc", "" ,d)}"
++KERNEL_FEATURES_append = " ${@bb.utils.contains("IMAGE_CLASSES", "dm-verity-img", " features/device-mapper/dm-verity.scc", "" ,d)}"
+-- 
+2.25.1
+
+
+^ permalink raw reply related	[flat|nested] 8+ messages in thread
+* [meta-security][PATCH 3/7] linux-yocto-dev: drop bbappend
+  2021-06-05 22:02 [meta-security][PATCH 0/7] YCL cleanups Armin Kuster
+  2021-06-05 22:02 ` [meta-security][PATCH 1/7] meta-security: add sanity check Armin Kuster
+  2021-06-05 22:02 ` [meta-security][PATCH 2/7] meta-security/recipe-kernel: use " Armin Kuster
+@ 2021-06-05 22:02 ` Armin Kuster
+  2021-06-05 22:02 ` [meta-security][PATCH 4/7] meta-tpm: add layer sanity check Armin Kuster
+                   ` (3 subsequent siblings)
+  6 siblings, 0 replies; 8+ messages in thread
+From: Armin Kuster @ 2021-06-05 22:02 UTC (permalink / raw)
+  To: yocto
+
+Signed-off-by: Armin Kuster <akuster808@gmail.com>
+---
+ recipes-kernel/linux/linux-yocto-dev.bbappend | 1 -
+ 1 file changed, 1 deletion(-)
+ delete mode 100644 recipes-kernel/linux/linux-yocto-dev.bbappend
+
+diff --git a/recipes-kernel/linux/linux-yocto-dev.bbappend b/recipes-kernel/linux/linux-yocto-dev.bbappend
+deleted file mode 100644
+index 1d9054f..0000000
+--- a/recipes-kernel/linux/linux-yocto-dev.bbappend
++++ /dev/null
+@@ -1 +0,0 @@
+-require ${@bb.utils.contains('DISTRO_FEATURES', 'security', '${BPN}_security.inc', '', d)}
+-- 
+2.25.1
+
+
+^ permalink raw reply related	[flat|nested] 8+ messages in thread
+* [meta-security][PATCH 4/7] meta-tpm: add layer sanity check
+  2021-06-05 22:02 [meta-security][PATCH 0/7] YCL cleanups Armin Kuster
+                   ` (2 preceding siblings ...)
+  2021-06-05 22:02 ` [meta-security][PATCH 3/7] linux-yocto-dev: drop bbappend Armin Kuster
+@ 2021-06-05 22:02 ` Armin Kuster
+  2021-06-05 22:02 ` [meta-security][PATCH 5/7] meta-tpm/linux-yocto: use sanity support Armin Kuster
+                   ` (2 subsequent siblings)
+  6 siblings, 0 replies; 8+ messages in thread
+From: Armin Kuster @ 2021-06-05 22:02 UTC (permalink / raw)
+  To: yocto
+
+Signed-off-by: Armin Kuster <akuster808@gmail.com>
+---
+ meta-tpm/README                          | 19 +++++++++++++++++++
+ meta-tpm/classes/sanity-meta-tpm.bbclass | 10 ++++++++++
+ meta-tpm/conf/layer.conf                 |  4 ++++
+ 3 files changed, 33 insertions(+)
+ create mode 100644 meta-tpm/classes/sanity-meta-tpm.bbclass
+
+diff --git a/meta-tpm/README b/meta-tpm/README
+index dd662b3..59d2ee3 100644
+--- a/meta-tpm/README
++++ b/meta-tpm/README
+@@ -1,6 +1,25 @@
+ meta-tpm layer
+ ==============
+ 
++The bbappend files for some recipes (e.g. linux-yocto) in this layer need
++to have 'tpm' in DISTRO_FEATURES to have effect.
++To enable them, add in configuration file the following line.
++
++  DISTRO_FEATURES_append = " tmp"
++
++If meta-tpm is included, but tpm is not enabled as a
++distro feature a warning is printed at parse time:
++
++    You have included the meta-tpm layer, but
++    'tpm' has not been enabled in your DISTRO_FEATURES. Some bbappend files
++    and preferred version setting may not take effect.
++
++If you know what you are doing, this warning can be disabled by setting the following
++variable in your configuration:
++
++  SKIP_META_TPM_SANITY_CHECK = 1
++
++
+ This layer contains base TPM recipes.
+ 
+ Dependencies
+diff --git a/meta-tpm/classes/sanity-meta-tpm.bbclass b/meta-tpm/classes/sanity-meta-tpm.bbclass
+new file mode 100644
+index 0000000..2f8b52d
+--- /dev/null
++++ b/meta-tpm/classes/sanity-meta-tpm.bbclass
+@@ -0,0 +1,10 @@
++addhandler tpm_machinecheck
++tpm_machinecheck[eventmask] = "bb.event.SanityCheck"
++python tpm_machinecheck() {
++    skip_check = e.data.getVar('SKIP_META_TPM_SANITY_CHECK') == "1"
++    if 'tpm' not in e.data.getVar('DISTRO_FEATURES').split() and not skip_check:
++        bb.warn("You have included the meta-tpm layer, but \
++'tpm or tpm2' has not been enabled in your DISTRO_FEATURES. Some bbappend files \
++and preferred version setting may not take effect. See the meta-tpm README \
++for details on enabling tpm support.")
++}
+diff --git a/meta-tpm/conf/layer.conf b/meta-tpm/conf/layer.conf
+index 1b766cb..0b102c5 100644
+--- a/meta-tpm/conf/layer.conf
++++ b/meta-tpm/conf/layer.conf
+@@ -17,6 +17,10 @@ LAYERDEPENDS_tpm-layer = " \
+ "
+ BBLAYERS_LAYERINDEX_NAME_tpm-layer = "meta-tpm"
+ 
++# Sanity check for meta-integrity layer.
++# Setting SKIP_META_TPM_SANITY_CHECK to "1" would skip the bbappend files check.
++INHERIT += "sanity-meta-tpm"
++
+ BBFILES_DYNAMIC += " \
+ networking-layer:${LAYERDIR}/dynamic-layers/meta-networking/recipes-*/*/*.bbappend \
+ "
+-- 
+2.25.1
+
+
+^ permalink raw reply related	[flat|nested] 8+ messages in thread
+* [meta-security][PATCH 5/7] meta-tpm/linux-yocto: use sanity support
+  2021-06-05 22:02 [meta-security][PATCH 0/7] YCL cleanups Armin Kuster
+                   ` (3 preceding siblings ...)
+  2021-06-05 22:02 ` [meta-security][PATCH 4/7] meta-tpm: add layer sanity check Armin Kuster
+@ 2021-06-05 22:02 ` Armin Kuster
+  2021-06-05 22:02 ` [meta-security][PATCH 6/7] meta-integrity: add sanity check Armin Kuster
+  2021-06-05 22:02 ` [meta-security][PATCH 7/7] meta-integrity/recipe-kernel: use " Armin Kuster
+  6 siblings, 0 replies; 8+ messages in thread
+From: Armin Kuster @ 2021-06-05 22:02 UTC (permalink / raw)
+  To: yocto
+
+Signed-off-by: Armin Kuster <akuster808@gmail.com>
+---
+ .../linux/linux-yocto_5.%.bbappend             | 18 +-----------------
+ .../recipes-kernel/linux/linux-yocto_tpm.inc   | 17 +++++++++++++++++
+ 2 files changed, 18 insertions(+), 17 deletions(-)
+ create mode 100644 meta-tpm/recipes-kernel/linux/linux-yocto_tpm.inc
+
+diff --git a/meta-tpm/recipes-kernel/linux/linux-yocto_5.%.bbappend b/meta-tpm/recipes-kernel/linux/linux-yocto_5.%.bbappend
+index cea8b1b..2cf1453 100644
+--- a/meta-tpm/recipes-kernel/linux/linux-yocto_5.%.bbappend
++++ b/meta-tpm/recipes-kernel/linux/linux-yocto_5.%.bbappend
+@@ -1,17 +1 @@
+-FILESEXTRAPATHS_prepend := "${THISDIR}/linux-yocto:"
+-
+-# Enable tpm in kernel 
+-SRC_URI_append_x86 = " \
+-    ${@bb.utils.contains('MACHINE_FEATURES', 'tpm', 'file://tpm.scc', '', d)} \
+-    ${@bb.utils.contains('MACHINE_FEATURES', 'tpm2', 'file://tpm2.scc', '', d)} \
+-    "
+-
+-SRC_URI_append_x86-64 = " \
+-    ${@bb.utils.contains('MACHINE_FEATURES', 'tpm', 'file://tpm.scc', '', d)} \
+-    ${@bb.utils.contains('MACHINE_FEATURES', 'tpm2', 'file://tpm2.scc', '', d)} \
+-    "
+-
+-SRC_URI += " \
+-    ${@bb.utils.contains('MACHINE_FEATURES', 'tpm_i2c', 'file://tpm_i2c.scc', '', d)} \
+-    ${@bb.utils.contains('MACHINE_FEATURES', 'vtpm', 'file://vtpm.scc', '', d)} \
+-    "
++require ${@bb.utils.contains_any('DISTRO_FEATURES', 'tpm', 'linux-yocto_tpm.inc', '', d)}
+diff --git a/meta-tpm/recipes-kernel/linux/linux-yocto_tpm.inc b/meta-tpm/recipes-kernel/linux/linux-yocto_tpm.inc
+new file mode 100644
+index 0000000..cea8b1b
+--- /dev/null
++++ b/meta-tpm/recipes-kernel/linux/linux-yocto_tpm.inc
+@@ -0,0 +1,17 @@
++FILESEXTRAPATHS_prepend := "${THISDIR}/linux-yocto:"
++
++# Enable tpm in kernel 
++SRC_URI_append_x86 = " \
++    ${@bb.utils.contains('MACHINE_FEATURES', 'tpm', 'file://tpm.scc', '', d)} \
++    ${@bb.utils.contains('MACHINE_FEATURES', 'tpm2', 'file://tpm2.scc', '', d)} \
++    "
++
++SRC_URI_append_x86-64 = " \
++    ${@bb.utils.contains('MACHINE_FEATURES', 'tpm', 'file://tpm.scc', '', d)} \
++    ${@bb.utils.contains('MACHINE_FEATURES', 'tpm2', 'file://tpm2.scc', '', d)} \
++    "
++
++SRC_URI += " \
++    ${@bb.utils.contains('MACHINE_FEATURES', 'tpm_i2c', 'file://tpm_i2c.scc', '', d)} \
++    ${@bb.utils.contains('MACHINE_FEATURES', 'vtpm', 'file://vtpm.scc', '', d)} \
++    "
+-- 
+2.25.1
+
+
+^ permalink raw reply related	[flat|nested] 8+ messages in thread
+* [meta-security][PATCH 6/7] meta-integrity: add sanity check
+  2021-06-05 22:02 [meta-security][PATCH 0/7] YCL cleanups Armin Kuster
+                   ` (4 preceding siblings ...)
+  2021-06-05 22:02 ` [meta-security][PATCH 5/7] meta-tpm/linux-yocto: use sanity support Armin Kuster
+@ 2021-06-05 22:02 ` Armin Kuster
+  2021-06-05 22:02 ` [meta-security][PATCH 7/7] meta-integrity/recipe-kernel: use " Armin Kuster
+  6 siblings, 0 replies; 8+ messages in thread
+From: Armin Kuster @ 2021-06-05 22:02 UTC (permalink / raw)
+  To: yocto
+
+Signed-off-by: Armin Kuster <akuster808@gmail.com>
+---
+ meta-integrity/README.md                       | 18 +++++++++++++++++-
+ .../classes/sanity-meta-integrity.bbclass      | 10 ++++++++++
+ meta-integrity/conf/layer.conf                 |  4 ++++
+ 3 files changed, 31 insertions(+), 1 deletion(-)
+ create mode 100644 meta-integrity/classes/sanity-meta-integrity.bbclass
+
+diff --git a/meta-integrity/README.md b/meta-integrity/README.md
+index 5048fba..8254b0d 100644
+--- a/meta-integrity/README.md
++++ b/meta-integrity/README.md
+@@ -1,8 +1,24 @@
+ This README file contains information on the contents of the
+ integrity layer.
+ 
+-Please see the corresponding sections below for details.
+ 
++The bbappend files for some recipes (e.g. linux-yocto) in this layer need
++to have 'integrity' in DISTRO_FEATURES to have effect.
++To enable them, add in configuration file the following line.
++
++  DISTRO_FEATURES_append = " integrity"
++
++If meta-integrity is included, but integrity is not enabled as a
++distro feature a warning is printed at parse time:
++
++    You have included the meta-integritry layer, but
++    'integrity' has not been enabled in your DISTRO_FEATURES. Some bbappend files
++    and preferred version setting may not take effect.
++
++If you know what you are doing, this warning can be disabled by setting the following
++variable in your configuration:
++
++  SKIP_META_INTEGRITY_SANITY_CHECK = 1
+ 
+ Dependencies
+ ============
+diff --git a/meta-integrity/classes/sanity-meta-integrity.bbclass b/meta-integrity/classes/sanity-meta-integrity.bbclass
+new file mode 100644
+index 0000000..6ba7e3f
+--- /dev/null
++++ b/meta-integrity/classes/sanity-meta-integrity.bbclass
+@@ -0,0 +1,10 @@
++addhandler integrity_bbappend_distrocheck
++integrity_bbappend_distrocheck[eventmask] = "bb.event.SanityCheck"
++python integrity_bbappend_distrocheck() {
++    skip_check = e.data.getVar('SKIP_META_INTEGRITY_SANITY_CHECK') == "1"
++    if 'integrity' not in e.data.getVar('DISTRO_FEATURES').split() and not skip_check:
++        bb.warn("You have included the meta-integrity layer, but \
++'integrity' has not been enabled in your DISTRO_FEATURES. Some bbappend files \
++and preferred version setting may not take effect. See the meta-integrity README \
++for details on enabling integrity support.")
++}
+diff --git a/meta-integrity/conf/layer.conf b/meta-integrity/conf/layer.conf
+index ba028da..37776f8 100644
+--- a/meta-integrity/conf/layer.conf
++++ b/meta-integrity/conf/layer.conf
+@@ -26,6 +26,10 @@ LAYERDEPENDS_integrity = "core openembedded-layer"
+ 
+ BBLAYERS_LAYERINDEX_NAME_integrity = "meta-integrity"
+ 
++# Sanity check for meta-integrity layer.
++# Setting SKIP_META_INTEGRITY_SANITY_CHECK to "1" would skip the bbappend files check.
++INHERIT += "sanity-meta-integrity"
++
+ BBFILES_DYNAMIC += " \
+ networking-layer:${LAYERDIR}/dynamic-layers/meta-networking/recipes-*/*/*.bbappend \
+ "
+-- 
+2.25.1
+
+
+^ permalink raw reply related	[flat|nested] 8+ messages in thread
+* [meta-security][PATCH 7/7] meta-integrity/recipe-kernel: use sanity check
+  2021-06-05 22:02 [meta-security][PATCH 0/7] YCL cleanups Armin Kuster
+                   ` (5 preceding siblings ...)
+  2021-06-05 22:02 ` [meta-security][PATCH 6/7] meta-integrity: add sanity check Armin Kuster
+@ 2021-06-05 22:02 ` Armin Kuster
+  6 siblings, 0 replies; 8+ messages in thread
+From: Armin Kuster @ 2021-06-05 22:02 UTC (permalink / raw)
+  To: yocto
+
+Signed-off-by: Armin Kuster <akuster808@gmail.com>
+---
+ meta-integrity/recipes-kernel/linux/linux-%.bbappend | 6 +-----
+ meta-integrity/recipes-kernel/linux/linux_ima.inc    | 5 +++++
+ 2 files changed, 6 insertions(+), 5 deletions(-)
+ create mode 100644 meta-integrity/recipes-kernel/linux/linux_ima.inc
+
+diff --git a/meta-integrity/recipes-kernel/linux/linux-%.bbappend b/meta-integrity/recipes-kernel/linux/linux-%.bbappend
+index f9a48cd..be60bfe 100644
+--- a/meta-integrity/recipes-kernel/linux/linux-%.bbappend
++++ b/meta-integrity/recipes-kernel/linux/linux-%.bbappend
+@@ -1,5 +1 @@
+-KERNEL_FEATURES_append = " ${@bb.utils.contains("DISTRO_FEATURES", "ima", " features/ima/ima.scc", "" ,d)}"
+-
+-KERNEL_FEATURES_append = " ${@bb.utils.contains('DISTRO_FEATURES', 'modsign', ' features/ima/modsign.scc', '', d)}"
+-
+-inherit ${@bb.utils.contains('DISTRO_FEATURES', 'modsign', 'kernel-modsign', '', d)}
++require ${@bb.utils.contains_any('DISTRO_FEATURES', 'integrity ', 'linux_ima.inc', '', d)}
+diff --git a/meta-integrity/recipes-kernel/linux/linux_ima.inc b/meta-integrity/recipes-kernel/linux/linux_ima.inc
+new file mode 100644
+index 0000000..f9a48cd
+--- /dev/null
++++ b/meta-integrity/recipes-kernel/linux/linux_ima.inc
+@@ -0,0 +1,5 @@
++KERNEL_FEATURES_append = " ${@bb.utils.contains("DISTRO_FEATURES", "ima", " features/ima/ima.scc", "" ,d)}"
++
++KERNEL_FEATURES_append = " ${@bb.utils.contains('DISTRO_FEATURES', 'modsign', ' features/ima/modsign.scc', '', d)}"
++
++inherit ${@bb.utils.contains('DISTRO_FEATURES', 'modsign', 'kernel-modsign', '', d)}
+-- 
+2.25.1
+
+
+^ permalink raw reply related	[flat|nested] 8+ messages in thread
+end of thread, other threads:[~2021-06-05 22:03 UTC | newest]
+
+Thread overview: 8+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-06-05 22:02 [meta-security][PATCH 0/7] YCL cleanups Armin Kuster
+2021-06-05 22:02 ` [meta-security][PATCH 1/7] meta-security: add sanity check Armin Kuster
+2021-06-05 22:02 ` [meta-security][PATCH 2/7] meta-security/recipe-kernel: use " Armin Kuster
+2021-06-05 22:02 ` [meta-security][PATCH 3/7] linux-yocto-dev: drop bbappend Armin Kuster
+2021-06-05 22:02 ` [meta-security][PATCH 4/7] meta-tpm: add layer sanity check Armin Kuster
+2021-06-05 22:02 ` [meta-security][PATCH 5/7] meta-tpm/linux-yocto: use sanity support Armin Kuster
+2021-06-05 22:02 ` [meta-security][PATCH 6/7] meta-integrity: add sanity check Armin Kuster
+2021-06-05 22:02 ` [meta-security][PATCH 7/7] meta-integrity/recipe-kernel: use " Armin Kuster
+

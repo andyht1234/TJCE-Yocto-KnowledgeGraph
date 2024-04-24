@@ -1,0 +1,178 @@
+* [meta-rockchip][PATCH v2] nanopi-r4s: add
+@ 2023-09-19 13:01 Trevor Woerner
+  2023-09-22  2:47 ` Trevor Woerner
+  0 siblings, 1 reply; 2+ messages in thread
+From: Trevor Woerner @ 2023-09-19 13:01 UTC (permalink / raw)
+  To: yocto
+
+Add a MACHINE definition for the FriendlyElec NanoPi R4S
+https://www.friendlyelec.com/index.php?route=product/product&product_id=284
+
+Include a device-tree patch to enable the 2nd PCIe ethernet.
+
+Signed-off-by: Trevor Woerner <twoerner@gmail.com>
+---
+v2:
+- rebase on top of master
+- s/r2s/r4s/g
+- include DT patch to enable PCIe ethernet
+---
+ README                                        |  1 +
+ conf/machine/nanopi-r4s.conf                  | 13 ++++++
+ .../linux/linux-yocto/nanopi-r4s.scc          |  6 +++
+ ...anopi-r4s.dts-enable-second-ethernet.patch | 41 +++++++++++++++++++
+ recipes-kernel/linux/linux-yocto_%.bbappend   |  2 +
+ 5 files changed, 63 insertions(+)
+ create mode 100644 conf/machine/nanopi-r4s.conf
+ create mode 100644 recipes-kernel/linux/linux-yocto/nanopi-r4s.scc
+ create mode 100644 recipes-kernel/linux/linux-yocto/rockchip-kmeta/bsp/rockchip/0001-rk3399-nanopi-r4s.dts-enable-second-ethernet.patch
+
+diff --git a/README b/README
+index d66ed7e79bd2..286dafbe1020 100644
+--- a/README
++++ b/README
+@@ -29,6 +29,7 @@ Status of supported boards:
+ 		tinker-board-s
+ 		vyasa-rk3288
+ 		firefly-rk3288
++		nanopi-r4s
+ 	builds:
+ 		marsboard-rk3066
+ 		radxarock
+diff --git a/conf/machine/nanopi-r4s.conf b/conf/machine/nanopi-r4s.conf
+new file mode 100644
+index 000000000000..160f8b906d63
+--- /dev/null
++++ b/conf/machine/nanopi-r4s.conf
+@@ -0,0 +1,13 @@
++#@TYPE: Machine
++#@NAME: NanoPi R4S
++#@DESCRIPTION: NanoPi R4S is a high-end FriendlyElec mini-router based on the RK3399 SoC
++#https://www.friendlyelec.com/index.php?route=product/product&product_id=284
++
++MACHINEOVERRIDES =. "nanopi-r4s:"
++
++require conf/machine/include/rk3399.inc
++
++MACHINE_EXTRA_RRECOMMENDS += "kernel-modules"
++
++KERNEL_DEVICETREE = "rockchip/rk3399-nanopi-r4s.dtb"
++UBOOT_MACHINE = "nanopi-r4s-rk3399_defconfig"
+diff --git a/recipes-kernel/linux/linux-yocto/nanopi-r4s.scc b/recipes-kernel/linux/linux-yocto/nanopi-r4s.scc
+new file mode 100644
+index 000000000000..266b77c63fe5
+--- /dev/null
++++ b/recipes-kernel/linux/linux-yocto/nanopi-r4s.scc
+@@ -0,0 +1,6 @@
++define KFEATURE_DESCRIPTION "tweaks for the nanopi-r4s"
++define KMACHINE nanopi-r4s
++define KTYPE standard
++define KARCH arm64
++
++include bsp/rockchip/0001-rk3399-nanopi-r4s.dts-enable-second-ethernet.patch
+diff --git a/recipes-kernel/linux/linux-yocto/rockchip-kmeta/bsp/rockchip/0001-rk3399-nanopi-r4s.dts-enable-second-ethernet.patch b/recipes-kernel/linux/linux-yocto/rockchip-kmeta/bsp/rockchip/0001-rk3399-nanopi-r4s.dts-enable-second-ethernet.patch
+new file mode 100644
+index 000000000000..e1f2b92665dd
+--- /dev/null
++++ b/recipes-kernel/linux/linux-yocto/rockchip-kmeta/bsp/rockchip/0001-rk3399-nanopi-r4s.dts-enable-second-ethernet.patch
+@@ -0,0 +1,41 @@
++From 4c867907b68b417da0711cabdde30a969e368596 Mon Sep 17 00:00:00 2001
++From: Trevor Woerner <twoerner@gmail.com>
++Date: Sun, 17 Sep 2023 17:30:43 -0400
++Subject: [PATCH] rk3399-nanopi-r4s.dts: enable second ethernet
++
++# lspci
++00:00.0 PCI bridge: Rockchip Electronics Co., Ltd RK3399 PCI Express Root Port
++01:00.0 Ethernet controller: Realtek Semiconductor Co., Ltd. RTL8111/8168/8411 PCI Express Gigabit Ether)
++
++Link: https://github.com/armbian/build/pull/2415
++Upstream-Status: Submitted [by someone else]
++Signed-off-by: Trevor Woerner <twoerner@gmail.com>
++---
++ arch/arm64/boot/dts/rockchip/rk3399-nanopi-r4s.dts | 11 +++++++++++
++ 1 file changed, 11 insertions(+)
++
++diff --git a/arch/arm64/boot/dts/rockchip/rk3399-nanopi-r4s.dts b/arch/arm64/boot/dts/rockchip/rk3399-nanopi-r4s.dts
++index fe5b52610010..771615722358 100644
++--- a/arch/arm64/boot/dts/rockchip/rk3399-nanopi-r4s.dts
+++++ b/arch/arm64/boot/dts/rockchip/rk3399-nanopi-r4s.dts
++@@ -76,6 +76,17 @@ &pcie0 {
++ 	max-link-speed = <1>;
++ 	num-lanes = <1>;
++ 	vpcie3v3-supply = <&vcc3v3_sys>;
+++
+++	pcie@0 {
+++		reg = <0x00000000 0 0 0 0>;
+++		#address-cells = <3>;
+++		#size-cells = <2>;
+++
+++		r8169: pcie@0,0 {
+++			reg = <0x000000 0 0 0 0>;
+++			local-mac-address = [ 00 00 00 00 00 00 ];
+++		};
+++	};
++ };
++ 
++ &pinctrl {
++-- 
++2.41.0.327.gaa9166bcc0ba
++
+diff --git a/recipes-kernel/linux/linux-yocto_%.bbappend b/recipes-kernel/linux/linux-yocto_%.bbappend
+index d0d24f1b074f..53833f1cc3f4 100644
+--- a/recipes-kernel/linux/linux-yocto_%.bbappend
++++ b/recipes-kernel/linux/linux-yocto_%.bbappend
+@@ -12,5 +12,7 @@ COMPATIBLE_MACHINE:nanopi-m4 = "nanopi-m4"
+ COMPATIBLE_MACHINE:nanopi-m4-2gb = "nanopi-m4-2gb"
+ COMPATIBLE_MACHINE:rock64 = "rock64"
+ COMPATIBLE_MACHINE:rock-pi-e = "rock-pi-e"
++COMPATIBLE_MACHINE:nanopi-r4s = "nanopi-r4s"
+ 
+ SRC_URI:append = " file://rockchip-kmeta;type=kmeta;name=rockchip-kmeta;destsuffix=rockchip-kmeta"
++SRC_URI:append:nanopi-r4s = " file://nanopi-r4s.scc"
+-- 
+2.41.0.327.gaa9166bcc0ba
+
+
+
+^ permalink raw reply related	[flat|nested] 2+ messages in thread
+* Re: [meta-rockchip][PATCH v2] nanopi-r4s: add
+  2023-09-19 13:01 [meta-rockchip][PATCH v2] nanopi-r4s: add Trevor Woerner
+@ 2023-09-22  2:47 ` Trevor Woerner
+  0 siblings, 0 replies; 2+ messages in thread
+From: Trevor Woerner @ 2023-09-22  2:47 UTC (permalink / raw)
+  To: yocto
+
+On Tue 2023-09-19 @ 09:01:15 AM, Trevor Woerner wrote:
+> Add a MACHINE definition for the FriendlyElec NanoPi R4S
+> https://www.friendlyelec.com/index.php?route=product/product&product_id=284
+> 
+> Include a device-tree patch to enable the 2nd PCIe ethernet.
+> 
+> Signed-off-by: Trevor Woerner <twoerner@gmail.com>
+> ---
+> v2:
+> - rebase on top of master
+> - s/r2s/r4s/g
+> - include DT patch to enable PCIe ethernet
+> ---
+>  README                                        |  1 +
+>  conf/machine/nanopi-r4s.conf                  | 13 ++++++
+>  .../linux/linux-yocto/nanopi-r4s.scc          |  6 +++
+>  ...anopi-r4s.dts-enable-second-ethernet.patch | 41 +++++++++++++++++++
+>  recipes-kernel/linux/linux-yocto_%.bbappend   |  2 +
+>  5 files changed, 63 insertions(+)
+>  create mode 100644 conf/machine/nanopi-r4s.conf
+>  create mode 100644 recipes-kernel/linux/linux-yocto/nanopi-r4s.scc
+>  create mode 100644 recipes-kernel/linux/linux-yocto/rockchip-kmeta/bsp/rockchip/0001-rk3399-nanopi-r4s.dts-enable-second-ethernet.patch
+
+Applied to meta-rockchip, master branch.
+
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2023-09-22  2:47 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-09-19 13:01 [meta-rockchip][PATCH v2] nanopi-r4s: add Trevor Woerner
+2023-09-22  2:47 ` Trevor Woerner
+

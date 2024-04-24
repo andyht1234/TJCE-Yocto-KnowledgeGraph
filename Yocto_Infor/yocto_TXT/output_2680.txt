@@ -1,0 +1,428 @@
+* Re: [yocto] bbappend usage
+       [not found] <MADEUP.16B1474819B9F6FA.19066@lists.yoctoproject.org>
+@ 2021-10-25 13:11 ` Leon Woestenberg
+  2021-10-25 13:26   ` Monsees, Steven C (US)
+       [not found]   ` <MADEUP.16B148FB50D2BC13.19066@lists.yoctoproject.org>
+  2021-10-25 13:22 ` Konrad Weihmann
+  1 sibling, 2 replies; 5+ messages in thread
+From: Leon Woestenberg @ 2021-10-25 13:11 UTC (permalink / raw)
+  To: steven.monsees; +Cc: yocto
+
+Hello Steve,
+
+Is the approach where you remove the recipes from the image an option?
+Is there a reason why you want to build the recipes that you do not
+want to appear in your image?
+
+Regards,
+
+Leon.
+
+
+-- 
+Leon Woestenberg
+leon@sidebranch.com
+T: +31 40 711 42 76
+M: +31 6 472 30 372
+
+Sidebranch Embedded Systems
+Eindhoven, The Netherlands
+http://www.sidebranch.com
+
+
+
+On Mon, Oct 25, 2021 at 2:55 PM Monsees, Steven C (US) via
+lists.yoctoproject.org
+<steven.monsees=baesystems.com@lists.yoctoproject.org> wrote:
+>
+>
+>
+> Hello:
+>
+>
+>
+> If I am building an image “image-ABC”, and it is composed of a number recipes, and for some of these recipes I may NOT want to install their final components within my image…
+>
+>
+>
+> Which is the best place to modify the build with bbappend ?
+>
+>
+>
+> Would I modify a recipe’s do_install (do_install_append-recipe_xyz) ?, or would I modify the image recipe (do_install_append-image_ABC) I am leaning this way to avoid cases where the component recipes might have bbappends in place already ?
+>
+>
+>
+> Looking for the proper Yocto way…
+>
+>
+>
+> Thanks,
+>
+> Steve
+>
+>
+>
+>
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#55136): https://lists.yoctoproject.org/g/yocto/message/55136
+> Mute This Topic: https://lists.yoctoproject.org/mt/86576092/1051774
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [leon@sidebranch.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] bbappend usage
+       [not found] <MADEUP.16B1474819B9F6FA.19066@lists.yoctoproject.org>
+  2021-10-25 13:11 ` [yocto] bbappend usage Leon Woestenberg
+@ 2021-10-25 13:22 ` Konrad Weihmann
+  1 sibling, 0 replies; 5+ messages in thread
+From: Konrad Weihmann @ 2021-10-25 13:22 UTC (permalink / raw)
+  To: steven.monsees, yocto
+
+The super yoctoish way would be to alter the packaging of the recipe to 
+your needs.
+
+Let's assume recipe-a consists of the files
+
+foo
+bar
+
+and it would package both files into recipe-a pkg.
+
+In the actual image you only install packages into a file system, so if 
+you don't want bar to be installed into your final image, it'd be best 
+to package bar into a separate package.
+
+PACKAGES_BEFORE_PN = "${PN}-bar"
+FILES:${PN}-bar = "bar"
+
+in this case the recipe would produce
+
+recipe-a (containing just foo)
+recipe-a-bar (containing just bar)
+
+You could install now (via IMAGE_INSTALL in your image recipe) just add 
+recipe-a and only foo would be put into the final image.
+
+While a potential other image (IMAGE_INSTALL += "recipe-a-bar recipe-a")
+would contain both.
+
+But if you'd go down that road you have to make sure that runtime 
+dependencies between the packages are met (using REDEPENDS:* 
+statements), as otherwise it could turn into very hard to debug issues.
+So I would propose to **not** do that via bbappends, but forks of the 
+recipes you want to repackage.
+
+Another option (as likely mentioned already) is to use
+
+rem_stuff() {
+    rm ${IMAGE_ROOTFS}/<file you want to delete>
+}
+
+ROOTFS_POSTPROCESS_COMMAND += "rem_stuff;"
+
+in your image recipe
+
+On 25.10.21 14:55, Monsees, Steven C (US) via lists.yoctoproject.org wrote:
+> Hello:
+> 
+> If I am building an image “image-ABC”, and it is composed of a number 
+> recipes, and for some of these recipes I may NOT want to install their 
+> final components within my image…
+> 
+> Which is the best place to modify the build with bbappend ?
+> 
+> Would I modify a recipe’s do_install (do_install_append-recipe_xyz) ?, 
+> or would I modify the image recipe (do_install_append-image_ABC) I am 
+> leaning this way to avoid cases where the component recipes might have 
+> bbappends in place already ?
+> 
+> Looking for the proper Yocto way…
+> 
+> Thanks,
+> 
+> Steve
+> 
+> 
+> 
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#55136): https://lists.yoctoproject.org/g/yocto/message/55136
+> Mute This Topic: https://lists.yoctoproject.org/mt/86576092/3647476
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [kweihmann@outlook.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+> 
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* RE: [yocto] bbappend usage
+  2021-10-25 13:11 ` [yocto] bbappend usage Leon Woestenberg
+@ 2021-10-25 13:26   ` Monsees, Steven C (US)
+       [not found]   ` <MADEUP.16B148FB50D2BC13.19066@lists.yoctoproject.org>
+  1 sibling, 0 replies; 5+ messages in thread
+From: Monsees, Steven C (US) @ 2021-10-25 13:26 UTC (permalink / raw)
+  To: Leon Woestenberg; +Cc: yocto
+
+
+I am looking to selectively remove portions of 1or 2 components I will not be using from my running image
+
+-----Original Message-----
+From: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org> On Behalf Of Leon Woestenberg
+Sent: Monday, October 25, 2021 9:12 AM
+To: Monsees, Steven C (US) <steven.monsees@baesystems.com>
+Cc: yocto@lists.yoctoproject.org
+Subject: Re: [yocto] bbappend usage
+
+External Email Alert
+
+This email has been sent from an account outside of the BAE Systems network.
+
+Please treat the email with caution, especially if you are requested to click on a link, decrypt/open an attachment, or enable macros.  For further information on how to spot phishing, access “Cybersecurity OneSpace Page” and report phishing by clicking the button “Report Phishing” on the Outlook toolbar.
+
+
+Hello Steve,
+
+Is the approach where you remove the recipes from the image an option?
+Is there a reason why you want to build the recipes that you do not want to appear in your image?
+
+Regards,
+
+Leon.
+
+
+--
+Leon Woestenberg
+leon@sidebranch.com
+T: +31 40 711 42 76
+M: +31 6 472 30 372
+
+Sidebranch Embedded Systems
+Eindhoven, The Netherlands
+http://www.sidebranch.com
+
+
+
+On Mon, Oct 25, 2021 at 2:55 PM Monsees, Steven C (US) via lists.yoctoproject.org <steven.monsees=baesystems.com@lists.yoctoproject.org> wrote:
+>
+>
+>
+> Hello:
+>
+>
+>
+> If I am building an image “image-ABC”, and it is composed of a number 
+> recipes, and for some of these recipes I may NOT want to install their 
+> final components within my image…
+>
+>
+>
+> Which is the best place to modify the build with bbappend ?
+>
+>
+>
+> Would I modify a recipe’s do_install (do_install_append-recipe_xyz) ?, or would I modify the image recipe (do_install_append-image_ABC) I am leaning this way to avoid cases where the component recipes might have bbappends in place already ?
+>
+>
+>
+> Looking for the proper Yocto way…
+>
+>
+>
+> Thanks,
+>
+> Steve
+>
+>
+>
+>
+>
+>
+> 
+>
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] bbappend usage
+       [not found]   ` <MADEUP.16B148FB50D2BC13.19066@lists.yoctoproject.org>
+@ 2021-10-25 14:03     ` Alexander Kanavin
+  0 siblings, 0 replies; 5+ messages in thread
+From: Alexander Kanavin @ 2021-10-25 14:03 UTC (permalink / raw)
+  To: steven.monsees; +Cc: Leon Woestenberg, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2900 bytes --]
+
+There is no one-size-fits-all answer to this. It helps if you provide
+specifics: what components and what portions of them and why.
+
+Alex
+
+On Mon, 25 Oct 2021 at 15:26, Monsees, Steven C (US) via
+lists.yoctoproject.org <steven.monsees=baesystems.com@lists.yoctoproject.org>
+wrote:
+
+>
+> I am looking to selectively remove portions of 1or 2 components I will not
+> be using from my running image
+>
+> -----Original Message-----
+> From: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org> On
+> Behalf Of Leon Woestenberg
+> Sent: Monday, October 25, 2021 9:12 AM
+> To: Monsees, Steven C (US) <steven.monsees@baesystems.com>
+> Cc: yocto@lists.yoctoproject.org
+> Subject: Re: [yocto] bbappend usage
+>
+> External Email Alert
+>
+> This email has been sent from an account outside of the BAE Systems
+> network.
+>
+> Please treat the email with caution, especially if you are requested to
+> click on a link, decrypt/open an attachment, or enable macros.  For further
+> information on how to spot phishing, access “Cybersecurity OneSpace Page”
+> and report phishing by clicking the button “Report Phishing” on the Outlook
+> toolbar.
+>
+>
+> Hello Steve,
+>
+> Is the approach where you remove the recipes from the image an option?
+> Is there a reason why you want to build the recipes that you do not want
+> to appear in your image?
+>
+> Regards,
+>
+> Leon.
+>
+>
+> --
+> Leon Woestenberg
+> leon@sidebranch.com
+> T: +31 40 711 42 76
+> M: +31 6 472 30 372
+>
+> Sidebranch Embedded Systems
+> Eindhoven, The Netherlands
+> http://www.sidebranch.com
+>
+>
+>
+> On Mon, Oct 25, 2021 at 2:55 PM Monsees, Steven C (US) via
+> lists.yoctoproject.org <steven.monsees=
+> baesystems.com@lists.yoctoproject.org> wrote:
+> >
+> >
+> >
+> > Hello:
+> >
+> >
+> >
+> > If I am building an image “image-ABC”, and it is composed of a number
+> > recipes, and for some of these recipes I may NOT want to install their
+> > final components within my image…
+> >
+> >
+> >
+> > Which is the best place to modify the build with bbappend ?
+> >
+> >
+> >
+> > Would I modify a recipe’s do_install (do_install_append-recipe_xyz) ?,
+> or would I modify the image recipe (do_install_append-image_ABC) I am
+> leaning this way to avoid cases where the component recipes might have
+> bbappends in place already ?
+> >
+> >
+> >
+> > Looking for the proper Yocto way…
+> >
+> >
+> >
+> > Thanks,
+> >
+> > Steve
+> >
+> >
+> >
+> >
+> >
+> >
+> >
+> >
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#55141):
+> https://lists.yoctoproject.org/g/yocto/message/55141
+> Mute This Topic: https://lists.yoctoproject.org/mt/86576092/1686489
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> alex.kanavin@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 4510 bytes --]
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* RE: [yocto] bbappend usage
+       [not found] <08a4cb0-64ab-6dd-b80-d64ee5a219ff@crashcourse.ca>
+@ 2021-10-25 13:24 ` Monsees, Steven C (US)
+  0 siblings, 0 replies; 5+ messages in thread
+From: Monsees, Steven C (US) @ 2021-10-25 13:24 UTC (permalink / raw)
+  To: Robert P. J. Day; +Cc: yocto
+
+
+No, you got it wromg... I have a buildable image which has all the components necessary, I want to remove some overhead installed by some components that I will not be within my running application... 
+
+-----Original Message-----
+From: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org> On Behalf Of Robert P. J. Day
+Sent: Monday, October 25, 2021 9:10 AM
+To: Monsees, Steven C (US) <steven.monsees@baesystems.com>
+Cc: yocto@lists.yoctoproject.org
+Subject: Re: [yocto] bbappend usage
+
+External Email Alert
+
+This email has been sent from an account outside of the BAE Systems network.
+
+Please treat the email with caution, especially if you are requested to click on a link, decrypt/open an attachment, or enable macros.  For further information on how to spot phishing, access “Cybersecurity OneSpace Page” and report phishing by clicking the button “Report Phishing” on the Outlook toolbar.
+
+
+On Mon, 25 Oct 2021, Monsees, Steven C (US) via lists.yoctoproject.org wrote:
+
+> If I am building an image “image-ABC”, and it is composed of a number 
+> recipes, and for some of these recipes I may NOT want to install their 
+> final components within my image…
+>
+> Which is the best place to modify the build with bbappend ?
+>
+> Would I modify a recipe’s do_install (do_install_append-recipe_xyz) ?, 
+> or would I modify the image recipe (do_install_append-image_ABC) I am 
+> leaning this way to avoid cases where the component recipes might have 
+> bbappends in place already ?
+
+  i would think start with defining a minimal image, then define other images based on that one which add more recipes. this has nothing to do with redefining the recipes, it just means defining more than one image.
+
+rday
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+end of thread, other threads:[~2021-10-25 14:04 UTC | newest]
+
+Thread overview: 5+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+     [not found] <MADEUP.16B1474819B9F6FA.19066@lists.yoctoproject.org>
+2021-10-25 13:11 ` [yocto] bbappend usage Leon Woestenberg
+2021-10-25 13:26   ` Monsees, Steven C (US)
+     [not found]   ` <MADEUP.16B148FB50D2BC13.19066@lists.yoctoproject.org>
+2021-10-25 14:03     ` Alexander Kanavin
+2021-10-25 13:22 ` Konrad Weihmann
+     [not found] <08a4cb0-64ab-6dd-b80-d64ee5a219ff@crashcourse.ca>
+2021-10-25 13:24 ` Monsees, Steven C (US)
+

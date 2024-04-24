@@ -1,0 +1,84 @@
+* example where "RDEPENDS" is including a "virtual/" run-time dependency
+@ 2023-10-17 11:56 Robert P. J. Day
+  2023-10-17 13:36 ` [yocto] " Ross Burton
+  0 siblings, 1 reply; 2+ messages in thread
+From: Robert P. J. Day @ 2023-10-17 11:56 UTC (permalink / raw)
+  To: Yocto discussion list
+
+
+  while the dev manual insists that "virtual/" dependencies are only
+for build-time deps and not run-time deps, i ran across this example
+on the meta-intel master branch, under
+dynamic-layers/openembedded-layer/recipes-oneapi/ (blank lines added
+for clarity):
+
+$ grep -r "RDEPENDS.*virtual/" *
+
+compiler/intel-oneapi-compiler_2023.0.0-25370.bb:RDEPENDS:${PN} +=
+"perl elfutils virtual/opencl-icd level-zero-loader zlib tbb libelf
+setup-intel-oneapi-env"
+
+dpcpp-compiler/intel-oneapi-dpcpp-cpp-runtime_2023.1.0-46305.bb:RDEPENDS:${PN}
++= "virtual/opencl-icd zlib tbb level-zero-loader bash tcsh"
+
+mkl/intel-oneapi-mkl_2023.0.0-25398.bb:RDEPENDS:${PN} += "bash tbb
+intel-oneapi-compiler setup-intel-oneapi-env virtual/opencl-icd"
+
+  i have no opinion on it, just observing that it seems to fly in the
+face of the rules laid down in the dev manual:
+
+https://docs.yoctoproject.org/dev-manual/new-recipe.html#using-virtual-providers
+
+rday
+
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+* Re: [yocto] example where "RDEPENDS" is including a "virtual/" run-time dependency
+  2023-10-17 11:56 example where "RDEPENDS" is including a "virtual/" run-time dependency Robert P. J. Day
+@ 2023-10-17 13:36 ` Ross Burton
+  0 siblings, 0 replies; 2+ messages in thread
+From: Ross Burton @ 2023-10-17 13:36 UTC (permalink / raw)
+  To: rpjday; +Cc: Yocto discussion list
+
+On 17 Oct 2023, at 12:56, Robert P. J. Day via lists.yoctoproject.org <rpjday=crashcourse.ca@lists.yoctoproject.org> wrote:
+> 
+> 
+>  while the dev manual insists that "virtual/" dependencies are only
+> for build-time deps and not run-time deps, i ran across this example
+> on the meta-intel master branch, under
+> dynamic-layers/openembedded-layer/recipes-oneapi/ (blank lines added
+> for clarity):
+> 
+> $ grep -r "RDEPENDS.*virtual/" *
+> 
+> compiler/intel-oneapi-compiler_2023.0.0-25370.bb:RDEPENDS:${PN} +=
+> "perl elfutils virtual/opencl-icd level-zero-loader zlib tbb libelf
+> setup-intel-oneapi-env"
+> 
+> dpcpp-compiler/intel-oneapi-dpcpp-cpp-runtime_2023.1.0-46305.bb:RDEPENDS:${PN}
+> += "virtual/opencl-icd zlib tbb level-zero-loader bash tcsh"
+> 
+> mkl/intel-oneapi-mkl_2023.0.0-25398.bb:RDEPENDS:${PN} += "bash tbb
+> intel-oneapi-compiler setup-intel-oneapi-env virtual/opencl-icd"
+> 
+>  i have no opinion on it, just observing that it seems to fly in the
+> face of the rules laid down in the dev manual:
+
+Correct, you’ve found a bug.
+
+It’s unconventional to use virtual/ as runtime names. The root of the bug is here:
+
+meta-oe/recipes-core/opencl/opencl-icd-loader_git.bb:RPROVIDES:${PN} = "virtual/opencl-icd”
+
+That should be virtual-opencl-icd and the change pushed to all the dependent recipes.
+
+Ross
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2023-10-17 13:37 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-10-17 11:56 example where "RDEPENDS" is including a "virtual/" run-time dependency Robert P. J. Day
+2023-10-17 13:36 ` [yocto] " Ross Burton
+

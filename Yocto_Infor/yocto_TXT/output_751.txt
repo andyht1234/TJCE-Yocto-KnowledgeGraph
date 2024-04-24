@@ -1,0 +1,337 @@
+* create-layers-setup Yaml support #bitbake
+@ 2023-04-11 13:01 talhacali
+  2023-04-11 14:01 ` [yocto] " Alexander Kanavin
+  0 siblings, 1 reply; 9+ messages in thread
+From: talhacali @ 2023-04-11 13:01 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1039 bytes --]
+
+Hi All,
+
+In my project at work, we want to use create-layers-setup instead of git submodules. But, there is one issue that we are facing right now: We have got a CI pipeline that has Renovate bots to update, and create pull requests for repositories when a new commit is made in one of the dependencies. For it to work with Yocto layers, renovate bots require a regular expression in the Json file before ref key that create-layers-setup creates. But the problem is since Json doesn't support comments, and it is not sorted, it creates so much manual work. It is also so ugly if we add a dummy key to the json.
+
+For that reason, would it be possible to support Yaml as an option? I know that Yaml is not part of Python standard library but it can be optional if pyyaml is installed in the system like here ( https://github.com/yoctoproject/poky/blob/e13a057812ec639544c321db0aedf9c7c203953e/documentation/sphinx/yocto-vars.py ). Either creating both json, and yaml file; or creating one of them that user chooses.
+
+Regards,
+Talha
+
+[-- Attachment #2: Type: text/html, Size: 1112 bytes --]
+
+^ permalink raw reply	[flat|nested] 9+ messages in thread
+* Re: [yocto] create-layers-setup Yaml support #bitbake
+  2023-04-11 13:01 create-layers-setup Yaml support #bitbake talhacali
+@ 2023-04-11 14:01 ` Alexander Kanavin
+  2023-04-11 14:31   ` talhacali
+  0 siblings, 1 reply; 9+ messages in thread
+From: Alexander Kanavin @ 2023-04-11 14:01 UTC (permalink / raw)
+  To: talhacali; +Cc: yocto
+
+I'm not sure I understand your use case. What kind of information
+would you want to have in the json file, and why can't it be placed
+into a separate file next to the .json one? It would help if you post
+snippets that show exactly what is missing and necessary for your CI
+to operate.
+
+Alex
+
+On Tue, 11 Apr 2023 at 15:01, <talhacali@gmail.com> wrote:
+>
+> Hi All,
+>
+> In my project at work, we want to use create-layers-setup instead of git submodules. But, there is one issue that we are facing right now: We have got a CI pipeline that has Renovate bots to update, and create pull requests for repositories when a new commit is made in one of the dependencies. For it to work with Yocto layers, renovate bots require a regular expression in the Json file before ref key that create-layers-setup creates. But the problem is since Json doesn't support comments, and it is not sorted, it creates so much manual work. It is also so ugly if we add a dummy key to the json.
+>
+> For that reason, would it be possible to support Yaml as an option? I know that Yaml is not part of Python standard library but it can be optional if pyyaml is installed in the system like here. Either creating both json, and yaml file; or creating one of them that user chooses.
+>
+> Regards,
+> Talha
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#59679): https://lists.yoctoproject.org/g/yocto/message/59679
+> Mute This Topic: https://lists.yoctoproject.org/mt/98196703/1686489
+> Mute #bitbake:https://lists.yoctoproject.org/g/yocto/mutehashtag/bitbake
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 9+ messages in thread
+* Re: create-layers-setup Yaml support #bitbake
+  2023-04-11 14:01 ` [yocto] " Alexander Kanavin
+@ 2023-04-11 14:31   ` talhacali
+  2023-04-11 14:47     ` [yocto] " Alexander Kanavin
+  0 siblings, 1 reply; 9+ messages in thread
+From: talhacali @ 2023-04-11 14:31 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 984 bytes --]
+
+So, how a renovate bot ( https://github.com/renovatebot/renovate ) works is that it parses the files for a specific regular expression that we determine and checks *the line after* this regular expression. So it needs to be in the same json file.
+
+For example:
+
+> 
+> {
+> "sources": {
+> "poky": {
+> "git-remote": {
+> "branch": "master",
+> "describe": "4.2_M2-676-gdf3ce81ed3",
+> "remotes": {
+> "origin": {
+> "uri": "https://github.com/yoctoproject/poky.git"
+> }
+> },
+> // renovate: datasource=git-tags depName=yoctoproject/poky
+> lookupName=https://github.com/yoctoproject/poky.git
+> "rev": "df3ce81ed3e5491b084041c5bcbd16dada129cf9"
+> },
+> "path": "poky"
+> }
+> },
+> "version": "1.0"
+> }
+> 
+> 
+
+So, for this file, renovate bot will find the line in red beginning with "// renovate: ", and then check the next line which is "rev": "df3ce81ed3e5491b084041c5bcbd16dada129cf9", if that commit is not the latest commit, then it will replace it with the latest.
+
+[-- Attachment #2: Type: text/html, Size: 4819 bytes --]
+
+^ permalink raw reply	[flat|nested] 9+ messages in thread
+* Re: [yocto] create-layers-setup Yaml support #bitbake
+  2023-04-11 14:31   ` talhacali
+@ 2023-04-11 14:47     ` Alexander Kanavin
+  2023-04-11 14:49       ` Alexander Kanavin
+  0 siblings, 1 reply; 9+ messages in thread
+From: Alexander Kanavin @ 2023-04-11 14:47 UTC (permalink / raw)
+  To: talhacali; +Cc: yocto
+
+This 'renovate bot' should not be specifying its own configuration in
+comments inside files that it wants to update, that's such a bad idea.
+You need to teach it use a configuration placed into an external file.
+
+Alex
+
+On Tue, 11 Apr 2023 at 16:31, <talhacali@gmail.com> wrote:
+>
+> So, how a renovate bot works is that it parses the files for a specific regular expression that we determine and checks the line after this regular expression. So it needs to be in the same json file.
+>
+> For example:
+>
+> {
+>     "sources": {
+>         "poky": {
+>             "git-remote": {
+>                 "branch": "master",
+>                 "describe": "4.2_M2-676-gdf3ce81ed3",
+>                 "remotes": {
+>                     "origin": {
+>                         "uri": "https://github.com/yoctoproject/poky.git"
+>                     }
+>                 },
+> // renovate: datasource=git-tags depName=yoctoproject/poky lookupName=https://github.com/yoctoproject/poky.git
+>                 "rev": "df3ce81ed3e5491b084041c5bcbd16dada129cf9"
+>             },
+>             "path": "poky"
+>         }
+>     },
+>     "version": "1.0"
+> }
+>
+> So, for this file, renovate bot will find the line in red beginning with "// renovate: ", and then check the next line which is "rev": "df3ce81ed3e5491b084041c5bcbd16dada129cf9", if that commit is not the latest commit, then it will replace it with the latest.
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#59681): https://lists.yoctoproject.org/g/yocto/message/59681
+> Mute This Topic: https://lists.yoctoproject.org/mt/98196703/1686489
+> Mute #bitbake:https://lists.yoctoproject.org/g/yocto/mutehashtag/bitbake
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 9+ messages in thread
+* Re: [yocto] create-layers-setup Yaml support #bitbake
+  2023-04-11 14:47     ` [yocto] " Alexander Kanavin
+@ 2023-04-11 14:49       ` Alexander Kanavin
+  2023-04-12 11:12         ` talhacali
+  0 siblings, 1 reply; 9+ messages in thread
+From: Alexander Kanavin @ 2023-04-11 14:49 UTC (permalink / raw)
+  To: talhacali; +Cc: yocto
+
+Better yet, just run 'create-layers-setup' to recreate the json over
+the previous one. You'd need to adjust CI though.
+
+Alex
+
+On Tue, 11 Apr 2023 at 16:47, Alexander Kanavin <alex.kanavin@gmail.com> wrote:
+>
+> This 'renovate bot' should not be specifying its own configuration in
+> comments inside files that it wants to update, that's such a bad idea.
+> You need to teach it use a configuration placed into an external file.
+>
+> Alex
+>
+> On Tue, 11 Apr 2023 at 16:31, <talhacali@gmail.com> wrote:
+> >
+> > So, how a renovate bot works is that it parses the files for a specific regular expression that we determine and checks the line after this regular expression. So it needs to be in the same json file.
+> >
+> > For example:
+> >
+> > {
+> >     "sources": {
+> >         "poky": {
+> >             "git-remote": {
+> >                 "branch": "master",
+> >                 "describe": "4.2_M2-676-gdf3ce81ed3",
+> >                 "remotes": {
+> >                     "origin": {
+> >                         "uri": "https://github.com/yoctoproject/poky.git"
+> >                     }
+> >                 },
+> > // renovate: datasource=git-tags depName=yoctoproject/poky lookupName=https://github.com/yoctoproject/poky.git
+> >                 "rev": "df3ce81ed3e5491b084041c5bcbd16dada129cf9"
+> >             },
+> >             "path": "poky"
+> >         }
+> >     },
+> >     "version": "1.0"
+> > }
+> >
+> > So, for this file, renovate bot will find the line in red beginning with "// renovate: ", and then check the next line which is "rev": "df3ce81ed3e5491b084041c5bcbd16dada129cf9", if that commit is not the latest commit, then it will replace it with the latest.
+> >
+> > -=-=-=-=-=-=-=-=-=-=-=-
+> > Links: You receive all messages sent to this group.
+> > View/Reply Online (#59681): https://lists.yoctoproject.org/g/yocto/message/59681
+> > Mute This Topic: https://lists.yoctoproject.org/mt/98196703/1686489
+> > Mute #bitbake:https://lists.yoctoproject.org/g/yocto/mutehashtag/bitbake
+> > Group Owner: yocto+owner@lists.yoctoproject.org
+> > Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com]
+> > -=-=-=-=-=-=-=-=-=-=-=-
+> >
+
+
+^ permalink raw reply	[flat|nested] 9+ messages in thread
+* Re: create-layers-setup Yaml support #bitbake
+  2023-04-11 14:49       ` Alexander Kanavin
+@ 2023-04-12 11:12         ` talhacali
+  2023-04-12 11:34           ` [yocto] " Alexander Kanavin
+  0 siblings, 1 reply; 9+ messages in thread
+From: talhacali @ 2023-04-12 11:12 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1015 bytes --]
+
+Renovate normally doesn't require to make changes in other files.
+It supports many package files, and detects them automatically.
+It parses them, and finds the dependencies without needing any change.
+But, for package files which is not supported by Renovate, a regular expression
+is needed inside the file to let Renovate know where to look while parsing the file.
+As far as I know, there is no other way than adding a new line to the file.
+
+We are also using Renovate the same way with bb files as well.
+
+We have got a lot of projects, and potential projects that have several different
+dependencies. They are hosted in different repositories, and the idea is to update
+their dependencies (or not it depends on the project) regularly, and do it automatically.
+Like I said, with the package files that Renovate supports such as npm, Dockerfiles, etc. it is easy to do,
+but for our case we need to modify the json file with an added comment. For this reason, Yaml files are
+an ideal solution for us.
+
+[-- Attachment #2: Type: text/html, Size: 1083 bytes --]
+
+^ permalink raw reply	[flat|nested] 9+ messages in thread
+* Re: [yocto] create-layers-setup Yaml support #bitbake
+  2023-04-12 11:12         ` talhacali
+@ 2023-04-12 11:34           ` Alexander Kanavin
+  2023-04-12 16:18             ` talhacali
+  0 siblings, 1 reply; 9+ messages in thread
+From: Alexander Kanavin @ 2023-04-12 11:34 UTC (permalink / raw)
+  To: talhacali; +Cc: yocto
+
+You should first take this issue up with 'renovate' upstream, not with
+yocto. Ask them, how is one supposed to handle updating json files
+using that tool? Maybe you need to write a custom extension specific
+to that format that doesn't require placing metadata inside the json?
+
+
+Alex
+
+On Wed, 12 Apr 2023 at 13:12, <talhacali@gmail.com> wrote:
+>
+> Renovate normally doesn't require to make changes in other files.
+> It supports many package files, and detects them automatically.
+> It parses them, and finds the dependencies without needing any change.
+> But, for package files which is not supported by Renovate, a regular expression
+> is needed inside the file to let Renovate know where to look while parsing the file.
+> As far as I know, there is no other way than adding a new line to the file.
+>
+> We are also using Renovate the same way with bb files as well.
+>
+> We have got a lot of projects, and potential projects that have several different
+> dependencies. They are hosted in different repositories, and the idea is to update
+> their dependencies (or not it depends on the project) regularly, and do it automatically.
+> Like I said, with the package files that Renovate supports such as npm, Dockerfiles, etc. it is easy to do,
+> but for our case we need to modify the json file with an added comment. For this reason, Yaml files are
+> an ideal solution for us.
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#59689): https://lists.yoctoproject.org/g/yocto/message/59689
+> Mute This Topic: https://lists.yoctoproject.org/mt/98196703/1686489
+> Mute #bitbake:https://lists.yoctoproject.org/g/yocto/mutehashtag/bitbake
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 9+ messages in thread
+* Re: create-layers-setup Yaml support #bitbake
+  2023-04-12 11:34           ` [yocto] " Alexander Kanavin
+@ 2023-04-12 16:18             ` talhacali
+  2023-04-12 16:19               ` talhacali
+  0 siblings, 1 reply; 9+ messages in thread
+From: talhacali @ 2023-04-12 16:18 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 250 bytes --]
+
+Yeah, actually, my colleague found a pull request in their Github.
+It seems to be blocked, and inactive for months. But, anyway, I guess
+we will need to wait. We have been considering setup-layers feature
+as a mid-to-late future solution anyway.
+
+[-- Attachment #2: Type: text/html, Size: 263 bytes --]
+
+^ permalink raw reply	[flat|nested] 9+ messages in thread
+* Re: create-layers-setup Yaml support #bitbake
+  2023-04-12 16:18             ` talhacali
+@ 2023-04-12 16:19               ` talhacali
+  0 siblings, 0 replies; 9+ messages in thread
+From: talhacali @ 2023-04-12 16:19 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 89 bytes --]
+
+Here is the pull request if curious: https://github.com/renovatebot/renovate/pull/17077
+
+[-- Attachment #2: Type: text/html, Size: 190 bytes --]
+
+^ permalink raw reply	[flat|nested] 9+ messages in thread
+end of thread, other threads:[~2023-04-12 16:19 UTC | newest]
+
+Thread overview: 9+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-04-11 13:01 create-layers-setup Yaml support #bitbake talhacali
+2023-04-11 14:01 ` [yocto] " Alexander Kanavin
+2023-04-11 14:31   ` talhacali
+2023-04-11 14:47     ` [yocto] " Alexander Kanavin
+2023-04-11 14:49       ` Alexander Kanavin
+2023-04-12 11:12         ` talhacali
+2023-04-12 11:34           ` [yocto] " Alexander Kanavin
+2023-04-12 16:18             ` talhacali
+2023-04-12 16:19               ` talhacali
+

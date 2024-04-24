@@ -1,0 +1,202 @@
+* Http access token fetching with gitsm fetcher
+@ 2023-10-20 11:55 alexzoyv
+  2023-10-20 13:32 ` [yocto] " Adrian Freihofer
+  0 siblings, 1 reply; 4+ messages in thread
+From: alexzoyv @ 2023-10-20 11:55 UTC (permalink / raw)
+  To: yocto
+
+
+[-- Attachment #1.1: Type: text/plain, Size: 543 bytes --]
+
+Greetings!
+I try to use gitsm fetcher to fetch bitbucket repository with read-only https access token. SRC_URI looks like this
+> 
+> 
+> SRC_URI =
+> "gitsm://******.git;protocol=https;branch=${BRANCH};user=azoykin:${TOKEN}"
+> 
+> 
+
+This recipe fetches parent repository, but is unable to fetch submodule, writing fatal: could not read Username for 'https://tps-git.topcon.com': No such device or address in log.do_fetch
+It happens because url is passed to fetcher function already with user string. I suggest a patch to fix this issue
+
+[-- Attachment #1.2: Type: text/html, Size: 605 bytes --]
+
+[-- Warning: decoded text below may be mangled, UTF-8 assumed --]
+[-- Attachment #2: gits.patch --]
+[-- Type: text/x-patch; name="gits.patch", Size: 704 bytes --]
+
+diff --git a/lib/bb/fetch2/gitsm.py b/lib/bb/fetch2/gitsm.py
+index c5f7c03c..3a025624 100644
+--- a/lib/bb/fetch2/gitsm.py
++++ b/lib/bb/fetch2/gitsm.py
+@@ -100,6 +100,10 @@ class GitSM(Git):
+                 # Properly formated URL already
+                 proto = uris[module].split(':', 1)[0]
+                 url = uris[module].replace('%s:' % proto, 'gitsm:', 1)
++                # remove user+password from string to add them as parameter
++                if ud.user in url:
++                    url = url.replace(ud.user + '@', '')
++                    url += ";user=%s" % ud.user
+             else:
+                 if ":" in uris[module]:
+                     # Most likely an SSH style reference
+
+^ permalink raw reply related	[flat|nested] 4+ messages in thread
+* Re: [yocto] Http access token fetching with gitsm fetcher
+  2023-10-20 11:55 Http access token fetching with gitsm fetcher alexzoyv
+@ 2023-10-20 13:32 ` Adrian Freihofer
+  2023-10-20 13:43   ` Yoann CONGAL
+  0 siblings, 1 reply; 4+ messages in thread
+From: Adrian Freihofer @ 2023-10-20 13:32 UTC (permalink / raw)
+  To: alexzoyv; +Cc: Yocto-mailing-list
+
+[-- Attachment #1: Type: text/plain, Size: 1128 bytes --]
+
+Did you already consider to write the credentials in a  .netrc file?
+
+Regards
+Adrian
+
+<alexzoyv@gmail.com> schrieb am Fr., 20. Okt. 2023, 13:55:
+
+> Greetings!
+> I try to use gitsm fetcher to fetch bitbucket repository with read-only
+> https access token. SRC_URI looks like this
+>
+> SRC_URI =
+> "gitsm://******.git;protocol=https;branch=${BRANCH};user=azoykin:${TOKEN}"
+>
+> This recipe fetches parent repository, but is unable to fetch submodule,
+> writing *fatal: could not read Username for 'https://tps-git.topcon.com
+> <https://tps-git.topcon.com>': No such device or address *in log.do_fetch
+> It happens because url is passed to fetcher function already with user
+> string. I suggest a patch to fix this issue
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#61430):
+> https://lists.yoctoproject.org/g/yocto/message/61430
+> Mute This Topic: https://lists.yoctoproject.org/mt/102079282/4454582
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> adrian.freihofer@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 2088 bytes --]
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] Http access token fetching with gitsm fetcher
+  2023-10-20 13:32 ` [yocto] " Adrian Freihofer
+@ 2023-10-20 13:43   ` Yoann CONGAL
+  2023-10-20 14:32     ` alexzoyv
+  0 siblings, 1 reply; 4+ messages in thread
+From: Yoann CONGAL @ 2023-10-20 13:43 UTC (permalink / raw)
+  To: Adrian Freihofer; +Cc: alexzoyv, Yocto-mailing-list
+
+Hi,
+
+Le ven. 20 oct. 2023 à 15:32, Adrian Freihofer
+<adrian.freihofer@gmail.com> a écrit :
+> Did you already consider to write the credentials in a  .netrc file?
+>
+> Regards
+> Adrian
+>
+> <alexzoyv@gmail.com> schrieb am Fr., 20. Okt. 2023, 13:55:
+>>
+>> Greetings!
+>> I try to use gitsm fetcher to fetch bitbucket repository with read-only https access token. SRC_URI looks like this
+>>
+>> SRC_URI = "gitsm://******.git;protocol=https;branch=${BRANCH};user=azoykin:${TOKEN}"
+>>
+>> This recipe fetches parent repository, but is unable to fetch submodule, writing fatal: could not read Username for 'https://tps-git.topcon.com': No such device or address in log.do_fetch
+>> It happens because url is passed to fetcher function already with user string. I suggest a patch to fix this issue
+
+I'm sorry but this is a known WONTFIX bug :
+https://bugzilla.yoctoproject.org/show_bug.cgi?id=13550
+See : https://git.openembedded.org/bitbake/tree/lib/bb/fetch2/gitsm.py#n127
+
+The only supported way to do this (that I know of) is to use .netrc as
+Adrian suggested.
+
+Regards,
+-- 
+Yoann Congal
+Smile ECS - Tech expert
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: Http access token fetching with gitsm fetcher
+  2023-10-20 13:43   ` Yoann CONGAL
+@ 2023-10-20 14:32     ` alexzoyv
+  0 siblings, 0 replies; 4+ messages in thread
+From: alexzoyv @ 2023-10-20 14:32 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1403 bytes --]
+
+Adrian, Yoann,
+Thank you very much and sorry for bringing it up.
+.netrc does fix my problem.
+Alex
+On Fri, Oct 20, 2023 at 04:43 PM, Yoann Congal wrote:
+
+> 
+> Hi,
+> 
+> Le ven. 20 oct. 2023 à 15:32, Adrian Freihofer
+> <adrian.freihofer@gmail.com> a écrit :
+> 
+>> Did you already consider to write the credentials in a .netrc file?
+>> 
+>> Regards
+>> Adrian
+>> 
+>> <alexzoyv@gmail.com> schrieb am Fr., 20. Okt. 2023, 13:55:
+>> 
+>>> 
+>>> Greetings!
+>>> I try to use gitsm fetcher to fetch bitbucket repository with read-only
+>>> https access token. SRC_URI looks like this
+>>> 
+>>> SRC_URI =
+>>> "gitsm://******.git;protocol=https;branch=${BRANCH};user=azoykin:${TOKEN}"
+>>> 
+>>> 
+>>> This recipe fetches parent repository, but is unable to fetch submodule,
+>>> writing fatal: could not read Username for ' https://tps-git.topcon.com' :
+>>> No such device or address in log.do_fetch
+>>> It happens because url is passed to fetcher function already with user
+>>> string. I suggest a patch to fix this issue
+>> 
+>> 
+> 
+> I'm sorry but this is a known WONTFIX bug :
+> https://bugzilla.yoctoproject.org/show_bug.cgi?id=13550
+> See : https://git.openembedded.org/bitbake/tree/lib/bb/fetch2/gitsm.py#n127
+> 
+> 
+> The only supported way to do this (that I know of) is to use .netrc as
+> Adrian suggested.
+> 
+> Regards,
+> --
+> Yoann Congal
+> Smile ECS - Tech expert
+
+[-- Attachment #2: Type: text/html, Size: 1782 bytes --]
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+end of thread, other threads:[~2023-10-20 14:32 UTC | newest]
+
+Thread overview: 4+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-10-20 11:55 Http access token fetching with gitsm fetcher alexzoyv
+2023-10-20 13:32 ` [yocto] " Adrian Freihofer
+2023-10-20 13:43   ` Yoann CONGAL
+2023-10-20 14:32     ` alexzoyv
+

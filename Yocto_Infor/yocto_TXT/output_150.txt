@@ -1,0 +1,314 @@
+* [RFC] recipetool create to support pypi project
+@ 2023-09-20 16:48 Julien Stephan
+  2023-09-20 18:36 ` [yocto] " Alexander Kanavin
+  2023-09-20 20:37 ` Richard Purdie
+  0 siblings, 2 replies; 4+ messages in thread
+From: Julien Stephan @ 2023-09-20 16:48 UTC (permalink / raw)
+  To: yocto
+
+Hi all,
+
+In the scope of the RFQ, I am currently looking at bug #14737 (adding
+support of PEP-517 in recipetool/devtool).
+
+I am quite new to the recipetool/devtool tools and I have several
+ideas I would like to discuss before going into development that may
+not be appropriate/necessary for the tool.
+
+As of today, from what I understand (please correct me if I am wrong)
+'devtool add' supports the creation of recipes for python modules from
+their download tarball so something like: devtool add
+https://files.pythonhosted.org/packages/e4/29/f1e7113ca4632283a76cdbe40b62be860d268fdc0e8eab7216ffaf2aa0ef/subunit-0.0.0a0.tar.gz
+works, but:
+- the created recipe does NOT takes advantage of the pypi class: the
+created recipe will have the SRC_URI variable instead of using
+'inherit pypi'
+- user has to find the url of the tarball
+
+I think it would be really easier for the user to just use: 'devtool
+add https://pypi.org/project/subunit/' This will have several
+advantages:
+- easier to use
+- fetch latest version automatically
+- easy to fetch specific version with --version
+- can easily detect 'pypi.org' on the url and inherit pypi
+- can easily parse the webpage for several informations such as
+author, summary, homepage, bugtracker page .. (I know some of them can
+be extracted from  setup.py / pyproject.toml, but not always)
+
+Looking at the create_recipe function of
+scripts/lib/recipetool/create.py, we can see that code is really git
+oriented even if you use a tarball, you go through a bunch of 'if'
+that doesn't apply.
+
+I think we can modernize this part of the code. This would also be
+useful for perl modules and cpan or rust modules and cargo...
+
+What do you think? Is this something that is worth investigating and
+implementing?
+
+Cheers
+Julien
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] [RFC] recipetool create to support pypi project
+  2023-09-20 16:48 [RFC] recipetool create to support pypi project Julien Stephan
+@ 2023-09-20 18:36 ` Alexander Kanavin
+  2023-09-20 20:37 ` Richard Purdie
+  1 sibling, 0 replies; 4+ messages in thread
+From: Alexander Kanavin @ 2023-09-20 18:36 UTC (permalink / raw)
+  To: Julien Stephan; +Cc: yocto
+
+Basically... yes, this is fine.
+
+We don't really have anyone taking care of devtool/recipetool at the
+moment or even knowing how the code works, so you have a lot of
+freedom in how it can be improved, the only request from me is to add
+tests to devtool and/or recipetool selftests for any new functionality
+or otherwise improve tests as deemed necessary (it's a good idea to
+study what there is right now - they're in
+meta/lib/oeqa/selftest/cases/).
+
+Alex
+
+On Wed, 20 Sept 2023 at 18:48, Julien Stephan <jstephan@baylibre.com> wrote:
+>
+> Hi all,
+>
+> In the scope of the RFQ, I am currently looking at bug #14737 (adding
+> support of PEP-517 in recipetool/devtool).
+>
+> I am quite new to the recipetool/devtool tools and I have several
+> ideas I would like to discuss before going into development that may
+> not be appropriate/necessary for the tool.
+>
+> As of today, from what I understand (please correct me if I am wrong)
+> 'devtool add' supports the creation of recipes for python modules from
+> their download tarball so something like: devtool add
+> https://files.pythonhosted.org/packages/e4/29/f1e7113ca4632283a76cdbe40b62be860d268fdc0e8eab7216ffaf2aa0ef/subunit-0.0.0a0.tar.gz
+> works, but:
+> - the created recipe does NOT takes advantage of the pypi class: the
+> created recipe will have the SRC_URI variable instead of using
+> 'inherit pypi'
+> - user has to find the url of the tarball
+>
+> I think it would be really easier for the user to just use: 'devtool
+> add https://pypi.org/project/subunit/' This will have several
+> advantages:
+> - easier to use
+> - fetch latest version automatically
+> - easy to fetch specific version with --version
+> - can easily detect 'pypi.org' on the url and inherit pypi
+> - can easily parse the webpage for several informations such as
+> author, summary, homepage, bugtracker page .. (I know some of them can
+> be extracted from  setup.py / pyproject.toml, but not always)
+>
+> Looking at the create_recipe function of
+> scripts/lib/recipetool/create.py, we can see that code is really git
+> oriented even if you use a tarball, you go through a bunch of 'if'
+> that doesn't apply.
+>
+> I think we can modernize this part of the code. This would also be
+> useful for perl modules and cpan or rust modules and cargo...
+>
+> What do you think? Is this something that is worth investigating and
+> implementing?
+>
+> Cheers
+> Julien
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#61052): https://lists.yoctoproject.org/g/yocto/message/61052
+> Mute This Topic: https://lists.yoctoproject.org/mt/101482623/1686489
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] [RFC] recipetool create to support pypi project
+  2023-09-20 16:48 [RFC] recipetool create to support pypi project Julien Stephan
+  2023-09-20 18:36 ` [yocto] " Alexander Kanavin
+@ 2023-09-20 20:37 ` Richard Purdie
+  2023-09-21 12:04   ` Julien Stephan
+  1 sibling, 1 reply; 4+ messages in thread
+From: Richard Purdie @ 2023-09-20 20:37 UTC (permalink / raw)
+  To: Julien Stephan, yocto
+
+On Wed, 2023-09-20 at 18:48 +0200, Julien Stephan wrote:
+> Hi all,
+> 
+> In the scope of the RFQ, I am currently looking at bug #14737 (adding
+> support of PEP-517 in recipetool/devtool).
+> 
+> I am quite new to the recipetool/devtool tools and I have several
+> ideas I would like to discuss before going into development that may
+> not be appropriate/necessary for the tool.
+> 
+> As of today, from what I understand (please correct me if I am wrong)
+> 'devtool add' supports the creation of recipes for python modules from
+> their download tarball so something like: devtool add
+> https://files.pythonhosted.org/packages/e4/29/f1e7113ca4632283a76cdbe40b62be860d268fdc0e8eab7216ffaf2aa0ef/subunit-0.0.0a0.tar.gz
+> works, but:
+> - the created recipe does NOT takes advantage of the pypi class: the
+> created recipe will have the SRC_URI variable instead of using
+> 'inherit pypi'
+> - user has to find the url of the tarball
+> 
+> I think it would be really easier for the user to just use: 'devtool
+> add https://pypi.org/project/subunit/' This will have several
+> advantages:
+> - easier to use
+> - fetch latest version automatically
+> - easy to fetch specific version with --version
+> - can easily detect 'pypi.org' on the url and inherit pypi
+> - can easily parse the webpage for several informations such as
+> author, summary, homepage, bugtracker page .. (I know some of them can
+> be extracted from  setup.py / pyproject.toml, but not always)
+> 
+> Looking at the create_recipe function of
+> scripts/lib/recipetool/create.py, we can see that code is really git
+> oriented even if you use a tarball, you go through a bunch of 'if'
+> that doesn't apply.
+> 
+> I think we can modernize this part of the code. This would also be
+> useful for perl modules and cpan or rust modules and cargo...
+> 
+> What do you think? Is this something that is worth investigating and
+> implementing?
+
+Basically, yes, it sounds like the right direction to me. Even nicer
+might be:
+
+devtool add pypi subunit
+
+which might match well other possible options like:
+
+devtool add cpan <cpan module name>
+
+and other such usages.
+
+This would take a bit more work up front to implement since it would be
+in the form "<type> <name>" rather than the existing "<url>" but that
+is probably worth investing in.
+
+As Alex mentioned, unit tests are key to keeping this maintainable. We
+do have really good test suites for recipetool and devtool already so
+we need to ensure new functionality has good coverage.
+
+Cheers,
+
+Richard
+
+
+
+
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] [RFC] recipetool create to support pypi project
+  2023-09-20 20:37 ` Richard Purdie
+@ 2023-09-21 12:04   ` Julien Stephan
+  0 siblings, 0 replies; 4+ messages in thread
+From: Julien Stephan @ 2023-09-21 12:04 UTC (permalink / raw)
+  To: Richard Purdie; +Cc: yocto
+
+Le mer. 20 sept. 2023 à 22:37, Richard Purdie
+<richard.purdie@linuxfoundation.org> a écrit :
+>
+> On Wed, 2023-09-20 at 18:48 +0200, Julien Stephan wrote:
+> > Hi all,
+> >
+> > In the scope of the RFQ, I am currently looking at bug #14737 (adding
+> > support of PEP-517 in recipetool/devtool).
+> >
+> > I am quite new to the recipetool/devtool tools and I have several
+> > ideas I would like to discuss before going into development that may
+> > not be appropriate/necessary for the tool.
+> >
+> > As of today, from what I understand (please correct me if I am wrong)
+> > 'devtool add' supports the creation of recipes for python modules from
+> > their download tarball so something like: devtool add
+> > https://files.pythonhosted.org/packages/e4/29/f1e7113ca4632283a76cdbe40b62be860d268fdc0e8eab7216ffaf2aa0ef/subunit-0.0.0a0.tar.gz
+> > works, but:
+> > - the created recipe does NOT takes advantage of the pypi class: the
+> > created recipe will have the SRC_URI variable instead of using
+> > 'inherit pypi'
+> > - user has to find the url of the tarball
+> >
+> > I think it would be really easier for the user to just use: 'devtool
+> > add https://pypi.org/project/subunit/' This will have several
+> > advantages:
+> > - easier to use
+> > - fetch latest version automatically
+> > - easy to fetch specific version with --version
+> > - can easily detect 'pypi.org' on the url and inherit pypi
+> > - can easily parse the webpage for several informations such as
+> > author, summary, homepage, bugtracker page .. (I know some of them can
+> > be extracted from  setup.py / pyproject.toml, but not always)
+> >
+> > Looking at the create_recipe function of
+> > scripts/lib/recipetool/create.py, we can see that code is really git
+> > oriented even if you use a tarball, you go through a bunch of 'if'
+> > that doesn't apply.
+> >
+> > I think we can modernize this part of the code. This would also be
+> > useful for perl modules and cpan or rust modules and cargo...
+> >
+> > What do you think? Is this something that is worth investigating and
+> > implementing?
+>
+> Basically, yes, it sounds like the right direction to me. Even nicer
+> might be:
+>
+> devtool add pypi subunit
+>
+> which might match well other possible options like:
+>
+> devtool add cpan <cpan module name>
+>
+> and other such usages.
+>
+> This would take a bit more work up front to implement since it would be
+> in the form "<type> <name>" rather than the existing "<url>" but that
+> is probably worth investing in.
+>
+> As Alex mentioned, unit tests are key to keeping this maintainable. We
+> do have really good test suites for recipetool and devtool already so
+> we need to ensure new functionality has good coverage.
+>
+> Cheers,
+>
+> Richard
+>
+>
+
+Hi Alexandre and Richard,
+
+Nice, I will try to come up with something and post it as RFC.
+
+I will take care of adding selftests.
+
+"devtool add pypi subunit" looks good, I will try to look at this
+
+Cheers
+Julien
+
+
+>
+>
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+end of thread, other threads:[~2023-09-21 12:05 UTC | newest]
+
+Thread overview: 4+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-09-20 16:48 [RFC] recipetool create to support pypi project Julien Stephan
+2023-09-20 18:36 ` [yocto] " Alexander Kanavin
+2023-09-20 20:37 ` Richard Purdie
+2023-09-21 12:04   ` Julien Stephan
+

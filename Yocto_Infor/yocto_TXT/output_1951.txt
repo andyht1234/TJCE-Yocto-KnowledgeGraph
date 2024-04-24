@@ -1,0 +1,136 @@
+* Re: [yocto] [PATCH yocto-autobuilder-helper v2] Wrote python code to automatically add banner to outdated versions of yocto-docs, pointing the user to the latest version.
+       [not found] <20220415144353.44823-1-abongwabonalais@gmail.com>
+@ 2022-04-15 21:17 ` Richard Purdie
+  2022-04-15 23:04   ` Abongwa Amahnui Bonalais
+  0 siblings, 1 reply; 2+ messages in thread
+From: Richard Purdie @ 2022-04-15 21:17 UTC (permalink / raw)
+  To: Abongwa Amahnui Bonalais, yocto
+
+Hi,
+
+Thanks for the patch, this is definitely moving in the right direction. I have
+some review feedback.
+
+Firstly, you need to make your first line of the commit messages more succinct
+(which translate into the subject line of these emails). It needs to be short
+and fit one line, preferably under 60-80 characters.
+
+On Fri, 2022-04-15 at 15:43 +0100, Abongwa Amahnui Bonalais wrote:
+> The main issue I am facing now is how to go around the "UnicodeDecodeError:
+> 'utf-8' codec can't decode byte 0xa0 in position 99: invalid start byte" for
+> the html script and the "UnicodeDecodeError: 'utf-8' codec can't decode byte
+> 0xe9 in position 158: invalid continuation byte error" for the css script I
+> get after the script has edited some of the files in the folder containing the
+> outdate versions, but it works perfectly in all the other directories I tested
+> in on.
+> But this error comes after some html and css files have successfully been edited by the script.
+
+You also need to line wrap commit messages.
+
+0xa0 is a Non-Breaking Space (NBSP) so I suspect the files aren't in utf-8 but
+in something like latin1/iso8859-1. To see if that helps, try using something
+like open(html_file, "r", encoding="ISO-8859-1").
+
+> Signed-off-by: Abongwa Bonalais Amahnui <abongwabonalais@gmail.com>
+> ---
+>  trial.py      | 38 +++++++++++++++++++++++++++++
+>  trialstyle.py | 67 +++++++++++++++++++++++++++++++++++++++++++++++++++
+>  2 files changed, 105 insertions(+)
+>  create mode 100644 trial.py
+>  create mode 100644 trialstyle.py
+> 
+> diff --git a/trial.py b/trial.py
+> new file mode 100644
+> index 0000000..d96bef5
+> --- /dev/null
+> +++ b/trial.py
+> @@ -0,0 +1,38 @@
+
+Python scripts should start with:
+
+#!/usr/bin/env python3
+
+They should be followed with the author/copyright and license information,
+preferably an SPDX-License-Identifier.
+
+> +# function to append to the content of an html file below the body tag
+> +content = ' <div id="outdated-warning">This document is for outdated, you should select the <a href="https://docs.yoctoproject.org/">latest release version</a> in this series.</div>'
+> +
+> +def append_to_body(html_file, content):
+> +    # open the html file in read mode
+> +    with open(html_file, 'r') as f:
+> +        # read the content of the html file
+> +        html_content = f.read()
+> +    # open the html file in write mode
+> +    with open(html_file, 'w') as f:
+> +        # write the content of the html file
+> +        f.write(html_content.replace('<body>', '<body>' + content ))
+> +
+> +
+> +
+> +import os
+
+Imports should be at the start of the file after the headers.
+
+> +# function to loop through all html files in the current directory and call the append_to_body function
+> +def loop_through_html_files(directory):
+> +    # loop through all files in the directory
+> +    for file in os.listdir(directory):
+> +        # check if the file is an html file
+> +        if file.endswith('.html'):
+> +            # call the append_to_body function
+> +            append_to_body(os.path.join(directory, file), content)
+> +#loop_through_html_files('.')
+> +
+> +
+> +# function to loop through all sub directories and recursively call above function
+> +def loop_through_directories(directory):
+> +    # loop through all sub directories in the directory
+> +    for dir in os.listdir(directory):
+> +        # check if the sub directory is a directory
+> +        if os.path.isdir(os.path.join(directory, dir)):
+> +            # call the loop_through_html_files function
+> +            loop_through_html_files(os.path.join(directory, dir))
+> +            # call the loop_through_directories function again via recursion
+> +            loop_through_directories(os.path.join(directory, dir))
+> +loop_through_directories('.')
+
+Python has a handy directory walking function, have a look at os.walk().
+
+The other script would need similar tweaks to the above comments.
+
+Cheers,
+
+Richard
+
+
+
+
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+* Re: [PATCH yocto-autobuilder-helper v2] Wrote python code to automatically add banner to outdated versions of yocto-docs, pointing the user to the latest version.
+  2022-04-15 21:17 ` [yocto] [PATCH yocto-autobuilder-helper v2] Wrote python code to automatically add banner to outdated versions of yocto-docs, pointing the user to the latest version Richard Purdie
+@ 2022-04-15 23:04   ` Abongwa Amahnui Bonalais
+  0 siblings, 0 replies; 2+ messages in thread
+From: Abongwa Amahnui Bonalais @ 2022-04-15 23:04 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 475 bytes --]
+
+Hi Richard,
+I implemented the changes you gave and it successfully modified all the html and css files.
+But I noticed an issue, In the script to edit the css script, I discovered that the class name of the <div> tag in the html files are different for some files.
+For such files, the banner will overlap with whatever is at the top.
+I was thinking of a way to grap the class name of each main div class and add it to the css file but it never came up with anything yet.
+
+[-- Attachment #2: Type: text/html, Size: 504 bytes --]
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2022-04-18 14:25 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+     [not found] <20220415144353.44823-1-abongwabonalais@gmail.com>
+2022-04-15 21:17 ` [yocto] [PATCH yocto-autobuilder-helper v2] Wrote python code to automatically add banner to outdated versions of yocto-docs, pointing the user to the latest version Richard Purdie
+2022-04-15 23:04   ` Abongwa Amahnui Bonalais
+

@@ -1,0 +1,1009 @@
+* [meta-rockchip][PATCH v6 0/6] kmeta BSP for nanopi-m4
+@ 2021-05-11 16:10 Yann Dirson
+  2021-05-11 16:10 ` [meta-rockchip][PATCH v6 1/6] linux-yocto: add an initial NanoPi-M4 BSP Yann Dirson
+                   ` (5 more replies)
+  0 siblings, 6 replies; 7+ messages in thread
+From: Yann Dirson @ 2021-05-11 16:10 UTC (permalink / raw)
+  To: yocto; +Cc: twoerner, Yann Dirson
+
+From: Yann Dirson <yann@blade-group.com>
+
+With this version the Wifi works (requires recent poky master for a
+linux-firmware fix).
+
+I'm not especially happy with the BT support:
+- it uses the rkwifibt repo because I don't have any other BT firmware
+  for this chip
+- I was not able to get it to work on the board I have (even with vendor
+  image with legacy kernel), so I may have a problem with this particular
+  piece of hardware.  At least it can do discover and pairing, maybe wider
+  testing will be useful.
+
+
+Changes in v6:
+- support for Wifi and BT
+
+Changes in v5:
+- removed AP6356S-related config options, will come later with proper
+  wifi/bt support
+- removed CONFIG_SND_SOC_RK3288_HDMI_ANALOG which turns out not to be
+  needed for HDMI audio
+- new patch to get HDMI to work
+
+Changes in v4:
+- install our bsp files in bsp/rockchip/ rather than directly in bsp/
+- also add "serial" to MACHINE_FEATURES
+
+Changes in v3:
+- relocate the bsp files into files/ so we don't have to add linux-yocto/
+  to FILESEXTRAPATHS for all other kernels
+- removed the "don't force KCONFIG_MODE to alldefconfig" (not needed finally,
+  and causing interferences in default setup)
+- add "usbhost" to MACHINE_FEATURES to enable lsusb and friends
+- better hardware coverage (though still no wifi/bt/audio, and buggy hdmi)
+
+Yann Dirson (6):
+  linux-yocto: add an initial NanoPi-M4 BSP
+  WIP linux-yocto: add workaround to disable VOPL usage on HDMI
+  linux-firmware: import variables file for ap4356s firmware from
+    armbian
+  NanoPi-M4: activate Wifi support
+  WIP Import rkwifibt-firmware from vendor's meta-rockchip
+  WIP NanoPi-M4: activate BT support
+
+ conf/machine/include/nanopi-m4.inc            |   9 +-
+ .../files/brcmfmac4356-sdio.txt               | 126 ++++++++++++++++++
+ .../linux-firmware/linux-firmware_%.bbappend  |  13 ++
+ .../files/bsp/rockchip/hdmi-no-vopl.patch     |  65 +++++++++
+ .../files/bsp/rockchip/nanopi-m4-standard.scc |   7 +
+ .../files/bsp/rockchip/nanopi-m4-tiny.scc     |   7 +
+ .../linux/files/bsp/rockchip/nanopi-m4.cfg    |  22 +++
+ .../linux/files/bsp/rockchip/nanopi-m4.scc    |   5 +
+ .../linux/files/bsp/rockchip/rk3399.cfg       |  70 ++++++++++
+ .../linux/files/bsp/rockchip/rk3399.scc       |   5 +
+ .../linux/files/bsp/rockchip/rockchip.cfg     |  50 +++++++
+ .../linux/files/bsp/rockchip/rockchip.scc     |   8 ++
+ recipes-kernel/linux/linux-yocto%.bbappend    |   6 +
+ .../rkwifibt-firmware/files/LICENSE.rockchip  |  41 ++++++
+ .../rkwifibt-firmware/rkwifibt-firmware.bb    | 110 +++++++++++++++
+ 15 files changed, 543 insertions(+), 1 deletion(-)
+ create mode 100644 recipes-kernel/linux-firmware/files/brcmfmac4356-sdio.txt
+ create mode 100644 recipes-kernel/linux-firmware/linux-firmware_%.bbappend
+ create mode 100644 recipes-kernel/linux/files/bsp/rockchip/hdmi-no-vopl.patch
+ create mode 100644 recipes-kernel/linux/files/bsp/rockchip/nanopi-m4-standard.scc
+ create mode 100644 recipes-kernel/linux/files/bsp/rockchip/nanopi-m4-tiny.scc
+ create mode 100644 recipes-kernel/linux/files/bsp/rockchip/nanopi-m4.cfg
+ create mode 100644 recipes-kernel/linux/files/bsp/rockchip/nanopi-m4.scc
+ create mode 100644 recipes-kernel/linux/files/bsp/rockchip/rk3399.cfg
+ create mode 100644 recipes-kernel/linux/files/bsp/rockchip/rk3399.scc
+ create mode 100644 recipes-kernel/linux/files/bsp/rockchip/rockchip.cfg
+ create mode 100644 recipes-kernel/linux/files/bsp/rockchip/rockchip.scc
+ create mode 100644 recipes-kernel/rkwifibt-firmware/files/LICENSE.rockchip
+ create mode 100644 recipes-kernel/rkwifibt-firmware/rkwifibt-firmware.bb
+
+-- 
+2.30.2
+
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* [meta-rockchip][PATCH v6 1/6] linux-yocto: add an initial NanoPi-M4 BSP
+  2021-05-11 16:10 [meta-rockchip][PATCH v6 0/6] kmeta BSP for nanopi-m4 Yann Dirson
+@ 2021-05-11 16:10 ` Yann Dirson
+  2021-05-11 16:10 ` [meta-rockchip][PATCH v6 2/6] WIP linux-yocto: add workaround to disable VOPL usage on HDMI Yann Dirson
+                   ` (4 subsequent siblings)
+  5 siblings, 0 replies; 7+ messages in thread
+From: Yann Dirson @ 2021-05-11 16:10 UTC (permalink / raw)
+  To: yocto; +Cc: twoerner, Yann Dirson
+
+From: Yann Dirson <yann@blade-group.com>
+
+This patch provides "standard" and "tiny" BSP.
+
+There is still much work to be done in dispatching feature to individual
+scc files - the more boards we can support the better it will get.
+Not all SoC/board features are covered yet either (esp. Wifi/Bluetooth and
+audio jack), and properly-woking HDMI still needs patches.
+
+Tiny is not fully testable by itself, it can be minimally booted with
+serial console (though still missing CONFIG_MULTIUSER for serial getty,
+and CONFIG_INOTIFY_USER for proper udev operation) using:
+
+ PREFERRED_PROVIDER_virtual/kernel = "linux-yocto-tiny"
+ KERNEL_FEATURES_append = "\
+  ktypes/base/base.scc \
+  features/debug/printk.scc \
+  cfg/fs/ext4.scc \
+  cfg/8250.scc \
+ "
+
+Such a tiny build is still using mainline defconfig with lots of hardware
+features, and the kernel can be slimmed down even more by using:
+
+ KBUILD_DEFCONFIG = ""
+
+Kernel weight using default configurations:
+- standard                11MB
+- tiny                     5MB
+- tiny with no defconfig   2.5MB
+
+Signed-off-by: Yann Dirson <yann@blade-group.com>
+---
+ .../files/bsp/rockchip/nanopi-m4-standard.scc |  7 ++
+ .../files/bsp/rockchip/nanopi-m4-tiny.scc     |  7 ++
+ .../linux/files/bsp/rockchip/nanopi-m4.cfg    | 11 +++
+ .../linux/files/bsp/rockchip/nanopi-m4.scc    |  5 ++
+ .../linux/files/bsp/rockchip/rk3399.cfg       | 70 +++++++++++++++++++
+ .../linux/files/bsp/rockchip/rk3399.scc       |  5 ++
+ .../linux/files/bsp/rockchip/rockchip.cfg     | 50 +++++++++++++
+ .../linux/files/bsp/rockchip/rockchip.scc     |  6 ++
+ recipes-kernel/linux/linux-yocto%.bbappend    |  6 ++
+ 9 files changed, 167 insertions(+)
+ create mode 100644 recipes-kernel/linux/files/bsp/rockchip/nanopi-m4-standard.scc
+ create mode 100644 recipes-kernel/linux/files/bsp/rockchip/nanopi-m4-tiny.scc
+ create mode 100644 recipes-kernel/linux/files/bsp/rockchip/nanopi-m4.cfg
+ create mode 100644 recipes-kernel/linux/files/bsp/rockchip/nanopi-m4.scc
+ create mode 100644 recipes-kernel/linux/files/bsp/rockchip/rk3399.cfg
+ create mode 100644 recipes-kernel/linux/files/bsp/rockchip/rk3399.scc
+ create mode 100644 recipes-kernel/linux/files/bsp/rockchip/rockchip.cfg
+ create mode 100644 recipes-kernel/linux/files/bsp/rockchip/rockchip.scc
+
+diff --git a/recipes-kernel/linux/files/bsp/rockchip/nanopi-m4-standard.scc b/recipes-kernel/linux/files/bsp/rockchip/nanopi-m4-standard.scc
+new file mode 100644
+index 0000000..5c74d6b
+--- /dev/null
++++ b/recipes-kernel/linux/files/bsp/rockchip/nanopi-m4-standard.scc
+@@ -0,0 +1,7 @@
++# SPDX-License-Identifier: MIT
++define KMACHINE nanopi-m4
++define KTYPE standard
++define KARCH arm
++
++include ktypes/standard/standard.scc
++include nanopi-m4.scc
+diff --git a/recipes-kernel/linux/files/bsp/rockchip/nanopi-m4-tiny.scc b/recipes-kernel/linux/files/bsp/rockchip/nanopi-m4-tiny.scc
+new file mode 100644
+index 0000000..6e94d6a
+--- /dev/null
++++ b/recipes-kernel/linux/files/bsp/rockchip/nanopi-m4-tiny.scc
+@@ -0,0 +1,7 @@
++# SPDX-License-Identifier: MIT
++define KMACHINE nanopi-m4
++define KTYPE tiny
++define KARCH arm
++
++include ktypes/tiny/tiny.scc
++include nanopi-m4.scc
+diff --git a/recipes-kernel/linux/files/bsp/rockchip/nanopi-m4.cfg b/recipes-kernel/linux/files/bsp/rockchip/nanopi-m4.cfg
+new file mode 100644
+index 0000000..f3a2abf
+--- /dev/null
++++ b/recipes-kernel/linux/files/bsp/rockchip/nanopi-m4.cfg
+@@ -0,0 +1,11 @@
++CONFIG_MFD_RK808=y
++CONFIG_COMMON_CLK_RK808=y
++
++CONFIG_REGULATOR_RK808=y
++CONFIG_REGULATOR_FAN53555=y
++
++CONFIG_MMC_BLOCK=y
++CONFIG_PWRSEQ_SIMPLE=y
++
++# RTL8211E
++CONFIG_REALTEK_PHY=m
+diff --git a/recipes-kernel/linux/files/bsp/rockchip/nanopi-m4.scc b/recipes-kernel/linux/files/bsp/rockchip/nanopi-m4.scc
+new file mode 100644
+index 0000000..f4267aa
+--- /dev/null
++++ b/recipes-kernel/linux/files/bsp/rockchip/nanopi-m4.scc
+@@ -0,0 +1,5 @@
++# SPDX-License-Identifier: MIT
++
++kconf hardware nanopi-m4.cfg
++
++include rk3399.scc
+diff --git a/recipes-kernel/linux/files/bsp/rockchip/rk3399.cfg b/recipes-kernel/linux/files/bsp/rockchip/rk3399.cfg
+new file mode 100644
+index 0000000..42adfd1
+--- /dev/null
++++ b/recipes-kernel/linux/files/bsp/rockchip/rk3399.cfg
+@@ -0,0 +1,70 @@
++# A72 errata, all past revisions
++CONFIG_ARM64_ERRATUM_1319367=y
++# A53 errata, all patched on boot when needed
++CONFIG_ARM64_ERRATUM_826319=y
++CONFIG_ARM64_ERRATUM_827319=y
++CONFIG_ARM64_ERRATUM_824069=y
++CONFIG_ARM64_ERRATUM_819472=y
++
++# cru
++CONFIG_CLK_RK3399=y
++
++CONFIG_PL330_DMA=y
++CONFIG_I2C_RK3X=y
++CONFIG_SERIAL_8250_DW=y
++
++# usb
++CONFIG_PHY_ROCKCHIP_INNO_USB2=y
++CONFIG_PHY_ROCKCHIP_TYPEC=y
++
++# ethernet
++CONFIG_NET_VENDOR_STMICRO=y
++CONFIG_STMMAC_ETH=m
++CONFIG_STMMAC_PLATFORM=m
++CONFIG_DWMAC_ROCKCHIP=m
++CONFIG_PHYLIB=m
++
++# display
++CONFIG_ROCKCHIP_DW_HDMI=y
++CONFIG_ROCKCHIP_DW_MIPI_DSI=y
++CONFIG_ROCKCHIP_ANALOGIX_DP=y
++CONFIG_ROCKCHIP_CDN_DP=y
++CONFIG_PHY_ROCKCHIP_DP=y
++CONFIG_DRM_DW_HDMI=m
++CONFIG_DRM_DW_HDMI_I2S_AUDIO=m
++CONFIG_DRM_DW_HDMI_CEC=m
++CONFIG_DRM_DW_MIPI_DSI=m
++CONFIG_DRM_PANFROST=m
++
++# HDMI audio
++CONFIG_DRM_DW_HDMI_AHB_AUDIO=m
++
++CONFIG_VIDEO_DEV=m
++CONFIG_V4L_MEM2MEM_DRIVERS=y
++CONFIG_VIDEO_ROCKCHIP_RGA=m
++
++CONFIG_V4L2_H264=m
++CONFIG_MEDIA_CONTROLLER_REQUEST_API=y
++CONFIG_VIDEO_HANTRO=m
++CONFIG_VIDEO_HANTRO_ROCKCHIP=y
++CONFIG_VIDEO_ROCKCHIP_VDEC=m
++
++# usb
++CONFIG_USB_DWC2=y
++CONFIG_USB_DWC3=y
++CONFIG_USB_DWC3_DUAL_ROLE=y
++
++# sd/mmc
++CONFIG_MMC=y
++CONFIG_MMC_SDHCI=y
++CONFIG_MMC_SDHCI_PLTFM=y
++CONFIG_MMC_DW=y
++CONFIG_MMC_DW_ROCKCHIP=y
++CONFIG_MMC_SDHCI_OF_ARASAN=y
++
++# temperature sensors
++CONFIG_THERMAL=y
++CONFIG_THERMAL_OF=y
++CONFIG_ROCKCHIP_THERMAL=m
++CONFIG_IIO=y
++CONFIG_ROCKCHIP_SARADC=m
+diff --git a/recipes-kernel/linux/files/bsp/rockchip/rk3399.scc b/recipes-kernel/linux/files/bsp/rockchip/rk3399.scc
+new file mode 100644
+index 0000000..9b1a88e
+--- /dev/null
++++ b/recipes-kernel/linux/files/bsp/rockchip/rk3399.scc
+@@ -0,0 +1,5 @@
++# SPDX-License-Identifier: MIT
++
++kconf hardware rk3399.cfg
++
++include rockchip.scc
+diff --git a/recipes-kernel/linux/files/bsp/rockchip/rockchip.cfg b/recipes-kernel/linux/files/bsp/rockchip/rockchip.cfg
+new file mode 100644
+index 0000000..05a397d
+--- /dev/null
++++ b/recipes-kernel/linux/files/bsp/rockchip/rockchip.cfg
+@@ -0,0 +1,50 @@
++CONFIG_CPU_ISOLATION=y
++CONFIG_NUMA_BALANCING_DEFAULT_ENABLED=y
++CONFIG_HZ_250=y
++CONFIG_CPU_IDLE=y
++CONFIG_ARM_CPUIDLE=y
++
++CONFIG_ARCH_ROCKCHIP=y
++CONFIG_COMMON_CLK_ROCKCHIP=y
++CONFIG_REGULATOR=y
++CONFIG_REGULATOR_FIXED_VOLTAGE=y
++CONFIG_REGULATOR_PWM=y
++CONFIG_I2C=y
++CONFIG_FW_LOADER=y
++CONFIG_PHY_ROCKCHIP_EMMC=y
++CONFIG_PINCTRL=y
++CONFIG_PINCTRL_ROCKCHIP=y
++CONFIG_ROCKCHIP_IODOMAIN=y
++CONFIG_ROCKCHIP_PM_DOMAINS=y
++
++CONFIG_SPI=y
++CONFIG_SPI_ROCKCHIP=m
++
++CONFIG_PWM=y
++CONFIG_PWM_ROCKCHIP=y
++
++CONFIG_DRM_KMS_HELPER=m
++CONFIG_DRM_FBDEV_EMULATION=y
++CONFIG_ROCKCHIP_IOMMU=y
++CONFIG_DRM_ROCKCHIP=m
++CONFIG_DRM_BRIDGE=y
++
++CONFIG_SND=y
++CONFIG_SND_SOC=y
++CONFIG_SND_HDA_CODEC_HDMI=m
++CONFIG_SND_SOC_ROCKCHIP=m
++CONFIG_SND_SOC_ROCKCHIP_I2S=m
++CONFIG_SND_SOC_ROCKCHIP_SPDIF=m
++
++CONFIG_NVMEM=y
++CONFIG_ROCKCHIP_EFUSE=m
++
++CONFIG_CPU_FREQ=y
++CONFIG_CPU_FREQ_THERMAL=y
++CONFIG_HWMON=y
++CONFIG_THERMAL_HWMON=y
++
++CONFIG_CRYPTO_HW=y
++CONFIG_CRYPTO_DEV_ROCKCHIP=m
++
++CONFIG_MMC_BLOCK_MINORS=32
+diff --git a/recipes-kernel/linux/files/bsp/rockchip/rockchip.scc b/recipes-kernel/linux/files/bsp/rockchip/rockchip.scc
+new file mode 100644
+index 0000000..800f105
+--- /dev/null
++++ b/recipes-kernel/linux/files/bsp/rockchip/rockchip.scc
+@@ -0,0 +1,6 @@
++# SPDX-License-Identifier: MIT
++
++kconf hardware rockchip.cfg
++
++include cfg/dmaengine.scc
++include features/mmc/mmc-block.cfg
+diff --git a/recipes-kernel/linux/linux-yocto%.bbappend b/recipes-kernel/linux/linux-yocto%.bbappend
+index 7702e3f..9658681 100644
+--- a/recipes-kernel/linux/linux-yocto%.bbappend
++++ b/recipes-kernel/linux/linux-yocto%.bbappend
+@@ -1,3 +1,9 @@
++FILESEXTRAPATHS_prepend := "${THISDIR}/files:"
++
++SRC_URI_append = "\
++ file://bsp;type=kmeta;subdir=kernel-meta \
++"
++
+ COMPATIBLE_MACHINE_marsboard-rk3066 = "marsboard-rk3066"
+ COMPATIBLE_MACHINE_rock2-square = "rock2-square"
+ COMPATIBLE_MACHINE_radxarock = "radxarock"
+-- 
+2.30.2
+
+
+^ permalink raw reply related	[flat|nested] 7+ messages in thread
+* [meta-rockchip][PATCH v6 2/6] WIP linux-yocto: add workaround to disable VOPL usage on HDMI
+  2021-05-11 16:10 [meta-rockchip][PATCH v6 0/6] kmeta BSP for nanopi-m4 Yann Dirson
+  2021-05-11 16:10 ` [meta-rockchip][PATCH v6 1/6] linux-yocto: add an initial NanoPi-M4 BSP Yann Dirson
+@ 2021-05-11 16:10 ` Yann Dirson
+  2021-05-11 16:10 ` [meta-rockchip][PATCH v6 3/6] linux-firmware: import variables file for ap4356s firmware from armbian Yann Dirson
+                   ` (3 subsequent siblings)
+  5 siblings, 0 replies; 7+ messages in thread
+From: Yann Dirson @ 2021-05-11 16:10 UTC (permalink / raw)
+  To: yocto; +Cc: twoerner, Yann Dirson
+
+From: Yann Dirson <yann@blade-group.com>
+
+There is a known issue in mainline kernel making the machine unusable
+once a HDMI screen is plugged.  This patch lets VOPB be alone to use
+the HDMI port and avoids the issue while providing wupport for the largest
+set of video modes, at the expense of double-screen support.
+
+FIXME: patch does not get applied, unless the scc is also added to
+KERNEL_FEATURES ?
+---
+ .../files/bsp/rockchip/hdmi-no-vopl.patch     | 65 +++++++++++++++++++
+ .../linux/files/bsp/rockchip/rockchip.scc     |  2 +
+ 2 files changed, 67 insertions(+)
+ create mode 100644 recipes-kernel/linux/files/bsp/rockchip/hdmi-no-vopl.patch
+
+diff --git a/recipes-kernel/linux/files/bsp/rockchip/hdmi-no-vopl.patch b/recipes-kernel/linux/files/bsp/rockchip/hdmi-no-vopl.patch
+new file mode 100644
+index 0000000..72ed753
+--- /dev/null
++++ b/recipes-kernel/linux/files/bsp/rockchip/hdmi-no-vopl.patch
+@@ -0,0 +1,65 @@
++From 92d9cf4e6c2767c8c5aa8d97e684f2f77d950e7d Mon Sep 17 00:00:00 2001
++From: Jonas Karlman <jonas@kwiboo.se>
++Date: Sun, 19 Jul 2020 16:35:11 +0000
++Subject: [PATCH] HACK: dts: rockchip: do not use vopl for hdmi
++Upstream-Status: Inappropriate [other]
++
++---
++ arch/arm/boot/dts/rk3288.dtsi            | 9 ---------
++ arch/arm64/boot/dts/rockchip/rk3399.dtsi | 9 ---------
++ 2 files changed, 18 deletions(-)
++
++diff --git a/arch/arm/boot/dts/rk3288.dtsi b/arch/arm/boot/dts/rk3288.dtsi
++index 03e86d012edd..746acfac1e92 100644
++--- a/arch/arm/boot/dts/rk3288.dtsi
+++++ b/arch/arm/boot/dts/rk3288.dtsi
++@@ -1104,11 +1104,6 @@ vopl_out: port {
++ 			#address-cells = <1>;
++ 			#size-cells = <0>;
++ 
++-			vopl_out_hdmi: endpoint@0 {
++-				reg = <0>;
++-				remote-endpoint = <&hdmi_in_vopl>;
++-			};
++-
++ 			vopl_out_edp: endpoint@1 {
++ 				reg = <1>;
++ 				remote-endpoint = <&edp_in_vopl>;
++@@ -1249,10 +1244,6 @@ hdmi_in_vopb: endpoint@0 {
++ 					reg = <0>;
++ 					remote-endpoint = <&vopb_out_hdmi>;
++ 				};
++-				hdmi_in_vopl: endpoint@1 {
++-					reg = <1>;
++-					remote-endpoint = <&vopl_out_hdmi>;
++-				};
++ 			};
++ 		};
++ 	};
++diff --git a/arch/arm64/boot/dts/rockchip/rk3399.dtsi b/arch/arm64/boot/dts/rockchip/rk3399.dtsi
++index a855805649ef..418d16b0b648 100644
++--- a/arch/arm64/boot/dts/rockchip/rk3399.dtsi
+++++ b/arch/arm64/boot/dts/rockchip/rk3399.dtsi
++@@ -1640,11 +1640,6 @@ vopl_out_edp: endpoint@1 {
++ 				remote-endpoint = <&edp_in_vopl>;
++ 			};
++ 
++-			vopl_out_hdmi: endpoint@2 {
++-				reg = <2>;
++-				remote-endpoint = <&hdmi_in_vopl>;
++-			};
++-
++ 			vopl_out_mipi1: endpoint@3 {
++ 				reg = <3>;
++ 				remote-endpoint = <&mipi1_in_vopl>;
++@@ -1816,10 +1811,6 @@ hdmi_in_vopb: endpoint@0 {
++ 					reg = <0>;
++ 					remote-endpoint = <&vopb_out_hdmi>;
++ 				};
++-				hdmi_in_vopl: endpoint@1 {
++-					reg = <1>;
++-					remote-endpoint = <&vopl_out_hdmi>;
++-				};
++ 			};
++ 		};
++ 	};
+diff --git a/recipes-kernel/linux/files/bsp/rockchip/rockchip.scc b/recipes-kernel/linux/files/bsp/rockchip/rockchip.scc
+index 800f105..4d61509 100644
+--- a/recipes-kernel/linux/files/bsp/rockchip/rockchip.scc
++++ b/recipes-kernel/linux/files/bsp/rockchip/rockchip.scc
+@@ -4,3 +4,5 @@ kconf hardware rockchip.cfg
+ 
+ include cfg/dmaengine.scc
+ include features/mmc/mmc-block.cfg
++
++patch hdmi-no-vopl.patch
+-- 
+2.30.2
+
+
+^ permalink raw reply related	[flat|nested] 7+ messages in thread
+* [meta-rockchip][PATCH v6 3/6] linux-firmware: import variables file for ap4356s firmware from armbian
+  2021-05-11 16:10 [meta-rockchip][PATCH v6 0/6] kmeta BSP for nanopi-m4 Yann Dirson
+  2021-05-11 16:10 ` [meta-rockchip][PATCH v6 1/6] linux-yocto: add an initial NanoPi-M4 BSP Yann Dirson
+  2021-05-11 16:10 ` [meta-rockchip][PATCH v6 2/6] WIP linux-yocto: add workaround to disable VOPL usage on HDMI Yann Dirson
+@ 2021-05-11 16:10 ` Yann Dirson
+  2021-05-11 16:10 ` [meta-rockchip][PATCH v6 4/6] NanoPi-M4: activate Wifi support Yann Dirson
+                   ` (2 subsequent siblings)
+  5 siblings, 0 replies; 7+ messages in thread
+From: Yann Dirson @ 2021-05-11 16:10 UTC (permalink / raw)
+  To: yocto; +Cc: twoerner, Yann Dirson
+
+From: Yann Dirson <yann@blade-group.com>
+
+This is required for wifi support on nanopi-m4 with kernel 5.10.
+
+This is dependant on poky commit commit 698fd81c551b52ff7f4a26e42d9acf9ad4ce5639,
+"linux-firmware: include all relevant files in -bcm4356".
+
+This file was fetched from
+https://github.com/armbian/firmware/commit/9c800d7e16616dd30cfd854f26e563fb675e3f8a
+
+Signed-off-by: Yann Dirson <yann@blade-group.com>
+---
+ .../files/brcmfmac4356-sdio.txt               | 126 ++++++++++++++++++
+ .../linux-firmware/linux-firmware_%.bbappend  |  13 ++
+ 2 files changed, 139 insertions(+)
+ create mode 100644 recipes-kernel/linux-firmware/files/brcmfmac4356-sdio.txt
+ create mode 100644 recipes-kernel/linux-firmware/linux-firmware_%.bbappend
+
+diff --git a/recipes-kernel/linux-firmware/files/brcmfmac4356-sdio.txt b/recipes-kernel/linux-firmware/files/brcmfmac4356-sdio.txt
+new file mode 100644
+index 0000000..a8c1ff8
+--- /dev/null
++++ b/recipes-kernel/linux-firmware/files/brcmfmac4356-sdio.txt
+@@ -0,0 +1,126 @@
++# Sample variables file for BCM94356Z NGFF 22x30mm iPA, iLNA board with PCIe for production package
++NVRAMRev=$Rev: 492104 $
++#4356 chip = 4354 A2 chip
++sromrev=11
++boardrev=0x1102
++boardtype=0x073e
++boardflags=0x02400201
++#0x2000 enable 2G spur WAR
++boardflags2=0x00802000
++boardflags3=0x0000000a
++#boardflags3 0x00000100 /* to read swctrlmap from nvram*/
++#define BFL3_5G_SPUR_WAR   0x00080000   /* enable spur WAR in 5G band */
++#define BFL3_AvVim   0x40000000   /* load AvVim from nvram */
++macaddr=00:90:4c:1a:10:01
++ccode=X2
++regrev=205
++antswitch=0
++pdgain5g=4
++pdgain2g=4
++tworangetssi2g=0
++tworangetssi5g=0
++paprdis=0
++femctrl=10
++vendid=0x14e4
++devid=0x43ec
++manfid=0x2d0
++#prodid=0x052e
++nocrc=1
++otpimagesize=502
++xtalfreq=37400
++rxgains2gelnagaina0=0
++rxgains2gtrisoa0=7
++rxgains2gtrelnabypa0=0
++rxgains5gelnagaina0=0
++rxgains5gtrisoa0=11
++rxgains5gtrelnabypa0=0
++rxgains5gmelnagaina0=0
++rxgains5gmtrisoa0=13
++rxgains5gmtrelnabypa0=0
++rxgains5ghelnagaina0=0
++rxgains5ghtrisoa0=12
++rxgains5ghtrelnabypa0=0
++rxgains2gelnagaina1=0
++rxgains2gtrisoa1=7
++rxgains2gtrelnabypa1=0
++rxgains5gelnagaina1=0
++rxgains5gtrisoa1=10
++rxgains5gtrelnabypa1=0
++rxgains5gmelnagaina1=0
++rxgains5gmtrisoa1=11
++rxgains5gmtrelnabypa1=0
++rxgains5ghelnagaina1=0
++rxgains5ghtrisoa1=11
++rxgains5ghtrelnabypa1=0
++rxchain=3
++txchain=3
++aa2g=3
++aa5g=3
++agbg0=2
++agbg1=2
++aga0=2
++aga1=2
++tssipos2g=1
++extpagain2g=2
++tssipos5g=1
++extpagain5g=2
++tempthresh=255
++tempoffset=255
++rawtempsense=0x1ff
++pa2ga0=-147,6192,-705
++pa2ga1=-161,6041,-701
++pa5ga0=-194,6069,-739,-188,6137,-743,-185,5931,-725,-171,5898,-715
++pa5ga1=-190,6248,-757,-190,6275,-759,-190,6225,-757,-184,6131,-746
++subband5gver=0x4
++pdoffsetcckma0=0x4
++pdoffsetcckma1=0x4
++pdoffset40ma0=0x0000
++pdoffset80ma0=0x0000
++pdoffset40ma1=0x0000
++pdoffset80ma1=0x0000
++maxp2ga0=76
++maxp5ga0=74,74,74,74
++maxp2ga1=76
++maxp5ga1=74,74,74,74
++cckbw202gpo=0x0000
++cckbw20ul2gpo=0x0000
++mcsbw202gpo=0x99644422
++mcsbw402gpo=0x99644422
++dot11agofdmhrbw202gpo=0x6666
++ofdmlrbw202gpo=0x0022
++mcsbw205glpo=0x88766663
++mcsbw405glpo=0x88666663
++mcsbw805glpo=0xbb666665
++mcsbw205gmpo=0xd8666663
++mcsbw405gmpo=0x88666663
++mcsbw805gmpo=0xcc666665
++mcsbw205ghpo=0xdc666663
++mcsbw405ghpo=0xaa666663
++mcsbw805ghpo=0xdd666665
++mcslr5glpo=0x0000
++mcslr5gmpo=0x0000
++mcslr5ghpo=0x0000
++sb20in40hrpo=0x0
++sb20in80and160hr5glpo=0x0
++sb40and80hr5glpo=0x0
++sb20in80and160hr5gmpo=0x0
++sb40and80hr5gmpo=0x0
++sb20in80and160hr5ghpo=0x0
++sb40and80hr5ghpo=0x0
++sb20in40lrpo=0x0
++sb20in80and160lr5glpo=0x0
++sb40and80lr5glpo=0x0
++sb20in80and160lr5gmpo=0x0
++sb40and80lr5gmpo=0x0
++sb20in80and160lr5ghpo=0x0
++sb40and80lr5ghpo=0x0
++dot11agduphrpo=0x0
++dot11agduplrpo=0x0
++phycal_tempdelta=255
++temps_period=15
++temps_hysteresis=15
++rssicorrnorm_c0=4,4
++rssicorrnorm_c1=4,4
++rssicorrnorm5g_c0=1,2,3,1,2,3,6,6,8,6,6,8
++rssicorrnorm5g_c1=1,2,3,2,2,2,7,7,8,7,7,8
++
+diff --git a/recipes-kernel/linux-firmware/linux-firmware_%.bbappend b/recipes-kernel/linux-firmware/linux-firmware_%.bbappend
+new file mode 100644
+index 0000000..45ab311
+--- /dev/null
++++ b/recipes-kernel/linux-firmware/linux-firmware_%.bbappend
+@@ -0,0 +1,13 @@
++FILESEXTRAPATHS_prepend := "${THISDIR}/files:"
++
++SRC_URI += "\
++ file://brcmfmac4356-sdio.txt \
++"
++
++BRCMDIR = "${nonarch_base_libdir}/firmware/brcm"
++
++do_install_append() {
++ install -m644 ${WORKDIR}/brcmfmac4356-sdio.txt ${D}${BRCMDIR}/
++}
++
++FILES_${PN}-bcm4356 += "${BRCMDIR}/brcmfmac4356-sdio.*"
+-- 
+2.30.2
+
+
+^ permalink raw reply related	[flat|nested] 7+ messages in thread
+* [meta-rockchip][PATCH v6 4/6] NanoPi-M4: activate Wifi support
+  2021-05-11 16:10 [meta-rockchip][PATCH v6 0/6] kmeta BSP for nanopi-m4 Yann Dirson
+                   ` (2 preceding siblings ...)
+  2021-05-11 16:10 ` [meta-rockchip][PATCH v6 3/6] linux-firmware: import variables file for ap4356s firmware from armbian Yann Dirson
+@ 2021-05-11 16:10 ` Yann Dirson
+  2021-05-11 16:10 ` [meta-rockchip][PATCH v6 5/6] WIP Import rkwifibt-firmware from vendor's meta-rockchip Yann Dirson
+  2021-05-11 16:10 ` [meta-rockchip][PATCH v6 6/6] WIP NanoPi-M4: activate BT support Yann Dirson
+  5 siblings, 0 replies; 7+ messages in thread
+From: Yann Dirson @ 2021-05-11 16:10 UTC (permalink / raw)
+  To: yocto; +Cc: twoerner, Yann Dirson
+
+From: Yann Dirson <yann@blade-group.com>
+
+---
+ conf/machine/include/nanopi-m4.inc                    | 5 ++++-
+ recipes-kernel/linux/files/bsp/rockchip/nanopi-m4.cfg | 5 +++++
+ 2 files changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/conf/machine/include/nanopi-m4.inc b/conf/machine/include/nanopi-m4.inc
+index a14b705..cb27928 100644
+--- a/conf/machine/include/nanopi-m4.inc
++++ b/conf/machine/include/nanopi-m4.inc
+@@ -3,7 +3,7 @@
+ 
+ require rk3399.inc
+ 
+-MACHINE_FEATURES += "usbhost serial"
++MACHINE_FEATURES += "usbhost serial wifi"
+ 
+ KMACHINE = "nanopi-m4"
+ KERNEL_DEVICETREE = "rockchip/rk3399-nanopi-m4.dtb"
+@@ -23,3 +23,6 @@ IMAGE_BOOT_FILES ?= "\
+     "
+ 
+ SERIAL_CONSOLES = "1500000;ttyS2"
++
++# wifi firmware
++MACHINE_EXTRA_RRECOMMENDS += "linux-firmware-bcm4356"
+diff --git a/recipes-kernel/linux/files/bsp/rockchip/nanopi-m4.cfg b/recipes-kernel/linux/files/bsp/rockchip/nanopi-m4.cfg
+index f3a2abf..d42b744 100644
+--- a/recipes-kernel/linux/files/bsp/rockchip/nanopi-m4.cfg
++++ b/recipes-kernel/linux/files/bsp/rockchip/nanopi-m4.cfg
+@@ -9,3 +9,8 @@ CONFIG_PWRSEQ_SIMPLE=y
+ 
+ # RTL8211E
+ CONFIG_REALTEK_PHY=m
++
++# AP6356S Wifi
++CONFIG_WLAN_VENDOR_BROADCOM=y
++CONFIG_BRCMFMAC=m
++CONFIG_BRCMFMAC_SDIO=y
+-- 
+2.30.2
+
+
+^ permalink raw reply related	[flat|nested] 7+ messages in thread
+* [meta-rockchip][PATCH v6 5/6] WIP Import rkwifibt-firmware from vendor's meta-rockchip
+  2021-05-11 16:10 [meta-rockchip][PATCH v6 0/6] kmeta BSP for nanopi-m4 Yann Dirson
+                   ` (3 preceding siblings ...)
+  2021-05-11 16:10 ` [meta-rockchip][PATCH v6 4/6] NanoPi-M4: activate Wifi support Yann Dirson
+@ 2021-05-11 16:10 ` Yann Dirson
+  2021-05-11 16:10 ` [meta-rockchip][PATCH v6 6/6] WIP NanoPi-M4: activate BT support Yann Dirson
+  5 siblings, 0 replies; 7+ messages in thread
+From: Yann Dirson @ 2021-05-11 16:10 UTC (permalink / raw)
+  To: yocto; +Cc: twoerner, Yann Dirson
+
+From: Yann Dirson <yann@blade-group.com>
+
+As far as the AP6356S in NanoPi-m4 is concerned, the included wifi firmware
+is for Rockchip's kernel tree, but for Bluetooth firmware this seems to be
+the proper "upstream" package.
+
+Changes from Rockchip's version:
+- use /lib/firmware/brcm/, not /system/etc/firmware/
+- include LICENSE.rockchip in package tree
+
+The chip powers on:
+
+ [    4.695193] Bluetooth: hci0: BCM: chip id 101
+ [    4.696142] Bluetooth: hci0: BCM: features 0x2f
+ [    4.697882] Bluetooth: hci0: BCM4354A2
+ [    4.698345] Bluetooth: hci0: BCM4356A2 (001.003.015) build 0000
+ [    4.701994] Bluetooth: hci0: BCM4356A2 'brcm/BCM4356A2.hcd' Patch
+ [    5.464146] Bluetooth: hci0: BCM4356 37.4MHz AMPAK AP6356-0055
+ [    5.464813] Bluetooth: hci0: BCM4356A2 (001.003.015) build 0266
+
+It is able to pair with devices, but connect fails.
+---
+ .../rkwifibt-firmware/files/LICENSE.rockchip  |  41 +++++++
+ .../rkwifibt-firmware/rkwifibt-firmware.bb    | 110 ++++++++++++++++++
+ 2 files changed, 151 insertions(+)
+ create mode 100644 recipes-kernel/rkwifibt-firmware/files/LICENSE.rockchip
+ create mode 100644 recipes-kernel/rkwifibt-firmware/rkwifibt-firmware.bb
+
+diff --git a/recipes-kernel/rkwifibt-firmware/files/LICENSE.rockchip b/recipes-kernel/rkwifibt-firmware/files/LICENSE.rockchip
+new file mode 100644
+index 0000000..69b445b
+--- /dev/null
++++ b/recipes-kernel/rkwifibt-firmware/files/LICENSE.rockchip
+@@ -0,0 +1,41 @@
++Copyright (c) 2020, Rockchip Electronics Co.Ltd
++All rights reserved.
++
++Redistribution.  Redistribution and use in binary form, without
++modification, are permitted provided that the following conditions are
++met:
++
++* Redistributions must reproduce the above copyright notice and the
++  following disclaimer in the documentation and/or other materials
++  provided with the distribution.
++
++* Neither the name of Rockchip Electronics Co.Ltd, its products
++  nor the names of its suppliers may be used to endorse or promote products
++  derived from this Software without specific prior written permission.
++
++* No reverse engineering, decompilation, or disassembly of this software
++  is permitted.
++
++Limited patent license. Rockchip Electronics Co.Ltd grants a world-wide,
++royalty-free, non-exclusive license under patents it now or hereafter
++owns or controls to make, have made, use, import, offer to sell and
++sell ("Utilize") this software, but solely to the extent that any
++such patent is necessary to Utilize the software alone, or in
++combination with an operating system licensed under an approved Open
++Source license as listed by the Open Source Initiative at
++http://opensource.org/licenses.  The patent license shall not apply to
++any other combinations which include this software.  No hardware per
++se is licensed hereunder.
++
++DISCLAIMER.  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
++CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING,
++BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND
++FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
++COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
++INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
++BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS
++OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
++ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR
++TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
++USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH
++DAMAGE.
+diff --git a/recipes-kernel/rkwifibt-firmware/rkwifibt-firmware.bb b/recipes-kernel/rkwifibt-firmware/rkwifibt-firmware.bb
+new file mode 100644
+index 0000000..870177b
+--- /dev/null
++++ b/recipes-kernel/rkwifibt-firmware/rkwifibt-firmware.bb
+@@ -0,0 +1,110 @@
++# Copyright (C) 2019, Fuzhou Rockchip Electronics Co., Ltd
++# Released under the MIT license (see COPYING.MIT for the terms)
++
++SUMMARY = "Rockchip WIFI/BT firmware files"
++SECTION = "kernel"
++
++LICENSE = "LICENSE.rockchip"
++LIC_FILES_CHKSUM = "file://LICENSE.rockchip;md5=d63890e209bf038f44e708bbb13e4ed9"
++
++PV_append = "+git${SRCPV}"
++
++SRCREV = "af2cf8772078b0246ac805e7ed78a62cf8f21993"
++SRC_URI = " \
++  git://github.com/rockchip-linux/rkwifibt.git \
++  file://LICENSE.rockchip;subdir=git \
++"
++#SRC_URI = "git://github.com/JeffyCN/mirrors.git;branch=rkwifibt;"
++
++S = "${WORKDIR}/git"
++
++inherit allarch deploy
++
++do_install() {
++	install -d ${D}/lib/firmware/brcm/
++	install -m 0644 ${S}/firmware/broadcom/all/*/* \
++		-t ${D}/lib/firmware/brcm/
++	install -d ${D}/lib/firmware/rtlbt/
++	install -m 0644 ${S}/realtek/RTL*/* -t ${D}/lib/firmware/rtlbt/
++}
++
++PACKAGES =+ " \
++	${PN}-ap6181-wifi \
++	${PN}-ap6212a1-wifi \
++	${PN}-ap6212a1-bt \
++	${PN}-ap6236-wifi \
++	${PN}-ap6236-bt \
++	${PN}-ap6255-wifi \
++	${PN}-ap6255-bt \
++	${PN}-ap6354-wifi \
++	${PN}-ap6354-bt \
++	${PN}-ap6356-wifi \
++	${PN}-ap6356-bt \
++	${PN}-rtl8723ds-bt \
++"
++
++FILES_${PN}-ap6181-wifi = " \
++	lib/firmware/brcm/fw_bcm40181a2_apsta.bin \
++	lib/firmware/brcm/fw_bcm40181a2.bin \
++	lib/firmware/brcm/nvram_ap6181.txt \
++"
++
++FILES_${PN}-ap6212a1-wifi = " \
++	lib/firmware/brcm/fw_bcm43438a1_apsta.bin \
++	lib/firmware/brcm/fw_bcm43438a1.bin \
++	lib/firmware/brcm/nvram_ap6212a.txt \
++"
++FILES_${PN}-ap6212a1-bt = " \
++	lib/firmware/brcm/bcm43438a1.hcd \
++"
++
++FILES_${PN}-ap6236-wifi = " \
++	lib/firmware/brcm/fw_bcm43436b0_apsta.bin \
++	lib/firmware/brcm/fw_bcm43436b0.bin \
++	lib/firmware/brcm/nvram_ap6236.txt \
++"
++FILES_${PN}-ap6236-bt = " \
++	lib/firmware/brcm/BCM4343B0.hcd \
++"
++
++FILES_${PN}-ap6255-wifi = " \
++	lib/firmware/brcm/fw_bcm43455c0_ag.bin \
++	lib/firmware/brcm/nvram_ap6255.txt \
++"
++FILES_${PN}-ap6255-bt = " \
++	lib/firmware/brcm/BCM4345C0_ap.hcd \
++	lib/firmware/brcm/BCM4345C0.hcd \
++"
++
++FILES_${PN}-ap6354-wifi = " \
++	lib/firmware/brcm/fw_bcm4354a1_ag.bin \
++	lib/firmware/brcm/nvram_ap6354.txt \
++"
++FILES_${PN}-ap6354-bt = " \
++	lib/firmware/brcm/bcm4354a1.hcd \
++"
++
++FILES_${PN}-ap6356-wifi = " \
++	lib/firmware/brcm/fw_bcm4356a2_ag.bin \
++	lib/firmware/brcm/nvram_ap6356.txt \
++	lib/firmware/brcm/nvram_ap6356s.txt \
++"
++FILES_${PN}-ap6356-bt = " \
++	lib/firmware/brcm/BCM4356A2.hcd \
++"
++
++FILES_${PN}-rtl8723ds-bt = " \
++	lib/firmware/rtlbt/rtl8723d_config \
++	lib/firmware/rtlbt/rtl8723d_fw \
++"
++
++FILES_${PN} = "*"
++
++# Make it depend on all of the split-out packages.
++python () {
++    pn = d.getVar('PN')
++    firmware_pkgs = oe.utils.packages_filter_out_system(d)
++    d.appendVar('RDEPENDS_' + pn, ' ' + ' '.join(firmware_pkgs))
++}
++
++INSANE_SKIP_${PN} += "arch"
+-- 
+2.30.2
+
+
+^ permalink raw reply related	[flat|nested] 7+ messages in thread
+* [meta-rockchip][PATCH v6 6/6] WIP NanoPi-M4: activate BT support
+  2021-05-11 16:10 [meta-rockchip][PATCH v6 0/6] kmeta BSP for nanopi-m4 Yann Dirson
+                   ` (4 preceding siblings ...)
+  2021-05-11 16:10 ` [meta-rockchip][PATCH v6 5/6] WIP Import rkwifibt-firmware from vendor's meta-rockchip Yann Dirson
+@ 2021-05-11 16:10 ` Yann Dirson
+  5 siblings, 0 replies; 7+ messages in thread
+From: Yann Dirson @ 2021-05-11 16:10 UTC (permalink / raw)
+  To: yocto; +Cc: twoerner, Yann Dirson
+
+From: Yann Dirson <yann@blade-group.com>
+
+Take the firmware from rbwifibt, as a compatible one does not seem to
+be available in broadcom-bt-firmware.
+
+Disclaimer: I have only been able to scan/pair with devices, I could
+not establish a connection.  However, with the same board I've had the
+same results with the board vendor's own FriendlyCore image.
+---
+ conf/machine/include/nanopi-m4.inc                    | 6 +++++-
+ recipes-kernel/linux/files/bsp/rockchip/nanopi-m4.cfg | 6 ++++++
+ 2 files changed, 11 insertions(+), 1 deletion(-)
+
+diff --git a/conf/machine/include/nanopi-m4.inc b/conf/machine/include/nanopi-m4.inc
+index cb27928..3bd5c97 100644
+--- a/conf/machine/include/nanopi-m4.inc
++++ b/conf/machine/include/nanopi-m4.inc
+@@ -3,7 +3,7 @@
+ 
+ require rk3399.inc
+ 
+-MACHINE_FEATURES += "usbhost serial wifi"
++MACHINE_FEATURES += "usbhost serial wifi bluetooth"
+ 
+ KMACHINE = "nanopi-m4"
+ KERNEL_DEVICETREE = "rockchip/rk3399-nanopi-m4.dtb"
+@@ -26,3 +26,7 @@ SERIAL_CONSOLES = "1500000;ttyS2"
+ 
+ # wifi firmware
+ MACHINE_EXTRA_RRECOMMENDS += "linux-firmware-bcm4356"
++
++# bluetooth firmware
++#MACHINE_EXTRA_RRECOMMENDS += "broadcom-bt-firmware-bcm4356a2"
++MACHINE_EXTRA_RRECOMMENDS += "rkwifibt-firmware-ap6356-bt"
+diff --git a/recipes-kernel/linux/files/bsp/rockchip/nanopi-m4.cfg b/recipes-kernel/linux/files/bsp/rockchip/nanopi-m4.cfg
+index d42b744..d45e879 100644
+--- a/recipes-kernel/linux/files/bsp/rockchip/nanopi-m4.cfg
++++ b/recipes-kernel/linux/files/bsp/rockchip/nanopi-m4.cfg
+@@ -14,3 +14,9 @@ CONFIG_REALTEK_PHY=m
+ CONFIG_WLAN_VENDOR_BROADCOM=y
+ CONFIG_BRCMFMAC=m
+ CONFIG_BRCMFMAC_SDIO=y
++
++# AP6356S BT
++CONFIG_BT_HCIUART=m
++CONFIG_SERIAL_DEV_BUS=y
++CONFIG_SERIAL_DEV_CTRL_TTYPORT=y
++CONFIG_BT_HCIUART_BCM=y
+-- 
+2.30.2
+
+
+^ permalink raw reply related	[flat|nested] 7+ messages in thread
+end of thread, other threads:[~2021-05-11 16:10 UTC | newest]
+
+Thread overview: 7+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-05-11 16:10 [meta-rockchip][PATCH v6 0/6] kmeta BSP for nanopi-m4 Yann Dirson
+2021-05-11 16:10 ` [meta-rockchip][PATCH v6 1/6] linux-yocto: add an initial NanoPi-M4 BSP Yann Dirson
+2021-05-11 16:10 ` [meta-rockchip][PATCH v6 2/6] WIP linux-yocto: add workaround to disable VOPL usage on HDMI Yann Dirson
+2021-05-11 16:10 ` [meta-rockchip][PATCH v6 3/6] linux-firmware: import variables file for ap4356s firmware from armbian Yann Dirson
+2021-05-11 16:10 ` [meta-rockchip][PATCH v6 4/6] NanoPi-M4: activate Wifi support Yann Dirson
+2021-05-11 16:10 ` [meta-rockchip][PATCH v6 5/6] WIP Import rkwifibt-firmware from vendor's meta-rockchip Yann Dirson
+2021-05-11 16:10 ` [meta-rockchip][PATCH v6 6/6] WIP NanoPi-M4: activate BT support Yann Dirson
+

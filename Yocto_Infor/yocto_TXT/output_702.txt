@@ -1,0 +1,168 @@
+* Error building m4-native while trying to build Beaglebone Black branch
+@ 2023-04-25 14:33 Steven Weaver
+  2023-04-25 21:06 ` [yocto] " Ross Burton
+  0 siblings, 1 reply; 4+ messages in thread
+From: Steven Weaver @ 2023-04-25 14:33 UTC (permalink / raw)
+  To: yocto
+
+Greetings,
+I am trying to follow the docs to build Yocto for the Beaglebone Black[1]. I've been able to clone
+everything just fine. I am triggering the following #errors when I try to run 'bitbake-image-*':
+
+| /home/steven/temp/beaglebone/build/tmp/work/x86_64-linux/m4-native/1.4.17-r0/m4-
+1.4.17/lib/freadahead.c: In function 'freadahead':
+| /home/steven/temp/beaglebone/build/tmp/work/x86_64-linux/m4-native/1.4.17-r0/m4-
+1.4.17/lib/freadahead.c:91:3: error: #error "Please port gnulib freadahead.c to your platform! Look
+at the definition of fflush, fread, ungetc on your system, then report this to bug-gnulib."
+|    91 |  #error "Please port gnulib freadahead.c to your platform! Look at the definition of
+fflush, fread, ungetc on your system, then report this to bug-gnulib."
+|       |   ^~~~~
+| make[3]: *** [Makefile:1842: freadahead.o] Error 1
+| make[3]: *** Waiting for unfinished jobs....
+| /home/steven/temp/beaglebone/build/tmp/work/x86_64-linux/m4-native/1.4.17-r0/m4-
+1.4.17/lib/fseeko.c: In function 'rpl_fseeko':
+| /home/steven/temp/beaglebone/build/tmp/work/x86_64-linux/m4-native/1.4.17-r0/m4-
+1.4.17/lib/fseeko.c:109:4: error: #error "Please port gnulib fseeko.c to your platform! Look at the
+code in fseeko.c, then report this to bug-gnulib."
+|   109 |   #error "Please port gnulib fseeko.c to your platform! Look at the code in fseeko.c, then
+report this to bug-gnulib."
+|       |    ^~~~~
+
+From reading through the mentioned source files, it appears the problem is probably related to the
+symbols _IO_ftrylockfile, __GNU_LIBRARY__, or maybe SLOW_BUT_NO_HACKS. I've tried fumbling around to
+see what's defined and what's not. I defined SLOW_BUT_NO_HACKS which got me past freadahead's
+#error. That doesn't feel right, though. I would expect it should be falling into the "/* GNU libc,
+BeOS, Haiku, Linux libc5 */" sections of both files.
+
+Any advice as to how to track down the cause and "correct" solution? I am trying to build on a
+Debian 11 system. I mention that since bitbake warns me about it.
+
+Thanks in advance for the help!
+Steve
+
+[1] https://docs.yoctoproject.org/brief-yoctoprojectqs/index.html
+
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] Error building m4-native while trying to build Beaglebone Black branch
+  2023-04-25 14:33 Error building m4-native while trying to build Beaglebone Black branch Steven Weaver
+@ 2023-04-25 21:06 ` Ross Burton
+  2023-04-25 22:26   ` Tim Orling
+  2023-04-26 13:14   ` Steven Weaver
+  0 siblings, 2 replies; 4+ messages in thread
+From: Ross Burton @ 2023-04-25 21:06 UTC (permalink / raw)
+  To: steve; +Cc: Yocto-mailing-list
+
+On 25 Apr 2023, at 15:33, Steven Weaver via lists.yoctoproject.org <steve=weaverpad.com@lists.yoctoproject.org> wrote:
+> 
+> Greetings,
+> I am trying to follow the docs to build Yocto for the Beaglebone Black[1]. I've been able to clone
+> everything just fine. I am triggering the following #errors when I try to run 'bitbake-image-*':
+> 
+> | /home/steven/temp/beaglebone/build/tmp/work/x86_64-linux/m4-native/1.4.17-r0/m4-
+> 1.4.17/lib/freadahead.c: In function 'freadahead':
+> | /home/steven/temp/beaglebone/build/tmp/work/x86_64-linux/m4-native/1.4.17-r0/m4-
+> 1.4.17/lib/freadahead.c:91:3: error: #error "Please port gnulib freadahead.c to your platform! Look
+> at the definition of fflush, fread, ungetc on your system, then report this to bug-gnulib."
+> |    91 |  #error "Please port gnulib freadahead.c to your platform! Look at the definition of
+> fflush, fread, ungetc on your system, then report this to bug-gnulib."
+
+What release of Yocto are you using? I ask because this was fixed in 2018...
+
+Ross
+
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] Error building m4-native while trying to build Beaglebone Black branch
+  2023-04-25 21:06 ` [yocto] " Ross Burton
+@ 2023-04-25 22:26   ` Tim Orling
+  2023-04-26 13:14   ` Steven Weaver
+  1 sibling, 0 replies; 4+ messages in thread
+From: Tim Orling @ 2023-04-25 22:26 UTC (permalink / raw)
+  To: Ross Burton; +Cc: Yocto-mailing-list, steve
+
+[-- Attachment #1: Type: text/plain, Size: 1712 bytes --]
+
+On Tue, Apr 25, 2023 at 2:06 PM Ross Burton <ross.burton@arm.com> wrote:
+
+> On 25 Apr 2023, at 15:33, Steven Weaver via lists.yoctoproject.org <steve=
+> weaverpad.com@lists.yoctoproject.org> wrote:
+> >
+> > Greetings,
+> > I am trying to follow the docs to build Yocto for the Beaglebone
+> Black[1]. I've been able to clone
+> > everything just fine. I am triggering the following #errors when I try
+> to run 'bitbake-image-*':
+> >
+> > |
+> /home/steven/temp/beaglebone/build/tmp/work/x86_64-linux/m4-native/1.4.17-r0/m4-
+> > 1.4.17/lib/freadahead.c: In function 'freadahead':
+> > |
+> /home/steven/temp/beaglebone/build/tmp/work/x86_64-linux/m4-native/1.4.17-r0/m4-
+> > 1.4.17/lib/freadahead.c:91:3: error: #error "Please port gnulib
+> freadahead.c to your platform! Look
+> > at the definition of fflush, fread, ungetc on your system, then report
+> this to bug-gnulib."
+> > |    91 |  #error "Please port gnulib freadahead.c to your platform!
+> Look at the definition of
+> > fflush, fread, ungetc on your system, then report this to bug-gnulib."
+>
+> What release of Yocto are you using? I ask because this was fixed in
+> 2018...
+>
+
+clearly a release before 2017:
+https://git.yoctoproject.org/poky/commit/meta/recipes-devtools/m4?id=a06e298de8306356327485be03404e45ed1941fa
+
+
+> Ross
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#59780):
+> https://lists.yoctoproject.org/g/yocto/message/59780
+> Mute This Topic: https://lists.yoctoproject.org/mt/98493950/924729
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe:
+> https://lists.yoctoproject.org/g/yocto/leave/7531966/924729/429220467/xyzzy
+> [ticotimo@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 3045 bytes --]
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] Error building m4-native while trying to build Beaglebone Black branch
+  2023-04-25 21:06 ` [yocto] " Ross Burton
+  2023-04-25 22:26   ` Tim Orling
+@ 2023-04-26 13:14   ` Steven Weaver
+  1 sibling, 0 replies; 4+ messages in thread
+From: Steven Weaver @ 2023-04-26 13:14 UTC (permalink / raw)
+  To: yocto
+
+On Tue, 2023-04-25 at 21:06 +0000, Ross Burton wrote:
+> On 25 Apr 2023, at 15:33, Steven Weaver via lists.yoctoproject.org 
+> What release of Yocto are you using? I ask because this was fixed in 2018...
+
+Well I feel stupid. I was still on the jethro branch from reading old instructions.
+
+Thanks everyone!
+
+Steve
+
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+end of thread, other threads:[~2023-04-26 13:14 UTC | newest]
+
+Thread overview: 4+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-04-25 14:33 Error building m4-native while trying to build Beaglebone Black branch Steven Weaver
+2023-04-25 21:06 ` [yocto] " Ross Burton
+2023-04-25 22:26   ` Tim Orling
+2023-04-26 13:14   ` Steven Weaver
+

@@ -1,0 +1,447 @@
+* [meta-security][PATCH] sssd: re-package to fix QA issues
+@ 2021-10-13  8:49 kai.kang
+  2021-10-13 19:57 ` [yocto] " akuster808
+       [not found] ` <16ADAF5C8E9754EC.2153@lists.yoctoproject.org>
+  0 siblings, 2 replies; 4+ messages in thread
+From: kai.kang @ 2021-10-13  8:49 UTC (permalink / raw)
+  To: yocto
+
+From: Kai Kang <kai.kang@windriver.com>
+
+It packages all file in ${libdir} to package sssd, including the .so
+symlink files. Then it causes QA issues:
+
+| ERROR: QA Issue: sssd rdepends on dbus-dev [dev-deps]
+| ERROR: QA Issue: sssd rdepends on ding-libs-dev [dev-deps]
+
+So re-package sssd then the .so symlink files and .pc files are packaged
+to sssd-dev which should be.
+
+File ${libdir}/libsss_sudo.so is not a symlink file but packaged to
+sssd-dev too. Then causes another QA issue:
+
+| ERROR: sssd-2.5.2-r0 do_package_qa: QA Issue:
+    -dev package sssd-dev contains non-symlink .so '/usr/lib/libsss_sudo.so' [dev-elf]
+
+So create a new sub-package libsss_sudo to package file libsss_sudo.so
+and make sssd rdepends on it.
+
+Signed-off-by: Kai Kang <kai.kang@windriver.com>
+---
+ recipes-security/sssd/sssd_2.5.2.bb | 16 +++++++++-------
+ 1 file changed, 9 insertions(+), 7 deletions(-)
+
+diff --git a/recipes-security/sssd/sssd_2.5.2.bb b/recipes-security/sssd/sssd_2.5.2.bb
+index 76d6e03..da1a5c3 100644
+--- a/recipes-security/sssd/sssd_2.5.2.bb
++++ b/recipes-security/sssd/sssd_2.5.2.bb
+@@ -125,10 +125,12 @@ SYSTEMD_SERVICE:${PN} = " \
+ "
+ SYSTEMD_AUTO_ENABLE = "disable"
+ 
+-FILES:${PN} += "${libdir} ${datadir} ${base_libdir}/security/pam_sss*.so"
+-FILES:${PN}-dev = " ${includedir}/* ${libdir}/*la ${libdir}/*/*la"
+-
+-# The package contains symlinks that trip up insane
+-INSANE_SKIP:${PN} = "dev-so"
+-
+-RDEPENDS:${PN} = "bind bind-utils dbus libldb libpam"
++PACKAGES =+ "libsss_sudo"
++FILES:${PN} += "${base_libdir}/security/pam_sss*.so  \
++                ${datadir}/dbus-1/system-services/*.service \
++                ${libdir}/krb5/* \
++                ${libdir}/ldb/* \
++                "
++FILES:libsss_sudo = "${libdir}/libsss_sudo.so"
++
++RDEPENDS:${PN} = "bind bind-utils dbus libldb libpam libsss_sudo"
+-- 
+2.17.1
+
+
+
+^ permalink raw reply related	[flat|nested] 4+ messages in thread
+* Re: [yocto] [meta-security][PATCH] sssd: re-package to fix QA issues
+  2021-10-13  8:49 [meta-security][PATCH] sssd: re-package to fix QA issues kai.kang
+@ 2021-10-13 19:57 ` akuster808
+       [not found] ` <16ADAF5C8E9754EC.2153@lists.yoctoproject.org>
+  1 sibling, 0 replies; 4+ messages in thread
+From: akuster808 @ 2021-10-13 19:57 UTC (permalink / raw)
+  To: kai, yocto
+
+
+
+On 10/13/21 1:49 AM, kai wrote:
+> From: Kai Kang <kai.kang@windriver.com>
+>
+> It packages all file in ${libdir} to package sssd, including the .so
+> symlink files. Then it causes QA issues:
+>
+> | ERROR: QA Issue: sssd rdepends on dbus-dev [dev-deps]
+> | ERROR: QA Issue: sssd rdepends on ding-libs-dev [dev-deps]
+>
+> So re-package sssd then the .so symlink files and .pc files are packaged
+> to sssd-dev which should be.
+>
+> File ${libdir}/libsss_sudo.so is not a symlink file but packaged to
+> sssd-dev too. Then causes another QA issue:
+>
+> | ERROR: sssd-2.5.2-r0 do_package_qa: QA Issue:
+>     -dev package sssd-dev contains non-symlink .so '/usr/lib/libsss_sudo.so' [dev-elf]
+
+When building for ipk and deb I am seeing these errors.
+
+IPK:
+ERROR: sssd-2.5.2-r0 do_package_write_ipk: Fatal errors occurred in
+subprocesses:
+Command
+'PATH="/home/akuster/oss/clean/poky/build/tmp/sysroots-uninative/x86_64-linux/usr/bin:/home/akuster/oss/clean/poky/scripts:/home/akuster/oss/clean/poky/build/tmp/work/core2-32-poky-linux/sssd/2.5.2-r0/recipe-sysroot-native/usr/bin/i686-poky-linux:/home/akuster/oss/clean/poky/build/tmp/work/core2-32-poky-linux/sssd/2.5.2-r0/recipe-sysroot/usr/bin/crossscripts:/home/akuster/oss/clean/poky/build/tmp/work/core2-32-poky-linux/sssd/2.5.2-r0/recipe-sysroot-native/usr/sbin:/home/akuster/oss/clean/poky/build/tmp/work/core2-32-poky-linux/sssd/2.5.2-r0/recipe-sysroot-native/usr/bin:/home/akuster/oss/clean/poky/build/tmp/work/core2-32-poky-linux/sssd/2.5.2-r0/recipe-sysroot-native/sbin:/home/akuster/oss/clean/poky/build/tmp/work/core2-32-poky-linux/sssd/2.5.2-r0/recipe-sysroot-native/bin:/home/akuster/oss/clean/poky/bitbake/bin:/home/akuster/oss/clean/poky/build/tmp/hosttools"
+opkg-build -Z xz -a "--memlimit=50% --threads=16" libsss_sudo
+/home/akuster/oss/clean/poky/build/tmp/work/core2-32-poky-linux/sssd/2.5.2-r0/deploy-ipks/core2-32'
+returned non-zero exit status 1.
+Subprocess output:libsss_sudo
+*** Error: Package name libsss_sudo contains illegal characters, (other
+than [a-z0-9.+-])
+
+opkg-build: Please fix the above errors and try again.
+
+ERROR: Logfile of failure stored in:
+/home/akuster/oss/clean/poky/build/tmp/work/core2-32-poky-linux/sssd/2.5.2-r0/temp/log.do_package_write_ipk.2960686
+ERROR: Task
+(/home/akuster/oss/maint/meta-security/recipes-security/sssd/sssd_2.5.2.bb:do_package_write_ipk)
+failed with exit code '1'
+
+DEB:
+
+ERROR: sssd-2.5.2-r0 do_package_write_deb: Fatal errors occurred in
+subprocesses:
+Command
+'PATH="/home/akuster/oss/clean/poky/build/tmp/sysroots-uninative/x86_64-linux/usr/bin:/home/akuster/oss/clean/poky/scripts:/home/akuster/oss/clean/poky/build/tmp/work/core2-32-poky-linux/sssd/2.5.2-r0/recipe-sysroot-native/usr/bin/i686-poky-linux:/home/akuster/oss/clean/poky/build/tmp/work/core2-32-poky-linux/sssd/2.5.2-r0/recipe-sysroot/usr/bin/crossscripts:/home/akuster/oss/clean/poky/build/tmp/work/core2-32-poky-linux/sssd/2.5.2-r0/recipe-sysroot-native/usr/sbin:/home/akuster/oss/clean/poky/build/tmp/work/core2-32-poky-linux/sssd/2.5.2-r0/recipe-sysroot-native/usr/bin:/home/akuster/oss/clean/poky/build/tmp/work/core2-32-poky-linux/sssd/2.5.2-r0/recipe-sysroot-native/sbin:/home/akuster/oss/clean/poky/build/tmp/work/core2-32-poky-linux/sssd/2.5.2-r0/recipe-sysroot-native/bin:/home/akuster/oss/clean/poky/bitbake/bin:/home/akuster/oss/clean/poky/build/tmp/hosttools"
+dpkg-deb -b
+/home/akuster/oss/clean/poky/build/tmp/work/core2-32-poky-linux/sssd/2.5.2-r0/packages-split/libsss_sudo
+/home/akuster/oss/clean/poky/build/tmp/work/core2-32-poky-linux/sssd/2.5.2-r0/deploy-debs/core2-32'
+returned non-zero exit status 2.
+Subprocess output:dpkg-deb: error: package name has characters that
+aren't lowercase alphanums or '-+.'
+
+ERROR: Logfile of failure stored in:
+/home/akuster/oss/clean/poky/build/tmp/work/core2-32-poky-linux/sssd/2.5.2-r0/temp/log.do_package_write_deb.2973553
+ERROR: Task
+(/home/akuster/oss/maint/meta-security/recipes-security/sssd/sssd_2.5.2.bb:do_package_write_deb)
+failed with exit code '1'
+
+
+
+>
+> So create a new sub-package libsss_sudo to package file libsss_sudo.so
+> and make sssd rdepends on it.
+>
+> Signed-off-by: Kai Kang <kai.kang@windriver.com>
+> ---
+>  recipes-security/sssd/sssd_2.5.2.bb | 16 +++++++++-------
+>  1 file changed, 9 insertions(+), 7 deletions(-)
+>
+> diff --git a/recipes-security/sssd/sssd_2.5.2.bb b/recipes-security/sssd/sssd_2.5.2.bb
+> index 76d6e03..da1a5c3 100644
+> --- a/recipes-security/sssd/sssd_2.5.2.bb
+> +++ b/recipes-security/sssd/sssd_2.5.2.bb
+> @@ -125,10 +125,12 @@ SYSTEMD_SERVICE:${PN} = " \
+>  "
+>  SYSTEMD_AUTO_ENABLE = "disable"
+>  
+> -FILES:${PN} += "${libdir} ${datadir} ${base_libdir}/security/pam_sss*.so"
+> -FILES:${PN}-dev = " ${includedir}/* ${libdir}/*la ${libdir}/*/*la"
+> -
+> -# The package contains symlinks that trip up insane
+> -INSANE_SKIP:${PN} = "dev-so"
+> -
+> -RDEPENDS:${PN} = "bind bind-utils dbus libldb libpam"
+> +PACKAGES =+ "libsss_sudo"
+> +FILES:${PN} += "${base_libdir}/security/pam_sss*.so  \
+> +                ${datadir}/dbus-1/system-services/*.service \
+> +                ${libdir}/krb5/* \
+> +                ${libdir}/ldb/* \
+> +                "
+> +FILES:libsss_sudo = "${libdir}/libsss_sudo.so"
+> +
+> +RDEPENDS:${PN} = "bind bind-utils dbus libldb libpam libsss_sudo"
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#55049): https://lists.yoctoproject.org/g/yocto/message/55049
+> Mute This Topic: https://lists.yoctoproject.org/mt/86283461/3616698
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [akuster808@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] [meta-security][PATCH] sssd: re-package to fix QA issues
+       [not found] ` <16ADAF5C8E9754EC.2153@lists.yoctoproject.org>
+@ 2021-10-13 20:08   ` akuster808
+  2021-10-14  1:36     ` Kai
+  0 siblings, 1 reply; 4+ messages in thread
+From: akuster808 @ 2021-10-13 20:08 UTC (permalink / raw)
+  To: kai, yocto
+
+
+changing the 'libsss_sudo' to 'libsss-sudo' fixes the errors.
+
+I can do this locally or you can send a v2.
+
+- armin
+
+On 10/13/21 12:57 PM, Armin Kuster via lists.yoctoproject.org wrote:
+>
+> On 10/13/21 1:49 AM, kai wrote:
+>> From: Kai Kang <kai.kang@windriver.com>
+>>
+>> It packages all file in ${libdir} to package sssd, including the .so
+>> symlink files. Then it causes QA issues:
+>>
+>> | ERROR: QA Issue: sssd rdepends on dbus-dev [dev-deps]
+>> | ERROR: QA Issue: sssd rdepends on ding-libs-dev [dev-deps]
+>>
+>> So re-package sssd then the .so symlink files and .pc files are packaged
+>> to sssd-dev which should be.
+>>
+>> File ${libdir}/libsss_sudo.so is not a symlink file but packaged to
+>> sssd-dev too. Then causes another QA issue:
+>>
+>> | ERROR: sssd-2.5.2-r0 do_package_qa: QA Issue:
+>>     -dev package sssd-dev contains non-symlink .so '/usr/lib/libsss_sudo.so' [dev-elf]
+> When building for ipk and deb I am seeing these errors.
+>
+> IPK:
+> ERROR: sssd-2.5.2-r0 do_package_write_ipk: Fatal errors occurred in
+> subprocesses:
+> Command
+> 'PATH="/home/akuster/oss/clean/poky/build/tmp/sysroots-uninative/x86_64-linux/usr/bin:/home/akuster/oss/clean/poky/scripts:/home/akuster/oss/clean/poky/build/tmp/work/core2-32-poky-linux/sssd/2.5.2-r0/recipe-sysroot-native/usr/bin/i686-poky-linux:/home/akuster/oss/clean/poky/build/tmp/work/core2-32-poky-linux/sssd/2.5.2-r0/recipe-sysroot/usr/bin/crossscripts:/home/akuster/oss/clean/poky/build/tmp/work/core2-32-poky-linux/sssd/2.5.2-r0/recipe-sysroot-native/usr/sbin:/home/akuster/oss/clean/poky/build/tmp/work/core2-32-poky-linux/sssd/2.5.2-r0/recipe-sysroot-native/usr/bin:/home/akuster/oss/clean/poky/build/tmp/work/core2-32-poky-linux/sssd/2.5.2-r0/recipe-sysroot-native/sbin:/home/akuster/oss/clean/poky/build/tmp/work/core2-32-poky-linux/sssd/2.5.2-r0/recipe-sysroot-native/bin:/home/akuster/oss/clean/poky/bitbake/bin:/home/akuster/oss/clean/poky/build/tmp/hosttools"
+> opkg-build -Z xz -a "--memlimit=50% --threads=16" libsss_sudo
+> /home/akuster/oss/clean/poky/build/tmp/work/core2-32-poky-linux/sssd/2.5.2-r0/deploy-ipks/core2-32'
+> returned non-zero exit status 1.
+> Subprocess output:libsss_sudo
+> *** Error: Package name libsss_sudo contains illegal characters, (other
+> than [a-z0-9.+-])
+>
+> opkg-build: Please fix the above errors and try again.
+>
+> ERROR: Logfile of failure stored in:
+> /home/akuster/oss/clean/poky/build/tmp/work/core2-32-poky-linux/sssd/2.5.2-r0/temp/log.do_package_write_ipk.2960686
+> ERROR: Task
+> (/home/akuster/oss/maint/meta-security/recipes-security/sssd/sssd_2.5.2.bb:do_package_write_ipk)
+> failed with exit code '1'
+>
+> DEB:
+>
+> ERROR: sssd-2.5.2-r0 do_package_write_deb: Fatal errors occurred in
+> subprocesses:
+> Command
+> 'PATH="/home/akuster/oss/clean/poky/build/tmp/sysroots-uninative/x86_64-linux/usr/bin:/home/akuster/oss/clean/poky/scripts:/home/akuster/oss/clean/poky/build/tmp/work/core2-32-poky-linux/sssd/2.5.2-r0/recipe-sysroot-native/usr/bin/i686-poky-linux:/home/akuster/oss/clean/poky/build/tmp/work/core2-32-poky-linux/sssd/2.5.2-r0/recipe-sysroot/usr/bin/crossscripts:/home/akuster/oss/clean/poky/build/tmp/work/core2-32-poky-linux/sssd/2.5.2-r0/recipe-sysroot-native/usr/sbin:/home/akuster/oss/clean/poky/build/tmp/work/core2-32-poky-linux/sssd/2.5.2-r0/recipe-sysroot-native/usr/bin:/home/akuster/oss/clean/poky/build/tmp/work/core2-32-poky-linux/sssd/2.5.2-r0/recipe-sysroot-native/sbin:/home/akuster/oss/clean/poky/build/tmp/work/core2-32-poky-linux/sssd/2.5.2-r0/recipe-sysroot-native/bin:/home/akuster/oss/clean/poky/bitbake/bin:/home/akuster/oss/clean/poky/build/tmp/hosttools"
+> dpkg-deb -b
+> /home/akuster/oss/clean/poky/build/tmp/work/core2-32-poky-linux/sssd/2.5.2-r0/packages-split/libsss_sudo
+> /home/akuster/oss/clean/poky/build/tmp/work/core2-32-poky-linux/sssd/2.5.2-r0/deploy-debs/core2-32'
+> returned non-zero exit status 2.
+> Subprocess output:dpkg-deb: error: package name has characters that
+> aren't lowercase alphanums or '-+.'
+>
+> ERROR: Logfile of failure stored in:
+> /home/akuster/oss/clean/poky/build/tmp/work/core2-32-poky-linux/sssd/2.5.2-r0/temp/log.do_package_write_deb.2973553
+> ERROR: Task
+> (/home/akuster/oss/maint/meta-security/recipes-security/sssd/sssd_2.5.2.bb:do_package_write_deb)
+> failed with exit code '1'
+>
+>
+>
+>> So create a new sub-package libsss_sudo to package file libsss_sudo.so
+>> and make sssd rdepends on it.
+>>
+>> Signed-off-by: Kai Kang <kai.kang@windriver.com>
+>> ---
+>>  recipes-security/sssd/sssd_2.5.2.bb | 16 +++++++++-------
+>>  1 file changed, 9 insertions(+), 7 deletions(-)
+>>
+>> diff --git a/recipes-security/sssd/sssd_2.5.2.bb b/recipes-security/sssd/sssd_2.5.2.bb
+>> index 76d6e03..da1a5c3 100644
+>> --- a/recipes-security/sssd/sssd_2.5.2.bb
+>> +++ b/recipes-security/sssd/sssd_2.5.2.bb
+>> @@ -125,10 +125,12 @@ SYSTEMD_SERVICE:${PN} = " \
+>>  "
+>>  SYSTEMD_AUTO_ENABLE = "disable"
+>>  
+>> -FILES:${PN} += "${libdir} ${datadir} ${base_libdir}/security/pam_sss*.so"
+>> -FILES:${PN}-dev = " ${includedir}/* ${libdir}/*la ${libdir}/*/*la"
+>> -
+>> -# The package contains symlinks that trip up insane
+>> -INSANE_SKIP:${PN} = "dev-so"
+>> -
+>> -RDEPENDS:${PN} = "bind bind-utils dbus libldb libpam"
+>> +PACKAGES =+ "libsss_sudo"
+>> +FILES:${PN} += "${base_libdir}/security/pam_sss*.so  \
+>> +                ${datadir}/dbus-1/system-services/*.service \
+>> +                ${libdir}/krb5/* \
+>> +                ${libdir}/ldb/* \
+>> +                "
+>> +FILES:libsss_sudo = "${libdir}/libsss_sudo.so"
+>> +
+>> +RDEPENDS:${PN} = "bind bind-utils dbus libldb libpam libsss_sudo"
+>>
+>>
+>>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#55058): https://lists.yoctoproject.org/g/yocto/message/55058
+> Mute This Topic: https://lists.yoctoproject.org/mt/86283461/3616698
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [akuster808@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] [meta-security][PATCH] sssd: re-package to fix QA issues
+  2021-10-13 20:08   ` akuster808
+@ 2021-10-14  1:36     ` Kai
+  0 siblings, 0 replies; 4+ messages in thread
+From: Kai @ 2021-10-14  1:36 UTC (permalink / raw)
+  To: akuster808, yocto
+
+On 10/14/21 4:08 AM, akuster808 wrote:
+Hi armin,
+> changing the 'libsss_sudo' to 'libsss-sudo' fixes the errors.
+>
+> I can do this locally or you can send a v2.
+
+v2 will be sent. Thanks.
+
+Kai
+
+>
+> - armin
+>
+> On 10/13/21 12:57 PM, Armin Kuster via lists.yoctoproject.org wrote:
+>> On 10/13/21 1:49 AM, kai wrote:
+>>> From: Kai Kang <kai.kang@windriver.com>
+>>>
+>>> It packages all file in ${libdir} to package sssd, including the .so
+>>> symlink files. Then it causes QA issues:
+>>>
+>>> | ERROR: QA Issue: sssd rdepends on dbus-dev [dev-deps]
+>>> | ERROR: QA Issue: sssd rdepends on ding-libs-dev [dev-deps]
+>>>
+>>> So re-package sssd then the .so symlink files and .pc files are packaged
+>>> to sssd-dev which should be.
+>>>
+>>> File ${libdir}/libsss_sudo.so is not a symlink file but packaged to
+>>> sssd-dev too. Then causes another QA issue:
+>>>
+>>> | ERROR: sssd-2.5.2-r0 do_package_qa: QA Issue:
+>>>      -dev package sssd-dev contains non-symlink .so '/usr/lib/libsss_sudo.so' [dev-elf]
+>> When building for ipk and deb I am seeing these errors.
+>>
+>> IPK:
+>> ERROR: sssd-2.5.2-r0 do_package_write_ipk: Fatal errors occurred in
+>> subprocesses:
+>> Command
+>> 'PATH="/home/akuster/oss/clean/poky/build/tmp/sysroots-uninative/x86_64-linux/usr/bin:/home/akuster/oss/clean/poky/scripts:/home/akuster/oss/clean/poky/build/tmp/work/core2-32-poky-linux/sssd/2.5.2-r0/recipe-sysroot-native/usr/bin/i686-poky-linux:/home/akuster/oss/clean/poky/build/tmp/work/core2-32-poky-linux/sssd/2.5.2-r0/recipe-sysroot/usr/bin/crossscripts:/home/akuster/oss/clean/poky/build/tmp/work/core2-32-poky-linux/sssd/2.5.2-r0/recipe-sysroot-native/usr/sbin:/home/akuster/oss/clean/poky/build/tmp/work/core2-32-poky-linux/sssd/2.5.2-r0/recipe-sysroot-native/usr/bin:/home/akuster/oss/clean/poky/build/tmp/work/core2-32-poky-linux/sssd/2.5.2-r0/recipe-sysroot-native/sbin:/home/akuster/oss/clean/poky/build/tmp/work/core2-32-poky-linux/sssd/2.5.2-r0/recipe-sysroot-native/bin:/home/akuster/oss/clean/poky/bitbake/bin:/home/akuster/oss/clean/poky/build/tmp/hosttools"
+>> opkg-build -Z xz -a "--memlimit=50% --threads=16" libsss_sudo
+>> /home/akuster/oss/clean/poky/build/tmp/work/core2-32-poky-linux/sssd/2.5.2-r0/deploy-ipks/core2-32'
+>> returned non-zero exit status 1.
+>> Subprocess output:libsss_sudo
+>> *** Error: Package name libsss_sudo contains illegal characters, (other
+>> than [a-z0-9.+-])
+>>
+>> opkg-build: Please fix the above errors and try again.
+>>
+>> ERROR: Logfile of failure stored in:
+>> /home/akuster/oss/clean/poky/build/tmp/work/core2-32-poky-linux/sssd/2.5.2-r0/temp/log.do_package_write_ipk.2960686
+>> ERROR: Task
+>> (/home/akuster/oss/maint/meta-security/recipes-security/sssd/sssd_2.5.2.bb:do_package_write_ipk)
+>> failed with exit code '1'
+>>
+>> DEB:
+>>
+>> ERROR: sssd-2.5.2-r0 do_package_write_deb: Fatal errors occurred in
+>> subprocesses:
+>> Command
+>> 'PATH="/home/akuster/oss/clean/poky/build/tmp/sysroots-uninative/x86_64-linux/usr/bin:/home/akuster/oss/clean/poky/scripts:/home/akuster/oss/clean/poky/build/tmp/work/core2-32-poky-linux/sssd/2.5.2-r0/recipe-sysroot-native/usr/bin/i686-poky-linux:/home/akuster/oss/clean/poky/build/tmp/work/core2-32-poky-linux/sssd/2.5.2-r0/recipe-sysroot/usr/bin/crossscripts:/home/akuster/oss/clean/poky/build/tmp/work/core2-32-poky-linux/sssd/2.5.2-r0/recipe-sysroot-native/usr/sbin:/home/akuster/oss/clean/poky/build/tmp/work/core2-32-poky-linux/sssd/2.5.2-r0/recipe-sysroot-native/usr/bin:/home/akuster/oss/clean/poky/build/tmp/work/core2-32-poky-linux/sssd/2.5.2-r0/recipe-sysroot-native/sbin:/home/akuster/oss/clean/poky/build/tmp/work/core2-32-poky-linux/sssd/2.5.2-r0/recipe-sysroot-native/bin:/home/akuster/oss/clean/poky/bitbake/bin:/home/akuster/oss/clean/poky/build/tmp/hosttools"
+>> dpkg-deb -b
+>> /home/akuster/oss/clean/poky/build/tmp/work/core2-32-poky-linux/sssd/2.5.2-r0/packages-split/libsss_sudo
+>> /home/akuster/oss/clean/poky/build/tmp/work/core2-32-poky-linux/sssd/2.5.2-r0/deploy-debs/core2-32'
+>> returned non-zero exit status 2.
+>> Subprocess output:dpkg-deb: error: package name has characters that
+>> aren't lowercase alphanums or '-+.'
+>>
+>> ERROR: Logfile of failure stored in:
+>> /home/akuster/oss/clean/poky/build/tmp/work/core2-32-poky-linux/sssd/2.5.2-r0/temp/log.do_package_write_deb.2973553
+>> ERROR: Task
+>> (/home/akuster/oss/maint/meta-security/recipes-security/sssd/sssd_2.5.2.bb:do_package_write_deb)
+>> failed with exit code '1'
+>>
+>>
+>>
+>>> So create a new sub-package libsss_sudo to package file libsss_sudo.so
+>>> and make sssd rdepends on it.
+>>>
+>>> Signed-off-by: Kai Kang <kai.kang@windriver.com>
+>>> ---
+>>>   recipes-security/sssd/sssd_2.5.2.bb | 16 +++++++++-------
+>>>   1 file changed, 9 insertions(+), 7 deletions(-)
+>>>
+>>> diff --git a/recipes-security/sssd/sssd_2.5.2.bb b/recipes-security/sssd/sssd_2.5.2.bb
+>>> index 76d6e03..da1a5c3 100644
+>>> --- a/recipes-security/sssd/sssd_2.5.2.bb
+>>> +++ b/recipes-security/sssd/sssd_2.5.2.bb
+>>> @@ -125,10 +125,12 @@ SYSTEMD_SERVICE:${PN} = " \
+>>>   "
+>>>   SYSTEMD_AUTO_ENABLE = "disable"
+>>>   
+>>> -FILES:${PN} += "${libdir} ${datadir} ${base_libdir}/security/pam_sss*.so"
+>>> -FILES:${PN}-dev = " ${includedir}/* ${libdir}/*la ${libdir}/*/*la"
+>>> -
+>>> -# The package contains symlinks that trip up insane
+>>> -INSANE_SKIP:${PN} = "dev-so"
+>>> -
+>>> -RDEPENDS:${PN} = "bind bind-utils dbus libldb libpam"
+>>> +PACKAGES =+ "libsss_sudo"
+>>> +FILES:${PN} += "${base_libdir}/security/pam_sss*.so  \
+>>> +                ${datadir}/dbus-1/system-services/*.service \
+>>> +                ${libdir}/krb5/* \
+>>> +                ${libdir}/ldb/* \
+>>> +                "
+>>> +FILES:libsss_sudo = "${libdir}/libsss_sudo.so"
+>>> +
+>>> +RDEPENDS:${PN} = "bind bind-utils dbus libldb libpam libsss_sudo"
+>>>
+>>>
+>>>
+>> -=-=-=-=-=-=-=-=-=-=-=-
+>> Links: You receive all messages sent to this group.
+>> View/Reply Online (#55058): https://lists.yoctoproject.org/g/yocto/message/55058
+>> Mute This Topic: https://lists.yoctoproject.org/mt/86283461/3616698
+>> Group Owner: yocto+owner@lists.yoctoproject.org
+>> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [akuster808@gmail.com]
+>> -=-=-=-=-=-=-=-=-=-=-=-
+>>
+
+-- 
+Kai Kang
+Wind River Linux
+
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+end of thread, other threads:[~2021-10-14  1:36 UTC | newest]
+
+Thread overview: 4+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-10-13  8:49 [meta-security][PATCH] sssd: re-package to fix QA issues kai.kang
+2021-10-13 19:57 ` [yocto] " akuster808
+     [not found] ` <16ADAF5C8E9754EC.2153@lists.yoctoproject.org>
+2021-10-13 20:08   ` akuster808
+2021-10-14  1:36     ` Kai
+

@@ -1,0 +1,906 @@
+* [meta-rockchip][PATCH v2] Rock64: add machine
+@ 2021-05-31 14:00 Yann Dirson
+  2021-06-14 16:19 ` Trevor Woerner
+  0 siblings, 1 reply; 5+ messages in thread
+From: Yann Dirson @ 2021-05-31 14:00 UTC (permalink / raw)
+  To: yocto; +Cc: twoerner, Yann Dirson
+
+From: Yann Dirson <yann@blade-group.com>
+
+This is a RK3328 board from Pine64.
+Board details at https://wiki.pine64.org/wiki/ROCK64.
+
+Default image is built to boot from SD-card.  Building an image for
+eMMC requires to set RK_BOOT_DEVICE="mmcblk0".
+
+Signed-off-by: Yann Dirson <yann@blade-group.com>
+---
+
+This is just basic initial support without a kernel BSP.  As is the
+board boots with a serial console.
+
+Note I had to create the SoC definition for rk3328, and rather than
+setting serial at 115200 there just to have the board definition
+override it with rockchip-standard 1500000 I've set the latter right
+in rk3328.inc.
+
+Changes in v2:
+- include Ayufan's patch for mmc aliases so presence of eMMC won't
+prevent booting from SD
+
+ conf/machine/include/rk3328.inc               | 25 ++++++++++++++++
+ conf/machine/rock64.conf                      | 30 +++++++++++++++++++
+ ...an-dtsi-rk3328-add-mmc0-mmc1-aliases.patch | 27 +++++++++++++++++
+ recipes-kernel/linux/linux-yocto%.bbappend    |  6 ++++
+ 4 files changed, 88 insertions(+)
+ create mode 100644 conf/machine/include/rk3328.inc
+ create mode 100644 conf/machine/rock64.conf
+ create mode 100644 recipes-kernel/linux/files/0001-ayufan-dtsi-rk3328-add-mmc0-mmc1-aliases.patch
+
+diff --git a/conf/machine/include/rk3328.inc b/conf/machine/include/rk3328.inc
+new file mode 100644
+index 0000000..7d67627
+--- /dev/null
++++ b/conf/machine/include/rk3328.inc
+@@ -0,0 +1,25 @@
++# Copyright (C) 2020 Garmin Ltd. or its subsidaries
++# Released under the MIT license (see COPYING.MIT for the terms)
++
++SOC_FAMILY = "rk3328"
++
++DEFAULTTUNE ?= "cortexa53-crypto"
++
++require conf/machine/include/soc-family.inc
++require conf/machine/include/tune-cortexa53.inc
++require conf/machine/include/rockchip-defaults.inc
++
++KBUILD_DEFCONFIG ?= "defconfig"
++KERNEL_CLASSES = "kernel-fitimage"
++KERNEL_IMAGETYPE = "fitImage"
++
++TFA_PLATFORM = "rk3328"
++TFA_BUILD_TARGET = "bl31"
++
++UBOOT_SUFFIX ?= "itb"
++UBOOT_ENTRYPOINT ?= "0x06000000"
++
++SERIAL_CONSOLES = "1500000;ttyS2"
++
++PREFERRED_PROVIDER_virtual/bootloader ?= "u-boot"
++SPL_BINARY ?= "idbloader.img"
+diff --git a/conf/machine/rock64.conf b/conf/machine/rock64.conf
+new file mode 100644
+index 0000000..38bc9fa
+--- /dev/null
++++ b/conf/machine/rock64.conf
+@@ -0,0 +1,30 @@
++# Copyright (C) 2021 Blade SAS
++
++#@TYPE: Machine
++#@NAME: Rock64
++#@DESCRIPTION: Rock64 RK3328 board from Pine64
++
++require include/rk3328.inc
++
++MACHINE_FEATURES += "usbhost serial"
++
++UBOOT_MACHINE = "rock64-rk3328_defconfig"
++KERNEL_DEVICETREE = "rockchip/rk3328-rock64.dtb"
++
++# set to mmcblk0 for booting from optional eMMC
++RK_BOOT_DEVICE ?= "mmcblk1"
++
++WKS_FILE ?= "rock-pi-4.wks"
++IMAGE_FSTYPES += "wic wic.bmap"
++
++WKS_FILE_DEPENDS ?= " \
++    mtools-native \
++    dosfstools-native \
++    virtual/bootloader \
++    virtual/kernel \
++    "
++IMAGE_BOOT_FILES ?= "\
++    ${KERNEL_IMAGETYPE} \
++    "
++
++KBUILD_DEFCONFIG = "defconfig"
+diff --git a/recipes-kernel/linux/files/0001-ayufan-dtsi-rk3328-add-mmc0-mmc1-aliases.patch b/recipes-kernel/linux/files/0001-ayufan-dtsi-rk3328-add-mmc0-mmc1-aliases.patch
+new file mode 100644
+index 0000000..1ad3b9e
+--- /dev/null
++++ b/recipes-kernel/linux/files/0001-ayufan-dtsi-rk3328-add-mmc0-mmc1-aliases.patch
+@@ -0,0 +1,27 @@
++From f10cfe01f753348d346374008b8e8f5f26ed94ab Mon Sep 17 00:00:00 2001
++From: Kamil Trzcinski <ayufan@ayufan.eu>
++Date: Mon, 28 Aug 2017 11:24:37 +0200
++Subject: [PATCH] ayufan: dtsi: rk3328: add mmc0/mmc1 aliases
++Upstream-Status: Pending [https://github.com/ayufan-rock64/linux-mainline-kernel/commit/f10cfe01f753348d346374008b8e8f5f26ed94ab]
++
++Change-Id: I82a5394df8a505f7d1496393621c1198895c88b0
++---
++ arch/arm64/boot/dts/rockchip/rk3328.dtsi | 2 ++
++ 1 file changed, 2 insertions(+)
++
++diff --git a/arch/arm64/boot/dts/rockchip/rk3328.dtsi b/arch/arm64/boot/dts/rockchip/rk3328.dtsi
++index 0afed15bc7ff..800f1c796882 100644
++--- a/arch/arm64/boot/dts/rockchip/rk3328.dtsi
+++++ b/arch/arm64/boot/dts/rockchip/rk3328.dtsi
++@@ -27,6 +27,8 @@
++ 		i2c1 = &i2c1;
++ 		i2c2 = &i2c2;
++ 		i2c3 = &i2c3;
+++		mmc0 = &emmc;
+++		mmc1 = &sdmmc;
++ 		ethernet0 = &gmac2io;
++ 		ethernet1 = &gmac2phy;
++ 	};
++-- 
++2.30.2
++
+diff --git a/recipes-kernel/linux/linux-yocto%.bbappend b/recipes-kernel/linux/linux-yocto%.bbappend
+index 7702e3f..3789c72 100644
+--- a/recipes-kernel/linux/linux-yocto%.bbappend
++++ b/recipes-kernel/linux/linux-yocto%.bbappend
+@@ -8,3 +8,9 @@ COMPATIBLE_MACHINE_tinker-board-s = "tinker-board-s"
+ COMPATIBLE_MACHINE_rock-pi-4 = "rock-pi-4"
+ COMPATIBLE_MACHINE_nanopi-m4 = "nanopi-m4"
+ COMPATIBLE_MACHINE_nanopi-m4-2gb = "nanopi-m4-2gb"
++COMPATIBLE_MACHINE_rock64 = "rock64"
++
++FILESEXTRAPATHS_prepend := "${THISDIR}/files:"
++
++# indeed applicable to all rk3328 boards
++SRC_URI_append_rock64 = " file://0001-ayufan-dtsi-rk3328-add-mmc0-mmc1-aliases.patch"
+-- 
+2.30.2
+
+
+^ permalink raw reply related	[flat|nested] 5+ messages in thread
+* Re: [meta-rockchip][PATCH v2] Rock64: add machine
+  2021-05-31 14:00 [meta-rockchip][PATCH v2] Rock64: add machine Yann Dirson
+@ 2021-06-14 16:19 ` Trevor Woerner
+  2021-06-15  8:03   ` Yann Dirson
+  0 siblings, 1 reply; 5+ messages in thread
+From: Trevor Woerner @ 2021-06-14 16:19 UTC (permalink / raw)
+  To: yann.dirson; +Cc: yocto, Yann Dirson
+
+Hi Yann,
+
+Thanks for the contribution!
+
+On Mon 2021-05-31 @ 04:00:58 PM, yann.dirson@blade-group.com wrote:
+> From: Yann Dirson <yann@blade-group.com>
+> 
+> This is a RK3328 board from Pine64.
+> Board details at https://wiki.pine64.org/wiki/ROCK64.
+> 
+> Default image is built to boot from SD-card.  Building an image for
+> eMMC requires to set RK_BOOT_DEVICE="mmcblk0".
+> 
+> Signed-off-by: Yann Dirson <yann@blade-group.com>
+> ---
+> 
+> This is just basic initial support without a kernel BSP.  As is the
+> board boots with a serial console.
+> 
+> Note I had to create the SoC definition for rk3328, and rather than
+> setting serial at 115200 there just to have the board definition
+> override it with rockchip-standard 1500000 I've set the latter right
+> in rk3328.inc.
+
+Sounds good. I prefer the rockchip default of 1,500,000 anyway.
+
+> 
+> Changes in v2:
+> - include Ayufan's patch for mmc aliases so presence of eMMC won't
+> prevent booting from SD
+> 
+>  conf/machine/include/rk3328.inc               | 25 ++++++++++++++++
+>  conf/machine/rock64.conf                      | 30 +++++++++++++++++++
+>  ...an-dtsi-rk3328-add-mmc0-mmc1-aliases.patch | 27 +++++++++++++++++
+>  recipes-kernel/linux/linux-yocto%.bbappend    |  6 ++++
+>  4 files changed, 88 insertions(+)
+>  create mode 100644 conf/machine/include/rk3328.inc
+>  create mode 100644 conf/machine/rock64.conf
+>  create mode 100644 recipes-kernel/linux/files/0001-ayufan-dtsi-rk3328-add-mmc0-mmc1-aliases.patch
+> 
+> diff --git a/conf/machine/include/rk3328.inc b/conf/machine/include/rk3328.inc
+> new file mode 100644
+> index 0000000..7d67627
+> --- /dev/null
+> +++ b/conf/machine/include/rk3328.inc
+> @@ -0,0 +1,25 @@
+> +# Copyright (C) 2020 Garmin Ltd. or its subsidaries
+
+Odd that you'd be assigning the copyright to Garmin ;-)
+
+> +# Released under the MIT license (see COPYING.MIT for the terms)
+> +
+> +SOC_FAMILY = "rk3328"
+> +
+> +DEFAULTTUNE ?= "cortexa53-crypto"
+> +
+> +require conf/machine/include/soc-family.inc
+> +require conf/machine/include/tune-cortexa53.inc
+> +require conf/machine/include/rockchip-defaults.inc
+> +
+> +KBUILD_DEFCONFIG ?= "defconfig"
+> +KERNEL_CLASSES = "kernel-fitimage"
+> +KERNEL_IMAGETYPE = "fitImage"
+> +
+> +TFA_PLATFORM = "rk3328"
+> +TFA_BUILD_TARGET = "bl31"
+> +
+> +UBOOT_SUFFIX ?= "itb"
+> +UBOOT_ENTRYPOINT ?= "0x06000000"
+> +
+> +SERIAL_CONSOLES = "1500000;ttyS2"
+> +
+> +PREFERRED_PROVIDER_virtual/bootloader ?= "u-boot"
+> +SPL_BINARY ?= "idbloader.img"
+> diff --git a/conf/machine/rock64.conf b/conf/machine/rock64.conf
+> new file mode 100644
+> index 0000000..38bc9fa
+> --- /dev/null
+> +++ b/conf/machine/rock64.conf
+> @@ -0,0 +1,30 @@
+> +# Copyright (C) 2021 Blade SAS
+
+Can you also specify an OSS-friendly licence too?
+
+> +
+> +#@TYPE: Machine
+> +#@NAME: Rock64
+> +#@DESCRIPTION: Rock64 RK3328 board from Pine64
+> +
+> +require include/rk3328.inc
+> +
+> +MACHINE_FEATURES += "usbhost serial"
+> +
+> +UBOOT_MACHINE = "rock64-rk3328_defconfig"
+> +KERNEL_DEVICETREE = "rockchip/rk3328-rock64.dtb"
+> +
+> +# set to mmcblk0 for booting from optional eMMC
+> +RK_BOOT_DEVICE ?= "mmcblk1"
+> +
+> +WKS_FILE ?= "rock-pi-4.wks"
+
+Personally I'd prefer to see a rock64 wic file which includes an rk3328
+default, even if it is a copy of the rock-pi-4 layout.
+
+> +IMAGE_FSTYPES += "wic wic.bmap"
+> +
+> +WKS_FILE_DEPENDS ?= " \
+> +    mtools-native \
+> +    dosfstools-native \
+> +    virtual/bootloader \
+> +    virtual/kernel \
+> +    "
+> +IMAGE_BOOT_FILES ?= "\
+> +    ${KERNEL_IMAGETYPE} \
+> +    "
+> +
+> +KBUILD_DEFCONFIG = "defconfig"
+> diff --git a/recipes-kernel/linux/files/0001-ayufan-dtsi-rk3328-add-mmc0-mmc1-aliases.patch b/recipes-kernel/linux/files/0001-ayufan-dtsi-rk3328-add-mmc0-mmc1-aliases.patch
+> new file mode 100644
+> index 0000000..1ad3b9e
+> --- /dev/null
+> +++ b/recipes-kernel/linux/files/0001-ayufan-dtsi-rk3328-add-mmc0-mmc1-aliases.patch
+> @@ -0,0 +1,27 @@
+> +From f10cfe01f753348d346374008b8e8f5f26ed94ab Mon Sep 17 00:00:00 2001
+> +From: Kamil Trzcinski <ayufan@ayufan.eu>
+> +Date: Mon, 28 Aug 2017 11:24:37 +0200
+> +Subject: [PATCH] ayufan: dtsi: rk3328: add mmc0/mmc1 aliases
+> +Upstream-Status: Pending [https://github.com/ayufan-rock64/linux-mainline-kernel/commit/f10cfe01f753348d346374008b8e8f5f26ed94ab]
+> +
+> +Change-Id: I82a5394df8a505f7d1496393621c1198895c88b0
+> +---
+> + arch/arm64/boot/dts/rockchip/rk3328.dtsi | 2 ++
+> + 1 file changed, 2 insertions(+)
+> +
+> +diff --git a/arch/arm64/boot/dts/rockchip/rk3328.dtsi b/arch/arm64/boot/dts/rockchip/rk3328.dtsi
+> +index 0afed15bc7ff..800f1c796882 100644
+> +--- a/arch/arm64/boot/dts/rockchip/rk3328.dtsi
+> ++++ b/arch/arm64/boot/dts/rockchip/rk3328.dtsi
+> +@@ -27,6 +27,8 @@
+> + 		i2c1 = &i2c1;
+> + 		i2c2 = &i2c2;
+> + 		i2c3 = &i2c3;
+> ++		mmc0 = &emmc;
+> ++		mmc1 = &sdmmc;
+> + 		ethernet0 = &gmac2io;
+> + 		ethernet1 = &gmac2phy;
+> + 	};
+> +-- 
+> +2.30.2
+> +
+> diff --git a/recipes-kernel/linux/linux-yocto%.bbappend b/recipes-kernel/linux/linux-yocto%.bbappend
+> index 7702e3f..3789c72 100644
+> --- a/recipes-kernel/linux/linux-yocto%.bbappend
+> +++ b/recipes-kernel/linux/linux-yocto%.bbappend
+> @@ -8,3 +8,9 @@ COMPATIBLE_MACHINE_tinker-board-s = "tinker-board-s"
+>  COMPATIBLE_MACHINE_rock-pi-4 = "rock-pi-4"
+>  COMPATIBLE_MACHINE_nanopi-m4 = "nanopi-m4"
+>  COMPATIBLE_MACHINE_nanopi-m4-2gb = "nanopi-m4-2gb"
+> +COMPATIBLE_MACHINE_rock64 = "rock64"
+> +
+> +FILESEXTRAPATHS_prepend := "${THISDIR}/files:"
+> +
+> +# indeed applicable to all rk3328 boards
+
+I have a roc-rk3328-cc ("renegade") board I should investigate adding. Then I
+can see if this applies there as well.
+
+> +SRC_URI_append_rock64 = " file://0001-ayufan-dtsi-rk3328-add-mmc0-mmc1-aliases.patch"
+> -- 
+> 2.30.2
+> 
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [meta-rockchip][PATCH v2] Rock64: add machine
+  2021-06-14 16:19 ` Trevor Woerner
+@ 2021-06-15  8:03   ` Yann Dirson
+  2021-06-15  8:15     ` Trevor Woerner
+  0 siblings, 1 reply; 5+ messages in thread
+From: Yann Dirson @ 2021-06-15  8:03 UTC (permalink / raw)
+  To: Trevor Woerner; +Cc: Yocto discussion list, Yann Dirson
+
+Le lun. 14 juin 2021 à 18:19, Trevor Woerner <twoerner@gmail.com> a écrit :
+>
+> Hi Yann,
+>
+> Thanks for the contribution!
+>
+> On Mon 2021-05-31 @ 04:00:58 PM, yann.dirson@blade-group.com wrote:
+> > From: Yann Dirson <yann@blade-group.com>
+> >
+> > This is a RK3328 board from Pine64.
+> > Board details at https://wiki.pine64.org/wiki/ROCK64.
+> >
+> > Default image is built to boot from SD-card.  Building an image for
+> > eMMC requires to set RK_BOOT_DEVICE="mmcblk0".
+> >
+> > Signed-off-by: Yann Dirson <yann@blade-group.com>
+> > ---
+> >
+> > This is just basic initial support without a kernel BSP.  As is the
+> > board boots with a serial console.
+> >
+> > Note I had to create the SoC definition for rk3328, and rather than
+> > setting serial at 115200 there just to have the board definition
+> > override it with rockchip-standard 1500000 I've set the latter right
+> > in rk3328.inc.
+>
+> Sounds good. I prefer the rockchip default of 1,500,000 anyway.
+>
+> >
+> > Changes in v2:
+> > - include Ayufan's patch for mmc aliases so presence of eMMC won't
+> > prevent booting from SD
+> >
+> >  conf/machine/include/rk3328.inc               | 25 ++++++++++++++++
+> >  conf/machine/rock64.conf                      | 30 +++++++++++++++++++
+> >  ...an-dtsi-rk3328-add-mmc0-mmc1-aliases.patch | 27 +++++++++++++++++
+> >  recipes-kernel/linux/linux-yocto%.bbappend    |  6 ++++
+> >  4 files changed, 88 insertions(+)
+> >  create mode 100644 conf/machine/include/rk3328.inc
+> >  create mode 100644 conf/machine/rock64.conf
+> >  create mode 100644 recipes-kernel/linux/files/0001-ayufan-dtsi-rk3328-add-mmc0-mmc1-aliases.patch
+> >
+> > diff --git a/conf/machine/include/rk3328.inc b/conf/machine/include/rk3328.inc
+> > new file mode 100644
+> > index 0000000..7d67627
+> > --- /dev/null
+> > +++ b/conf/machine/include/rk3328.inc
+> > @@ -0,0 +1,25 @@
+> > +# Copyright (C) 2020 Garmin Ltd. or its subsidaries
+>
+> Odd that you'd be assigning the copyright to Garmin ;-)
+
+Oh, right, copypaste rules around here, so Garmin does have a role but
+something may be missing :)
+
+>
+> > +# Released under the MIT license (see COPYING.MIT for the terms)
+> > +
+> > +SOC_FAMILY = "rk3328"
+> > +
+> > +DEFAULTTUNE ?= "cortexa53-crypto"
+> > +
+> > +require conf/machine/include/soc-family.inc
+> > +require conf/machine/include/tune-cortexa53.inc
+> > +require conf/machine/include/rockchip-defaults.inc
+> > +
+> > +KBUILD_DEFCONFIG ?= "defconfig"
+> > +KERNEL_CLASSES = "kernel-fitimage"
+> > +KERNEL_IMAGETYPE = "fitImage"
+> > +
+> > +TFA_PLATFORM = "rk3328"
+> > +TFA_BUILD_TARGET = "bl31"
+> > +
+> > +UBOOT_SUFFIX ?= "itb"
+> > +UBOOT_ENTRYPOINT ?= "0x06000000"
+> > +
+> > +SERIAL_CONSOLES = "1500000;ttyS2"
+> > +
+> > +PREFERRED_PROVIDER_virtual/bootloader ?= "u-boot"
+> > +SPL_BINARY ?= "idbloader.img"
+> > diff --git a/conf/machine/rock64.conf b/conf/machine/rock64.conf
+> > new file mode 100644
+> > index 0000000..38bc9fa
+> > --- /dev/null
+> > +++ b/conf/machine/rock64.conf
+> > @@ -0,0 +1,30 @@
+> > +# Copyright (C) 2021 Blade SAS
+>
+> Can you also specify an OSS-friendly licence too?
+>
+> > +
+> > +#@TYPE: Machine
+> > +#@NAME: Rock64
+> > +#@DESCRIPTION: Rock64 RK3328 board from Pine64
+> > +
+> > +require include/rk3328.inc
+> > +
+> > +MACHINE_FEATURES += "usbhost serial"
+> > +
+> > +UBOOT_MACHINE = "rock64-rk3328_defconfig"
+> > +KERNEL_DEVICETREE = "rockchip/rk3328-rock64.dtb"
+> > +
+> > +# set to mmcblk0 for booting from optional eMMC
+> > +RK_BOOT_DEVICE ?= "mmcblk1"
+> > +
+> > +WKS_FILE ?= "rock-pi-4.wks"
+>
+> Personally I'd prefer to see a rock64 wic file which includes an rk3328
+> default, even if it is a copy of the rock-pi-4 layout.
+
+Right that was something I wondered how to deal with and forgot (and note that
+for the nanopi-m4 I used the same file).
+
+My reading of [1] is that all rockchip APs are using the same
+partition table.  I see
+that the existing {rk3288,rk3399}-boot.wks only differ in the choice
+of u-boot image,
+and I'm wondering if using the SoC to distinguish between them is the
+right choice,
+as eg. upstream RK is not using the .itb format, and I suspect we
+could use it as well
+for rk3288 (I'm sure I have one in a drawer and could check that some day).  Now
+maybe the sate of things is different for 32bit SoCs, and I thought it
+could make sense to
+distinguish rockchip-32bit-boot.wks and rockchip-64bit-boot.wks, or maybe even
+name them using the format, as something like rockchip-legacy-boot.wks
+(well there
+is probably a more descriptive name for that format) and rockchip-itb-boot.wks ?
+
+Similarly, the .wks for 3288-based boards and for 3399-based ones only
+differ by the
+console baudrate, and the 3288-based .wks are all identical except for
+some whitespace.
+And in fact, it is not unthinkable for a given project to use
+something else than a
+single-partition layout, so those files are indeed closer to a
+"default wks".  Maybe we
+could use more generic filenames there too (until we implement a way to avoid
+hardcoding the baudrate here)
+
+[1] http://opensource.rock-chips.com/wiki_Boot_option
+
+> > +IMAGE_FSTYPES += "wic wic.bmap"
+> > +
+> > +WKS_FILE_DEPENDS ?= " \
+> > +    mtools-native \
+> > +    dosfstools-native \
+> > +    virtual/bootloader \
+> > +    virtual/kernel \
+> > +    "
+> > +IMAGE_BOOT_FILES ?= "\
+> > +    ${KERNEL_IMAGETYPE} \
+> > +    "
+> > +
+> > +KBUILD_DEFCONFIG = "defconfig"
+> > diff --git a/recipes-kernel/linux/files/0001-ayufan-dtsi-rk3328-add-mmc0-mmc1-aliases.patch b/recipes-kernel/linux/files/0001-ayufan-dtsi-rk3328-add-mmc0-mmc1-aliases.patch
+> > new file mode 100644
+> > index 0000000..1ad3b9e
+> > --- /dev/null
+> > +++ b/recipes-kernel/linux/files/0001-ayufan-dtsi-rk3328-add-mmc0-mmc1-aliases.patch
+> > @@ -0,0 +1,27 @@
+> > +From f10cfe01f753348d346374008b8e8f5f26ed94ab Mon Sep 17 00:00:00 2001
+> > +From: Kamil Trzcinski <ayufan@ayufan.eu>
+> > +Date: Mon, 28 Aug 2017 11:24:37 +0200
+> > +Subject: [PATCH] ayufan: dtsi: rk3328: add mmc0/mmc1 aliases
+> > +Upstream-Status: Pending [https://github.com/ayufan-rock64/linux-mainline-kernel/commit/f10cfe01f753348d346374008b8e8f5f26ed94ab]
+> > +
+> > +Change-Id: I82a5394df8a505f7d1496393621c1198895c88b0
+> > +---
+> > + arch/arm64/boot/dts/rockchip/rk3328.dtsi | 2 ++
+> > + 1 file changed, 2 insertions(+)
+> > +
+> > +diff --git a/arch/arm64/boot/dts/rockchip/rk3328.dtsi b/arch/arm64/boot/dts/rockchip/rk3328.dtsi
+> > +index 0afed15bc7ff..800f1c796882 100644
+> > +--- a/arch/arm64/boot/dts/rockchip/rk3328.dtsi
+> > ++++ b/arch/arm64/boot/dts/rockchip/rk3328.dtsi
+> > +@@ -27,6 +27,8 @@
+> > +             i2c1 = &i2c1;
+> > +             i2c2 = &i2c2;
+> > +             i2c3 = &i2c3;
+> > ++            mmc0 = &emmc;
+> > ++            mmc1 = &sdmmc;
+> > +             ethernet0 = &gmac2io;
+> > +             ethernet1 = &gmac2phy;
+> > +     };
+> > +--
+> > +2.30.2
+> > +
+> > diff --git a/recipes-kernel/linux/linux-yocto%.bbappend b/recipes-kernel/linux/linux-yocto%.bbappend
+> > index 7702e3f..3789c72 100644
+> > --- a/recipes-kernel/linux/linux-yocto%.bbappend
+> > +++ b/recipes-kernel/linux/linux-yocto%.bbappend
+> > @@ -8,3 +8,9 @@ COMPATIBLE_MACHINE_tinker-board-s = "tinker-board-s"
+> >  COMPATIBLE_MACHINE_rock-pi-4 = "rock-pi-4"
+> >  COMPATIBLE_MACHINE_nanopi-m4 = "nanopi-m4"
+> >  COMPATIBLE_MACHINE_nanopi-m4-2gb = "nanopi-m4-2gb"
+> > +COMPATIBLE_MACHINE_rock64 = "rock64"
+> > +
+> > +FILESEXTRAPATHS_prepend := "${THISDIR}/files:"
+> > +
+> > +# indeed applicable to all rk3328 boards
+>
+> I have a roc-rk3328-cc ("renegade") board I should investigate adding. Then I
+> can see if this applies there as well.
+>
+> > +SRC_URI_append_rock64 = " file://0001-ayufan-dtsi-rk3328-add-mmc0-mmc1-aliases.patch"
+> > --
+> > 2.30.2
+> >
+
+
+
+-- 
+Yann Dirson <yann@blade-group.com>
+Blade / Shadow -- http://shadow.tech
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [meta-rockchip][PATCH v2] Rock64: add machine
+  2021-06-15  8:03   ` Yann Dirson
+@ 2021-06-15  8:15     ` Trevor Woerner
+  2021-06-15 13:00       ` Yann Dirson
+  0 siblings, 1 reply; 5+ messages in thread
+From: Trevor Woerner @ 2021-06-15  8:15 UTC (permalink / raw)
+  To: Yann Dirson; +Cc: Yocto discussion list, Yann Dirson
+
+On Tue 2021-06-15 @ 10:03:31 AM, Yann Dirson wrote:
+> Le lun. 14 juin 2021 à 18:19, Trevor Woerner <twoerner@gmail.com> a écrit :
+> >
+> > Hi Yann,
+> >
+> > Thanks for the contribution!
+> >
+> > On Mon 2021-05-31 @ 04:00:58 PM, yann.dirson@blade-group.com wrote:
+> > > From: Yann Dirson <yann@blade-group.com>
+> > >
+> > > This is a RK3328 board from Pine64.
+> > > Board details at https://wiki.pine64.org/wiki/ROCK64.
+> > >
+> > > Default image is built to boot from SD-card.  Building an image for
+> > > eMMC requires to set RK_BOOT_DEVICE="mmcblk0".
+> > >
+> > > Signed-off-by: Yann Dirson <yann@blade-group.com>
+> > > ---
+> > >
+> > > This is just basic initial support without a kernel BSP.  As is the
+> > > board boots with a serial console.
+> > >
+> > > Note I had to create the SoC definition for rk3328, and rather than
+> > > setting serial at 115200 there just to have the board definition
+> > > override it with rockchip-standard 1500000 I've set the latter right
+> > > in rk3328.inc.
+> >
+> > Sounds good. I prefer the rockchip default of 1,500,000 anyway.
+> >
+> > >
+> > > Changes in v2:
+> > > - include Ayufan's patch for mmc aliases so presence of eMMC won't
+> > > prevent booting from SD
+> > >
+> > >  conf/machine/include/rk3328.inc               | 25 ++++++++++++++++
+> > >  conf/machine/rock64.conf                      | 30 +++++++++++++++++++
+> > >  ...an-dtsi-rk3328-add-mmc0-mmc1-aliases.patch | 27 +++++++++++++++++
+> > >  recipes-kernel/linux/linux-yocto%.bbappend    |  6 ++++
+> > >  4 files changed, 88 insertions(+)
+> > >  create mode 100644 conf/machine/include/rk3328.inc
+> > >  create mode 100644 conf/machine/rock64.conf
+> > >  create mode 100644 recipes-kernel/linux/files/0001-ayufan-dtsi-rk3328-add-mmc0-mmc1-aliases.patch
+> > >
+> > > diff --git a/conf/machine/include/rk3328.inc b/conf/machine/include/rk3328.inc
+> > > new file mode 100644
+> > > index 0000000..7d67627
+> > > --- /dev/null
+> > > +++ b/conf/machine/include/rk3328.inc
+> > > @@ -0,0 +1,25 @@
+> > > +# Copyright (C) 2020 Garmin Ltd. or its subsidaries
+> >
+> > Odd that you'd be assigning the copyright to Garmin ;-)
+> 
+> Oh, right, copypaste rules around here, so Garmin does have a role but
+> something may be missing :)
+> 
+> >
+> > > +# Released under the MIT license (see COPYING.MIT for the terms)
+> > > +
+> > > +SOC_FAMILY = "rk3328"
+> > > +
+> > > +DEFAULTTUNE ?= "cortexa53-crypto"
+> > > +
+> > > +require conf/machine/include/soc-family.inc
+> > > +require conf/machine/include/tune-cortexa53.inc
+> > > +require conf/machine/include/rockchip-defaults.inc
+> > > +
+> > > +KBUILD_DEFCONFIG ?= "defconfig"
+> > > +KERNEL_CLASSES = "kernel-fitimage"
+> > > +KERNEL_IMAGETYPE = "fitImage"
+> > > +
+> > > +TFA_PLATFORM = "rk3328"
+> > > +TFA_BUILD_TARGET = "bl31"
+> > > +
+> > > +UBOOT_SUFFIX ?= "itb"
+> > > +UBOOT_ENTRYPOINT ?= "0x06000000"
+> > > +
+> > > +SERIAL_CONSOLES = "1500000;ttyS2"
+> > > +
+> > > +PREFERRED_PROVIDER_virtual/bootloader ?= "u-boot"
+> > > +SPL_BINARY ?= "idbloader.img"
+> > > diff --git a/conf/machine/rock64.conf b/conf/machine/rock64.conf
+> > > new file mode 100644
+> > > index 0000000..38bc9fa
+> > > --- /dev/null
+> > > +++ b/conf/machine/rock64.conf
+> > > @@ -0,0 +1,30 @@
+> > > +# Copyright (C) 2021 Blade SAS
+> >
+> > Can you also specify an OSS-friendly licence too?
+> >
+> > > +
+> > > +#@TYPE: Machine
+> > > +#@NAME: Rock64
+> > > +#@DESCRIPTION: Rock64 RK3328 board from Pine64
+> > > +
+> > > +require include/rk3328.inc
+> > > +
+> > > +MACHINE_FEATURES += "usbhost serial"
+> > > +
+> > > +UBOOT_MACHINE = "rock64-rk3328_defconfig"
+> > > +KERNEL_DEVICETREE = "rockchip/rk3328-rock64.dtb"
+> > > +
+> > > +# set to mmcblk0 for booting from optional eMMC
+> > > +RK_BOOT_DEVICE ?= "mmcblk1"
+> > > +
+> > > +WKS_FILE ?= "rock-pi-4.wks"
+> >
+> > Personally I'd prefer to see a rock64 wic file which includes an rk3328
+> > default, even if it is a copy of the rock-pi-4 layout.
+> 
+> Right that was something I wondered how to deal with and forgot (and note that
+> for the nanopi-m4 I used the same file).
+> 
+> My reading of [1] is that all rockchip APs are using the same
+> partition table.  I see
+> that the existing {rk3288,rk3399}-boot.wks only differ in the choice
+> of u-boot image,
+> and I'm wondering if using the SoC to distinguish between them is the
+> right choice,
+> as eg. upstream RK is not using the .itb format, and I suspect we
+> could use it as well
+> for rk3288 (I'm sure I have one in a drawer and could check that some day).  Now
+> maybe the sate of things is different for 32bit SoCs, and I thought it
+> could make sense to
+> distinguish rockchip-32bit-boot.wks and rockchip-64bit-boot.wks, or maybe even
+> name them using the format, as something like rockchip-legacy-boot.wks
+> (well there
+> is probably a more descriptive name for that format) and rockchip-itb-boot.wks ?
+> 
+> Similarly, the .wks for 3288-based boards and for 3399-based ones only
+> differ by the
+> console baudrate, and the 3288-based .wks are all identical except for
+> some whitespace.
+> And in fact, it is not unthinkable for a given project to use
+> something else than a
+> single-partition layout, so those files are indeed closer to a
+> "default wks".  Maybe we
+> could use more generic filenames there too (until we implement a way to avoid
+> hardcoding the baudrate here)
+> 
+> [1] http://opensource.rock-chips.com/wiki_Boot_option
+
+True. We could definitely use some cleanup in this area. If you want to
+propose something that's going to work, I'll add it.
+
+Also, when adding a new board, please update the top-level README.
+
+Thanks!
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [meta-rockchip][PATCH v2] Rock64: add machine
+  2021-06-15  8:15     ` Trevor Woerner
+@ 2021-06-15 13:00       ` Yann Dirson
+  0 siblings, 0 replies; 5+ messages in thread
+From: Yann Dirson @ 2021-06-15 13:00 UTC (permalink / raw)
+  To: Trevor Woerner; +Cc: Yocto discussion list, Yann Dirson
+
+Le mar. 15 juin 2021 à 10:16, Trevor Woerner <twoerner@gmail.com> a écrit :
+>
+> On Tue 2021-06-15 @ 10:03:31 AM, Yann Dirson wrote:
+> > Le lun. 14 juin 2021 à 18:19, Trevor Woerner <twoerner@gmail.com> a écrit :
+> > >
+> > > Hi Yann,
+> > >
+> > > Thanks for the contribution!
+> > >
+> > > On Mon 2021-05-31 @ 04:00:58 PM, yann.dirson@blade-group.com wrote:
+> > > > From: Yann Dirson <yann@blade-group.com>
+> > > >
+> > > > This is a RK3328 board from Pine64.
+> > > > Board details at https://wiki.pine64.org/wiki/ROCK64.
+> > > >
+> > > > Default image is built to boot from SD-card.  Building an image for
+> > > > eMMC requires to set RK_BOOT_DEVICE="mmcblk0".
+> > > >
+> > > > Signed-off-by: Yann Dirson <yann@blade-group.com>
+> > > > ---
+> > > >
+> > > > This is just basic initial support without a kernel BSP.  As is the
+> > > > board boots with a serial console.
+> > > >
+> > > > Note I had to create the SoC definition for rk3328, and rather than
+> > > > setting serial at 115200 there just to have the board definition
+> > > > override it with rockchip-standard 1500000 I've set the latter right
+> > > > in rk3328.inc.
+> > >
+> > > Sounds good. I prefer the rockchip default of 1,500,000 anyway.
+> > >
+> > > >
+> > > > Changes in v2:
+> > > > - include Ayufan's patch for mmc aliases so presence of eMMC won't
+> > > > prevent booting from SD
+> > > >
+> > > >  conf/machine/include/rk3328.inc               | 25 ++++++++++++++++
+> > > >  conf/machine/rock64.conf                      | 30 +++++++++++++++++++
+> > > >  ...an-dtsi-rk3328-add-mmc0-mmc1-aliases.patch | 27 +++++++++++++++++
+> > > >  recipes-kernel/linux/linux-yocto%.bbappend    |  6 ++++
+> > > >  4 files changed, 88 insertions(+)
+> > > >  create mode 100644 conf/machine/include/rk3328.inc
+> > > >  create mode 100644 conf/machine/rock64.conf
+> > > >  create mode 100644 recipes-kernel/linux/files/0001-ayufan-dtsi-rk3328-add-mmc0-mmc1-aliases.patch
+> > > >
+> > > > diff --git a/conf/machine/include/rk3328.inc b/conf/machine/include/rk3328.inc
+> > > > new file mode 100644
+> > > > index 0000000..7d67627
+> > > > --- /dev/null
+> > > > +++ b/conf/machine/include/rk3328.inc
+> > > > @@ -0,0 +1,25 @@
+> > > > +# Copyright (C) 2020 Garmin Ltd. or its subsidaries
+> > >
+> > > Odd that you'd be assigning the copyright to Garmin ;-)
+> >
+> > Oh, right, copypaste rules around here, so Garmin does have a role but
+> > something may be missing :)
+> >
+> > >
+> > > > +# Released under the MIT license (see COPYING.MIT for the terms)
+> > > > +
+> > > > +SOC_FAMILY = "rk3328"
+> > > > +
+> > > > +DEFAULTTUNE ?= "cortexa53-crypto"
+> > > > +
+> > > > +require conf/machine/include/soc-family.inc
+> > > > +require conf/machine/include/tune-cortexa53.inc
+> > > > +require conf/machine/include/rockchip-defaults.inc
+> > > > +
+> > > > +KBUILD_DEFCONFIG ?= "defconfig"
+> > > > +KERNEL_CLASSES = "kernel-fitimage"
+> > > > +KERNEL_IMAGETYPE = "fitImage"
+> > > > +
+> > > > +TFA_PLATFORM = "rk3328"
+> > > > +TFA_BUILD_TARGET = "bl31"
+> > > > +
+> > > > +UBOOT_SUFFIX ?= "itb"
+> > > > +UBOOT_ENTRYPOINT ?= "0x06000000"
+> > > > +
+> > > > +SERIAL_CONSOLES = "1500000;ttyS2"
+> > > > +
+> > > > +PREFERRED_PROVIDER_virtual/bootloader ?= "u-boot"
+> > > > +SPL_BINARY ?= "idbloader.img"
+> > > > diff --git a/conf/machine/rock64.conf b/conf/machine/rock64.conf
+> > > > new file mode 100644
+> > > > index 0000000..38bc9fa
+> > > > --- /dev/null
+> > > > +++ b/conf/machine/rock64.conf
+> > > > @@ -0,0 +1,30 @@
+> > > > +# Copyright (C) 2021 Blade SAS
+> > >
+> > > Can you also specify an OSS-friendly licence too?
+> > >
+> > > > +
+> > > > +#@TYPE: Machine
+> > > > +#@NAME: Rock64
+> > > > +#@DESCRIPTION: Rock64 RK3328 board from Pine64
+> > > > +
+> > > > +require include/rk3328.inc
+> > > > +
+> > > > +MACHINE_FEATURES += "usbhost serial"
+> > > > +
+> > > > +UBOOT_MACHINE = "rock64-rk3328_defconfig"
+> > > > +KERNEL_DEVICETREE = "rockchip/rk3328-rock64.dtb"
+> > > > +
+> > > > +# set to mmcblk0 for booting from optional eMMC
+> > > > +RK_BOOT_DEVICE ?= "mmcblk1"
+> > > > +
+> > > > +WKS_FILE ?= "rock-pi-4.wks"
+> > >
+> > > Personally I'd prefer to see a rock64 wic file which includes an rk3328
+> > > default, even if it is a copy of the rock-pi-4 layout.
+
+In fact we already have rock-pi-e.wks doing this.
+
+> >
+> > Right that was something I wondered how to deal with and forgot (and note that
+> > for the nanopi-m4 I used the same file).
+> >
+> > My reading of [1] is that all rockchip APs are using the same
+> > partition table.  I see
+> > that the existing {rk3288,rk3399}-boot.wks only differ in the choice
+> > of u-boot image,
+> > and I'm wondering if using the SoC to distinguish between them is the
+> > right choice,
+> > as eg. upstream RK is not using the .itb format, and I suspect we
+> > could use it as well
+> > for rk3288 (I'm sure I have one in a drawer and could check that some day).  Now
+> > maybe the sate of things is different for 32bit SoCs, and I thought it
+> > could make sense to
+> > distinguish rockchip-32bit-boot.wks and rockchip-64bit-boot.wks, or maybe even
+> > name them using the format, as something like rockchip-legacy-boot.wks
+> > (well there
+> > is probably a more descriptive name for that format) and rockchip-itb-boot.wks ?
+> >
+> > Similarly, the .wks for 3288-based boards and for 3399-based ones only
+> > differ by the
+> > console baudrate, and the 3288-based .wks are all identical except for
+> > some whitespace.
+> > And in fact, it is not unthinkable for a given project to use
+> > something else than a
+> > single-partition layout, so those files are indeed closer to a
+> > "default wks".  Maybe we
+> > could use more generic filenames there too (until we implement a way to avoid
+> > hardcoding the baudrate here)
+> >
+> > [1] http://opensource.rock-chips.com/wiki_Boot_option
+>
+> True. We could definitely use some cleanup in this area. If you want to
+> propose something that's going to work, I'll add it.
+>
+> Also, when adding a new board, please update the top-level README.
+
+Let's do the minimum for now for this to get merged, and we'll improve
+incrementally.
+Eg. only now I realize, through the presence of rk3328-boot.wks, that
+rock-pi-e is
+indeed also based on that soc, and its machine def would benefit from
+including the
+same rk3328.inc.
+
+-- 
+Yann Dirson <yann@blade-group.com>
+Blade / Shadow -- http://shadow.tech
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+end of thread, other threads:[~2021-06-15 13:01 UTC | newest]
+
+Thread overview: 5+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-05-31 14:00 [meta-rockchip][PATCH v2] Rock64: add machine Yann Dirson
+2021-06-14 16:19 ` Trevor Woerner
+2021-06-15  8:03   ` Yann Dirson
+2021-06-15  8:15     ` Trevor Woerner
+2021-06-15 13:00       ` Yann Dirson
+

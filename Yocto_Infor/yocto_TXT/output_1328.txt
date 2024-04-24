@@ -1,0 +1,176 @@
+* [layerindex-web][PATCH 1/2] utils.py: Fix for is_commit_ancestor()
+@ 2022-10-09  9:38 Robert Yang
+  2022-10-09  9:38 ` [layerindex-web][PATCH 2/2] layerindex/admin.py: Remove has_delete_permission to allow deletion Robert Yang
+  0 siblings, 1 reply; 2+ messages in thread
+From: Robert Yang @ 2022-10-09  9:38 UTC (permalink / raw)
+  To: yocto
+
+The runcmd() would print an "ERROR" when failed which caused confusions since
+the failed is expected on old branches, so subprocess.getstatusoutput to fix
+the problem.
+
+Signed-off-by: Robert Yang <liezhi.yang@windriver.com>
+---
+ layerindex/utils.py | 18 ++++++++++--------
+ 1 file changed, 10 insertions(+), 8 deletions(-)
+
+diff --git a/layerindex/utils.py b/layerindex/utils.py
+index efd18e4..6d73c9f 100644
+--- a/layerindex/utils.py
++++ b/layerindex/utils.py
+@@ -243,16 +243,18 @@ def is_commit_ancestor(repodir, commit, logger):
+         # check if commit is a sha1 hash
+         if re.match('[0-9a-f]{40}', commit):
+             # check if the commit is an ancestor
+-            contained = runcmd(['git', 'merge-base', '--is-ancestor', '%s' % commit, 'HEAD'], repodir, logger=logger)
+-            return True
+-        else:
+-            raise Exception('is_commit_ancestor: "commit" must be a SHA1 hash')
+-    except subprocess.CalledProcessError as e:
+-            if e.returncode == 1:
+-                # commit is not an ancestor
++            cmd = "GIT_DIR=%s/.git git merge-base --is-ancestor %s HEAD" % (repodir, commit)
++            logger.debug('Running "%s"' % cmd)
++            ret, output = subprocess.getstatusoutput(cmd)
++            if ret == 0:
++                return True
++            elif ret == 1:
++                logger.debug('output: %s' % output)
+                 return False
+             else:
+-                raise e
++                raise Exception('Failed to run command: %s: ret: %s, output: %s' % (cmd, ret, output))
++        else:
++            raise Exception('is_commit_ancestor: "commit" must be a SHA1 hash')
+     except Exception as esc:
+         logger.warn(esc)
+ 
+-- 
+2.37.1
+
+
+
+^ permalink raw reply related	[flat|nested] 2+ messages in thread
+* [layerindex-web][PATCH 2/2] layerindex/admin.py: Remove has_delete_permission to allow deletion
+  2022-10-09  9:38 [layerindex-web][PATCH 1/2] utils.py: Fix for is_commit_ancestor() Robert Yang
+@ 2022-10-09  9:38 ` Robert Yang
+  0 siblings, 0 replies; 2+ messages in thread
+From: Robert Yang @ 2022-10-09  9:38 UTC (permalink / raw)
+  To: yocto
+
+The commit (2d526f9 Updating models and imports for Django 2.2 upgrade.)
+has added on_delete=models.deletion.CASCADE on the ForeignKeys such as
+Branch and LayerBranch, which blocks the deletion of Branch or LayerBranch, e.g.:
+
+Deleting the branch 'foo' would result in deleting related objects, but your
+account doesn't have permission to delete the following types of objects:
+
+Append
+patch
+machine
+recipe
+inc file
+
+Refer to:
+https://docs.djangoproject.com/en/4.1/ref/models/fields/#django.db.models.ForeignKey.on_delete
+
+The CASCADE means that it needs remove "Append", "patch" and other objects, but
+has_delete_permission returns False blocks the deletion, so we need remove the
+local has_delete_permission() to make Branch or LayerBranch can be deleted. The
+django's default has_delete_permission() will be used after removal.
+
+Signed-off-by: Robert Yang <liezhi.yang@windriver.com>
+---
+ layerindex/admin.py | 17 -----------------
+ 1 file changed, 17 deletions(-)
+
+diff --git a/layerindex/admin.py b/layerindex/admin.py
+index 9ed6102..f8b2f6e 100644
+--- a/layerindex/admin.py
++++ b/layerindex/admin.py
+@@ -102,8 +102,6 @@ class RecipeAdmin(admin.ModelAdmin):
+         return rofields
+     def has_add_permission(self, request, obj=None):
+         return False
+-    def has_delete_permission(self, request, obj=None):
+-        return False
+ 
+ class PackageConfigAdmin(admin.ModelAdmin):
+     search_fields = ['feature', 'recipe__pn']
+@@ -132,8 +130,6 @@ class ClassicRecipeAdmin(admin.ModelAdmin):
+         return rofields
+     def has_add_permission(self, request, obj=None):
+         return False
+-    def has_delete_permission(self, request, obj=None):
+-        return False
+ 
+ class MachineAdmin(admin.ModelAdmin):
+     search_fields = ['name']
+@@ -141,8 +137,6 @@ class MachineAdmin(admin.ModelAdmin):
+     readonly_fields = [f.name for f in Machine._meta.get_fields()]
+     def has_add_permission(self, request, obj=None):
+         return False
+-    def has_delete_permission(self, request, obj=None):
+-        return False
+ 
+ class DistroAdmin(admin.ModelAdmin):
+     search_fields = ['name']
+@@ -150,9 +144,6 @@ class DistroAdmin(admin.ModelAdmin):
+     readonly_fields = [f.name for f in Distro._meta.get_fields()]
+     def has_add_permission(self, request, obj=None):
+         return False
+-    def has_delete_permission(self, request, obj=None):
+-        return False
+-
+ 
+ class BBAppendAdmin(admin.ModelAdmin):
+     search_fields = ['filename']
+@@ -160,8 +151,6 @@ class BBAppendAdmin(admin.ModelAdmin):
+     readonly_fields = [f.name for f in BBAppend._meta.get_fields()]
+     def has_add_permission(self, request, obj=None):
+         return False
+-    def has_delete_permission(self, request, obj=None):
+-        return False
+ 
+ class BBClassAdmin(admin.ModelAdmin):
+     search_fields = ['name']
+@@ -169,8 +158,6 @@ class BBClassAdmin(admin.ModelAdmin):
+     readonly_fields = [f.name for f in BBClass._meta.get_fields()]
+     def has_add_permission(self, request, obj=None):
+         return False
+-    def has_delete_permission(self, request, obj=None):
+-        return False
+ 
+ class PatchAdmin(admin.ModelAdmin):
+     search_fields = ['path']
+@@ -178,8 +165,6 @@ class PatchAdmin(admin.ModelAdmin):
+     readonly_fields = [f.name for f in Patch._meta.get_fields()]
+     def has_add_permission(self, request, obj=None):
+         return False
+-    def has_delete_permission(self, request, obj=None):
+-        return False
+ 
+ class PatchDispositionAdmin(admin.ModelAdmin):
+     fields = ['patch', 'user', 'disposition', 'comment']
+@@ -199,8 +184,6 @@ class IncFileAdmin(admin.ModelAdmin):
+     readonly_fields = [f.name for f in IncFile._meta.get_fields()]
+     def has_add_permission(self, request, obj=None):
+         return False
+-    def has_delete_permission(self, request, obj=None):
+-        return False
+ 
+ class RecipeChangeInline(admin.StackedInline):
+     model = RecipeChange
+-- 
+2.37.1
+
+
+
+^ permalink raw reply related	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2022-10-09  9:38 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-10-09  9:38 [layerindex-web][PATCH 1/2] utils.py: Fix for is_commit_ancestor() Robert Yang
+2022-10-09  9:38 ` [layerindex-web][PATCH 2/2] layerindex/admin.py: Remove has_delete_permission to allow deletion Robert Yang
+

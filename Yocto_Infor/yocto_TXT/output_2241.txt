@@ -1,0 +1,132 @@
+* Error: Transaction check error: while doing do_rootfs task
+@ 2022-02-09 14:54 Sourabh Hegde
+  2022-02-09 17:48 ` [yocto] " Khem Raj
+  0 siblings, 1 reply; 3+ messages in thread
+From: Sourabh Hegde @ 2022-02-09 14:54 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1121 bytes --]
+
+Hello All,
+
+While bitbaking an image recipe with systemd configured in "local.conf", I am facing an error while doing do_rootfs task.
+
+In the local.conf :
+
+DISTRO_FEATURES_append = " systemd"
+#DISTRO_FEATURES_BACKFILL_CONSIDERED += "sysvinit"
+VIRTUAL-RUNTIME_init_manager = "systemd"
+VIRTUAL-RUNTIME_initscripts = "systemd-compat-units"
+
+Bitbake error:
+.
+.
+Transaction check succeeded.
+Running transaction test
+Error: Transaction check error:
+file /sbin/telinit conflicts between attempted installs of sysvinit-2.96-r0.cortexa7t2hf_neon_vfpv4 and systemd-1:244.5-r0.cortexa7t2hf_neon_vfpv4
+
+I was not facing this error before without systemd.
+
+Can anyone please let me know how to resolve this error and what does this error mean?
+
+Your help will be much appreciated.
+
+Thanks in advance
+
+P.S: If I uncomment DISTRO_FEATURES_BACKFILL_CONSIDERED += "sysvinit" in local.conf I get below error:
+
+ERROR: Nothing RPROVIDES 'sysvinit' (but [...]/core-image-swupdate.bb RDEPENDS on or otherwise requires it)
+sysvinit was skipped: missing required distro feature 'sysvinit' (not in DISTRO_FEATURES)
+
+[-- Attachment #2: Type: text/html, Size: 1249 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] Error: Transaction check error: while doing do_rootfs task
+  2022-02-09 14:54 Error: Transaction check error: while doing do_rootfs task Sourabh Hegde
+@ 2022-02-09 17:48 ` Khem Raj
+  2022-02-09 19:37   ` Sourabh Hegde
+  0 siblings, 1 reply; 3+ messages in thread
+From: Khem Raj @ 2022-02-09 17:48 UTC (permalink / raw)
+  To: Sourabh Hegde; +Cc: Yocto-mailing-list
+
+I think core-image-swupdate.bb is adding sysvinit explicitly, please
+remove it from that.
+
+On Wed, Feb 9, 2022 at 6:54 AM Sourabh Hegde <hrsourabh011@gmail.com> wrote:
+>
+> Hello All,
+>
+> While bitbaking an image recipe with systemd configured in "local.conf", I am facing an error while doing do_rootfs task.
+>
+> In the local.conf :
+>
+> DISTRO_FEATURES_append = " systemd"
+> #DISTRO_FEATURES_BACKFILL_CONSIDERED += "sysvinit"
+> VIRTUAL-RUNTIME_init_manager = "systemd"
+> VIRTUAL-RUNTIME_initscripts = "systemd-compat-units"
+>
+> Bitbake error:
+> .
+> .
+> Transaction check succeeded.
+> Running transaction test
+> Error: Transaction check error:
+>   file /sbin/telinit conflicts between attempted installs of sysvinit-2.96-r0.cortexa7t2hf_neon_vfpv4 and systemd-1:244.5-r0.cortexa7t2hf_neon_vfpv4
+>
+> I was not facing this error before without systemd.
+>
+> Can anyone please let me know how to resolve this error and what does this error mean?
+>
+> Your help will be much appreciated.
+>
+> Thanks in advance
+>
+> P.S: If I uncomment DISTRO_FEATURES_BACKFILL_CONSIDERED += "sysvinit" in local.conf I get below error:
+>
+> ERROR: Nothing RPROVIDES 'sysvinit' (but [...]/core-image-swupdate.bb RDEPENDS on or otherwise requires it)
+> sysvinit was skipped: missing required distro feature 'sysvinit' (not in DISTRO_FEATURES)
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> You automatically follow any topics you start or reply to.
+> View/Reply Online (#56118): https://lists.yoctoproject.org/g/yocto/message/56118
+> Mute This Topic: https://lists.yoctoproject.org/mt/89022709/1997914
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [raj.khem@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: Error: Transaction check error: while doing do_rootfs task
+  2022-02-09 17:48 ` [yocto] " Khem Raj
+@ 2022-02-09 19:37   ` Sourabh Hegde
+  0 siblings, 0 replies; 3+ messages in thread
+From: Sourabh Hegde @ 2022-02-09 19:37 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 696 bytes --]
+
+Hello Khem,
+
+Doing "bitbake -e core-image-swupdate | grep ^INIT_MANAGER=" shows INIT_MANAGER="none". And "bitbake -e core-image-swupdate | grep ^DISTRO_FEATURES=" shows DISTRO_FEATURES="acl alsa argp bluetooth ext2 ipv4 ipv6 largefile pcmcia usbgadget usbhost wifi xattr nfs zeroconf pci 3g nfc x11 vfat largefile opengl ptest multiarch wayland vulkan systemd wifi systemd pulseaudio sysvinit gobject-introspection-data ldconfig".
+
+I don't understand why these is both systemd and sysvinit. In the core-image-swupdate I have mentioned:
+
+DISTRO_FEATURES_append = " systemd"
+
+Can you please let me know how can I check if the recipe has dependency on sysvinit or not?
+
+Thanks in advance
+
+[-- Attachment #2: Type: text/html, Size: 737 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2022-02-09 19:37 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-02-09 14:54 Error: Transaction check error: while doing do_rootfs task Sourabh Hegde
+2022-02-09 17:48 ` [yocto] " Khem Raj
+2022-02-09 19:37   ` Sourabh Hegde
+

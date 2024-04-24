@@ -1,0 +1,73 @@
+* Error while updating sources using "$ opkg update". [ opkg_verify_gpg_signature: GPG signature checking not supported ] [ pkg_src_verify: Signature verification failed for *. ] #yocto #raspberrypi
+@ 2021-05-27 17:42 tokuchiprime
+  0 siblings, 0 replies; only message in thread
+From: tokuchiprime @ 2021-05-27 17:42 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2579 bytes --]
+
+Hi everyone.
+
+I am trying to setup a Package Feed with signed ipk packages. For this, I first set up the key pair on my build host.
+
+This is the result of "$ gpg --list-keys" :
+
+/home/<username>/.gnupg/pubring.kbx
+--------------------------------
+pub   rsa3072 2021-05-26 [SC] [expires: 2023-05-26]
+<40-char-hex-key-id>
+uid           [ultimate] <user-id> <email-id>
+sub   rsa3072 2021-05-26 [E] [expires: 2023-05-26]
+
+I added the following to my local.conf :
+
+# For generating signed packages
+INHERIT += "sign_ipk"
+IPK_GPG_NAME = "<last-8-digits-of-key-id>"
+IPK_GPG_PASSPHRASE_FILE = "/home/<username>/passphrase.txt"
+INHERIT += "sign_package_feed"
+PACKAGE_FEED_GPG_NAME = "<last-8-digits-of-key-id>"
+PACKAGE_FEED_GPG_PASSPHRASE_FILE = "/home/<username>/passphrase.txt"
+
+Burnt the new image onto the SD Card and booted up. At this point, $ opkg update fails with the following error:
+
+Downloading http://192.168.0.8/rpi_packages/all/Packages.gz.
+Downloading http://192.168.0.8/rpi_packages/all/Packages.asc.
+Downloading http://192.168.0.8/rpi_packages/cortexa7t2hf-neon-vfpv4/Packages.gz.
+Downloading http://192.168.0.8/rpi_packages/cortexa7t2hf-neon-vfpv4/Packages.asc.
+Downloading http://192.168.0.8/rpi_packages/raspberrypi3/Packages.gz.
+Downloading http://192.168.0.8/rpi_packages/raspberrypi3/Packages.asc.
+Collected errors:
+* opkg_verify_gpg_signature: GPG signature checking not supported
+* pkg_src_verify: Signature verification failed for all.
+* opkg_verify_gpg_signature: GPG signature checking not supported
+* pkg_src_verify: Signature verification failed for cortexa7t2hf-neon-vfpv4.
+* opkg_verify_gpg_signature: GPG signature checking not supported
+* pkg_src_verify: Signature verification failed for raspberrypi3.
+
+The /etc/pki/packagefeed-gpg directory has PACKAGEFEED-GPG-KEY-b2qt-dunfell in it.
+
+At first gnupg wasn't installed on the target, so I added it.
+
+Running "$ gpg --list-keys" outputs:
+
+gpg: directory '/home/root/.gnupg' created
+gpg: keybox '/home/root/.gnupg/pubring.kbx' created
+gpg: /home/root/.gnupg/trustdb.gpg: trustdb created
+
+I imported /etc/pki/packagefeed-gpg/PACKAGEFEED-GPG-KEY-b2qt-dunfell, after which "$ gpg --list-keys" shows the public key. But it doesn't solve the issue.
+Found a question in the mailing list, where the OP used OPKG_KEYRING_KEYS. So I rebuilt the image with OPKG_KEYRING_KEYS = "<last-8-digits-of-key-id>", but the result was same as earlier.
+
+If signature verification is disabled then the sources are updated without any error.
+
+Thanks for reading.
+
+[-- Attachment #2: Type: text/html, Size: 5705 bytes --]
+
+^ permalink raw reply	[flat|nested] only message in thread
+only message in thread, other threads:[~2021-05-27 17:42 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-05-27 17:42 Error while updating sources using "$ opkg update". [ opkg_verify_gpg_signature: GPG signature checking not supported ] [ pkg_src_verify: Signature verification failed for *. ] #yocto #raspberrypi tokuchiprime
+

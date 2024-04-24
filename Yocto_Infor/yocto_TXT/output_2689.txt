@@ -1,0 +1,99 @@
+* [layerindex-web][PATCH] update.py: add option -s for send mail
+@ 2021-10-22  4:02 changqing.li
+  0 siblings, 0 replies; only message in thread
+From: changqing.li @ 2021-10-22  4:02 UTC (permalink / raw)
+  To: yocto
+
+From: Changqing Li <changqing.li@windriver.com>
+
+Add option -s to support send mail to admin when update_layer.py
+return non-zero value. So that admin can find issues ASAP.
+
+Signed-off-by: Changqing Li <changqing.li@windriver.com>
+---
+ layerindex/update.py                   | 27 ++++++++++++++++++++++++++
+ templates/layerindex/updatefailure.txt | 11 +++++++++++
+ 2 files changed, 38 insertions(+)
+ create mode 100644 templates/layerindex/updatefailure.txt
+
+diff --git a/layerindex/update.py b/layerindex/update.py
+index 5a2642b..f66a747 100755
+--- a/layerindex/update.py
++++ b/layerindex/update.py
+@@ -35,6 +35,28 @@ except ImportError:
+     logger.error("Please install PythonGit 0.3.1 or later in order to use this script")
+     sys.exit(1)
+ 
++def send_email(cmd, log):
++    from django.core.mail import EmailMessage
++    from django.template.loader import get_template
++    import settings
++
++    subject = 'Notification: Layer Index Update ERRORS/WARNINGS'
++    from_email = settings.DEFAULT_FROM_EMAIL
++
++    to_email_list = []
++    for a in settings.ADMINS:
++        to_email_list.append(a[1])
++
++    d = {
++        'cmd': cmd,
++        'log': log,
++    }
++
++    plaintext = get_template('layerindex/updatefailure.txt')
++    text_content = plaintext.render(d)
++
++    msg = EmailMessage(subject, text_content, from_email, to_email_list)
++    msg.send()
+ 
+ def prepare_update_layer_command(options, branch, layer, initial=False):
+     """Prepare the update_layer.py command line"""
+@@ -178,6 +200,9 @@ def main():
+     parser.add_option("", "--keep-temp",
+             help = "Preserve temporary directory at the end instead of deleting it",
+             action="store_true")
++    parser.add_option("-s", "--send-mail",
++            help = "Send mail to admin when update layer have errors",
++            action="store_true", dest="sendmail", default=False)
+ 
+     options, args = parser.parse_args(sys.argv)
+     if len(args) > 1:
+@@ -443,6 +468,8 @@ def main():
+                         layerupdate.retcode = ret
+                         if not options.dryrun:
+                             layerupdate.save()
++                        if options.sendmail:
++                            send_email(cmd, output)
+                         continue
+ 
+                     col = extract_value('BBFILE_COLLECTIONS', output)
+diff --git a/templates/layerindex/updatefailure.txt b/templates/layerindex/updatefailure.txt
+new file mode 100644
+index 0000000..ddcb6b9
+--- /dev/null
++++ b/templates/layerindex/updatefailure.txt
+@@ -0,0 +1,11 @@
++Hi, Admins
++
++There are ERRORS/WARNINGS during layer index update, please check it.
++
++Layer update command:
++{{cmd}}
++
++Details:
++{{log | safe}}
++
++Have a nice day!
+-- 
+2.17.1
+
+
+
+^ permalink raw reply related	[flat|nested] only message in thread
+only message in thread, other threads:[~2021-10-22  4:03 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-10-22  4:02 [layerindex-web][PATCH] update.py: add option -s for send mail changqing.li
+

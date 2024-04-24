@@ -1,0 +1,229 @@
+* [meta-security][PATCH] tpm2-tss: upgrade 3.2.0 -> 4.0.1
+@ 2023-02-17 19:02 Petr Gotthard
+  2023-04-21 18:07 ` Peter Kjellerstedt
+  0 siblings, 1 reply; 3+ messages in thread
+From: Petr Gotthard @ 2023-02-17 19:02 UTC (permalink / raw)
+  To: yocto
+
+Changelog:
+https://github.com/tpm2-software/tpm2-tss/blob/4.0.1/CHANGELOG.md
+
+Signed-off-by: Petr Gotthard <petr.gotthard@advantech.cz>
+---
+ .../tpm2-tss/tpm2-tss/fixup_hosttools.patch          | 10 +++++-----
+ .../{tpm2-tss_3.2.0.bb => tpm2-tss_4.0.1.bb}         | 12 ++++--------
+ 2 files changed, 9 insertions(+), 13 deletions(-)
+ rename meta-tpm/recipes-tpm2/tpm2-tss/{tpm2-tss_3.2.0.bb => tpm2-tss_4.0.1.bb} (90%)
+
+diff --git a/meta-tpm/recipes-tpm2/tpm2-tss/tpm2-tss/fixup_hosttools.patch b/meta-tpm/recipes-tpm2/tpm2-tss/tpm2-tss/fixup_hosttools.patch
+index 450698f..04a2964 100644
+--- a/meta-tpm/recipes-tpm2/tpm2-tss/tpm2-tss/fixup_hosttools.patch
++++ b/meta-tpm/recipes-tpm2/tpm2-tss/tpm2-tss/fixup_hosttools.patch
+@@ -5,16 +5,16 @@ Not appropriate for cross build env.
+ Upstream-Status: OE [inappropriate]
+ Signed-off-by: Armin Kuster <akuster808@gmail.com>
+ 
+-Index: tpm2-tss-3.2.0/configure.ac
++Index: tpm2-tss-4.0.1/configure.ac
+ ===================================================================
+---- tpm2-tss-3.2.0.orig/configure.ac
+-+++ tpm2-tss-3.2.0/configure.ac
+-@@ -488,17 +488,6 @@
++--- tpm2-tss-4.0.1.orig/configure.ac
+++++ tpm2-tss-4.0.1/configure.ac
++@@ -554,17 +554,6 @@ AM_CONDITIONAL(SYSD_SYSUSERS, test "x$systemd_sysusers" = "xyes")
+  AC_CHECK_PROG(systemd_tmpfiles, systemd-tmpfiles, yes)
+  AM_CONDITIONAL(SYSD_TMPFILES, test "x$systemd_tmpfiles" = "xyes")
+  
+ -# Check all tools used by make install
+--AS_IF([test "$HOSTOS" = "Linux"],
++-AS_IF([test "$HOSTOS" = "Linux" && test "x$systemd_sysusers" != "xyes"],
+ -    [ AC_CHECK_PROG(useradd, useradd, yes)
+ -      AC_CHECK_PROG(groupadd, groupadd, yes)
+ -      AC_CHECK_PROG(adduser, adduser, yes)
+diff --git a/meta-tpm/recipes-tpm2/tpm2-tss/tpm2-tss_3.2.0.bb b/meta-tpm/recipes-tpm2/tpm2-tss/tpm2-tss_4.0.1.bb
+similarity index 90%
+rename from meta-tpm/recipes-tpm2/tpm2-tss/tpm2-tss_3.2.0.bb
+rename to meta-tpm/recipes-tpm2/tpm2-tss/tpm2-tss_4.0.1.bb
+index 1556273..657a2cd 100644
+--- a/meta-tpm/recipes-tpm2/tpm2-tss/tpm2-tss_3.2.0.bb
++++ b/meta-tpm/recipes-tpm2/tpm2-tss/tpm2-tss_4.0.1.bb
+@@ -10,15 +10,16 @@ SRC_URI = "https://github.com/tpm2-software/${BPN}/releases/download/${PV}/${BPN
+            file://fixup_hosttools.patch \
+            "
+ 
+-SRC_URI[sha256sum] = "48305e4144dcf6d10f3b25b7bccf0189fd2d1186feafd8cd68c6b17ecf0d7912"
++SRC_URI[sha256sum] = "532a70133910b6bd842289915b3f9423c0205c0ea009d65294ca18a74087c950"
+ 
+ UPSTREAM_CHECK_URI = "https://github.com/tpm2-software/${BPN}/releases"
+ 
+ inherit autotools pkgconfig systemd useradd
+ 
+-PACKAGECONFIG ??= ""
++PACKAGECONFIG ??= "vendor"
+ PACKAGECONFIG[oxygen] = ",--disable-doxygen-doc, "
+-PACKAGECONFIG[fapi] = "--enable-fapi,--disable-fapi,curl json-c "
++PACKAGECONFIG[fapi] = "--enable-fapi,--disable-fapi,curl json-c util-linux-libuuid "
++PACKAGECONFIG[policy] = "--enable-policy,--disable-policy,json-c util-linux-libuuid "
+ 
+ EXTRA_OECONF += "--enable-static --with-udevrulesdir=${nonarch_base_libdir}/udev/rules.d/"
+ EXTRA_OECONF += "--runstatedir=/run"
+@@ -28,11 +29,6 @@ USERADD_PACKAGES = "${PN}"
+ GROUPADD_PARAM:${PN} = "--system tss"
+ USERADD_PARAM:${PN} = "--system -M -d /var/lib/tpm -s /bin/false -g tss tss"
+ 
+-do_configure:prepend() {
+-    # do not extract the version number from git
+-    sed -i -e 's/m4_esyscmd_s(\[git describe --tags --always --dirty\])/${PV}/' ${S}/configure.ac
+-}
+-
+ do_install:append() {
+     # Remove /run as it is created on startup
+     rm -rf ${D}/run
+-- 
+2.34.1
+
+
+^ permalink raw reply related	[flat|nested] 3+ messages in thread
+* RE: [meta-security][PATCH] tpm2-tss: upgrade 3.2.0 -> 4.0.1
+  2023-02-17 19:02 [meta-security][PATCH] tpm2-tss: upgrade 3.2.0 -> 4.0.1 Petr Gotthard
+@ 2023-04-21 18:07 ` Peter Kjellerstedt
+  2023-04-21 18:17   ` Petr Gotthard
+  0 siblings, 1 reply; 3+ messages in thread
+From: Peter Kjellerstedt @ 2023-04-21 18:07 UTC (permalink / raw)
+  To: Petr Gotthard; +Cc: yocto
+
+> -----Original Message-----
+> From: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org> On Behalf Of Petr Gotthard
+> Sent: den 17 februari 2023 20:02
+> To: yocto@lists.yoctoproject.org
+> Subject: [yocto] [meta-security][PATCH] tpm2-tss: upgrade 3.2.0 -> 4.0.1
+> 
+> Changelog:
+> https://github.com/tpm2-software/tpm2-tss/blob/4.0.1/CHANGELOG.md
+> 
+> Signed-off-by: Petr Gotthard <petr.gotthard@advantech.cz>
+> ---
+>  .../tpm2-tss/tpm2-tss/fixup_hosttools.patch          | 10 +++++-----
+>  .../{tpm2-tss_3.2.0.bb => tpm2-tss_4.0.1.bb}         | 12 ++++--------
+>  2 files changed, 9 insertions(+), 13 deletions(-)
+>  rename meta-tpm/recipes-tpm2/tpm2-tss/{tpm2-tss_3.2.0.bb => tpm2-tss_4.0.1.bb} (90%)
+> 
+> diff --git a/meta-tpm/recipes-tpm2/tpm2-tss/tpm2-tss/fixup_hosttools.patch b/meta-tpm/recipes-tpm2/tpm2-tss/tpm2-tss/fixup_hosttools.patch
+> index 450698f..04a2964 100644
+> --- a/meta-tpm/recipes-tpm2/tpm2-tss/tpm2-tss/fixup_hosttools.patch
+> +++ b/meta-tpm/recipes-tpm2/tpm2-tss/tpm2-tss/fixup_hosttools.patch
+> @@ -5,16 +5,16 @@ Not appropriate for cross build env.
+>  Upstream-Status: OE [inappropriate]
+>  Signed-off-by: Armin Kuster <akuster808@gmail.com>
+> 
+> -Index: tpm2-tss-3.2.0/configure.ac
+> +Index: tpm2-tss-4.0.1/configure.ac
+>  ===================================================================
+> ---- tpm2-tss-3.2.0.orig/configure.ac
+> -+++ tpm2-tss-3.2.0/configure.ac
+> -@@ -488,17 +488,6 @@
+> +--- tpm2-tss-4.0.1.orig/configure.ac
+> ++++ tpm2-tss-4.0.1/configure.ac
+> +@@ -554,17 +554,6 @@ AM_CONDITIONAL(SYSD_SYSUSERS, test
+> "x$systemd_sysusers" = "xyes")
+>   AC_CHECK_PROG(systemd_tmpfiles, systemd-tmpfiles, yes)
+>   AM_CONDITIONAL(SYSD_TMPFILES, test "x$systemd_tmpfiles" = "xyes")
+> 
+>  -# Check all tools used by make install
+> --AS_IF([test "$HOSTOS" = "Linux"],
+> +-AS_IF([test "$HOSTOS" = "Linux" && test "x$systemd_sysusers" != "xyes"],
+>  -    [ AC_CHECK_PROG(useradd, useradd, yes)
+>  -      AC_CHECK_PROG(groupadd, groupadd, yes)
+>  -      AC_CHECK_PROG(adduser, adduser, yes)
+> diff --git a/meta-tpm/recipes-tpm2/tpm2-tss/tpm2-tss_3.2.0.bb b/meta-tpm/recipes-tpm2/tpm2-tss/tpm2-tss_4.0.1.bb
+> similarity index 90%
+> rename from meta-tpm/recipes-tpm2/tpm2-tss/tpm2-tss_3.2.0.bb
+> rename to meta-tpm/recipes-tpm2/tpm2-tss/tpm2-tss_4.0.1.bb
+> index 1556273..657a2cd 100644
+> --- a/meta-tpm/recipes-tpm2/tpm2-tss/tpm2-tss_3.2.0.bb
+> +++ b/meta-tpm/recipes-tpm2/tpm2-tss/tpm2-tss_4.0.1.bb
+> @@ -10,15 +10,16 @@ SRC_URI = "https://github.com/tpm2-software/${BPN}/releases/download/${PV}/${BPN
+>             file://fixup_hosttools.patch \
+>             "
+> 
+> -SRC_URI[sha256sum] = "48305e4144dcf6d10f3b25b7bccf0189fd2d1186feafd8cd68c6b17ecf0d7912"
+> +SRC_URI[sha256sum] = "532a70133910b6bd842289915b3f9423c0205c0ea009d65294ca18a74087c950"
+> 
+>  UPSTREAM_CHECK_URI = "https://github.com/tpm2-software/${BPN}/releases"
+> 
+>  inherit autotools pkgconfig systemd useradd
+> 
+> -PACKAGECONFIG ??= ""
+> +PACKAGECONFIG ??= "vendor"
+>  PACKAGECONFIG[oxygen] = ",--disable-doxygen-doc, "
+> -PACKAGECONFIG[fapi] = "--enable-fapi,--disable-fapi,curl json-c "
+> +PACKAGECONFIG[fapi] = "--enable-fapi,--disable-fapi,curl json-c util-linux-libuuid "
+> +PACKAGECONFIG[policy] = "--enable-policy,--disable-policy,json-c util-linux-libuuid "
+
+You introduce a new feature "policy", but then you set the default 
+for PACKAGECONFIG to "vendor", which does not exist. Was this 
+intentional? If so it should have been mentioned in the commit 
+message as it causes a warning unless you override the 
+default PACKAGECONFIG:
+
+  WARNING: tpm2-tss-4.0.1-r0 do_configure: QA Issue: tpm2-tss: invalid 
+  PACKAGECONFIG: vendor [invalid-packageconfig]
+
+> 
+>  EXTRA_OECONF += "--enable-static --with-udevrulesdir=${nonarch_base_libdir}/udev/rules.d/"
+>  EXTRA_OECONF += "--runstatedir=/run"
+> @@ -28,11 +29,6 @@ USERADD_PACKAGES = "${PN}"
+>  GROUPADD_PARAM:${PN} = "--system tss"
+>  USERADD_PARAM:${PN} = "--system -M -d /var/lib/tpm -s /bin/false -g tss tss"
+> 
+> -do_configure:prepend() {
+> -    # do not extract the version number from git
+> -    sed -i -e 's/m4_esyscmd_s(\[git describe --tags --always --dirty\])/${PV}/' ${S}/configure.ac
+> -}
+> -
+>  do_install:append() {
+>      # Remove /run as it is created on startup
+>      rm -rf ${D}/run
+> --
+> 2.34.1
+
+//Peter
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* RE: [meta-security][PATCH] tpm2-tss: upgrade 3.2.0 -> 4.0.1
+  2023-04-21 18:07 ` Peter Kjellerstedt
+@ 2023-04-21 18:17   ` Petr Gotthard
+  0 siblings, 0 replies; 3+ messages in thread
+From: Petr Gotthard @ 2023-04-21 18:17 UTC (permalink / raw)
+  To: Peter Kjellerstedt; +Cc: yocto
+
+Yeah, I am sorry for that. It was intentional, but I discovered there is a bug in the upstream that prevents me from using this feature properly.
+https://github.com/tpm2-software/tpm2-tss/issues/2571
+
+I thought it will be fixed quickly, but it wasn't. Let me fix this.
+
+-----Original Message-----
+From: Peter Kjellerstedt <peter.kjellerstedt@axis.com> 
+Sent: Friday, April 21, 2023 8:07 PM
+To: Petr Gotthard <petr.gotthard@advantech.cz>
+Cc: yocto@lists.yoctoproject.org
+Subject: RE: [meta-security][PATCH] tpm2-tss: upgrade 3.2.0 -> 4.0.1
+
+You introduce a new feature "policy", but then you set the default for PACKAGECONFIG to "vendor", which does not exist. Was this intentional? If so it should have been mentioned in the commit message as it causes a warning unless you override the default PACKAGECONFIG:
+
+  WARNING: tpm2-tss-4.0.1-r0 do_configure: QA Issue: tpm2-tss: invalid
+  PACKAGECONFIG: vendor [invalid-packageconfig]
+
+
+//Peter
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2023-04-21 18:18 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-02-17 19:02 [meta-security][PATCH] tpm2-tss: upgrade 3.2.0 -> 4.0.1 Petr Gotthard
+2023-04-21 18:07 ` Peter Kjellerstedt
+2023-04-21 18:17   ` Petr Gotthard
+

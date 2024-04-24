@@ -1,0 +1,204 @@
+* How to get license text
+@ 2022-07-11 17:00 William Huang
+  2022-07-12 14:22 ` [yocto] " Nicolas Jeker
+  0 siblings, 1 reply; 3+ messages in thread
+From: William Huang @ 2022-07-11 17:00 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 494 bytes --]
+
+Hi,
+I was wondering if it is possible to get the license information for all of the deployed packages in the image? I know there's a license.manifest file in deploy/licenses, but I'm looking for a file that includes that manifest as well as the paragraph associated with the license. Closest I found was in the /usr/share/common-license folder which has the LICENSE or COPYING file for each package, but I am looking if there's a single file that contains this information instead.
+
+Thanks
+
+[-- Attachment #2: Type: text/html, Size: 513 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] How to get license text
+  2022-07-11 17:00 How to get license text William Huang
+@ 2022-07-12 14:22 ` Nicolas Jeker
+  2022-07-13  9:41   ` Ross Burton
+  0 siblings, 1 reply; 3+ messages in thread
+From: Nicolas Jeker @ 2022-07-12 14:22 UTC (permalink / raw)
+  To: William Huang, yocto
+
+On Mon, 2022-07-11 at 10:00 -0700, William Huang wrote:
+> Hi,
+> I was wondering if it is possible to get the license information for
+> all of the deployed packages in the image? I know there's a
+> license.manifest file in deploy/licenses, but I'm looking for a file
+> that includes that manifest as well as the paragraph associated with
+> the license. Closest I found was in the /usr/share/common-license
+> folder which has the LICENSE or COPYING file for each package, but I
+> am looking if there's a single file that contains this information
+> instead.
+> 
+
+I started working on something like this as I'm currently not aware
+that this functionality already exists (someone correct me if I'm
+wrong). My goal was to create a PDF with a list of packets and all
+licenses. The design I chose was creating something text based directly
+out of yocto (markdown) and using something like pandoc to convert that
+to a PDF. I've abandoned the project for the moment as other things
+became more important.
+
+This is what I have so far, it currently depends on python tabulate and
+generally has some rough edges. I called it "credits.bbclass" and just
+used "inherit credits" in my image task. If someone wants to continue
+working on it, go for it.
+
+CREDITS_DIR ??= "${DEPLOY_DIR}"
+CREDITS_FILENAME ??= "credits.md"
+
+python create_credit_file() {
+    # bb.plain("Connect debugger now")
+    # import epdb; epdb.serve()
+    import re
+    import oe.packagedata
+    from oe.rootfs import image_list_installed_packages
+
+    build_images_from_feeds = d.getVar('BUILD_IMAGES_FROM_FEEDS')
+    if build_images_from_feeds == "1":
+        return 0
+
+    # list of packages and their corresponding licenses
+    license_summary = []
+    # list of generic licenses
+    generic_licenses = []
+    # dictionary of packages and their license files
+    license_details = {}
+    # set of licenses to exclude
+    exclude = set(d.getVar(('CREDITS_EXCLUDE_LICENSES') or "").split())
+
+    for pkg in sorted(image_list_installed_packages(d)):
+        # obtain and process basic information about the package
+        pkg_info_path = os.path.join(d.getVar('PKGDATA_DIR'),
+                                     'runtime-reverse', pkg)
+        pkg_name = os.path.basename(os.readlink(pkg_info_path))
+        pkg_data = oe.packagedata.read_pkgdatafile(pkg_info_path)
+        if not "LICENSE" in pkg_data.keys():
+            pkg_lic_name = "LICENSE_" + pkg_name
+            pkg_data["LICENSE"] = pkg_data[pkg_lic_name]
+
+        pkg_license_list = re.sub(r'[|&()*]', ' ', pkg_data["LICENSE"])
+        pkg_license_list = re.sub(r'  *', ' ',
+pkg_license_list).split()
+
+        # skip package if one of it's licenses is in the exclude set
+        if set(pkg_license_list).intersection(exclude):
+            continue
+
+        # create summary entry
+        license_summary.append(( pkg_name, pkg_data["LICENSE"] ))
+
+        # create generic and detail entries
+        pkg_license_dir = os.path.join(d.getVar('LICENSE_DIRECTORY'),
+                                       pkg_data["PN"])
+        pkg_manifest_licenses = [canonical_license(d, lic) \
+                                 for lic in pkg_license_list]
+        licenses = os.listdir(pkg_license_dir)
+        for lic in licenses:
+            if re.match(r"^generic_.*$", lic):
+                generic_lic = canonical_license(d,
+                        re.search(r"^generic_(.*)$", lic).group(1))
+
+                # ignore generic licenses that are not declared in
+LICENSES
+                if not re.sub(r'\+$', '', generic_lic) in \
+                        [re.sub(r'\+', '', lic) for lic in \
+                            pkg_manifest_licenses]:
+                    continue
+
+                if generic_lic not in generic_licenses:
+                    generic_licenses.append(generic_lic)
+            else:
+                license_details.setdefault(pkg, []) \
+                    .append(os.path.join(pkg_license_dir, lic))
+
+    credit_file_dir = os.path.join(d.getVar('CREDITS_DIR'))
+    bb.utils.mkdirhier(credit_file_dir)
+    credit_file_path = os.path.join(credit_file_dir,
+                                    d.getVar('CREDITS_FILENAME'))
+    write_credit_file(d, credit_file_path, license_summary,
+generic_licenses)
+}
+
+def write_credit_file(d, path, license_summary, generic_licenses):
+    from tabulate import tabulate
+    with open(path, "w") as credit_file:
+        credit_file.write("# Summary\n\n")
+        credit_file.write(tabulate(license_summary,
+                                   headers=["Package", "License"],
+                                   tablefmt="github"))
+        credit_file.write("\n\n")
+
+        credit_file.write("# Generic Licenses\n\n")
+        generic_directory = d.getVar('COMMON_LICENSE_DIR')
+        for generic_license in generic_licenses:
+            credit_file.write(f"## {generic_license}\n\n")
+            generic_file_path = os.path.join(generic_directory,
+generic_license)
+            if os.path.isfile(generic_file_path):
+                credit_file.write("```\n")
+                with open(generic_file_path) as generic_file:
+                    credit_file.write(generic_file.read())
+                credit_file.write("```\n\n")
+            else:
+                bb.warn(f"Generic license not found:
+{generic_file_path}")
+
+ROOTFS_POSTPROCESS_COMMAND_append = "create_credit_file; "
+
+
+> Thanks
+> 
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] How to get license text
+  2022-07-12 14:22 ` [yocto] " Nicolas Jeker
+@ 2022-07-13  9:41   ` Ross Burton
+  0 siblings, 0 replies; 3+ messages in thread
+From: Ross Burton @ 2022-07-13  9:41 UTC (permalink / raw)
+  To: n.jeker; +Cc: William Huang, yocto
+
+On 12 Jul 2022, at 15:22, Nicolas Jeker via lists.yoctoproject.org <n.jeker=delisys.ch@lists.yoctoproject.org> wrote:
+> 
+> On Mon, 2022-07-11 at 10:00 -0700, William Huang wrote:
+>> Hi,
+>> I was wondering if it is possible to get the license information for
+>> all of the deployed packages in the image? I know there's a
+>> license.manifest file in deploy/licenses, but I'm looking for a file
+>> that includes that manifest as well as the paragraph associated with
+>> the license. Closest I found was in the /usr/share/common-license
+>> folder which has the LICENSE or COPYING file for each package, but I
+>> am looking if there's a single file that contains this information
+>> instead.
+>> 
+> 
+> I started working on something like this as I'm currently not aware
+> that this functionality already exists (someone correct me if I'm
+> wrong). My goal was to create a PDF with a list of packets and all
+> licenses. The design I chose was creating something text based directly
+> out of yocto (markdown) and using something like pandoc to convert that
+> to a PDF. I've abandoned the project for the moment as other things
+> became more important.
+
+I wrote a similar thing a while back, to review the license checksums in a layer.  It’s only in my ross/mut branch on poky-contrib right now:
+
+https://git.yoctoproject.org/poky-contrib/tree/scripts/licensereview.py?h=ross/mut
+
+This is slightly different: it doesn’t write the actual license files being referenced, but the fragments of the files which are the license checksums.
+
+Ross
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2022-07-13  9:41 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-07-11 17:00 How to get license text William Huang
+2022-07-12 14:22 ` [yocto] " Nicolas Jeker
+2022-07-13  9:41   ` Ross Burton
+

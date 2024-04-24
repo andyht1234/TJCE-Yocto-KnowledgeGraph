@@ -1,0 +1,1314 @@
+* [meta-rockchip][PATCH] rock5b: add
+@ 2023-09-22  2:51 Trevor Woerner
+  2023-09-22 14:22 ` [yocto] " Quentin Schulz
+  0 siblings, 1 reply; 5+ messages in thread
+From: Trevor Woerner @ 2023-09-22  2:51 UTC (permalink / raw)
+  To: yocto; +Cc: Quentin Schulz
+
+Add support for the Radxa Rock 5B
+https://wiki.radxa.com/Rock5/5b
+
+The device-tree for this board is better in the 6.5 (and later) kernels,
+therefore set the kernel to linux-yocto-dev for now (eventually this won't be
+needed as linux-yocto moves forward).
+
+The Trusted Firmware A project (TF-A git://git.trustedfirmware.org/TF-A)
+does not currently support the rk3588, but patches are in review. For
+the time-being we're using the binary DDR/TPL initialization blob from
+https://github.com/rockchip-linux/rkbin. Hopefully this can change if/when
+TF-A gains support for the rk3588.
+
+The rk3588 comes in two variants: rk3588 and rk3588s. The "s" option is a
+stripped-down version of the rk3588. In the Linux kernel these two SoCs are
+kept separate, with the rk3588 building on the rk3588s, so we've mimicked that
+same behaviour here.
+
+Signed-off-by: Quentin Schulz <qschulz@theobroma-systems.com>
+Signed-off-by: Trevor Woerner <twoerner@gmail.com>
+---
+ README                                        |  1 +
+ conf/machine/include/rk3588.inc               |  8 ++
+ conf/machine/include/rk3588s-base.inc         | 16 ++++
+ conf/machine/include/rk3588s.inc              |  5 ++
+ conf/machine/rock5b.conf                      | 12 +++
+ recipes-bsp/rkbin/rockchip-rkbin_git.bb       | 37 ++++++++
+ recipes-bsp/u-boot/u-boot%.bbappend           |  5 ++
+ recipes-kernel/linux/linux-yocto-dev.bbappend |  3 +
+ .../rockchip/remove-non-rockchip-arch-arm.cfg | 85 +++++++++++++++++++
+ .../rockchip/remove-non-rockchip-arch-arm.scc |  1 +
+ .../remove-non-rockchip-arch-arm64.cfg        | 66 ++++++++++++++
+ .../remove-non-rockchip-arch-arm64.scc        |  1 +
+ 12 files changed, 240 insertions(+)
+ create mode 100644 conf/machine/include/rk3588.inc
+ create mode 100644 conf/machine/include/rk3588s-base.inc
+ create mode 100644 conf/machine/include/rk3588s.inc
+ create mode 100644 conf/machine/rock5b.conf
+ create mode 100644 recipes-bsp/rkbin/rockchip-rkbin_git.bb
+ create mode 100644 recipes-kernel/linux/linux-yocto-dev.bbappend
+ create mode 100644 recipes-kernel/linux/linux-yocto-dev/rockchip-kmeta/bsp/rockchip/remove-non-rockchip-arch-arm.cfg
+ create mode 100644 recipes-kernel/linux/linux-yocto-dev/rockchip-kmeta/bsp/rockchip/remove-non-rockchip-arch-arm.scc
+ create mode 100644 recipes-kernel/linux/linux-yocto-dev/rockchip-kmeta/bsp/rockchip/remove-non-rockchip-arch-arm64.cfg
+ create mode 100644 recipes-kernel/linux/linux-yocto-dev/rockchip-kmeta/bsp/rockchip/remove-non-rockchip-arch-arm64.scc
+
+diff --git a/README b/README
+index 286dafbe1020..032d9bbb6b34 100644
+--- a/README
++++ b/README
+@@ -30,6 +30,7 @@ Status of supported boards:
+ 		vyasa-rk3288
+ 		firefly-rk3288
+ 		nanopi-r4s
++		rock5b
+ 	builds:
+ 		marsboard-rk3066
+ 		radxarock
+diff --git a/conf/machine/include/rk3588.inc b/conf/machine/include/rk3588.inc
+new file mode 100644
+index 000000000000..d358565a904d
+--- /dev/null
++++ b/conf/machine/include/rk3588.inc
+@@ -0,0 +1,8 @@
++# the rk3588s is a "stripped-down" version of the rk3588
++# in the kernel's device-tree the rk3588 builds on top of the rk3588s
++# so anything that is valid for the rk3588s is valid for the rk3588
++MACHINEOVERRIDES =. "rk3588:rk3588s:"
++require conf/machine/include/rk3588s-base.inc
++
++SOC_FAMILY = "rk3588"
++require conf/machine/include/soc-family.inc
+diff --git a/conf/machine/include/rk3588s-base.inc b/conf/machine/include/rk3588s-base.inc
+new file mode 100644
+index 000000000000..ad74a1895ec0
+--- /dev/null
++++ b/conf/machine/include/rk3588s-base.inc
+@@ -0,0 +1,16 @@
++DEFAULTTUNE ?= "cortexa76-cortexa55-crypto"
++
++require conf/machine/include/arm/armv8-2a/tune-cortexa76-cortexa55.inc
++require conf/machine/include/rockchip-defaults.inc
++require conf/machine/include/rockchip-wic.inc
++
++KBUILD_DEFCONFIG ?= "defconfig"
++KERNEL_FEATURES:append:rk3588 = " bsp/rockchip/remove-non-rockchip-arch-arm64.scc"
++KERNEL_CLASSES = "kernel-fitimage"
++KERNEL_IMAGETYPE = "fitImage"
++
++PREFERRED_PROVIDER_trusted-firmware-a = "rockchip-rkbin"
++PREFERRED_PROVIDER_optee-os = "rockchip-rkbin"
++
++UBOOT_SUFFIX ?= "itb"
++UBOOT_ENTRYPOINT ?= "0x06000000"
+diff --git a/conf/machine/include/rk3588s.inc b/conf/machine/include/rk3588s.inc
+new file mode 100644
+index 000000000000..a57be507bf5e
+--- /dev/null
++++ b/conf/machine/include/rk3588s.inc
+@@ -0,0 +1,5 @@
++MACHINEOVERRIDES =. "rk3588s:"
++require conf/machine/include/rk3588s-base.inc
++
++SOC_FAMILY = "rk3588s"
++require conf/machine/include/soc-family.inc
+diff --git a/conf/machine/rock5b.conf b/conf/machine/rock5b.conf
+new file mode 100644
+index 000000000000..dc31a9f3a4e4
+--- /dev/null
++++ b/conf/machine/rock5b.conf
+@@ -0,0 +1,12 @@
++#@TYPE: Machine
++#@NAME: Radxa Rock5b
++#@DESCRIPTION: ROCK5 is the 5th generation of SBC designed by Radxa.
++#https://wiki.radxa.com/Rock5/5b
++
++require conf/machine/include/rk3588.inc
++
++PREFERRED_PROVIDER_virtual/kernel = "linux-yocto-dev"
++KERNEL_DEVICETREE = "rockchip/rk3588-rock-5b.dtb"
++MACHINE_EXTRA_RRECOMMENDS += "kernel-modules"
++
++UBOOT_MACHINE = "rock5b-rk3588_defconfig"
+diff --git a/recipes-bsp/rkbin/rockchip-rkbin_git.bb b/recipes-bsp/rkbin/rockchip-rkbin_git.bb
+new file mode 100644
+index 000000000000..7fefb017053b
+--- /dev/null
++++ b/recipes-bsp/rkbin/rockchip-rkbin_git.bb
+@@ -0,0 +1,37 @@
++DESCRIPTION = "Rockchip Firmware and Tool Binaries"
++LICENSE = "Proprietary"
++LIC_FILES_CHKSUM = "file://LICENSE;md5=15faa4a01e7eb0f5d33f9f2bcc7bff62"
++
++SRC_URI = "git://github.com/rockchip-linux/rkbin;protocol=https;branch=master"
++SRCREV = "b4558da0860ca48bf1a571dd33ccba580b9abe23"
++
++PROVIDES += "trusted-firmware-a"
++PROVIDES += "optee-os"
++
++inherit bin_package deploy
++
++S = "${WORKDIR}/git"
++
++COMPATIBLE_MACHINE = ""
++COMPATIBLE_MACHINE:rk3588s = "rk3588s"
++
++PACKAGE_ARCH = "${MACHINE_ARCH}"
++
++do_install() {
++	# Nothing in this recipe is useful in a filesystem
++	:
++}
++
++PACKAGES = "${PN}"
++ALLOW_EMPTY:${PN} = "1"
++
++do_deploy() {
++	# Prebuilt TF-A
++	install -m 644 ${S}/bin/rk35/rk3588_bl31_v*.elf ${DEPLOYDIR}/bl31-rk3588.elf
++	# Prebuilt OPTEE-OS
++	install -m 644 ${S}/bin/rk35/rk3588_bl32_v*.bin ${DEPLOYDIR}/tee-rk3588.bin
++	# Prebuilt U-Boot TPL (DDR init)
++	install -m 644 ${S}/bin/rk35/rk3588_ddr_lp4_2112MHz_lp5_2736MHz_v*.bin ${DEPLOYDIR}/ddr-rk3588.bin
++}
++
++addtask deploy after do_install
+diff --git a/recipes-bsp/u-boot/u-boot%.bbappend b/recipes-bsp/u-boot/u-boot%.bbappend
+index db8e0166f5b3..3732c7f04373 100644
+--- a/recipes-bsp/u-boot/u-boot%.bbappend
++++ b/recipes-bsp/u-boot/u-boot%.bbappend
+@@ -11,6 +11,11 @@ DEPENDS:append = " python3-pyelftools-native"
+ 
+ ATF_DEPENDS ??= ""
+ 
++EXTRA_OEMAKE:append:rk3588s = " BL31=${DEPLOY_DIR_IMAGE}/bl31-rk3588.elf"
++ATF_DEPENDS:append:rk3588s = " trusted-firmware-a:do_deploy"
++EXTRA_OEMAKE:append:rk3588s = " ROCKCHIP_TPL=${DEPLOY_DIR_IMAGE}/ddr-rk3588.bin"
++ATF_DEPENDS:append:rk3588s = " rockchip-rkbin:do_deploy"
++
+ EXTRA_OEMAKE:append:rk3399 = " BL31=${DEPLOY_DIR_IMAGE}/bl31-rk3399.elf"
+ ATF_DEPENDS:rk3399 = " trusted-firmware-a:do_deploy"
+ EXTRA_OEMAKE:append:rk3328 = " BL31=${DEPLOY_DIR_IMAGE}/bl31-rk3328.elf"
+diff --git a/recipes-kernel/linux/linux-yocto-dev.bbappend b/recipes-kernel/linux/linux-yocto-dev.bbappend
+new file mode 100644
+index 000000000000..cda5c520c4fe
+--- /dev/null
++++ b/recipes-kernel/linux/linux-yocto-dev.bbappend
+@@ -0,0 +1,3 @@
++FILESEXTRAPATHS:prepend := "${THISDIR}/${PN}:"
++COMPATIBLE_MACHINE:rock5b = "rock5b"
++SRC_URI:append:rock5b = " file://rockchip-kmeta;type=kmeta;name=rockchip-kmeta;destsuffix=rockchip-kmeta"
+diff --git a/recipes-kernel/linux/linux-yocto-dev/rockchip-kmeta/bsp/rockchip/remove-non-rockchip-arch-arm.cfg b/recipes-kernel/linux/linux-yocto-dev/rockchip-kmeta/bsp/rockchip/remove-non-rockchip-arch-arm.cfg
+new file mode 100644
+index 000000000000..e9443f17895c
+--- /dev/null
++++ b/recipes-kernel/linux/linux-yocto-dev/rockchip-kmeta/bsp/rockchip/remove-non-rockchip-arch-arm.cfg
+@@ -0,0 +1,85 @@
++CONFIG_ARCH_ACTIONS=n
++CONFIG_ARCH_AIROHA=n
++CONFIG_ARCH_ALPINE=n
++CONFIG_ARCH_ARTPEC=n
++CONFIG_ARCH_ASPEED=n
++CONFIG_ARCH_AT91=n
++CONFIG_ARCH_BCM2835=n
++CONFIG_ARCH_BCM=n
++CONFIG_ARCH_BCMBCA=n
++CONFIG_ARCH_BCMBCA_BRAHMAB15=n
++CONFIG_ARCH_BCMBCA_CORTEXA7=n
++CONFIG_ARCH_BCMBCA_CORTEXA9=n
++CONFIG_ARCH_BCM_21664=n
++CONFIG_ARCH_BCM_23550=n
++CONFIG_ARCH_BCM_281XX=n
++CONFIG_ARCH_BCM_5301X=n
++CONFIG_ARCH_BCM_53573=n
++CONFIG_ARCH_BCM_CYGNUS=n
++CONFIG_ARCH_BCM_HR2=n
++CONFIG_ARCH_BCM_NSP=n
++CONFIG_ARCH_BERLIN=n
++CONFIG_ARCH_BRCMSTB=n
++CONFIG_ARCH_DIGICOLOR=n
++CONFIG_ARCH_EMEV2=n
++CONFIG_ARCH_EXYNOS=n
++CONFIG_ARCH_HI3xxx=n
++CONFIG_ARCH_HIGHBANK=n
++CONFIG_ARCH_HIP01=n
++CONFIG_ARCH_HIP04=n
++CONFIG_ARCH_HISI=n
++CONFIG_ARCH_HIX5HD2=n
++CONFIG_ARCH_HPE=n
++CONFIG_ARCH_HPE_GXP=n
++CONFIG_ARCH_INTEL_SOCFPGA=n
++CONFIG_ARCH_KEYSTONE=n
++CONFIG_ARCH_MEDIATEK=n
++CONFIG_ARCH_MESON=n
++CONFIG_ARCH_MILBEAUT=n
++CONFIG_ARCH_MILBEAUT_M10V=n
++CONFIG_ARCH_MMP=n
++CONFIG_ARCH_MSM8916=n
++CONFIG_ARCH_MSM8960=n
++CONFIG_ARCH_MSM8974=n
++CONFIG_ARCH_MSM8X60=n
++CONFIG_ARCH_MVEBU=n
++CONFIG_ARCH_MXC=n
++CONFIG_ARCH_OMAP3=n
++CONFIG_ARCH_OMAP4=n
++CONFIG_ARCH_QCOM=n
++CONFIG_ARCH_R7S72100=n
++CONFIG_ARCH_R7S9210=n
++CONFIG_ARCH_R8A73A4=n
++CONFIG_ARCH_R8A7740=n
++CONFIG_ARCH_R8A7742=n
++CONFIG_ARCH_R8A7743=n
++CONFIG_ARCH_R8A7744=n
++CONFIG_ARCH_R8A7745=n
++CONFIG_ARCH_R8A77470=n
++CONFIG_ARCH_R8A7778=n
++CONFIG_ARCH_R8A7779=n
++CONFIG_ARCH_R8A7790=n
++CONFIG_ARCH_R8A7791=n
++CONFIG_ARCH_R8A7792=n
++CONFIG_ARCH_R8A7793=n
++CONFIG_ARCH_R8A7794=n
++CONFIG_ARCH_R9A06G032=n
++CONFIG_ARCH_RENESAS=n
++CONFIG_ARCH_SH73A0=n
++CONFIG_ARCH_SPEAR13XX=n
++CONFIG_ARCH_STI=n
++CONFIG_ARCH_STM32=n
++CONFIG_ARCH_SUNPLUS=n
++CONFIG_ARCH_SUNXI=n
++CONFIG_ARCH_TEGRA=n
++CONFIG_ARCH_TEGRA_114_SOC=n
++CONFIG_ARCH_TEGRA_124_SOC=n
++CONFIG_ARCH_TEGRA_2x_SOC=n
++CONFIG_ARCH_TEGRA_3x_SOC=n
++CONFIG_ARCH_U8500=n
++CONFIG_ARCH_UNIPHIER=n
++CONFIG_ARCH_VEXPRESS=n
++CONFIG_ARCH_VEXPRESS_TC2_PM=n
++CONFIG_ARCH_VIRT=n
++CONFIG_ARCH_WM8850=n
++CONFIG_ARCH_ZYNQ=n
+diff --git a/recipes-kernel/linux/linux-yocto-dev/rockchip-kmeta/bsp/rockchip/remove-non-rockchip-arch-arm.scc b/recipes-kernel/linux/linux-yocto-dev/rockchip-kmeta/bsp/rockchip/remove-non-rockchip-arch-arm.scc
+new file mode 100644
+index 000000000000..ce7770456ea4
+--- /dev/null
++++ b/recipes-kernel/linux/linux-yocto-dev/rockchip-kmeta/bsp/rockchip/remove-non-rockchip-arch-arm.scc
+@@ -0,0 +1 @@
++kconf hardware remove-non-rockchip-arch-arm.cfg
+diff --git a/recipes-kernel/linux/linux-yocto-dev/rockchip-kmeta/bsp/rockchip/remove-non-rockchip-arch-arm64.cfg b/recipes-kernel/linux/linux-yocto-dev/rockchip-kmeta/bsp/rockchip/remove-non-rockchip-arch-arm64.cfg
+new file mode 100644
+index 000000000000..5b804a2ca26b
+--- /dev/null
++++ b/recipes-kernel/linux/linux-yocto-dev/rockchip-kmeta/bsp/rockchip/remove-non-rockchip-arch-arm64.cfg
+@@ -0,0 +1,66 @@
++CONFIG_ARCH_ACTIONS=n
++CONFIG_ARCH_ALPINE=n
++CONFIG_ARCH_APPLE=n
++CONFIG_ARCH_BCM2835=n
++CONFIG_ARCH_BCM=n
++CONFIG_ARCH_BCMBCA=n
++CONFIG_ARCH_BCM_IPROC=n
++CONFIG_ARCH_BERLIN=n
++CONFIG_ARCH_BRCMSTB=n
++CONFIG_ARCH_EXYNOS=n
++CONFIG_ARCH_SPARX5=n
++CONFIG_ARCH_HISI=n
++CONFIG_ARCH_INTEL_SOCFPGA=n
++CONFIG_ARCH_K3=n
++CONFIG_ARCH_KEEMBAY=n
++CONFIG_ARCH_LAYERSCAPE=n
++CONFIG_ARCH_LG1K=n
++CONFIG_ARCH_MEDIATEK=n
++CONFIG_ARCH_MESON=n
++CONFIG_ARCH_MVEBU=n
++CONFIG_ARCH_MXC=n
++CONFIG_ARCH_NPCM=n
++CONFIG_ARCH_NXP=n
++CONFIG_ARCH_MA35=n
++CONFIG_ARCH_QCOM=n
++CONFIG_ARCH_REALTEK=n
++CONFIG_ARCH_R8A774A1=n
++CONFIG_ARCH_R8A774B1=n
++CONFIG_ARCH_R8A774C0=n
++CONFIG_ARCH_R8A774E1=n
++CONFIG_ARCH_R8A77951=n
++CONFIG_ARCH_R8A77960=n
++CONFIG_ARCH_R8A77961=n
++CONFIG_ARCH_R8A77965=n
++CONFIG_ARCH_R8A77970=n
++CONFIG_ARCH_R8A77980=n
++CONFIG_ARCH_R8A77990=n
++CONFIG_ARCH_R8A77995=n
++CONFIG_ARCH_R8A779A0=n
++CONFIG_ARCH_R8A779F0=n
++CONFIG_ARCH_R8A779G0=n
++CONFIG_ARCH_R9A07G043=n
++CONFIG_ARCH_R9A07G044=n
++CONFIG_ARCH_R9A07G054=n
++CONFIG_ARCH_R9A09G011=n
++CONFIG_ARCH_RENESAS=n
++CONFIG_ARCH_S32=n
++CONFIG_ARCH_SEATTLE=n
++CONFIG_ARCH_STM32=n
++CONFIG_ARCH_SPRD=n
++CONFIG_ARCH_SUNXI=n
++CONFIG_ARCH_SYNQUACER=n
++CONFIG_ARCH_TEGRA=n
++CONFIG_ARCH_TEGRA_132_SOC=n
++CONFIG_ARCH_TEGRA_186_SOC=n
++CONFIG_ARCH_TEGRA_194_SOC=n
++CONFIG_ARCH_TEGRA_210_SOC=n
++CONFIG_ARCH_TEGRA_234_SOC=n
++CONFIG_ARCH_TESLA_FSD=n
++CONFIG_ARCH_THUNDER2=n
++CONFIG_ARCH_THUNDER=n
++CONFIG_ARCH_UNIPHIER=n
++CONFIG_ARCH_VEXPRESS=n
++CONFIG_ARCH_VISCONTI=n
++CONFIG_ARCH_XGENE=n
++CONFIG_ARCH_ZYNQMP=n
+diff --git a/recipes-kernel/linux/linux-yocto-dev/rockchip-kmeta/bsp/rockchip/remove-non-rockchip-arch-arm64.scc b/recipes-kernel/linux/linux-yocto-dev/rockchip-kmeta/bsp/rockchip/remove-non-rockchip-arch-arm64.scc
+new file mode 100644
+index 000000000000..e169240f5067
+--- /dev/null
++++ b/recipes-kernel/linux/linux-yocto-dev/rockchip-kmeta/bsp/rockchip/remove-non-rockchip-arch-arm64.scc
+@@ -0,0 +1 @@
++kconf hardware remove-non-rockchip-arch-arm64.cfg
+-- 
+2.41.0.327.gaa9166bcc0ba
+
+
+
+^ permalink raw reply related	[flat|nested] 5+ messages in thread
+* Re: [yocto] [meta-rockchip][PATCH] rock5b: add
+  2023-09-22  2:51 [meta-rockchip][PATCH] rock5b: add Trevor Woerner
+@ 2023-09-22 14:22 ` Quentin Schulz
+  2023-09-22 15:06   ` Trevor Woerner
+  0 siblings, 1 reply; 5+ messages in thread
+From: Quentin Schulz @ 2023-09-22 14:22 UTC (permalink / raw)
+  To: twoerner, yocto
+
+Hi Trevor,
+
+Looking good :) Thanks for looking into it, will be helpful to me in the 
+upcoming weeks/months :)
+
+On 9/22/23 04:51, Trevor Woerner via lists.yoctoproject.org wrote:
+> Add support for the Radxa Rock 5B
+> https://wiki.radxa.com/Rock5/5b
+> 
+> The device-tree for this board is better in the 6.5 (and later) kernels,
+> therefore set the kernel to linux-yocto-dev for now (eventually this won't be
+> needed as linux-yocto moves forward).
+> 
+> The Trusted Firmware A project (TF-A git://git.trustedfirmware.org/TF-A)
+> does not currently support the rk3588, but patches are in review. For
+> the time-being we're using the binary DDR/TPL initialization blob from
+> https://github.com/rockchip-linux/rkbin. Hopefully this can change if/when
+> TF-A gains support for the rk3588.
+> 
+
+Because it's closed source, I cannot tell if DDR binary is based off 
+TF-A but I would say it's likely not? It's fine like this but not 
+entirely sure it's true.
+
+> The rk3588 comes in two variants: rk3588 and rk3588s. The "s" option is a
+> stripped-down version of the rk3588. In the Linux kernel these two SoCs are
+> kept separate, with the rk3588 building on the rk3588s, so we've mimicked that
+> same behaviour here.
+> 
+> Signed-off-by: Quentin Schulz <qschulz@theobroma-systems.com>
+
+I may have improperly wrote this in the github commit I sent you, but my 
+professional mail address is:
+quentin.schulz@theobroma-systems.com
+:)
+
+> Signed-off-by: Trevor Woerner <twoerner@gmail.com>
+> ---
+>   README                                        |  1 +
+>   conf/machine/include/rk3588.inc               |  8 ++
+>   conf/machine/include/rk3588s-base.inc         | 16 ++++
+>   conf/machine/include/rk3588s.inc              |  5 ++
+>   conf/machine/rock5b.conf                      | 12 +++
+>   recipes-bsp/rkbin/rockchip-rkbin_git.bb       | 37 ++++++++
+>   recipes-bsp/u-boot/u-boot%.bbappend           |  5 ++
+>   recipes-kernel/linux/linux-yocto-dev.bbappend |  3 +
+>   .../rockchip/remove-non-rockchip-arch-arm.cfg | 85 +++++++++++++++++++
+>   .../rockchip/remove-non-rockchip-arch-arm.scc |  1 +
+>   .../remove-non-rockchip-arch-arm64.cfg        | 66 ++++++++++++++
+>   .../remove-non-rockchip-arch-arm64.scc        |  1 +
+>   12 files changed, 240 insertions(+)
+>   create mode 100644 conf/machine/include/rk3588.inc
+>   create mode 100644 conf/machine/include/rk3588s-base.inc
+>   create mode 100644 conf/machine/include/rk3588s.inc
+>   create mode 100644 conf/machine/rock5b.conf
+>   create mode 100644 recipes-bsp/rkbin/rockchip-rkbin_git.bb
+>   create mode 100644 recipes-kernel/linux/linux-yocto-dev.bbappend
+>   create mode 100644 recipes-kernel/linux/linux-yocto-dev/rockchip-kmeta/bsp/rockchip/remove-non-rockchip-arch-arm.cfg
+>   create mode 100644 recipes-kernel/linux/linux-yocto-dev/rockchip-kmeta/bsp/rockchip/remove-non-rockchip-arch-arm.scc
+>   create mode 100644 recipes-kernel/linux/linux-yocto-dev/rockchip-kmeta/bsp/rockchip/remove-non-rockchip-arch-arm64.cfg
+>   create mode 100644 recipes-kernel/linux/linux-yocto-dev/rockchip-kmeta/bsp/rockchip/remove-non-rockchip-arch-arm64.scc
+> 
+> diff --git a/README b/README
+> index 286dafbe1020..032d9bbb6b34 100644
+> --- a/README
+> +++ b/README
+> @@ -30,6 +30,7 @@ Status of supported boards:
+>   		vyasa-rk3288
+>   		firefly-rk3288
+>   		nanopi-r4s
+> +		rock5b
+>   	builds:
+>   		marsboard-rk3066
+>   		radxarock
+> diff --git a/conf/machine/include/rk3588.inc b/conf/machine/include/rk3588.inc
+> new file mode 100644
+> index 000000000000..d358565a904d
+> --- /dev/null
+> +++ b/conf/machine/include/rk3588.inc
+> @@ -0,0 +1,8 @@
+> +# the rk3588s is a "stripped-down" version of the rk3588
+> +# in the kernel's device-tree the rk3588 builds on top of the rk3588s
+> +# so anything that is valid for the rk3588s is valid for the rk3588
+> +MACHINEOVERRIDES =. "rk3588:rk3588s:"
+
+This is incorrect, this makes rk3588s have precedence over rk3588, which 
+is wrong for rk3588-based devices. Why not have MACHINEOVERRIDES for 
+rk3588s in rk3588s-base.inc instead?
+
+> +require conf/machine/include/rk3588s-base.inc
+> +
+> +SOC_FAMILY = "rk3588"
+> +require conf/machine/include/soc-family.inc
+
+The two lines above actually do MACHINEOVERRIDES =. "rk3588"
+so we don't need to repeat it.
+
+> diff --git a/conf/machine/include/rk3588s-base.inc b/conf/machine/include/rk3588s-base.inc
+> new file mode 100644
+> index 000000000000..ad74a1895ec0
+> --- /dev/null
+> +++ b/conf/machine/include/rk3588s-base.inc
+> @@ -0,0 +1,16 @@
+> +DEFAULTTUNE ?= "cortexa76-cortexa55-crypto"
+> +
+> +require conf/machine/include/arm/armv8-2a/tune-cortexa76-cortexa55.inc
+> +require conf/machine/include/rockchip-defaults.inc
+> +require conf/machine/include/rockchip-wic.inc
+> +
+> +KBUILD_DEFCONFIG ?= "defconfig"
+> +KERNEL_FEATURES:append:rk3588 = " bsp/rockchip/remove-non-rockchip-arch-arm64.scc"
+> +KERNEL_CLASSES = "kernel-fitimage"
+> +KERNEL_IMAGETYPE = "fitImage"
+> +
+> +PREFERRED_PROVIDER_trusted-firmware-a = "rockchip-rkbin"
+> +PREFERRED_PROVIDER_optee-os = "rockchip-rkbin"
+> +
+> +UBOOT_SUFFIX ?= "itb"
+> +UBOOT_ENTRYPOINT ?= "0x06000000"
+> diff --git a/conf/machine/include/rk3588s.inc b/conf/machine/include/rk3588s.inc
+> new file mode 100644
+> index 000000000000..a57be507bf5e
+> --- /dev/null
+> +++ b/conf/machine/include/rk3588s.inc
+> @@ -0,0 +1,5 @@
+> +MACHINEOVERRIDES =. "rk3588s:"
+
+Maybe we could move this directly to the -base.inc so we don't add it in 
+rk3588.inc and rk3588s.inc?
+
+To verify the MACHINEOVERRIDES is correct, I highly suggest to run:
+"""
+bitbake-getvar MACHINEOVERRIDES
+"""
+
+this variable is read from right to left, with the highest precedence on 
+the right side.
+
+So we should have something like:
+"""
+aarch64:rk3588s:rk3588:rock5b
+aarch64:rk3588s:orangepi5
+"""
+for example.
+
+Now also wondering if we shouldn't add "rockchip" to MACHINEOVERRIDES, 
+which would make things a bit easier for COMPATIBLE_MACHINE in 
+rockchip-rkbin (though not really useful).
+
+> +require conf/machine/include/rk3588s-base.inc
+> +
+> +SOC_FAMILY = "rk3588s"
+> +require conf/machine/include/soc-family.inc
+> diff --git a/conf/machine/rock5b.conf b/conf/machine/rock5b.conf
+> new file mode 100644
+> index 000000000000..dc31a9f3a4e4
+> --- /dev/null
+> +++ b/conf/machine/rock5b.conf
+> @@ -0,0 +1,12 @@
+> +#@TYPE: Machine
+> +#@NAME: Radxa Rock5b
+> +#@DESCRIPTION: ROCK5 is the 5th generation of SBC designed by Radxa.
+> +#https://wiki.radxa.com/Rock5/5b
+> +
+> +require conf/machine/include/rk3588.inc
+> +
+> +PREFERRED_PROVIDER_virtual/kernel = "linux-yocto-dev"
+> +KERNEL_DEVICETREE = "rockchip/rk3588-rock-5b.dtb"
+> +MACHINE_EXTRA_RRECOMMENDS += "kernel-modules"
+> +
+> +UBOOT_MACHINE = "rock5b-rk3588_defconfig"
+> diff --git a/recipes-bsp/rkbin/rockchip-rkbin_git.bb b/recipes-bsp/rkbin/rockchip-rkbin_git.bb
+> new file mode 100644
+> index 000000000000..7fefb017053b
+> --- /dev/null
+> +++ b/recipes-bsp/rkbin/rockchip-rkbin_git.bb
+> @@ -0,0 +1,37 @@
+> +DESCRIPTION = "Rockchip Firmware and Tool Binaries"
+> +LICENSE = "Proprietary"
+> +LIC_FILES_CHKSUM = "file://LICENSE;md5=15faa4a01e7eb0f5d33f9f2bcc7bff62"
+> +
+> +SRC_URI = "git://github.com/rockchip-linux/rkbin;protocol=https;branch=master"
+> +SRCREV = "b4558da0860ca48bf1a571dd33ccba580b9abe23"
+> +
+> +PROVIDES += "trusted-firmware-a"
+> +PROVIDES += "optee-os"
+> +
+> +inherit bin_package deploy
+> +
+> +S = "${WORKDIR}/git"
+> +
+> +COMPATIBLE_MACHINE = ""
+> +COMPATIBLE_MACHINE:rk3588s = "rk3588s"
+> +
+> +PACKAGE_ARCH = "${MACHINE_ARCH}"
+> +
+> +do_install() {
+> +	# Nothing in this recipe is useful in a filesystem
+> +	:
+> +}
+> +
+> +PACKAGES = "${PN}"
+> +ALLOW_EMPTY:${PN} = "1"
+> +
+> +do_deploy() {
+> +	# Prebuilt TF-A
+> +	install -m 644 ${S}/bin/rk35/rk3588_bl31_v*.elf ${DEPLOYDIR}/bl31-rk3588.elf
+> +	# Prebuilt OPTEE-OS
+> +	install -m 644 ${S}/bin/rk35/rk3588_bl32_v*.bin ${DEPLOYDIR}/tee-rk3588.bin
+> +	# Prebuilt U-Boot TPL (DDR init)
+> +	install -m 644 ${S}/bin/rk35/rk3588_ddr_lp4_2112MHz_lp5_2736MHz_v*.bin ${DEPLOYDIR}/ddr-rk3588.bin
+> +}
+> + > +addtask deploy after do_install
+
+Regarding the topic of adding support for more SoCs you brought up on 
+IRC, we either need to have multiple deploy, e.g.
+
+"""
+do_deploy:rk3588s() {
+    install ...
+}
+
+do_deploy:rk3308() {
+    install ...
+}
+
+do_deploy() {
+     # Required because addtask needs to be able to run regardless of 
+COMPATIBLE_MACHINE I believe?
+     :
+}
+"""
+
+or abstract the paths to instlal in variables, e.g.
+
+"""
+
+RKBIN_BL31:rk3588s = "rk35/rk3588_bl31_v*.elf"
+RKBIN_BL31_INSTALLED:rk3588s = "bl31-rk3588.elf"
+
+RKBIN_BL31:rk3308 = "rk33/rk3308_bl31_v*.elf"
+RKBIN_BL31_INSTALLED:rk3308 = "bl31-rk3308.elf"
+
+RKBIN_BL32:rk3588s = "rk35/rk3588_bl32_v*.bin"
+RKBIN_BL32_INSTALLED:rk3588s = "tee-rk3588.bin"
+
+RKBIN_BL32:rk3308 = "rk33/rk3308_bl32_v*.bin"
+RKBIN_BL32_INSTALLED:rk3308 = "tee-rk3308.bin"
+
+RKBIN_DDR:rk3588s = "rk35/rk3588_ddr_lp4_2112MHz_lp5_2736MHz_v*.bin"
+RKBIN_DDR_INSTALLED:rk3588s = "ddr-rk3588.bin"
+
+RKBIN_DDR:rk3308 = "rk33/rk3308_ddr_589MHz_uart4_m0_v*.bin"
+RKBIN_DDR_INSTALLED:rk3308 = "ddr-rk3308.bin"
+
+do_deploy() {
+	# Prebuilt TF-A
+	install -m 644 ${S}/bin/${RKBIN_BL31} ${DEPLOYDIR}/${RKBIN_BL31_INSTALLED}
+	# Prebuilt OPTEE-OS
+	install -m 644 ${S}/bin/${RKBIN_BL32} ${DEPLOYDIR}/${RKBIN_BL32_INSTALLED}
+	# Prebuilt U-Boot TPL (DDR init)
+	install -m 644 ${S}/bin/${RKBIN_DDR} ${DEPLOYDIR}/${RKBIN_DDR_INSTALLED}
+}
+"""
+
+we could also simplify it by doing some educated guess:
+
+"""
+
+# In rkbin, rk3588s uses rk3588-prefixed binaries
+SOC_FAMILY:rk3588s = "rk3588"
+SHORT_SOC_FAMILY = "${@d.getVar("SOC_FAMILY")[:2]}"
+
+RKBIN_BL31 = "${SHORT_SOC_FAMILY}/${SOC_FAMILY}_bl31_v*.elf"
+RKBIN_BL31_INSTALLED = "bl31-${SOC_FAMILY}.elf"
+RKBIN_BL32 = "${SHORT_SOC_FAMILY}/${SOC_FAMILY}_bl32_v*.bin"
+RKBIN_BL32_INSTALLED = "tee-${SOC_FAMILY}.bin"
+RKBIN_DDR_INSTALLED = "ddr-${SOC_FAMILY}.bin"
+
+# We only want one match of this glob and they are difficult to guess 
+based on SoC only
+RKBIN_DDR:rk3308 = "rk3308_ddr_589MHz_uart4_m0_v*.bin"
+RKBIN_DDR:rk3588s = "rk3588_ddr_lp4_2112MHz_lp5_2736MHz_v*.bin"
+
+do_deploy() {
+	# Prebuilt TF-A
+	install -m 644 ${S}/bin/${SHORT_SOC_FAMILY}/${RKBIN_BL31} 
+${DEPLOYDIR}/${RKBIN_BL31_INSTALLED}
+	# Prebuilt OPTEE-OS
+	install -m 644 ${S}/bin/${SHORT_SOC_FAMILY}/${RKBIN_BL32} 
+${DEPLOYDIR}/${RKBIN_BL32_INSTALLED}
+	# Prebuilt U-Boot TPL (DDR init)
+	install -m 644 ${S}/bin/${SHORT_SOC_FAMILY}/${RKBIN_DDR} 
+${DEPLOYDIR}/${RKBIN_DDR_INSTALLED}
+}
+
+"""
+
+Cheers,
+Quentin
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] [meta-rockchip][PATCH] rock5b: add
+  2023-09-22 14:22 ` [yocto] " Quentin Schulz
+@ 2023-09-22 15:06   ` Trevor Woerner
+  2023-09-22 15:15     ` Quentin Schulz
+  2023-09-22 16:31     ` Trevor Woerner
+  0 siblings, 2 replies; 5+ messages in thread
+From: Trevor Woerner @ 2023-09-22 15:06 UTC (permalink / raw)
+  To: Quentin Schulz; +Cc: yocto
+
+On Fri 2023-09-22 @ 04:22:11 PM, Quentin Schulz wrote:
+> Hi Trevor,
+> 
+> Looking good :) Thanks for looking into it, will be helpful to me in the
+> upcoming weeks/months :)
+> 
+> On 9/22/23 04:51, Trevor Woerner via lists.yoctoproject.org wrote:
+> > Add support for the Radxa Rock 5B
+> > https://wiki.radxa.com/Rock5/5b
+> > 
+> > The device-tree for this board is better in the 6.5 (and later) kernels,
+> > therefore set the kernel to linux-yocto-dev for now (eventually this won't be
+> > needed as linux-yocto moves forward).
+> > 
+> > The Trusted Firmware A project (TF-A git://git.trustedfirmware.org/TF-A)
+> > does not currently support the rk3588, but patches are in review. For
+> > the time-being we're using the binary DDR/TPL initialization blob from
+> > https://github.com/rockchip-linux/rkbin. Hopefully this can change if/when
+> > TF-A gains support for the rk3588.
+> > 
+> 
+> Because it's closed source, I cannot tell if DDR binary is based off TF-A
+> but I would say it's likely not? It's fine like this but not entirely sure
+> it's true.
+
+Does this sound like I believe the binary blob is based on TF-A? If so I'll
+need to reword. I'm literally trying to say the opposite. I.e. we can't use
+TF-A yet so we're stuck using the blob... for now.
+
+> > The rk3588 comes in two variants: rk3588 and rk3588s. The "s" option is a
+> > stripped-down version of the rk3588. In the Linux kernel these two SoCs are
+> > kept separate, with the rk3588 building on the rk3588s, so we've mimicked that
+> > same behaviour here.
+> > 
+> > Signed-off-by: Quentin Schulz <qschulz@theobroma-systems.com>
+> 
+> I may have improperly wrote this in the github commit I sent you, but my
+> professional mail address is:
+> quentin.schulz@theobroma-systems.com
+> :)
+
+lol, I was wondering why that bounced.
+
+> 
+> > Signed-off-by: Trevor Woerner <twoerner@gmail.com>
+> > ---
+> >   README                                        |  1 +
+> >   conf/machine/include/rk3588.inc               |  8 ++
+> >   conf/machine/include/rk3588s-base.inc         | 16 ++++
+> >   conf/machine/include/rk3588s.inc              |  5 ++
+> >   conf/machine/rock5b.conf                      | 12 +++
+> >   recipes-bsp/rkbin/rockchip-rkbin_git.bb       | 37 ++++++++
+> >   recipes-bsp/u-boot/u-boot%.bbappend           |  5 ++
+> >   recipes-kernel/linux/linux-yocto-dev.bbappend |  3 +
+> >   .../rockchip/remove-non-rockchip-arch-arm.cfg | 85 +++++++++++++++++++
+> >   .../rockchip/remove-non-rockchip-arch-arm.scc |  1 +
+> >   .../remove-non-rockchip-arch-arm64.cfg        | 66 ++++++++++++++
+> >   .../remove-non-rockchip-arch-arm64.scc        |  1 +
+> >   12 files changed, 240 insertions(+)
+> >   create mode 100644 conf/machine/include/rk3588.inc
+> >   create mode 100644 conf/machine/include/rk3588s-base.inc
+> >   create mode 100644 conf/machine/include/rk3588s.inc
+> >   create mode 100644 conf/machine/rock5b.conf
+> >   create mode 100644 recipes-bsp/rkbin/rockchip-rkbin_git.bb
+> >   create mode 100644 recipes-kernel/linux/linux-yocto-dev.bbappend
+> >   create mode 100644 recipes-kernel/linux/linux-yocto-dev/rockchip-kmeta/bsp/rockchip/remove-non-rockchip-arch-arm.cfg
+> >   create mode 100644 recipes-kernel/linux/linux-yocto-dev/rockchip-kmeta/bsp/rockchip/remove-non-rockchip-arch-arm.scc
+> >   create mode 100644 recipes-kernel/linux/linux-yocto-dev/rockchip-kmeta/bsp/rockchip/remove-non-rockchip-arch-arm64.cfg
+> >   create mode 100644 recipes-kernel/linux/linux-yocto-dev/rockchip-kmeta/bsp/rockchip/remove-non-rockchip-arch-arm64.scc
+> > 
+> > diff --git a/README b/README
+> > index 286dafbe1020..032d9bbb6b34 100644
+> > --- a/README
+> > +++ b/README
+> > @@ -30,6 +30,7 @@ Status of supported boards:
+> >   		vyasa-rk3288
+> >   		firefly-rk3288
+> >   		nanopi-r4s
+> > +		rock5b
+> >   	builds:
+> >   		marsboard-rk3066
+> >   		radxarock
+> > diff --git a/conf/machine/include/rk3588.inc b/conf/machine/include/rk3588.inc
+> > new file mode 100644
+> > index 000000000000..d358565a904d
+> > --- /dev/null
+> > +++ b/conf/machine/include/rk3588.inc
+> > @@ -0,0 +1,8 @@
+> > +# the rk3588s is a "stripped-down" version of the rk3588
+> > +# in the kernel's device-tree the rk3588 builds on top of the rk3588s
+> > +# so anything that is valid for the rk3588s is valid for the rk3588
+> > +MACHINEOVERRIDES =. "rk3588:rk3588s:"
+> 
+> This is incorrect, this makes rk3588s have precedence over rk3588, which is
+> wrong for rk3588-based devices. Why not have MACHINEOVERRIDES for rk3588s in
+> rk3588s-base.inc instead?
+> 
+> > +require conf/machine/include/rk3588s-base.inc
+> > +
+> > +SOC_FAMILY = "rk3588"
+> > +require conf/machine/include/soc-family.inc
+> 
+> The two lines above actually do MACHINEOVERRIDES =. "rk3588"
+> so we don't need to repeat it.
+> 
+> > diff --git a/conf/machine/include/rk3588s-base.inc b/conf/machine/include/rk3588s-base.inc
+> > new file mode 100644
+> > index 000000000000..ad74a1895ec0
+> > --- /dev/null
+> > +++ b/conf/machine/include/rk3588s-base.inc
+> > @@ -0,0 +1,16 @@
+> > +DEFAULTTUNE ?= "cortexa76-cortexa55-crypto"
+> > +
+> > +require conf/machine/include/arm/armv8-2a/tune-cortexa76-cortexa55.inc
+> > +require conf/machine/include/rockchip-defaults.inc
+> > +require conf/machine/include/rockchip-wic.inc
+> > +
+> > +KBUILD_DEFCONFIG ?= "defconfig"
+> > +KERNEL_FEATURES:append:rk3588 = " bsp/rockchip/remove-non-rockchip-arch-arm64.scc"
+> > +KERNEL_CLASSES = "kernel-fitimage"
+> > +KERNEL_IMAGETYPE = "fitImage"
+> > +
+> > +PREFERRED_PROVIDER_trusted-firmware-a = "rockchip-rkbin"
+> > +PREFERRED_PROVIDER_optee-os = "rockchip-rkbin"
+> > +
+> > +UBOOT_SUFFIX ?= "itb"
+> > +UBOOT_ENTRYPOINT ?= "0x06000000"
+> > diff --git a/conf/machine/include/rk3588s.inc b/conf/machine/include/rk3588s.inc
+> > new file mode 100644
+> > index 000000000000..a57be507bf5e
+> > --- /dev/null
+> > +++ b/conf/machine/include/rk3588s.inc
+> > @@ -0,0 +1,5 @@
+> > +MACHINEOVERRIDES =. "rk3588s:"
+> 
+> Maybe we could move this directly to the -base.inc so we don't add it in
+> rk3588.inc and rk3588s.inc?
+> 
+> To verify the MACHINEOVERRIDES is correct, I highly suggest to run:
+> """
+> bitbake-getvar MACHINEOVERRIDES
+> """
+> 
+> this variable is read from right to left, with the highest precedence on the
+> right side.
+> 
+> So we should have something like:
+> """
+> aarch64:rk3588s:rk3588:rock5b
+> aarch64:rk3588s:orangepi5
+> """
+> for example.
+
+I spent quite a while checking MACHINEOVERRIDES and SOC_FAMILY with many
+variations until I was able to get exactly what you've just said we should be
+getting.
+
+MACHINE="rock5b"
+	$ meta-rockchip> bitbake core-image-base -e | grep "^MACHINEOVERRIDES="
+	MACHINEOVERRIDES="rk3588:aarch64:armv8-2a:cortexa76-cortexa55:rk3588:rk3588s:rock5b"
+	$ meta-rockchip> bitbake core-image-base -e | grep "^SOC_FAMILY="
+	SOC_FAMILY="rk3588"
+
+MACHINE="orangepi5"
+	$ meta-rockchip> bitbake core-image-base -e | grep "^MACHINEOVERRIDES="
+	MACHINEOVERRIDES="rk3588s:aarch64:armv8-2a:cortexa76-cortexa55:rk3588s:orangepi5"
+	$ meta-rockchip> bitbake core-image-base -e | grep "^SOC_FAMILY="
+	SOC_FAMILY="rk3588s"
+> 
+> Now also wondering if we shouldn't add "rockchip" to MACHINEOVERRIDES, which
+> would make things a bit easier for COMPATIBLE_MACHINE in rockchip-rkbin
+> (though not really useful).
+
+I've thought of adding a "rockchip" MACHINEOVERRIDES several times.
+
+> > +require conf/machine/include/rk3588s-base.inc
+> > +
+> > +SOC_FAMILY = "rk3588s"
+> > +require conf/machine/include/soc-family.inc
+> > diff --git a/conf/machine/rock5b.conf b/conf/machine/rock5b.conf
+> > new file mode 100644
+> > index 000000000000..dc31a9f3a4e4
+> > --- /dev/null
+> > +++ b/conf/machine/rock5b.conf
+> > @@ -0,0 +1,12 @@
+> > +#@TYPE: Machine
+> > +#@NAME: Radxa Rock5b
+> > +#@DESCRIPTION: ROCK5 is the 5th generation of SBC designed by Radxa.
+> > +#https://wiki.radxa.com/Rock5/5b
+> > +
+> > +require conf/machine/include/rk3588.inc
+> > +
+> > +PREFERRED_PROVIDER_virtual/kernel = "linux-yocto-dev"
+> > +KERNEL_DEVICETREE = "rockchip/rk3588-rock-5b.dtb"
+> > +MACHINE_EXTRA_RRECOMMENDS += "kernel-modules"
+> > +
+> > +UBOOT_MACHINE = "rock5b-rk3588_defconfig"
+> > diff --git a/recipes-bsp/rkbin/rockchip-rkbin_git.bb b/recipes-bsp/rkbin/rockchip-rkbin_git.bb
+> > new file mode 100644
+> > index 000000000000..7fefb017053b
+> > --- /dev/null
+> > +++ b/recipes-bsp/rkbin/rockchip-rkbin_git.bb
+> > @@ -0,0 +1,37 @@
+> > +DESCRIPTION = "Rockchip Firmware and Tool Binaries"
+> > +LICENSE = "Proprietary"
+> > +LIC_FILES_CHKSUM = "file://LICENSE;md5=15faa4a01e7eb0f5d33f9f2bcc7bff62"
+> > +
+> > +SRC_URI = "git://github.com/rockchip-linux/rkbin;protocol=https;branch=master"
+> > +SRCREV = "b4558da0860ca48bf1a571dd33ccba580b9abe23"
+> > +
+> > +PROVIDES += "trusted-firmware-a"
+> > +PROVIDES += "optee-os"
+> > +
+> > +inherit bin_package deploy
+> > +
+> > +S = "${WORKDIR}/git"
+> > +
+> > +COMPATIBLE_MACHINE = ""
+> > +COMPATIBLE_MACHINE:rk3588s = "rk3588s"
+> > +
+> > +PACKAGE_ARCH = "${MACHINE_ARCH}"
+> > +
+> > +do_install() {
+> > +	# Nothing in this recipe is useful in a filesystem
+> > +	:
+> > +}
+> > +
+> > +PACKAGES = "${PN}"
+> > +ALLOW_EMPTY:${PN} = "1"
+> > +
+> > +do_deploy() {
+> > +	# Prebuilt TF-A
+> > +	install -m 644 ${S}/bin/rk35/rk3588_bl31_v*.elf ${DEPLOYDIR}/bl31-rk3588.elf
+> > +	# Prebuilt OPTEE-OS
+> > +	install -m 644 ${S}/bin/rk35/rk3588_bl32_v*.bin ${DEPLOYDIR}/tee-rk3588.bin
+> > +	# Prebuilt U-Boot TPL (DDR init)
+> > +	install -m 644 ${S}/bin/rk35/rk3588_ddr_lp4_2112MHz_lp5_2736MHz_v*.bin ${DEPLOYDIR}/ddr-rk3588.bin
+> > +}
+> > + > +addtask deploy after do_install
+> 
+> Regarding the topic of adding support for more SoCs you brought up on IRC,
+> we either need to have multiple deploy, e.g.
+> 
+> """
+> do_deploy:rk3588s() {
+>    install ...
+> }
+> 
+> do_deploy:rk3308() {
+>    install ...
+> }
+> 
+> do_deploy() {
+>     # Required because addtask needs to be able to run regardless of
+> COMPATIBLE_MACHINE I believe?
+>     :
+> }
+> """
+
+Oh, I'll have to test the above. I know that simply doing:
+
+	do_deploy:rk3588() {
+	}
+
+by itself doesn't work; causes:
+
+	do_deploy not defined
+
+
+> or abstract the paths to instlal in variables, e.g.
+
+This is probably what we'll need to do. I'd prefer the do_deploy() overrides,
+but we'll have to do this if the other doesn't work.
+
+> 
+> """
+> 
+> RKBIN_BL31:rk3588s = "rk35/rk3588_bl31_v*.elf"
+> RKBIN_BL31_INSTALLED:rk3588s = "bl31-rk3588.elf"
+> 
+> RKBIN_BL31:rk3308 = "rk33/rk3308_bl31_v*.elf"
+> RKBIN_BL31_INSTALLED:rk3308 = "bl31-rk3308.elf"
+> 
+> RKBIN_BL32:rk3588s = "rk35/rk3588_bl32_v*.bin"
+> RKBIN_BL32_INSTALLED:rk3588s = "tee-rk3588.bin"
+> 
+> RKBIN_BL32:rk3308 = "rk33/rk3308_bl32_v*.bin"
+> RKBIN_BL32_INSTALLED:rk3308 = "tee-rk3308.bin"
+> 
+> RKBIN_DDR:rk3588s = "rk35/rk3588_ddr_lp4_2112MHz_lp5_2736MHz_v*.bin"
+> RKBIN_DDR_INSTALLED:rk3588s = "ddr-rk3588.bin"
+> 
+> RKBIN_DDR:rk3308 = "rk33/rk3308_ddr_589MHz_uart4_m0_v*.bin"
+> RKBIN_DDR_INSTALLED:rk3308 = "ddr-rk3308.bin"
+> 
+> do_deploy() {
+> 	# Prebuilt TF-A
+> 	install -m 644 ${S}/bin/${RKBIN_BL31} ${DEPLOYDIR}/${RKBIN_BL31_INSTALLED}
+> 	# Prebuilt OPTEE-OS
+> 	install -m 644 ${S}/bin/${RKBIN_BL32} ${DEPLOYDIR}/${RKBIN_BL32_INSTALLED}
+> 	# Prebuilt U-Boot TPL (DDR init)
+> 	install -m 644 ${S}/bin/${RKBIN_DDR} ${DEPLOYDIR}/${RKBIN_DDR_INSTALLED}
+> }
+> """
+> 
+> we could also simplify it by doing some educated guess:
+> 
+> """
+> 
+> # In rkbin, rk3588s uses rk3588-prefixed binaries
+> SOC_FAMILY:rk3588s = "rk3588"
+> SHORT_SOC_FAMILY = "${@d.getVar("SOC_FAMILY")[:2]}"
+> 
+> RKBIN_BL31 = "${SHORT_SOC_FAMILY}/${SOC_FAMILY}_bl31_v*.elf"
+> RKBIN_BL31_INSTALLED = "bl31-${SOC_FAMILY}.elf"
+> RKBIN_BL32 = "${SHORT_SOC_FAMILY}/${SOC_FAMILY}_bl32_v*.bin"
+> RKBIN_BL32_INSTALLED = "tee-${SOC_FAMILY}.bin"
+> RKBIN_DDR_INSTALLED = "ddr-${SOC_FAMILY}.bin"
+> 
+> # We only want one match of this glob and they are difficult to guess based
+> on SoC only
+> RKBIN_DDR:rk3308 = "rk3308_ddr_589MHz_uart4_m0_v*.bin"
+> RKBIN_DDR:rk3588s = "rk3588_ddr_lp4_2112MHz_lp5_2736MHz_v*.bin"
+> 
+> do_deploy() {
+> 	# Prebuilt TF-A
+> 	install -m 644 ${S}/bin/${SHORT_SOC_FAMILY}/${RKBIN_BL31}
+> ${DEPLOYDIR}/${RKBIN_BL31_INSTALLED}
+> 	# Prebuilt OPTEE-OS
+> 	install -m 644 ${S}/bin/${SHORT_SOC_FAMILY}/${RKBIN_BL32}
+> ${DEPLOYDIR}/${RKBIN_BL32_INSTALLED}
+> 	# Prebuilt U-Boot TPL (DDR init)
+> 	install -m 644 ${S}/bin/${SHORT_SOC_FAMILY}/${RKBIN_DDR}
+> ${DEPLOYDIR}/${RKBIN_DDR_INSTALLED}
+> }
+> 
+> """
+> 
+> Cheers,
+> Quentin
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] [meta-rockchip][PATCH] rock5b: add
+  2023-09-22 15:06   ` Trevor Woerner
+@ 2023-09-22 15:15     ` Quentin Schulz
+  2023-09-22 16:31     ` Trevor Woerner
+  1 sibling, 0 replies; 5+ messages in thread
+From: Quentin Schulz @ 2023-09-22 15:15 UTC (permalink / raw)
+  To: Trevor Woerner; +Cc: yocto
+
+Hi Trevor,
+
+On 9/22/23 17:06, Trevor Woerner wrote:
+> On Fri 2023-09-22 @ 04:22:11 PM, Quentin Schulz wrote:
+>> Hi Trevor,
+>>
+>> Looking good :) Thanks for looking into it, will be helpful to me in the
+>> upcoming weeks/months :)
+>>
+>> On 9/22/23 04:51, Trevor Woerner via lists.yoctoproject.org wrote:
+>>> Add support for the Radxa Rock 5B
+>>> https://wiki.radxa.com/Rock5/5b
+>>>
+>>> The device-tree for this board is better in the 6.5 (and later) kernels,
+>>> therefore set the kernel to linux-yocto-dev for now (eventually this won't be
+>>> needed as linux-yocto moves forward).
+>>>
+>>> The Trusted Firmware A project (TF-A git://git.trustedfirmware.org/TF-A)
+>>> does not currently support the rk3588, but patches are in review. For
+>>> the time-being we're using the binary DDR/TPL initialization blob from
+>>> https://github.com/rockchip-linux/rkbin. Hopefully this can change if/when
+>>> TF-A gains support for the rk3588.
+>>>
+>>
+>> Because it's closed source, I cannot tell if DDR binary is based off TF-A
+>> but I would say it's likely not? It's fine like this but not entirely sure
+>> it's true.
+> 
+> Does this sound like I believe the binary blob is based on TF-A? If so I'll
+> need to reword. I'm literally trying to say the opposite. I.e. we can't use
+> TF-A yet so we're stuck using the blob... for now.
+> 
+
+I can suggest:
+"""
+The upstream Trusted Firmware A project (TF-A 
+git://git.trustedfirmware.org/TF-A) does not currently support the 
+rk3588, but patches are in review. Until it gains support, we are stuck 
+with blob provided by Rockchip in <rockchip-rkbin link>.
+Similarly, U-Boot doesn't have support for DDR initialization on rk3588 
+yet and only a blob has been provided by Rockchip in <rockchip-rkbin 
+link>, so we've no choice but use that one until proper DDR init is 
+added to U-Boot upstream.
+"""
+
+what do you think?
+
+>>> The rk3588 comes in two variants: rk3588 and rk3588s. The "s" option is a
+>>> stripped-down version of the rk3588. In the Linux kernel these two SoCs are
+>>> kept separate, with the rk3588 building on the rk3588s, so we've mimicked that
+>>> same behaviour here.
+>>>
+>>> Signed-off-by: Quentin Schulz <qschulz@theobroma-systems.com>
+>>
+>> I may have improperly wrote this in the github commit I sent you, but my
+>> professional mail address is:
+>> quentin.schulz@theobroma-systems.com
+>> :)
+> 
+> lol, I was wondering why that bounced.
+> 
+
+Mystery solved :)
+
+>>
+>>> Signed-off-by: Trevor Woerner <twoerner@gmail.com>
+>>> ---
+>>>    README                                        |  1 +
+>>>    conf/machine/include/rk3588.inc               |  8 ++
+>>>    conf/machine/include/rk3588s-base.inc         | 16 ++++
+>>>    conf/machine/include/rk3588s.inc              |  5 ++
+>>>    conf/machine/rock5b.conf                      | 12 +++
+>>>    recipes-bsp/rkbin/rockchip-rkbin_git.bb       | 37 ++++++++
+>>>    recipes-bsp/u-boot/u-boot%.bbappend           |  5 ++
+>>>    recipes-kernel/linux/linux-yocto-dev.bbappend |  3 +
+>>>    .../rockchip/remove-non-rockchip-arch-arm.cfg | 85 +++++++++++++++++++
+>>>    .../rockchip/remove-non-rockchip-arch-arm.scc |  1 +
+>>>    .../remove-non-rockchip-arch-arm64.cfg        | 66 ++++++++++++++
+>>>    .../remove-non-rockchip-arch-arm64.scc        |  1 +
+>>>    12 files changed, 240 insertions(+)
+>>>    create mode 100644 conf/machine/include/rk3588.inc
+>>>    create mode 100644 conf/machine/include/rk3588s-base.inc
+>>>    create mode 100644 conf/machine/include/rk3588s.inc
+>>>    create mode 100644 conf/machine/rock5b.conf
+>>>    create mode 100644 recipes-bsp/rkbin/rockchip-rkbin_git.bb
+>>>    create mode 100644 recipes-kernel/linux/linux-yocto-dev.bbappend
+>>>    create mode 100644 recipes-kernel/linux/linux-yocto-dev/rockchip-kmeta/bsp/rockchip/remove-non-rockchip-arch-arm.cfg
+>>>    create mode 100644 recipes-kernel/linux/linux-yocto-dev/rockchip-kmeta/bsp/rockchip/remove-non-rockchip-arch-arm.scc
+>>>    create mode 100644 recipes-kernel/linux/linux-yocto-dev/rockchip-kmeta/bsp/rockchip/remove-non-rockchip-arch-arm64.cfg
+>>>    create mode 100644 recipes-kernel/linux/linux-yocto-dev/rockchip-kmeta/bsp/rockchip/remove-non-rockchip-arch-arm64.scc
+>>>
+>>> diff --git a/README b/README
+>>> index 286dafbe1020..032d9bbb6b34 100644
+>>> --- a/README
+>>> +++ b/README
+>>> @@ -30,6 +30,7 @@ Status of supported boards:
+>>>    		vyasa-rk3288
+>>>    		firefly-rk3288
+>>>    		nanopi-r4s
+>>> +		rock5b
+>>>    	builds:
+>>>    		marsboard-rk3066
+>>>    		radxarock
+>>> diff --git a/conf/machine/include/rk3588.inc b/conf/machine/include/rk3588.inc
+>>> new file mode 100644
+>>> index 000000000000..d358565a904d
+>>> --- /dev/null
+>>> +++ b/conf/machine/include/rk3588.inc
+>>> @@ -0,0 +1,8 @@
+>>> +# the rk3588s is a "stripped-down" version of the rk3588
+>>> +# in the kernel's device-tree the rk3588 builds on top of the rk3588s
+>>> +# so anything that is valid for the rk3588s is valid for the rk3588
+>>> +MACHINEOVERRIDES =. "rk3588:rk3588s:"
+>>
+>> This is incorrect, this makes rk3588s have precedence over rk3588, which is
+>> wrong for rk3588-based devices. Why not have MACHINEOVERRIDES for rk3588s in
+>> rk3588s-base.inc instead?
+>>
+>>> +require conf/machine/include/rk3588s-base.inc
+>>> +
+>>> +SOC_FAMILY = "rk3588"
+>>> +require conf/machine/include/soc-family.inc
+>>
+>> The two lines above actually do MACHINEOVERRIDES =. "rk3588"
+>> so we don't need to repeat it.
+>>
+>>> diff --git a/conf/machine/include/rk3588s-base.inc b/conf/machine/include/rk3588s-base.inc
+>>> new file mode 100644
+>>> index 000000000000..ad74a1895ec0
+>>> --- /dev/null
+>>> +++ b/conf/machine/include/rk3588s-base.inc
+>>> @@ -0,0 +1,16 @@
+>>> +DEFAULTTUNE ?= "cortexa76-cortexa55-crypto"
+>>> +
+>>> +require conf/machine/include/arm/armv8-2a/tune-cortexa76-cortexa55.inc
+>>> +require conf/machine/include/rockchip-defaults.inc
+>>> +require conf/machine/include/rockchip-wic.inc
+>>> +
+>>> +KBUILD_DEFCONFIG ?= "defconfig"
+>>> +KERNEL_FEATURES:append:rk3588 = " bsp/rockchip/remove-non-rockchip-arch-arm64.scc"
+>>> +KERNEL_CLASSES = "kernel-fitimage"
+>>> +KERNEL_IMAGETYPE = "fitImage"
+>>> +
+>>> +PREFERRED_PROVIDER_trusted-firmware-a = "rockchip-rkbin"
+>>> +PREFERRED_PROVIDER_optee-os = "rockchip-rkbin"
+>>> +
+>>> +UBOOT_SUFFIX ?= "itb"
+>>> +UBOOT_ENTRYPOINT ?= "0x06000000"
+>>> diff --git a/conf/machine/include/rk3588s.inc b/conf/machine/include/rk3588s.inc
+>>> new file mode 100644
+>>> index 000000000000..a57be507bf5e
+>>> --- /dev/null
+>>> +++ b/conf/machine/include/rk3588s.inc
+>>> @@ -0,0 +1,5 @@
+>>> +MACHINEOVERRIDES =. "rk3588s:"
+>>
+>> Maybe we could move this directly to the -base.inc so we don't add it in
+>> rk3588.inc and rk3588s.inc?
+>>
+>> To verify the MACHINEOVERRIDES is correct, I highly suggest to run:
+>> """
+>> bitbake-getvar MACHINEOVERRIDES
+>> """
+>>
+>> this variable is read from right to left, with the highest precedence on the
+>> right side.
+>>
+>> So we should have something like:
+>> """
+>> aarch64:rk3588s:rk3588:rock5b
+>> aarch64:rk3588s:orangepi5
+>> """
+>> for example.
+> 
+> I spent quite a while checking MACHINEOVERRIDES and SOC_FAMILY with many
+> variations until I was able to get exactly what you've just said we should be
+> getting.
+> 
+> MACHINE="rock5b"
+> 	$ meta-rockchip> bitbake core-image-base -e | grep "^MACHINEOVERRIDES="
+> 	MACHINEOVERRIDES="rk3588:aarch64:armv8-2a:cortexa76-cortexa55:rk3588:rk3588s:rock5b"
+> 	$ meta-rockchip> bitbake core-image-base -e | grep "^SOC_FAMILY="
+> 	SOC_FAMILY="rk3588"
+> 
+> MACHINE="orangepi5"
+> 	$ meta-rockchip> bitbake core-image-base -e | grep "^MACHINEOVERRIDES="
+> 	MACHINEOVERRIDES="rk3588s:aarch64:armv8-2a:cortexa76-cortexa55:rk3588s:orangepi5"
+> 	$ meta-rockchip> bitbake core-image-base -e | grep "^SOC_FAMILY="
+> 	SOC_FAMILY="rk3588s"
+
+We're still not there yet
+
+
+rk3588:aarch64:armv8-2a:cortexa76-cortexa55:rk3588:rk3588s:rock5b"
+
+is incorrect
+it should be
+
+aarch64:armv8-2a:cortexa76-cortexa55:rk3588s:rk3588:rock5b
+
+similarly for orangepi5 we should have
+
+aarch64:armv8-2a:cortexa76-cortexa55:rk3588s:orangepi5
+
+Could you run with bitbake-getvar so we have the whole history of the 
+variable so we know when things are added and in which file? I remember 
+I had to patch a qemu include in poky because it was incorrect maybe 
+somehow some other layer have it messed up too (or maybe only 
+meta-rockchip for now :) ).
+
+Cheers,
+QUentin
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] [meta-rockchip][PATCH] rock5b: add
+  2023-09-22 15:06   ` Trevor Woerner
+  2023-09-22 15:15     ` Quentin Schulz
+@ 2023-09-22 16:31     ` Trevor Woerner
+  1 sibling, 0 replies; 5+ messages in thread
+From: Trevor Woerner @ 2023-09-22 16:31 UTC (permalink / raw)
+  To: Quentin Schulz; +Cc: yocto
+
+On Fri 2023-09-22 @ 11:06:05 AM, Trevor Woerner wrote:
+> On Fri 2023-09-22 @ 04:22:11 PM, Quentin Schulz wrote:
+> > So we should have something like:
+> > """
+> > aarch64:rk3588s:rk3588:rock5b
+> > aarch64:rk3588s:orangepi5
+> > """
+> > for example.
+> 
+> I spent quite a while checking MACHINEOVERRIDES and SOC_FAMILY with many
+> variations until I was able to get exactly what you've just said we should be
+> getting.
+> 
+> MACHINE="rock5b"
+> 	$ meta-rockchip> bitbake core-image-base -e | grep "^MACHINEOVERRIDES="
+> 	MACHINEOVERRIDES="rk3588:aarch64:armv8-2a:cortexa76-cortexa55:rk3588:rk3588s:rock5b"
+> 	$ meta-rockchip> bitbake core-image-base -e | grep "^SOC_FAMILY="
+> 	SOC_FAMILY="rk3588"
+> 
+> MACHINE="orangepi5"
+> 	$ meta-rockchip> bitbake core-image-base -e | grep "^MACHINEOVERRIDES="
+> 	MACHINEOVERRIDES="rk3588s:aarch64:armv8-2a:cortexa76-cortexa55:rk3588s:orangepi5"
+> 	$ meta-rockchip> bitbake core-image-base -e | grep "^SOC_FAMILY="
+> 	SOC_FAMILY="rk3588s"
+
+Ah, ordering not just content.
+Okay, I'll spin a v2.
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+end of thread, other threads:[~2023-09-22 16:31 UTC | newest]
+
+Thread overview: 5+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-09-22  2:51 [meta-rockchip][PATCH] rock5b: add Trevor Woerner
+2023-09-22 14:22 ` [yocto] " Quentin Schulz
+2023-09-22 15:06   ` Trevor Woerner
+2023-09-22 15:15     ` Quentin Schulz
+2023-09-22 16:31     ` Trevor Woerner
+

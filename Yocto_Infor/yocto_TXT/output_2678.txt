@@ -1,0 +1,175 @@
+* dunfell: pkgconfig-native build fails in existing Yocto BSP
+@ 2021-10-25  6:50 Matthias Klein
+  2021-10-25  8:27 ` Ahmed Hossam
+  2021-10-25 10:21 ` [yocto] " Richard Purdie
+  0 siblings, 2 replies; 4+ messages in thread
+From: Matthias Klein @ 2021-10-25  6:50 UTC (permalink / raw)
+  To: yocto
+
+Hello,
+
+our dunfell based yocto no longer builds in the pkgconfig-native section. I tried it in an Ubuntu 18.04 and Debian 10 Docker container.
+The build always aborts as follows:
+
+checking thread related cflags... -D_REENTRANT
+| checking for pthread_create/pthread_join... no
+| checking for pthread_create/pthread_join in -lpthread... no
+| checking for pthread_create/pthread_join in -lpthread32... no
+| checking for pthread_create/pthread_join in -lpthreads... no
+| checking for pthread_create/pthread_join in -lthread... no
+| configure: error: I can't find the libraries for the thread implementation
+|                  posix. Please choose another thread implementation or
+|                   provide information on your thread implementation.
+| configure: error: ../../git/glib/configure failed for glib
+| NOTE: The following config.log files may provide further information.
+| NOTE: /work/yocto-optimeas/build/tmp/work/x86_64-linux/pkgconfig-native/0.29.2+gitAUTOINC+edf8e6f0ea-r0/build/glib/config.log /work/yocto-optimeas/build/tmp/work/x86_64-linux/pkgconfig-native/0.29.2+gitAUTOINC+edf8e6f0ea-r0/build/config.log
+| ERROR: configure failed
+| WARNING: /work/yocto-optimeas/build/tmp/work/x86_64-linux/pkgconfig-native/0.29.2+gitAUTOINC+edf8e6f0ea-r0/temp/run.do_configure.243679:1 exit 1 from 'exit 1'
+| ERROR: Execution of '/work/yocto-optimeas/build/tmp/work/x86_64-linux/pkgconfig-native/0.29.2+gitAUTOINC+edf8e6f0ea-r0/temp/run.do_configure.243679' failed with exit code 1
+ERROR: Task (virtual:native:/work/yocto-optimeas/yocto/poky/meta/recipes-devtools/pkgconfig/pkgconfig_git.bb:do_configure) failed with exit code '1'
+ERROR: ninja-native-1.10.0-r0 do_compile: Execution of '/work/yocto-optimeas/build/tmp/work/x86_64-linux/ninja-native/1.10.0-r0/temp/run.do_compile.319277' failed with exit code 1
+ERROR: Logfile of failure stored in: /work/yocto-optimeas/build/tmp/work/x86_64-linux/ninja-native/1.10.0-r0/temp/log.do_compile.319277
+Log data follows:
+| DEBUG: Executing shell function do_compile
+| ninja: fatal: posix_spawn: Operation not permitted
+| bootstrapping ninja...
+| wrote build.ninja.
+| bootstrap complete.  rebuilding...
+| Traceback (most recent call last):
+|   File "./configure.py", line 709, in <module>
+|     subprocess.check_call(rebuild_args)
+|   File "/usr/lib/python3.7/subprocess.py", line 347, in check_call
+|     raise CalledProcessError(retcode, cmd)
+| subprocess.CalledProcessError: Command '['./ninja']' returned non-zero exit status 1.
+| WARNING: /work/yocto-optimeas/build/tmp/work/x86_64-linux/ninja-native/1.10.0-r0/temp/run.do_compile.319277:1 exit 1 from 'python3 ./configure.py --bootstrap'
+| ERROR: Execution of '/work/yocto-optimeas/build/tmp/work/x86_64-linux/ninja-native/1.10.0-r0/temp/run.do_compile.319277' failed with exit code 1
+ERROR: Task (virtual:native:/work/yocto-optimeas/yocto/poky/meta/recipes-devtools/ninja/ninja_1.10.0.bb:do_compile) failed with exit code '1'
+
+
+I also tried using the commits from dunfell-next in the poky repo as a test. But then the build doesn't even start and I get the following error:
+
+ERROR: ParseError at /work/yocto-optimeas/yocto/meta-openembedded/meta-oe/recipes-extended/libimobiledevice/libplist_2.1.0.bb:9: Could not inherit file classes/python3targetconfig.bbclass                                                                               | ETA:  --:--:--
+
+
+Does anyone have any idea what is causing this? does anyone have the same behavior?
+
+Many greetings,
+Matthias
+
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: dunfell: pkgconfig-native build fails in existing Yocto BSP
+  2021-10-25  6:50 dunfell: pkgconfig-native build fails in existing Yocto BSP Matthias Klein
+@ 2021-10-25  8:27 ` Ahmed Hossam
+  2021-10-25 10:21 ` [yocto] " Richard Purdie
+  1 sibling, 0 replies; 4+ messages in thread
+From: Ahmed Hossam @ 2021-10-25  8:27 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 243 bytes --]
+
+Hello,
+
+We also have the same issue with similar in-docker builds, a workaround for the issue is mentioned here: https://bugzilla.yoctoproject.org/show_bug.cgi?id=14519 until the fix is backported to dunfell.
+
+Best Regards,
+Ahmed Hossam
+
+[-- Attachment #2: Type: text/html, Size: 374 bytes --]
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] dunfell: pkgconfig-native build fails in existing Yocto BSP
+  2021-10-25  6:50 dunfell: pkgconfig-native build fails in existing Yocto BSP Matthias Klein
+  2021-10-25  8:27 ` Ahmed Hossam
+@ 2021-10-25 10:21 ` Richard Purdie
+  2021-10-25 14:21   ` AW: " Matthias Klein
+  1 sibling, 1 reply; 4+ messages in thread
+From: Richard Purdie @ 2021-10-25 10:21 UTC (permalink / raw)
+  To: Matthias Klein, yocto
+
+On Mon, 2021-10-25 at 06:50 +0000, Matthias Klein wrote:
+> Hello,
+> 
+> our dunfell based yocto no longer builds in the pkgconfig-native section. I tried it in an Ubuntu 18.04 and Debian 10 Docker container.
+> The build always aborts as follows:
+> 
+> checking thread related cflags... -D_REENTRANT
+> > checking for pthread_create/pthread_join... no
+> > checking for pthread_create/pthread_join in -lpthread... no
+> > checking for pthread_create/pthread_join in -lpthread32... no
+> > checking for pthread_create/pthread_join in -lpthreads... no
+> > checking for pthread_create/pthread_join in -lthread... no
+> > configure: error: I can't find the libraries for the thread implementation
+> >                  posix. Please choose another thread implementation or
+> >                   provide information on your thread implementation.
+> > configure: error: ../../git/glib/configure failed for glib
+> > NOTE: The following config.log files may provide further information.
+> > NOTE: /work/yocto-optimeas/build/tmp/work/x86_64-linux/pkgconfig-native/0.29.2+gitAUTOINC+edf8e6f0ea-r0/build/glib/config.log /work/yocto-optimeas/build/tmp/work/x86_64-linux/pkgconfig-native/0.29.2+gitAUTOINC+edf8e6f0ea-r0/build/config.log
+> > ERROR: configure failed
+> > WARNING: /work/yocto-optimeas/build/tmp/work/x86_64-linux/pkgconfig-native/0.29.2+gitAUTOINC+edf8e6f0ea-r0/temp/run.do_configure.243679:1 exit 1 from 'exit 1'
+> > ERROR: Execution of '/work/yocto-optimeas/build/tmp/work/x86_64-linux/pkgconfig-native/0.29.2+gitAUTOINC+edf8e6f0ea-r0/temp/run.do_configure.243679' failed with exit code 1
+> ERROR: Task (virtual:native:/work/yocto-optimeas/yocto/poky/meta/recipes-devtools/pkgconfig/pkgconfig_git.bb:do_configure) failed with exit code '1'
+> ERROR: ninja-native-1.10.0-r0 do_compile: Execution of '/work/yocto-optimeas/build/tmp/work/x86_64-linux/ninja-native/1.10.0-r0/temp/run.do_compile.319277' failed with exit code 1
+> ERROR: Logfile of failure stored in: /work/yocto-optimeas/build/tmp/work/x86_64-linux/ninja-native/1.10.0-r0/temp/log.do_compile.319277
+> Log data follows:
+> > DEBUG: Executing shell function do_compile
+> > ninja: fatal: posix_spawn: Operation not permitted
+> > bootstrapping ninja...
+> > wrote build.ninja.
+> > bootstrap complete.  rebuilding...
+> > Traceback (most recent call last):
+> >   File "./configure.py", line 709, in <module>
+> >     subprocess.check_call(rebuild_args)
+> >   File "/usr/lib/python3.7/subprocess.py", line 347, in check_call
+> >     raise CalledProcessError(retcode, cmd)
+> > subprocess.CalledProcessError: Command '['./ninja']' returned non-zero exit status 1.
+> > WARNING: /work/yocto-optimeas/build/tmp/work/x86_64-linux/ninja-native/1.10.0-r0/temp/run.do_compile.319277:1 exit 1 from 'python3 ./configure.py --bootstrap'
+> > ERROR: Execution of '/work/yocto-optimeas/build/tmp/work/x86_64-linux/ninja-native/1.10.0-r0/temp/run.do_compile.319277' failed with exit code 1
+> ERROR: Task (virtual:native:/work/yocto-optimeas/yocto/poky/meta/recipes-devtools/ninja/ninja_1.10.0.bb:do_compile) failed with exit code '1'
+> 
+> 
+> I also tried using the commits from dunfell-next in the poky repo as a test. But then the build doesn't even start and I get the following error:
+> 
+> ERROR: ParseError at /work/yocto-optimeas/yocto/meta-openembedded/meta-oe/recipes-extended/libimobiledevice/libplist_2.1.0.bb:9: Could not inherit file classes/python3targetconfig.bbclass                                                                               | ETA:  --:--:--
+> 
+> 
+> Does anyone have any idea what is causing this? does anyone have the same behavior?
+
+I just backported a uninative upgrade to dunfell which should address this
+issue.
+
+Cheers,
+
+Richard
+
+
+
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* AW: [yocto] dunfell: pkgconfig-native build fails in existing Yocto BSP
+  2021-10-25 10:21 ` [yocto] " Richard Purdie
+@ 2021-10-25 14:21   ` Matthias Klein
+  0 siblings, 0 replies; 4+ messages in thread
+From: Matthias Klein @ 2021-10-25 14:21 UTC (permalink / raw)
+  To: Richard Purdie, yocto
+
+Hello Richard,
+
+Thanks for the quick help!
+
+Best regards,
+Matthias
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+end of thread, other threads:[~2021-10-25 14:21 UTC | newest]
+
+Thread overview: 4+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-10-25  6:50 dunfell: pkgconfig-native build fails in existing Yocto BSP Matthias Klein
+2021-10-25  8:27 ` Ahmed Hossam
+2021-10-25 10:21 ` [yocto] " Richard Purdie
+2021-10-25 14:21   ` AW: " Matthias Klein
+

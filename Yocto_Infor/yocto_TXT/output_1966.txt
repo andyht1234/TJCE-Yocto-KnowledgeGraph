@@ -1,0 +1,1501 @@
+* [Question] How to handle GPLv3 packages?
+@ 2022-04-06  8:59 Måns
+  2022-04-06  9:03 ` [yocto] " Alexander Kanavin
+                   ` (2 more replies)
+  0 siblings, 3 replies; 19+ messages in thread
+From: Måns @ 2022-04-06  8:59 UTC (permalink / raw)
+  To: yocto
+
+Hi,
+
+I cannot use GPLv3 packages in our image build. I am no legal expert
+but from what I can understand most companies will not be able to
+comply with this license without allowing the customer to compile and
+deploy a new version of any GPLv3 package to the target. I know it is
+possible to comply with this but we are using secure boot and have not
+the time and probably no interest in setting up a solution for
+allowing customers to be able to deploy GPLv3 packages on the target.
+We are trying to make use of INCOMPATIBLE_LICENSE but that results in
+several issues. We have made sure that we don't include GPLv3 in the
+image build using a manual process but would like to use
+INCOMPATIBLE_LICENSE to alert any developer about the issue. It seems
+like INCOMPATIBLE_LICENSE is a bit harsh since it will catch any
+packages even if it is only part of the SDK and also for native
+packages that are not part of the image build.
+
+I cannot be the only one with this problem so how are other companies
+solving this issue? Are they just not using the INCOMPATIBLE_LICENSE?
+Are you setting up a parallel process for checking for any
+incompatible licenses issues?
+
+A more specific issue is that there are so many packages with bash
+dependencies which are pulling in bash which is GPLv3 so how have you
+solved that? Currently we have done some pretty uggly hacks which I am
+not that happy with but we needed to keep it out of the image.
+
+Thanks
+
+
+^ permalink raw reply	[flat|nested] 19+ messages in thread
+* Re: [yocto] [Question] How to handle GPLv3 packages?
+  2022-04-06  8:59 [Question] How to handle GPLv3 packages? Måns
+@ 2022-04-06  9:03 ` Alexander Kanavin
+  2022-04-08  6:06   ` Måns
+  2022-04-06  9:10 ` Ross Burton
+  2022-04-06  9:23 ` Mikko.Rapeli
+  2 siblings, 1 reply; 19+ messages in thread
+From: Alexander Kanavin @ 2022-04-06  9:03 UTC (permalink / raw)
+  To: Mans Zigher; +Cc: Yocto-mailing-list
+
+I'd suggest you start by setting INCOMPATIBLE_LICENSE per image, e.g.
+enable gpl3 ban only in the images that ship to the customers and not
+across the entire build. Then carefully look at what pulls in bash
+into those images and why, and reconfigure those pieces to not do that
+(e.g. by reconfiguring the PACKAGECONFIGs), or rewrite the scripts in
+posix shell.
+
+Alex
+
+On Wed, 6 Apr 2022 at 10:59, Mans Zigher <mans.zigher@gmail.com> wrote:
+>
+> Hi,
+>
+> I cannot use GPLv3 packages in our image build. I am no legal expert
+> but from what I can understand most companies will not be able to
+> comply with this license without allowing the customer to compile and
+> deploy a new version of any GPLv3 package to the target. I know it is
+> possible to comply with this but we are using secure boot and have not
+> the time and probably no interest in setting up a solution for
+> allowing customers to be able to deploy GPLv3 packages on the target.
+> We are trying to make use of INCOMPATIBLE_LICENSE but that results in
+> several issues. We have made sure that we don't include GPLv3 in the
+> image build using a manual process but would like to use
+> INCOMPATIBLE_LICENSE to alert any developer about the issue. It seems
+> like INCOMPATIBLE_LICENSE is a bit harsh since it will catch any
+> packages even if it is only part of the SDK and also for native
+> packages that are not part of the image build.
+>
+> I cannot be the only one with this problem so how are other companies
+> solving this issue? Are they just not using the INCOMPATIBLE_LICENSE?
+> Are you setting up a parallel process for checking for any
+> incompatible licenses issues?
+>
+> A more specific issue is that there are so many packages with bash
+> dependencies which are pulling in bash which is GPLv3 so how have you
+> solved that? Currently we have done some pretty uggly hacks which I am
+> not that happy with but we needed to keep it out of the image.
+>
+> Thanks
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#56672): https://lists.yoctoproject.org/g/yocto/message/56672
+> Mute This Topic: https://lists.yoctoproject.org/mt/90285507/1686489
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 19+ messages in thread
+* Re: [yocto] [Question] How to handle GPLv3 packages?
+  2022-04-06  8:59 [Question] How to handle GPLv3 packages? Måns
+  2022-04-06  9:03 ` [yocto] " Alexander Kanavin
+@ 2022-04-06  9:10 ` Ross Burton
+  2022-04-08  8:18   ` Måns
+  2022-04-06  9:23 ` Mikko.Rapeli
+  2 siblings, 1 reply; 19+ messages in thread
+From: Ross Burton @ 2022-04-06  9:10 UTC (permalink / raw)
+  To: Mans Zigher; +Cc: yocto
+
+On Wed, 6 Apr 2022 at 09:59, Mans Zigher <mans.zigher@gmail.com> wrote:
+> A more specific issue is that there are so many packages with bash
+> dependencies which are pulling in bash which is GPLv3 so how have you
+> solved that? Currently we have done some pretty uggly hacks which I am
+> not that happy with but we needed to keep it out of the image.
+
+As you're not naming recipes it is hard to offer concrete advice, but
+I will note that a large percentage of the bash dependencies in
+oe-core are specific to the ptest packages. If you don't need those
+then you can turn off the ptest DISTRO_FEATURE.
+
+Ross
+
+
+^ permalink raw reply	[flat|nested] 19+ messages in thread
+* Re: [yocto] [Question] How to handle GPLv3 packages?
+  2022-04-06  8:59 [Question] How to handle GPLv3 packages? Måns
+  2022-04-06  9:03 ` [yocto] " Alexander Kanavin
+  2022-04-06  9:10 ` Ross Burton
+@ 2022-04-06  9:23 ` Mikko.Rapeli
+  2022-04-06  9:31   ` Måns
+  2 siblings, 1 reply; 19+ messages in thread
+From: Mikko.Rapeli @ 2022-04-06  9:23 UTC (permalink / raw)
+  To: mans.zigher; +Cc: yocto
+
+Hi
+
+I set INCOMPATIBLE_LICENSE_append = " GPLv3 GPLv3+ LGPLv3 LGPLv3+"
+but then allow compiling several recipes with those licenses as long
+as they don't end up on images and in the product. For example:
+
+...
+WHITELIST_GPL-3.0+ += "cairo"
+PACKAGE_EXCLUDE += "cairo-src cairo-dbg cairo-perf-utils cairo-staticdev cairo-locale"
+
+WHITELIST_GPL-3.0 += "binutils"
+PACKAGE_EXCLUDE += "binutils-dbg binutils-staticdev binutils-dev binutils-doc binutils-locale libbfd binutils"
+
+WHITELIST_GPL-3.0 += "gdb"
+PACKAGE_EXCLUDE += "gdb-sdktests-dbg gdb-sdktests gdbserver gdb-dbg gdb-staticdev gdb-dev gdb-doc gdb-locale gdb"
+...
+
+I do this in the distro config.
+
+Results works but you may need to revisit several recipes and detect where exactly
+the GPLv3 license is being used.
+
+bash dependency is annoying but products can be made without. Same for GNU readline
+support.
+
+These are much work and better then using meta-gplv2 with its unmaintained SW
+versions.
+
+Would be nice to collaborate in yocto upstream on a build config which disables most
+GPLv3 packages from rootfs but keeps the development tools etc working in
+the SDK.
+
+Cheers,
+
+-Mikko
+
+^ permalink raw reply	[flat|nested] 19+ messages in thread
+* Re: [yocto] [Question] How to handle GPLv3 packages?
+  2022-04-06  9:23 ` Mikko.Rapeli
+@ 2022-04-06  9:31   ` Måns
+  0 siblings, 0 replies; 19+ messages in thread
+From: Måns @ 2022-04-06  9:31 UTC (permalink / raw)
+  To: Mikko Rapeli; +Cc: yocto
+
+Thanks all for your quick response. You have given me something to
+think of so I will look into it to see if some of my issues are
+related to the way we have set things up. I will post my findings once
+I have gone through your comments to see if we could use it in our
+build.
+
+Thanks
+
+Den ons 6 apr. 2022 kl 11:23 skrev <Mikko.Rapeli@bmw.de>:
+>
+> Hi
+>
+> I set INCOMPATIBLE_LICENSE_append = " GPLv3 GPLv3+ LGPLv3 LGPLv3+"
+> but then allow compiling several recipes with those licenses as long
+> as they don't end up on images and in the product. For example:
+>
+> ...
+> WHITELIST_GPL-3.0+ += "cairo"
+> PACKAGE_EXCLUDE += "cairo-src cairo-dbg cairo-perf-utils cairo-staticdev cairo-locale"
+>
+> WHITELIST_GPL-3.0 += "binutils"
+> PACKAGE_EXCLUDE += "binutils-dbg binutils-staticdev binutils-dev binutils-doc binutils-locale libbfd binutils"
+>
+> WHITELIST_GPL-3.0 += "gdb"
+> PACKAGE_EXCLUDE += "gdb-sdktests-dbg gdb-sdktests gdbserver gdb-dbg gdb-staticdev gdb-dev gdb-doc gdb-locale gdb"
+> ...
+>
+> I do this in the distro config.
+>
+> Results works but you may need to revisit several recipes and detect where exactly
+> the GPLv3 license is being used.
+>
+> bash dependency is annoying but products can be made without. Same for GNU readline
+> support.
+>
+> These are much work and better then using meta-gplv2 with its unmaintained SW
+> versions.
+>
+> Would be nice to collaborate in yocto upstream on a build config which disables most
+> GPLv3 packages from rootfs but keeps the development tools etc working in
+> the SDK.
+>
+> Cheers,
+>
+> -Mikko
+
+
+^ permalink raw reply	[flat|nested] 19+ messages in thread
+* Re: [yocto] [Question] How to handle GPLv3 packages?
+  2022-04-06  9:03 ` [yocto] " Alexander Kanavin
+@ 2022-04-08  6:06   ` Måns
+  2022-04-08  8:15     ` Alexander Kanavin
+  0 siblings, 1 reply; 19+ messages in thread
+From: Måns @ 2022-04-08  6:06 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: Yocto-mailing-list
+
+Hi Alex,
+
+Could you maybe clarify what you mean with "setting
+INCOMPATIBLE_LICENSE per image"? Do you mean that you have one
+specific image that is used when you build an image for release to the
+customer and then one image for development?
+
+Thanks
+
+Den ons 6 apr. 2022 kl 11:04 skrev Alexander Kanavin <alex.kanavin@gmail.com>:
+>
+> I'd suggest you start by setting INCOMPATIBLE_LICENSE per image, e.g.
+> enable gpl3 ban only in the images that ship to the customers and not
+> across the entire build. Then carefully look at what pulls in bash
+> into those images and why, and reconfigure those pieces to not do that
+> (e.g. by reconfiguring the PACKAGECONFIGs), or rewrite the scripts in
+> posix shell.
+>
+> Alex
+>
+> On Wed, 6 Apr 2022 at 10:59, Mans Zigher <mans.zigher@gmail.com> wrote:
+> >
+> > Hi,
+> >
+> > I cannot use GPLv3 packages in our image build. I am no legal expert
+> > but from what I can understand most companies will not be able to
+> > comply with this license without allowing the customer to compile and
+> > deploy a new version of any GPLv3 package to the target. I know it is
+> > possible to comply with this but we are using secure boot and have not
+> > the time and probably no interest in setting up a solution for
+> > allowing customers to be able to deploy GPLv3 packages on the target.
+> > We are trying to make use of INCOMPATIBLE_LICENSE but that results in
+> > several issues. We have made sure that we don't include GPLv3 in the
+> > image build using a manual process but would like to use
+> > INCOMPATIBLE_LICENSE to alert any developer about the issue. It seems
+> > like INCOMPATIBLE_LICENSE is a bit harsh since it will catch any
+> > packages even if it is only part of the SDK and also for native
+> > packages that are not part of the image build.
+> >
+> > I cannot be the only one with this problem so how are other companies
+> > solving this issue? Are they just not using the INCOMPATIBLE_LICENSE?
+> > Are you setting up a parallel process for checking for any
+> > incompatible licenses issues?
+> >
+> > A more specific issue is that there are so many packages with bash
+> > dependencies which are pulling in bash which is GPLv3 so how have you
+> > solved that? Currently we have done some pretty uggly hacks which I am
+> > not that happy with but we needed to keep it out of the image.
+> >
+> > Thanks
+> >
+> > -=-=-=-=-=-=-=-=-=-=-=-
+> > Links: You receive all messages sent to this group.
+> > View/Reply Online (#56672): https://lists.yoctoproject.org/g/yocto/message/56672
+> > Mute This Topic: https://lists.yoctoproject.org/mt/90285507/1686489
+> > Group Owner: yocto+owner@lists.yoctoproject.org
+> > Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com]
+> > -=-=-=-=-=-=-=-=-=-=-=-
+> >
+
+
+^ permalink raw reply	[flat|nested] 19+ messages in thread
+* Re: [yocto] [Question] How to handle GPLv3 packages?
+  2022-04-08  6:06   ` Måns
+@ 2022-04-08  8:15     ` Alexander Kanavin
+  2022-04-08 16:56       ` Måns
+  0 siblings, 1 reply; 19+ messages in thread
+From: Alexander Kanavin @ 2022-04-08  8:15 UTC (permalink / raw)
+  To: Måns; +Cc: Yocto-mailing-list
+
+Hello Mans,
+
+please refer to the tests we have for the feature:
+https://git.yoctoproject.org/poky/tree/meta/lib/oeqa/selftest/cases/incompatible_lic.py?h=master-next#n95
+(line 95 and below)
+
+The key bit is:
+INCOMPATIBLE_LICENSE:pn-core-image-minimal = "GPL-3.0* LGPL-3.0*"
+e.g. apply the restriction only to core-image-minimal.
+
+Alex
+
+On Fri, 8 Apr 2022 at 08:06, Måns <mans.zigher@gmail.com> wrote:
+>
+> Hi Alex,
+>
+> Could you maybe clarify what you mean with "setting
+> INCOMPATIBLE_LICENSE per image"? Do you mean that you have one
+> specific image that is used when you build an image for release to the
+> customer and then one image for development?
+>
+> Thanks
+>
+> Den ons 6 apr. 2022 kl 11:04 skrev Alexander Kanavin <alex.kanavin@gmail.com>:
+> >
+> > I'd suggest you start by setting INCOMPATIBLE_LICENSE per image, e.g.
+> > enable gpl3 ban only in the images that ship to the customers and not
+> > across the entire build. Then carefully look at what pulls in bash
+> > into those images and why, and reconfigure those pieces to not do that
+> > (e.g. by reconfiguring the PACKAGECONFIGs), or rewrite the scripts in
+> > posix shell.
+> >
+> > Alex
+> >
+> > On Wed, 6 Apr 2022 at 10:59, Mans Zigher <mans.zigher@gmail.com> wrote:
+> > >
+> > > Hi,
+> > >
+> > > I cannot use GPLv3 packages in our image build. I am no legal expert
+> > > but from what I can understand most companies will not be able to
+> > > comply with this license without allowing the customer to compile and
+> > > deploy a new version of any GPLv3 package to the target. I know it is
+> > > possible to comply with this but we are using secure boot and have not
+> > > the time and probably no interest in setting up a solution for
+> > > allowing customers to be able to deploy GPLv3 packages on the target.
+> > > We are trying to make use of INCOMPATIBLE_LICENSE but that results in
+> > > several issues. We have made sure that we don't include GPLv3 in the
+> > > image build using a manual process but would like to use
+> > > INCOMPATIBLE_LICENSE to alert any developer about the issue. It seems
+> > > like INCOMPATIBLE_LICENSE is a bit harsh since it will catch any
+> > > packages even if it is only part of the SDK and also for native
+> > > packages that are not part of the image build.
+> > >
+> > > I cannot be the only one with this problem so how are other companies
+> > > solving this issue? Are they just not using the INCOMPATIBLE_LICENSE?
+> > > Are you setting up a parallel process for checking for any
+> > > incompatible licenses issues?
+> > >
+> > > A more specific issue is that there are so many packages with bash
+> > > dependencies which are pulling in bash which is GPLv3 so how have you
+> > > solved that? Currently we have done some pretty uggly hacks which I am
+> > > not that happy with but we needed to keep it out of the image.
+> > >
+> > > Thanks
+> > >
+> > > -=-=-=-=-=-=-=-=-=-=-=-
+> > > Links: You receive all messages sent to this group.
+> > > View/Reply Online (#56672): https://lists.yoctoproject.org/g/yocto/message/56672
+> > > Mute This Topic: https://lists.yoctoproject.org/mt/90285507/1686489
+> > > Group Owner: yocto+owner@lists.yoctoproject.org
+> > > Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com]
+> > > -=-=-=-=-=-=-=-=-=-=-=-
+> > >
+
+
+^ permalink raw reply	[flat|nested] 19+ messages in thread
+* Re: [yocto] [Question] How to handle GPLv3 packages?
+  2022-04-06  9:10 ` Ross Burton
+@ 2022-04-08  8:18   ` Måns
+  2022-04-08  8:22     ` Alexander Kanavin
+  2022-04-08  8:32     ` Mikko.Rapeli
+  0 siblings, 2 replies; 19+ messages in thread
+From: Måns @ 2022-04-08  8:18 UTC (permalink / raw)
+  To: Ross Burton; +Cc: yocto
+
+Hi Ross,
+
+We don't have a ptest set in DISTRO_FEATURE so if that is the only way
+to pull in ptest I would say that is the reason for us at least on why
+there are so many bash dependencies.
+One recipe that I am looking into right now is util-linux which does
+have package util-linux-bash-completion but even the package
+util-linux seems to depend on bash and bash-completion when
+checking the dependencies by running bitbake -g util-linux and bitbake
+-g <image>. It is not clear why the package util-linux depends on bash
+and bash-completion. I have other recipes where it is also
+not obvious to me why they have a dependency to bash and
+bash-completion. One such recipe is a recipe that we have created and
+the only content in the package produced is a script and the script
+only has #!/bin/sh so not sure where this bash and bash-completion
+comes from it is not something we have added so maybe we have some
+underlying issue here that results in so many dependencies to
+bash and bash-completion. We have not set up this system ourselves,
+instead one of the HW suppliers starting with a Q ending with COMM
+which I must say I am not that impressed with has supplied the
+base that we are building on.
+
+Thanks for your help anyway.
+
+
+Den ons 6 apr. 2022 kl 11:11 skrev Ross Burton <ross@burtonini.com>:
+>
+> On Wed, 6 Apr 2022 at 09:59, Mans Zigher <mans.zigher@gmail.com> wrote:
+> > A more specific issue is that there are so many packages with bash
+> > dependencies which are pulling in bash which is GPLv3 so how have you
+> > solved that? Currently we have done some pretty uggly hacks which I am
+> > not that happy with but we needed to keep it out of the image.
+>
+> As you're not naming recipes it is hard to offer concrete advice, but
+> I will note that a large percentage of the bash dependencies in
+> oe-core are specific to the ptest packages. If you don't need those
+> then you can turn off the ptest DISTRO_FEATURE.
+>
+> Ross
+
+
+^ permalink raw reply	[flat|nested] 19+ messages in thread
+* Re: [yocto] [Question] How to handle GPLv3 packages?
+  2022-04-08  8:18   ` Måns
+@ 2022-04-08  8:22     ` Alexander Kanavin
+  2022-04-08  8:32     ` Mikko.Rapeli
+  1 sibling, 0 replies; 19+ messages in thread
+From: Alexander Kanavin @ 2022-04-08  8:22 UTC (permalink / raw)
+  To: Mans Zigher; +Cc: Ross Burton, Yocto-mailing-list
+
+Qualcomm is notorious for the poor quality of their layers. Just tell
+the management that they created this situation, and they should be
+held responsible for delaying whatever product you have to ship.
+
+Alex
+
+On Fri, 8 Apr 2022 at 10:18, Mans Zigher <mans.zigher@gmail.com> wrote:
+>
+> Hi Ross,
+>
+> We don't have a ptest set in DISTRO_FEATURE so if that is the only way
+> to pull in ptest I would say that is the reason for us at least on why
+> there are so many bash dependencies.
+> One recipe that I am looking into right now is util-linux which does
+> have package util-linux-bash-completion but even the package
+> util-linux seems to depend on bash and bash-completion when
+> checking the dependencies by running bitbake -g util-linux and bitbake
+> -g <image>. It is not clear why the package util-linux depends on bash
+> and bash-completion. I have other recipes where it is also
+> not obvious to me why they have a dependency to bash and
+> bash-completion. One such recipe is a recipe that we have created and
+> the only content in the package produced is a script and the script
+> only has #!/bin/sh so not sure where this bash and bash-completion
+> comes from it is not something we have added so maybe we have some
+> underlying issue here that results in so many dependencies to
+> bash and bash-completion. We have not set up this system ourselves,
+> instead one of the HW suppliers starting with a Q ending with COMM
+> which I must say I am not that impressed with has supplied the
+> base that we are building on.
+>
+> Thanks for your help anyway.
+>
+>
+> Den ons 6 apr. 2022 kl 11:11 skrev Ross Burton <ross@burtonini.com>:
+> >
+> > On Wed, 6 Apr 2022 at 09:59, Mans Zigher <mans.zigher@gmail.com> wrote:
+> > > A more specific issue is that there are so many packages with bash
+> > > dependencies which are pulling in bash which is GPLv3 so how have you
+> > > solved that? Currently we have done some pretty uggly hacks which I am
+> > > not that happy with but we needed to keep it out of the image.
+> >
+> > As you're not naming recipes it is hard to offer concrete advice, but
+> > I will note that a large percentage of the bash dependencies in
+> > oe-core are specific to the ptest packages. If you don't need those
+> > then you can turn off the ptest DISTRO_FEATURE.
+> >
+> > Ross
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#56690): https://lists.yoctoproject.org/g/yocto/message/56690
+> Mute This Topic: https://lists.yoctoproject.org/mt/90285507/1686489
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 19+ messages in thread
+* Re: [yocto] [Question] How to handle GPLv3 packages?
+  2022-04-08  8:18   ` Måns
+  2022-04-08  8:22     ` Alexander Kanavin
+@ 2022-04-08  8:32     ` Mikko.Rapeli
+  2022-04-08  9:22       ` Alexander Kanavin
+  1 sibling, 1 reply; 19+ messages in thread
+From: Mikko.Rapeli @ 2022-04-08  8:32 UTC (permalink / raw)
+  To: mans.zigher; +Cc: ross, yocto
+
+Hi,
+
+On Fri, Apr 08, 2022 at 10:18:22AM +0200, Mans Zigher wrote:
+> Hi Ross,
+> 
+> We don't have a ptest set in DISTRO_FEATURE so if that is the only way
+> to pull in ptest I would say that is the reason for us at least on why
+> there are so many bash dependencies.
+> One recipe that I am looking into right now is util-linux which does
+> have package util-linux-bash-completion but even the package
+> util-linux seems to depend on bash and bash-completion when
+
+util-linux is a meta package. Install the needed util-linux utilities separately,
+e.g. util-linux-mount, util-linux-umount. Also ptest you can build as distro
+feature if you don't install ptest packages into images. I do that.
+And then during testing, I install the ptest packages and dependencies to
+the plain non-GPLv3 target to execute the tests.
+
+> checking the dependencies by running bitbake -g util-linux and bitbake
+> -g <image>. It is not clear why the package util-linux depends on bash
+> and bash-completion. I have other recipes where it is also
+> not obvious to me why they have a dependency to bash and
+> bash-completion. One such recipe is a recipe that we have created and
+> the only content in the package produced is a script and the script
+> only has #!/bin/sh so not sure where this bash and bash-completion
+> comes from it is not something we have added so maybe we have some
+> underlying issue here that results in so many dependencies to
+> bash and bash-completion. We have not set up this system ourselves,
+> instead one of the HW suppliers starting with a Q ending with COMM
+> which I must say I am not that impressed with has supplied the
+> base that we are building on.
+
+Qualcomm, I know that one :( As integrator for a product
+you must minimize the impact of the BSP SW delivery and thus allow only
+bootloader, kernel and low level libraries to be compiled using the
+BSP vendor delivery, e.g. their meta layers. I BBMASK away most of their
+high level SW changes, e.g. systemd and other odd patches which I don't need.
+
+Cheers,
+
+-Mikko
+
+^ permalink raw reply	[flat|nested] 19+ messages in thread
+* Re: [yocto] [Question] How to handle GPLv3 packages?
+  2022-04-08  8:32     ` Mikko.Rapeli
+@ 2022-04-08  9:22       ` Alexander Kanavin
+  2022-04-08 10:17         ` Måns
+  0 siblings, 1 reply; 19+ messages in thread
+From: Alexander Kanavin @ 2022-04-08  9:22 UTC (permalink / raw)
+  To: Mikko Rapeli; +Cc: Måns Zigher, Ross Burton, Yocto-mailing-list
+
+On Fri, 8 Apr 2022 at 10:32, Mikko Rapeli <mikko.rapeli@bmw.de> wrote:
+> Qualcomm, I know that one :( As integrator for a product
+> you must minimize the impact of the BSP SW delivery and thus allow only
+> bootloader, kernel and low level libraries to be compiled using the
+> BSP vendor delivery, e.g. their meta layers. I BBMASK away most of their
+> high level SW changes, e.g. systemd and other odd patches which I don't need.
+
+At Daimler, I put my foot down, and forced them to cleanly rewrite the
+BSP into an actual BSP layer before we would set up official builds
+with it. It took several months, but eventually we got there.
+
+Alex
+
+
+^ permalink raw reply	[flat|nested] 19+ messages in thread
+* Re: [yocto] [Question] How to handle GPLv3 packages?
+  2022-04-08  9:22       ` Alexander Kanavin
+@ 2022-04-08 10:17         ` Måns
+  0 siblings, 0 replies; 19+ messages in thread
+From: Måns @ 2022-04-08 10:17 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: Mikko Rapeli, Ross Burton, Yocto-mailing-list
+
+Yes I did something similar initially using BBMASK to minimize the
+build and in the end requesting them to supply a more minimal build
+setup. The end result was not a pure BSP layer because we needed some
+other things to be able to use other parts of the HW. We could
+probably have done that our self but did not really have the time to
+set up our own solution for it.
+
+Mans
+
+Den fre 8 apr. 2022 kl 11:22 skrev Alexander Kanavin <alex.kanavin@gmail.com>:
+>
+> On Fri, 8 Apr 2022 at 10:32, Mikko Rapeli <mikko.rapeli@bmw.de> wrote:
+> > Qualcomm, I know that one :( As integrator for a product
+> > you must minimize the impact of the BSP SW delivery and thus allow only
+> > bootloader, kernel and low level libraries to be compiled using the
+> > BSP vendor delivery, e.g. their meta layers. I BBMASK away most of their
+> > high level SW changes, e.g. systemd and other odd patches which I don't need.
+>
+> At Daimler, I put my foot down, and forced them to cleanly rewrite the
+> BSP into an actual BSP layer before we would set up official builds
+> with it. It took several months, but eventually we got there.
+>
+> Alex
+
+
+^ permalink raw reply	[flat|nested] 19+ messages in thread
+* Re: [yocto] [Question] How to handle GPLv3 packages?
+  2022-04-08  8:15     ` Alexander Kanavin
+@ 2022-04-08 16:56       ` Måns
+  2022-04-08 16:59         ` Alexander Kanavin
+  0 siblings, 1 reply; 19+ messages in thread
+From: Måns @ 2022-04-08 16:56 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: Yocto-mailing-list
+
+I am currently on Thud so I am missing the support from what I can
+tell to set INCOMPATIBLE_LICENSE per image. I have tried to find the
+commit that adds that support but am having some problems finding it.
+Do you maybe know what I should look for to find the commit that adds
+this support?
+
+Thanks
+
+Den fre 8 apr. 2022 kl 10:16 skrev Alexander Kanavin <alex.kanavin@gmail.com>:
+>
+> Hello Mans,
+>
+> please refer to the tests we have for the feature:
+> https://git.yoctoproject.org/poky/tree/meta/lib/oeqa/selftest/cases/incompatible_lic.py?h=master-next#n95
+> (line 95 and below)
+>
+> The key bit is:
+> INCOMPATIBLE_LICENSE:pn-core-image-minimal = "GPL-3.0* LGPL-3.0*"
+> e.g. apply the restriction only to core-image-minimal.
+>
+> Alex
+>
+> On Fri, 8 Apr 2022 at 08:06, Måns <mans.zigher@gmail.com> wrote:
+> >
+> > Hi Alex,
+> >
+> > Could you maybe clarify what you mean with "setting
+> > INCOMPATIBLE_LICENSE per image"? Do you mean that you have one
+> > specific image that is used when you build an image for release to the
+> > customer and then one image for development?
+> >
+> > Thanks
+> >
+> > Den ons 6 apr. 2022 kl 11:04 skrev Alexander Kanavin <alex.kanavin@gmail.com>:
+> > >
+> > > I'd suggest you start by setting INCOMPATIBLE_LICENSE per image, e.g.
+> > > enable gpl3 ban only in the images that ship to the customers and not
+> > > across the entire build. Then carefully look at what pulls in bash
+> > > into those images and why, and reconfigure those pieces to not do that
+> > > (e.g. by reconfiguring the PACKAGECONFIGs), or rewrite the scripts in
+> > > posix shell.
+> > >
+> > > Alex
+> > >
+> > > On Wed, 6 Apr 2022 at 10:59, Mans Zigher <mans.zigher@gmail.com> wrote:
+> > > >
+> > > > Hi,
+> > > >
+> > > > I cannot use GPLv3 packages in our image build. I am no legal expert
+> > > > but from what I can understand most companies will not be able to
+> > > > comply with this license without allowing the customer to compile and
+> > > > deploy a new version of any GPLv3 package to the target. I know it is
+> > > > possible to comply with this but we are using secure boot and have not
+> > > > the time and probably no interest in setting up a solution for
+> > > > allowing customers to be able to deploy GPLv3 packages on the target.
+> > > > We are trying to make use of INCOMPATIBLE_LICENSE but that results in
+> > > > several issues. We have made sure that we don't include GPLv3 in the
+> > > > image build using a manual process but would like to use
+> > > > INCOMPATIBLE_LICENSE to alert any developer about the issue. It seems
+> > > > like INCOMPATIBLE_LICENSE is a bit harsh since it will catch any
+> > > > packages even if it is only part of the SDK and also for native
+> > > > packages that are not part of the image build.
+> > > >
+> > > > I cannot be the only one with this problem so how are other companies
+> > > > solving this issue? Are they just not using the INCOMPATIBLE_LICENSE?
+> > > > Are you setting up a parallel process for checking for any
+> > > > incompatible licenses issues?
+> > > >
+> > > > A more specific issue is that there are so many packages with bash
+> > > > dependencies which are pulling in bash which is GPLv3 so how have you
+> > > > solved that? Currently we have done some pretty uggly hacks which I am
+> > > > not that happy with but we needed to keep it out of the image.
+> > > >
+> > > > Thanks
+> > > >
+> > > > -=-=-=-=-=-=-=-=-=-=-=-
+> > > > Links: You receive all messages sent to this group.
+> > > > View/Reply Online (#56672): https://lists.yoctoproject.org/g/yocto/message/56672
+> > > > Mute This Topic: https://lists.yoctoproject.org/mt/90285507/1686489
+> > > > Group Owner: yocto+owner@lists.yoctoproject.org
+> > > > Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com]
+> > > > -=-=-=-=-=-=-=-=-=-=-=-
+> > > >
+
+
+^ permalink raw reply	[flat|nested] 19+ messages in thread
+* Re: [yocto] [Question] How to handle GPLv3 packages?
+  2022-04-08 16:56       ` Måns
+@ 2022-04-08 16:59         ` Alexander Kanavin
+  2022-04-11  7:12           ` Måns
+  0 siblings, 1 reply; 19+ messages in thread
+From: Alexander Kanavin @ 2022-04-08 16:59 UTC (permalink / raw)
+  To: Måns; +Cc: Yocto-mailing-list
+
+Thud has been EOL for a long time. You can see when the support been
+added here (end of 2019 it seems):
+https://git.yoctoproject.org/poky/log/meta/lib/oeqa/selftest/cases/incompatible_lic.py?h=master-next
+
+Alex
+
+On Fri, 8 Apr 2022 at 18:56, Måns <mans.zigher@gmail.com> wrote:
+>
+> I am currently on Thud so I am missing the support from what I can
+> tell to set INCOMPATIBLE_LICENSE per image. I have tried to find the
+> commit that adds that support but am having some problems finding it.
+> Do you maybe know what I should look for to find the commit that adds
+> this support?
+>
+> Thanks
+>
+> Den fre 8 apr. 2022 kl 10:16 skrev Alexander Kanavin <alex.kanavin@gmail.com>:
+> >
+> > Hello Mans,
+> >
+> > please refer to the tests we have for the feature:
+> > https://git.yoctoproject.org/poky/tree/meta/lib/oeqa/selftest/cases/incompatible_lic.py?h=master-next#n95
+> > (line 95 and below)
+> >
+> > The key bit is:
+> > INCOMPATIBLE_LICENSE:pn-core-image-minimal = "GPL-3.0* LGPL-3.0*"
+> > e.g. apply the restriction only to core-image-minimal.
+> >
+> > Alex
+> >
+> > On Fri, 8 Apr 2022 at 08:06, Måns <mans.zigher@gmail.com> wrote:
+> > >
+> > > Hi Alex,
+> > >
+> > > Could you maybe clarify what you mean with "setting
+> > > INCOMPATIBLE_LICENSE per image"? Do you mean that you have one
+> > > specific image that is used when you build an image for release to the
+> > > customer and then one image for development?
+> > >
+> > > Thanks
+> > >
+> > > Den ons 6 apr. 2022 kl 11:04 skrev Alexander Kanavin <alex.kanavin@gmail.com>:
+> > > >
+> > > > I'd suggest you start by setting INCOMPATIBLE_LICENSE per image, e.g.
+> > > > enable gpl3 ban only in the images that ship to the customers and not
+> > > > across the entire build. Then carefully look at what pulls in bash
+> > > > into those images and why, and reconfigure those pieces to not do that
+> > > > (e.g. by reconfiguring the PACKAGECONFIGs), or rewrite the scripts in
+> > > > posix shell.
+> > > >
+> > > > Alex
+> > > >
+> > > > On Wed, 6 Apr 2022 at 10:59, Mans Zigher <mans.zigher@gmail.com> wrote:
+> > > > >
+> > > > > Hi,
+> > > > >
+> > > > > I cannot use GPLv3 packages in our image build. I am no legal expert
+> > > > > but from what I can understand most companies will not be able to
+> > > > > comply with this license without allowing the customer to compile and
+> > > > > deploy a new version of any GPLv3 package to the target. I know it is
+> > > > > possible to comply with this but we are using secure boot and have not
+> > > > > the time and probably no interest in setting up a solution for
+> > > > > allowing customers to be able to deploy GPLv3 packages on the target.
+> > > > > We are trying to make use of INCOMPATIBLE_LICENSE but that results in
+> > > > > several issues. We have made sure that we don't include GPLv3 in the
+> > > > > image build using a manual process but would like to use
+> > > > > INCOMPATIBLE_LICENSE to alert any developer about the issue. It seems
+> > > > > like INCOMPATIBLE_LICENSE is a bit harsh since it will catch any
+> > > > > packages even if it is only part of the SDK and also for native
+> > > > > packages that are not part of the image build.
+> > > > >
+> > > > > I cannot be the only one with this problem so how are other companies
+> > > > > solving this issue? Are they just not using the INCOMPATIBLE_LICENSE?
+> > > > > Are you setting up a parallel process for checking for any
+> > > > > incompatible licenses issues?
+> > > > >
+> > > > > A more specific issue is that there are so many packages with bash
+> > > > > dependencies which are pulling in bash which is GPLv3 so how have you
+> > > > > solved that? Currently we have done some pretty uggly hacks which I am
+> > > > > not that happy with but we needed to keep it out of the image.
+> > > > >
+> > > > > Thanks
+> > > > >
+> > > > > -=-=-=-=-=-=-=-=-=-=-=-
+> > > > > Links: You receive all messages sent to this group.
+> > > > > View/Reply Online (#56672): https://lists.yoctoproject.org/g/yocto/message/56672
+> > > > > Mute This Topic: https://lists.yoctoproject.org/mt/90285507/1686489
+> > > > > Group Owner: yocto+owner@lists.yoctoproject.org
+> > > > > Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com]
+> > > > > -=-=-=-=-=-=-=-=-=-=-=-
+> > > > >
+
+
+^ permalink raw reply	[flat|nested] 19+ messages in thread
+* Re: [yocto] [Question] How to handle GPLv3 packages?
+  2022-04-08 16:59         ` Alexander Kanavin
+@ 2022-04-11  7:12           ` Måns
+  2022-04-11  7:16             ` Alexander Kanavin
+  0 siblings, 1 reply; 19+ messages in thread
+From: Måns @ 2022-04-11  7:12 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: Yocto-mailing-list
+
+Yes I know. Not sure why QC is stuck on Thud. Even newer releases from
+QC for the target that we are working on is stuck at Thud.
+
+Mans
+
+Den fre 8 apr. 2022 kl 18:59 skrev Alexander Kanavin <alex.kanavin@gmail.com>:
+>
+> Thud has been EOL for a long time. You can see when the support been
+> added here (end of 2019 it seems):
+> https://git.yoctoproject.org/poky/log/meta/lib/oeqa/selftest/cases/incompatible_lic.py?h=master-next
+>
+> Alex
+>
+> On Fri, 8 Apr 2022 at 18:56, Måns <mans.zigher@gmail.com> wrote:
+> >
+> > I am currently on Thud so I am missing the support from what I can
+> > tell to set INCOMPATIBLE_LICENSE per image. I have tried to find the
+> > commit that adds that support but am having some problems finding it.
+> > Do you maybe know what I should look for to find the commit that adds
+> > this support?
+> >
+> > Thanks
+> >
+> > Den fre 8 apr. 2022 kl 10:16 skrev Alexander Kanavin <alex.kanavin@gmail.com>:
+> > >
+> > > Hello Mans,
+> > >
+> > > please refer to the tests we have for the feature:
+> > > https://git.yoctoproject.org/poky/tree/meta/lib/oeqa/selftest/cases/incompatible_lic.py?h=master-next#n95
+> > > (line 95 and below)
+> > >
+> > > The key bit is:
+> > > INCOMPATIBLE_LICENSE:pn-core-image-minimal = "GPL-3.0* LGPL-3.0*"
+> > > e.g. apply the restriction only to core-image-minimal.
+> > >
+> > > Alex
+> > >
+> > > On Fri, 8 Apr 2022 at 08:06, Måns <mans.zigher@gmail.com> wrote:
+> > > >
+> > > > Hi Alex,
+> > > >
+> > > > Could you maybe clarify what you mean with "setting
+> > > > INCOMPATIBLE_LICENSE per image"? Do you mean that you have one
+> > > > specific image that is used when you build an image for release to the
+> > > > customer and then one image for development?
+> > > >
+> > > > Thanks
+> > > >
+> > > > Den ons 6 apr. 2022 kl 11:04 skrev Alexander Kanavin <alex.kanavin@gmail.com>:
+> > > > >
+> > > > > I'd suggest you start by setting INCOMPATIBLE_LICENSE per image, e.g.
+> > > > > enable gpl3 ban only in the images that ship to the customers and not
+> > > > > across the entire build. Then carefully look at what pulls in bash
+> > > > > into those images and why, and reconfigure those pieces to not do that
+> > > > > (e.g. by reconfiguring the PACKAGECONFIGs), or rewrite the scripts in
+> > > > > posix shell.
+> > > > >
+> > > > > Alex
+> > > > >
+> > > > > On Wed, 6 Apr 2022 at 10:59, Mans Zigher <mans.zigher@gmail.com> wrote:
+> > > > > >
+> > > > > > Hi,
+> > > > > >
+> > > > > > I cannot use GPLv3 packages in our image build. I am no legal expert
+> > > > > > but from what I can understand most companies will not be able to
+> > > > > > comply with this license without allowing the customer to compile and
+> > > > > > deploy a new version of any GPLv3 package to the target. I know it is
+> > > > > > possible to comply with this but we are using secure boot and have not
+> > > > > > the time and probably no interest in setting up a solution for
+> > > > > > allowing customers to be able to deploy GPLv3 packages on the target.
+> > > > > > We are trying to make use of INCOMPATIBLE_LICENSE but that results in
+> > > > > > several issues. We have made sure that we don't include GPLv3 in the
+> > > > > > image build using a manual process but would like to use
+> > > > > > INCOMPATIBLE_LICENSE to alert any developer about the issue. It seems
+> > > > > > like INCOMPATIBLE_LICENSE is a bit harsh since it will catch any
+> > > > > > packages even if it is only part of the SDK and also for native
+> > > > > > packages that are not part of the image build.
+> > > > > >
+> > > > > > I cannot be the only one with this problem so how are other companies
+> > > > > > solving this issue? Are they just not using the INCOMPATIBLE_LICENSE?
+> > > > > > Are you setting up a parallel process for checking for any
+> > > > > > incompatible licenses issues?
+> > > > > >
+> > > > > > A more specific issue is that there are so many packages with bash
+> > > > > > dependencies which are pulling in bash which is GPLv3 so how have you
+> > > > > > solved that? Currently we have done some pretty uggly hacks which I am
+> > > > > > not that happy with but we needed to keep it out of the image.
+> > > > > >
+> > > > > > Thanks
+> > > > > >
+> > > > > > -=-=-=-=-=-=-=-=-=-=-=-
+> > > > > > Links: You receive all messages sent to this group.
+> > > > > > View/Reply Online (#56672): https://lists.yoctoproject.org/g/yocto/message/56672
+> > > > > > Mute This Topic: https://lists.yoctoproject.org/mt/90285507/1686489
+> > > > > > Group Owner: yocto+owner@lists.yoctoproject.org
+> > > > > > Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com]
+> > > > > > -=-=-=-=-=-=-=-=-=-=-=-
+> > > > > >
+
+
+^ permalink raw reply	[flat|nested] 19+ messages in thread
+* Re: [yocto] [Question] How to handle GPLv3 packages?
+  2022-04-11  7:12           ` Måns
+@ 2022-04-11  7:16             ` Alexander Kanavin
+  2022-04-11  8:29               ` Måns
+  0 siblings, 1 reply; 19+ messages in thread
+From: Alexander Kanavin @ 2022-04-11  7:16 UTC (permalink / raw)
+  To: Måns; +Cc: Yocto-mailing-list
+
+It's a contracting issue. You need to specify in writing that the
+vendor cannot provide ancient Yocto. Otherwise they won't bother.
+
+Alex
+
+On Mon, 11 Apr 2022 at 09:13, Måns <mans.zigher@gmail.com> wrote:
+>
+> Yes I know. Not sure why QC is stuck on Thud. Even newer releases from
+> QC for the target that we are working on is stuck at Thud.
+>
+> Mans
+>
+> Den fre 8 apr. 2022 kl 18:59 skrev Alexander Kanavin <alex.kanavin@gmail.com>:
+> >
+> > Thud has been EOL for a long time. You can see when the support been
+> > added here (end of 2019 it seems):
+> > https://git.yoctoproject.org/poky/log/meta/lib/oeqa/selftest/cases/incompatible_lic.py?h=master-next
+> >
+> > Alex
+> >
+> > On Fri, 8 Apr 2022 at 18:56, Måns <mans.zigher@gmail.com> wrote:
+> > >
+> > > I am currently on Thud so I am missing the support from what I can
+> > > tell to set INCOMPATIBLE_LICENSE per image. I have tried to find the
+> > > commit that adds that support but am having some problems finding it.
+> > > Do you maybe know what I should look for to find the commit that adds
+> > > this support?
+> > >
+> > > Thanks
+> > >
+> > > Den fre 8 apr. 2022 kl 10:16 skrev Alexander Kanavin <alex.kanavin@gmail.com>:
+> > > >
+> > > > Hello Mans,
+> > > >
+> > > > please refer to the tests we have for the feature:
+> > > > https://git.yoctoproject.org/poky/tree/meta/lib/oeqa/selftest/cases/incompatible_lic.py?h=master-next#n95
+> > > > (line 95 and below)
+> > > >
+> > > > The key bit is:
+> > > > INCOMPATIBLE_LICENSE:pn-core-image-minimal = "GPL-3.0* LGPL-3.0*"
+> > > > e.g. apply the restriction only to core-image-minimal.
+> > > >
+> > > > Alex
+> > > >
+> > > > On Fri, 8 Apr 2022 at 08:06, Måns <mans.zigher@gmail.com> wrote:
+> > > > >
+> > > > > Hi Alex,
+> > > > >
+> > > > > Could you maybe clarify what you mean with "setting
+> > > > > INCOMPATIBLE_LICENSE per image"? Do you mean that you have one
+> > > > > specific image that is used when you build an image for release to the
+> > > > > customer and then one image for development?
+> > > > >
+> > > > > Thanks
+> > > > >
+> > > > > Den ons 6 apr. 2022 kl 11:04 skrev Alexander Kanavin <alex.kanavin@gmail.com>:
+> > > > > >
+> > > > > > I'd suggest you start by setting INCOMPATIBLE_LICENSE per image, e.g.
+> > > > > > enable gpl3 ban only in the images that ship to the customers and not
+> > > > > > across the entire build. Then carefully look at what pulls in bash
+> > > > > > into those images and why, and reconfigure those pieces to not do that
+> > > > > > (e.g. by reconfiguring the PACKAGECONFIGs), or rewrite the scripts in
+> > > > > > posix shell.
+> > > > > >
+> > > > > > Alex
+> > > > > >
+> > > > > > On Wed, 6 Apr 2022 at 10:59, Mans Zigher <mans.zigher@gmail.com> wrote:
+> > > > > > >
+> > > > > > > Hi,
+> > > > > > >
+> > > > > > > I cannot use GPLv3 packages in our image build. I am no legal expert
+> > > > > > > but from what I can understand most companies will not be able to
+> > > > > > > comply with this license without allowing the customer to compile and
+> > > > > > > deploy a new version of any GPLv3 package to the target. I know it is
+> > > > > > > possible to comply with this but we are using secure boot and have not
+> > > > > > > the time and probably no interest in setting up a solution for
+> > > > > > > allowing customers to be able to deploy GPLv3 packages on the target.
+> > > > > > > We are trying to make use of INCOMPATIBLE_LICENSE but that results in
+> > > > > > > several issues. We have made sure that we don't include GPLv3 in the
+> > > > > > > image build using a manual process but would like to use
+> > > > > > > INCOMPATIBLE_LICENSE to alert any developer about the issue. It seems
+> > > > > > > like INCOMPATIBLE_LICENSE is a bit harsh since it will catch any
+> > > > > > > packages even if it is only part of the SDK and also for native
+> > > > > > > packages that are not part of the image build.
+> > > > > > >
+> > > > > > > I cannot be the only one with this problem so how are other companies
+> > > > > > > solving this issue? Are they just not using the INCOMPATIBLE_LICENSE?
+> > > > > > > Are you setting up a parallel process for checking for any
+> > > > > > > incompatible licenses issues?
+> > > > > > >
+> > > > > > > A more specific issue is that there are so many packages with bash
+> > > > > > > dependencies which are pulling in bash which is GPLv3 so how have you
+> > > > > > > solved that? Currently we have done some pretty uggly hacks which I am
+> > > > > > > not that happy with but we needed to keep it out of the image.
+> > > > > > >
+> > > > > > > Thanks
+> > > > > > >
+> > > > > > > -=-=-=-=-=-=-=-=-=-=-=-
+> > > > > > > Links: You receive all messages sent to this group.
+> > > > > > > View/Reply Online (#56672): https://lists.yoctoproject.org/g/yocto/message/56672
+> > > > > > > Mute This Topic: https://lists.yoctoproject.org/mt/90285507/1686489
+> > > > > > > Group Owner: yocto+owner@lists.yoctoproject.org
+> > > > > > > Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com]
+> > > > > > > -=-=-=-=-=-=-=-=-=-=-=-
+> > > > > > >
+
+
+^ permalink raw reply	[flat|nested] 19+ messages in thread
+* Re: [yocto] [Question] How to handle GPLv3 packages?
+  2022-04-11  7:16             ` Alexander Kanavin
+@ 2022-04-11  8:29               ` Måns
+  2022-04-11 16:19                 ` Khem Raj
+  0 siblings, 1 reply; 19+ messages in thread
+From: Måns @ 2022-04-11  8:29 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: Yocto-mailing-list
+
+This is my first time working with them so I am learning a lot but
+never encountered anything like it. Trying to look into what it would
+require to move to a newer version it appears as if they have set up
+their layers inside the poky dir and then they are using COREBASE when
+one layer depends on the content of another layer. So again something
+that should have been fairly simple will now require some additional
+work. But thanks for all your help I appreciate it. I am getting a bit
+off topic in this thread.
+
+For anyone having issues with enabling INCOMPATIBLE_LICENSE make sure
+to set it per image but before that you will have to make sure you are
+not including any packages that have the incompatible license there is
+some tedious work but it needs to be done.
+
+Thanks
+
+Den mån 11 apr. 2022 kl 09:16 skrev Alexander Kanavin <alex.kanavin@gmail.com>:
+>
+> It's a contracting issue. You need to specify in writing that the
+> vendor cannot provide ancient Yocto. Otherwise they won't bother.
+>
+> Alex
+>
+> On Mon, 11 Apr 2022 at 09:13, Måns <mans.zigher@gmail.com> wrote:
+> >
+> > Yes I know. Not sure why QC is stuck on Thud. Even newer releases from
+> > QC for the target that we are working on is stuck at Thud.
+> >
+> > Mans
+> >
+> > Den fre 8 apr. 2022 kl 18:59 skrev Alexander Kanavin <alex.kanavin@gmail.com>:
+> > >
+> > > Thud has been EOL for a long time. You can see when the support been
+> > > added here (end of 2019 it seems):
+> > > https://git.yoctoproject.org/poky/log/meta/lib/oeqa/selftest/cases/incompatible_lic.py?h=master-next
+> > >
+> > > Alex
+> > >
+> > > On Fri, 8 Apr 2022 at 18:56, Måns <mans.zigher@gmail.com> wrote:
+> > > >
+> > > > I am currently on Thud so I am missing the support from what I can
+> > > > tell to set INCOMPATIBLE_LICENSE per image. I have tried to find the
+> > > > commit that adds that support but am having some problems finding it.
+> > > > Do you maybe know what I should look for to find the commit that adds
+> > > > this support?
+> > > >
+> > > > Thanks
+> > > >
+> > > > Den fre 8 apr. 2022 kl 10:16 skrev Alexander Kanavin <alex.kanavin@gmail.com>:
+> > > > >
+> > > > > Hello Mans,
+> > > > >
+> > > > > please refer to the tests we have for the feature:
+> > > > > https://git.yoctoproject.org/poky/tree/meta/lib/oeqa/selftest/cases/incompatible_lic.py?h=master-next#n95
+> > > > > (line 95 and below)
+> > > > >
+> > > > > The key bit is:
+> > > > > INCOMPATIBLE_LICENSE:pn-core-image-minimal = "GPL-3.0* LGPL-3.0*"
+> > > > > e.g. apply the restriction only to core-image-minimal.
+> > > > >
+> > > > > Alex
+> > > > >
+> > > > > On Fri, 8 Apr 2022 at 08:06, Måns <mans.zigher@gmail.com> wrote:
+> > > > > >
+> > > > > > Hi Alex,
+> > > > > >
+> > > > > > Could you maybe clarify what you mean with "setting
+> > > > > > INCOMPATIBLE_LICENSE per image"? Do you mean that you have one
+> > > > > > specific image that is used when you build an image for release to the
+> > > > > > customer and then one image for development?
+> > > > > >
+> > > > > > Thanks
+> > > > > >
+> > > > > > Den ons 6 apr. 2022 kl 11:04 skrev Alexander Kanavin <alex.kanavin@gmail.com>:
+> > > > > > >
+> > > > > > > I'd suggest you start by setting INCOMPATIBLE_LICENSE per image, e.g.
+> > > > > > > enable gpl3 ban only in the images that ship to the customers and not
+> > > > > > > across the entire build. Then carefully look at what pulls in bash
+> > > > > > > into those images and why, and reconfigure those pieces to not do that
+> > > > > > > (e.g. by reconfiguring the PACKAGECONFIGs), or rewrite the scripts in
+> > > > > > > posix shell.
+> > > > > > >
+> > > > > > > Alex
+> > > > > > >
+> > > > > > > On Wed, 6 Apr 2022 at 10:59, Mans Zigher <mans.zigher@gmail.com> wrote:
+> > > > > > > >
+> > > > > > > > Hi,
+> > > > > > > >
+> > > > > > > > I cannot use GPLv3 packages in our image build. I am no legal expert
+> > > > > > > > but from what I can understand most companies will not be able to
+> > > > > > > > comply with this license without allowing the customer to compile and
+> > > > > > > > deploy a new version of any GPLv3 package to the target. I know it is
+> > > > > > > > possible to comply with this but we are using secure boot and have not
+> > > > > > > > the time and probably no interest in setting up a solution for
+> > > > > > > > allowing customers to be able to deploy GPLv3 packages on the target.
+> > > > > > > > We are trying to make use of INCOMPATIBLE_LICENSE but that results in
+> > > > > > > > several issues. We have made sure that we don't include GPLv3 in the
+> > > > > > > > image build using a manual process but would like to use
+> > > > > > > > INCOMPATIBLE_LICENSE to alert any developer about the issue. It seems
+> > > > > > > > like INCOMPATIBLE_LICENSE is a bit harsh since it will catch any
+> > > > > > > > packages even if it is only part of the SDK and also for native
+> > > > > > > > packages that are not part of the image build.
+> > > > > > > >
+> > > > > > > > I cannot be the only one with this problem so how are other companies
+> > > > > > > > solving this issue? Are they just not using the INCOMPATIBLE_LICENSE?
+> > > > > > > > Are you setting up a parallel process for checking for any
+> > > > > > > > incompatible licenses issues?
+> > > > > > > >
+> > > > > > > > A more specific issue is that there are so many packages with bash
+> > > > > > > > dependencies which are pulling in bash which is GPLv3 so how have you
+> > > > > > > > solved that? Currently we have done some pretty uggly hacks which I am
+> > > > > > > > not that happy with but we needed to keep it out of the image.
+> > > > > > > >
+> > > > > > > > Thanks
+> > > > > > > >
+> > > > > > > > -=-=-=-=-=-=-=-=-=-=-=-
+> > > > > > > > Links: You receive all messages sent to this group.
+> > > > > > > > View/Reply Online (#56672): https://lists.yoctoproject.org/g/yocto/message/56672
+> > > > > > > > Mute This Topic: https://lists.yoctoproject.org/mt/90285507/1686489
+> > > > > > > > Group Owner: yocto+owner@lists.yoctoproject.org
+> > > > > > > > Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com]
+> > > > > > > > -=-=-=-=-=-=-=-=-=-=-=-
+> > > > > > > >
+
+
+^ permalink raw reply	[flat|nested] 19+ messages in thread
+* Re: [yocto] [Question] How to handle GPLv3 packages?
+  2022-04-11  8:29               ` Måns
+@ 2022-04-11 16:19                 ` Khem Raj
+  2022-04-12  9:45                   ` Måns
+  0 siblings, 1 reply; 19+ messages in thread
+From: Khem Raj @ 2022-04-11 16:19 UTC (permalink / raw)
+  To: Mans Zigher; +Cc: Alexander Kanavin, Yocto-mailing-list
+
+On Mon, Apr 11, 2022 at 1:29 AM Mans Zigher <mans.zigher@gmail.com> wrote:
+>
+> This is my first time working with them so I am learning a lot but
+> never encountered anything like it. Trying to look into what it would
+> require to move to a newer version it appears as if they have set up
+> their layers inside the poky dir and then they are using COREBASE when
+> one layer depends on the content of another layer. So again something
+> that should have been fairly simple will now require some additional
+> work. But thanks for all your help I appreciate it. I am getting a bit
+> off topic in this thread.
+
+This will be valiant effort but my advice is don't go alone if you
+want to undertake this
+SOC sdks have lot of nitty gritty issues that will pop up along the
+way and unless you
+have someone from SOC suppliers actively supporting you on this upgrade you will
+burn your time to no end.
+
+>
+> For anyone having issues with enabling INCOMPATIBLE_LICENSE make sure
+> to set it per image but before that you will have to make sure you are
+> not including any packages that have the incompatible license there is
+> some tedious work but it needs to be done.
+
+Perhaps a write-up will be beneficial for someone who trips into these
+issues in future.
+
+>
+> Thanks
+>
+> Den mån 11 apr. 2022 kl 09:16 skrev Alexander Kanavin <alex.kanavin@gmail.com>:
+> >
+> > It's a contracting issue. You need to specify in writing that the
+> > vendor cannot provide ancient Yocto. Otherwise they won't bother.
+> >
+> > Alex
+> >
+> > On Mon, 11 Apr 2022 at 09:13, Måns <mans.zigher@gmail.com> wrote:
+> > >
+> > > Yes I know. Not sure why QC is stuck on Thud. Even newer releases from
+> > > QC for the target that we are working on is stuck at Thud.
+> > >
+> > > Mans
+> > >
+> > > Den fre 8 apr. 2022 kl 18:59 skrev Alexander Kanavin <alex.kanavin@gmail.com>:
+> > > >
+> > > > Thud has been EOL for a long time. You can see when the support been
+> > > > added here (end of 2019 it seems):
+> > > > https://git.yoctoproject.org/poky/log/meta/lib/oeqa/selftest/cases/incompatible_lic.py?h=master-next
+> > > >
+> > > > Alex
+> > > >
+> > > > On Fri, 8 Apr 2022 at 18:56, Måns <mans.zigher@gmail.com> wrote:
+> > > > >
+> > > > > I am currently on Thud so I am missing the support from what I can
+> > > > > tell to set INCOMPATIBLE_LICENSE per image. I have tried to find the
+> > > > > commit that adds that support but am having some problems finding it.
+> > > > > Do you maybe know what I should look for to find the commit that adds
+> > > > > this support?
+> > > > >
+> > > > > Thanks
+> > > > >
+> > > > > Den fre 8 apr. 2022 kl 10:16 skrev Alexander Kanavin <alex.kanavin@gmail.com>:
+> > > > > >
+> > > > > > Hello Mans,
+> > > > > >
+> > > > > > please refer to the tests we have for the feature:
+> > > > > > https://git.yoctoproject.org/poky/tree/meta/lib/oeqa/selftest/cases/incompatible_lic.py?h=master-next#n95
+> > > > > > (line 95 and below)
+> > > > > >
+> > > > > > The key bit is:
+> > > > > > INCOMPATIBLE_LICENSE:pn-core-image-minimal = "GPL-3.0* LGPL-3.0*"
+> > > > > > e.g. apply the restriction only to core-image-minimal.
+> > > > > >
+> > > > > > Alex
+> > > > > >
+> > > > > > On Fri, 8 Apr 2022 at 08:06, Måns <mans.zigher@gmail.com> wrote:
+> > > > > > >
+> > > > > > > Hi Alex,
+> > > > > > >
+> > > > > > > Could you maybe clarify what you mean with "setting
+> > > > > > > INCOMPATIBLE_LICENSE per image"? Do you mean that you have one
+> > > > > > > specific image that is used when you build an image for release to the
+> > > > > > > customer and then one image for development?
+> > > > > > >
+> > > > > > > Thanks
+> > > > > > >
+> > > > > > > Den ons 6 apr. 2022 kl 11:04 skrev Alexander Kanavin <alex.kanavin@gmail.com>:
+> > > > > > > >
+> > > > > > > > I'd suggest you start by setting INCOMPATIBLE_LICENSE per image, e.g.
+> > > > > > > > enable gpl3 ban only in the images that ship to the customers and not
+> > > > > > > > across the entire build. Then carefully look at what pulls in bash
+> > > > > > > > into those images and why, and reconfigure those pieces to not do that
+> > > > > > > > (e.g. by reconfiguring the PACKAGECONFIGs), or rewrite the scripts in
+> > > > > > > > posix shell.
+> > > > > > > >
+> > > > > > > > Alex
+> > > > > > > >
+> > > > > > > > On Wed, 6 Apr 2022 at 10:59, Mans Zigher <mans.zigher@gmail.com> wrote:
+> > > > > > > > >
+> > > > > > > > > Hi,
+> > > > > > > > >
+> > > > > > > > > I cannot use GPLv3 packages in our image build. I am no legal expert
+> > > > > > > > > but from what I can understand most companies will not be able to
+> > > > > > > > > comply with this license without allowing the customer to compile and
+> > > > > > > > > deploy a new version of any GPLv3 package to the target. I know it is
+> > > > > > > > > possible to comply with this but we are using secure boot and have not
+> > > > > > > > > the time and probably no interest in setting up a solution for
+> > > > > > > > > allowing customers to be able to deploy GPLv3 packages on the target.
+> > > > > > > > > We are trying to make use of INCOMPATIBLE_LICENSE but that results in
+> > > > > > > > > several issues. We have made sure that we don't include GPLv3 in the
+> > > > > > > > > image build using a manual process but would like to use
+> > > > > > > > > INCOMPATIBLE_LICENSE to alert any developer about the issue. It seems
+> > > > > > > > > like INCOMPATIBLE_LICENSE is a bit harsh since it will catch any
+> > > > > > > > > packages even if it is only part of the SDK and also for native
+> > > > > > > > > packages that are not part of the image build.
+> > > > > > > > >
+> > > > > > > > > I cannot be the only one with this problem so how are other companies
+> > > > > > > > > solving this issue? Are they just not using the INCOMPATIBLE_LICENSE?
+> > > > > > > > > Are you setting up a parallel process for checking for any
+> > > > > > > > > incompatible licenses issues?
+> > > > > > > > >
+> > > > > > > > > A more specific issue is that there are so many packages with bash
+> > > > > > > > > dependencies which are pulling in bash which is GPLv3 so how have you
+> > > > > > > > > solved that? Currently we have done some pretty uggly hacks which I am
+> > > > > > > > > not that happy with but we needed to keep it out of the image.
+> > > > > > > > >
+> > > > > > > > > Thanks
+> > > > > > > > >
+> > > > > > > > >
+> > > > > > > > >
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> You automatically follow any topics you start or reply to.
+> View/Reply Online (#56717): https://lists.yoctoproject.org/g/yocto/message/56717
+> Mute This Topic: https://lists.yoctoproject.org/mt/90285507/1997914
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [raj.khem@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 19+ messages in thread
+* Re: [yocto] [Question] How to handle GPLv3 packages?
+  2022-04-11 16:19                 ` Khem Raj
+@ 2022-04-12  9:45                   ` Måns
+  0 siblings, 0 replies; 19+ messages in thread
+From: Måns @ 2022-04-12  9:45 UTC (permalink / raw)
+  To: Khem Raj; +Cc: Alexander Kanavin, Yocto-mailing-list
+
+Hi,
+
+Thanks for the advice. I am right now unsure how to solve it since I
+am on thud but I will continue to work on this so once I get this done
+and I have a solution that works I will try and remember to come back
+and try to write something together for anyone else encountering this
+issue.
+
+/Måns
+
+Den mån 11 apr. 2022 kl 18:20 skrev Khem Raj <raj.khem@gmail.com>:
+>
+> On Mon, Apr 11, 2022 at 1:29 AM Mans Zigher <mans.zigher@gmail.com> wrote:
+> >
+> > This is my first time working with them so I am learning a lot but
+> > never encountered anything like it. Trying to look into what it would
+> > require to move to a newer version it appears as if they have set up
+> > their layers inside the poky dir and then they are using COREBASE when
+> > one layer depends on the content of another layer. So again something
+> > that should have been fairly simple will now require some additional
+> > work. But thanks for all your help I appreciate it. I am getting a bit
+> > off topic in this thread.
+>
+> This will be valiant effort but my advice is don't go alone if you
+> want to undertake this
+> SOC sdks have lot of nitty gritty issues that will pop up along the
+> way and unless you
+> have someone from SOC suppliers actively supporting you on this upgrade you will
+> burn your time to no end.
+>
+> >
+> > For anyone having issues with enabling INCOMPATIBLE_LICENSE make sure
+> > to set it per image but before that you will have to make sure you are
+> > not including any packages that have the incompatible license there is
+> > some tedious work but it needs to be done.
+>
+> Perhaps a write-up will be beneficial for someone who trips into these
+> issues in future.
+>
+> >
+> > Thanks
+> >
+> > Den mån 11 apr. 2022 kl 09:16 skrev Alexander Kanavin <alex.kanavin@gmail.com>:
+> > >
+> > > It's a contracting issue. You need to specify in writing that the
+> > > vendor cannot provide ancient Yocto. Otherwise they won't bother.
+> > >
+> > > Alex
+> > >
+> > > On Mon, 11 Apr 2022 at 09:13, Måns <mans.zigher@gmail.com> wrote:
+> > > >
+> > > > Yes I know. Not sure why QC is stuck on Thud. Even newer releases from
+> > > > QC for the target that we are working on is stuck at Thud.
+> > > >
+> > > > Mans
+> > > >
+> > > > Den fre 8 apr. 2022 kl 18:59 skrev Alexander Kanavin <alex.kanavin@gmail.com>:
+> > > > >
+> > > > > Thud has been EOL for a long time. You can see when the support been
+> > > > > added here (end of 2019 it seems):
+> > > > > https://git.yoctoproject.org/poky/log/meta/lib/oeqa/selftest/cases/incompatible_lic.py?h=master-next
+> > > > >
+> > > > > Alex
+> > > > >
+> > > > > On Fri, 8 Apr 2022 at 18:56, Måns <mans.zigher@gmail.com> wrote:
+> > > > > >
+> > > > > > I am currently on Thud so I am missing the support from what I can
+> > > > > > tell to set INCOMPATIBLE_LICENSE per image. I have tried to find the
+> > > > > > commit that adds that support but am having some problems finding it.
+> > > > > > Do you maybe know what I should look for to find the commit that adds
+> > > > > > this support?
+> > > > > >
+> > > > > > Thanks
+> > > > > >
+> > > > > > Den fre 8 apr. 2022 kl 10:16 skrev Alexander Kanavin <alex.kanavin@gmail.com>:
+> > > > > > >
+> > > > > > > Hello Mans,
+> > > > > > >
+> > > > > > > please refer to the tests we have for the feature:
+> > > > > > > https://git.yoctoproject.org/poky/tree/meta/lib/oeqa/selftest/cases/incompatible_lic.py?h=master-next#n95
+> > > > > > > (line 95 and below)
+> > > > > > >
+> > > > > > > The key bit is:
+> > > > > > > INCOMPATIBLE_LICENSE:pn-core-image-minimal = "GPL-3.0* LGPL-3.0*"
+> > > > > > > e.g. apply the restriction only to core-image-minimal.
+> > > > > > >
+> > > > > > > Alex
+> > > > > > >
+> > > > > > > On Fri, 8 Apr 2022 at 08:06, Måns <mans.zigher@gmail.com> wrote:
+> > > > > > > >
+> > > > > > > > Hi Alex,
+> > > > > > > >
+> > > > > > > > Could you maybe clarify what you mean with "setting
+> > > > > > > > INCOMPATIBLE_LICENSE per image"? Do you mean that you have one
+> > > > > > > > specific image that is used when you build an image for release to the
+> > > > > > > > customer and then one image for development?
+> > > > > > > >
+> > > > > > > > Thanks
+> > > > > > > >
+> > > > > > > > Den ons 6 apr. 2022 kl 11:04 skrev Alexander Kanavin <alex.kanavin@gmail.com>:
+> > > > > > > > >
+> > > > > > > > > I'd suggest you start by setting INCOMPATIBLE_LICENSE per image, e.g.
+> > > > > > > > > enable gpl3 ban only in the images that ship to the customers and not
+> > > > > > > > > across the entire build. Then carefully look at what pulls in bash
+> > > > > > > > > into those images and why, and reconfigure those pieces to not do that
+> > > > > > > > > (e.g. by reconfiguring the PACKAGECONFIGs), or rewrite the scripts in
+> > > > > > > > > posix shell.
+> > > > > > > > >
+> > > > > > > > > Alex
+> > > > > > > > >
+> > > > > > > > > On Wed, 6 Apr 2022 at 10:59, Mans Zigher <mans.zigher@gmail.com> wrote:
+> > > > > > > > > >
+> > > > > > > > > > Hi,
+> > > > > > > > > >
+> > > > > > > > > > I cannot use GPLv3 packages in our image build. I am no legal expert
+> > > > > > > > > > but from what I can understand most companies will not be able to
+> > > > > > > > > > comply with this license without allowing the customer to compile and
+> > > > > > > > > > deploy a new version of any GPLv3 package to the target. I know it is
+> > > > > > > > > > possible to comply with this but we are using secure boot and have not
+> > > > > > > > > > the time and probably no interest in setting up a solution for
+> > > > > > > > > > allowing customers to be able to deploy GPLv3 packages on the target.
+> > > > > > > > > > We are trying to make use of INCOMPATIBLE_LICENSE but that results in
+> > > > > > > > > > several issues. We have made sure that we don't include GPLv3 in the
+> > > > > > > > > > image build using a manual process but would like to use
+> > > > > > > > > > INCOMPATIBLE_LICENSE to alert any developer about the issue. It seems
+> > > > > > > > > > like INCOMPATIBLE_LICENSE is a bit harsh since it will catch any
+> > > > > > > > > > packages even if it is only part of the SDK and also for native
+> > > > > > > > > > packages that are not part of the image build.
+> > > > > > > > > >
+> > > > > > > > > > I cannot be the only one with this problem so how are other companies
+> > > > > > > > > > solving this issue? Are they just not using the INCOMPATIBLE_LICENSE?
+> > > > > > > > > > Are you setting up a parallel process for checking for any
+> > > > > > > > > > incompatible licenses issues?
+> > > > > > > > > >
+> > > > > > > > > > A more specific issue is that there are so many packages with bash
+> > > > > > > > > > dependencies which are pulling in bash which is GPLv3 so how have you
+> > > > > > > > > > solved that? Currently we have done some pretty uggly hacks which I am
+> > > > > > > > > > not that happy with but we needed to keep it out of the image.
+> > > > > > > > > >
+> > > > > > > > > > Thanks
+> > > > > > > > > >
+> > > > > > > > > >
+> > > > > > > > > >
+> >
+> > -=-=-=-=-=-=-=-=-=-=-=-
+> > Links: You receive all messages sent to this group.
+> > You automatically follow any topics you start or reply to.
+> > View/Reply Online (#56717): https://lists.yoctoproject.org/g/yocto/message/56717
+> > Mute This Topic: https://lists.yoctoproject.org/mt/90285507/1997914
+> > Group Owner: yocto+owner@lists.yoctoproject.org
+> > Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [raj.khem@gmail.com]
+> > -=-=-=-=-=-=-=-=-=-=-=-
+> >
+
+
+^ permalink raw reply	[flat|nested] 19+ messages in thread
+end of thread, other threads:[~2022-04-12 16:46 UTC | newest]
+
+Thread overview: 19+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-04-06  8:59 [Question] How to handle GPLv3 packages? Måns
+2022-04-06  9:03 ` [yocto] " Alexander Kanavin
+2022-04-08  6:06   ` Måns
+2022-04-08  8:15     ` Alexander Kanavin
+2022-04-08 16:56       ` Måns
+2022-04-08 16:59         ` Alexander Kanavin
+2022-04-11  7:12           ` Måns
+2022-04-11  7:16             ` Alexander Kanavin
+2022-04-11  8:29               ` Måns
+2022-04-11 16:19                 ` Khem Raj
+2022-04-12  9:45                   ` Måns
+2022-04-06  9:10 ` Ross Burton
+2022-04-08  8:18   ` Måns
+2022-04-08  8:22     ` Alexander Kanavin
+2022-04-08  8:32     ` Mikko.Rapeli
+2022-04-08  9:22       ` Alexander Kanavin
+2022-04-08 10:17         ` Måns
+2022-04-06  9:23 ` Mikko.Rapeli
+2022-04-06  9:31   ` Måns
+

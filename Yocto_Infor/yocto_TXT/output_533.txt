@@ -1,0 +1,171 @@
+* [auto-upgrade-helper] Should AUH send patches in-line instead of as attachments?
+@ 2023-06-02 23:49 Tim Orling
+  2023-06-03 13:25 ` Alexander Kanavin
+  0 siblings, 1 reply; 4+ messages in thread
+From: Tim Orling @ 2023-06-02 23:49 UTC (permalink / raw)
+  To: Yocto (yocto@lists.yoctoproject.org), Alexander Kanavin
+
+[-- Attachment #1: Type: text/plain, Size: 415 bytes --]
+
+In the `b4 shazaam` workflow, you cannot consume patches from AUH emails
+because they are sent as attachments. This means a maintainer must first
+download the patch from an email or wget it from a lore.kernel.org copied
+url.
+
+Before I go implementing something that might be unwanted, is there a
+downside to sending AUH generated emails with the patches in the normal
+`git send-email` type approach?
+
+Regards
+--Tim
+
+[-- Attachment #2: Type: text/html, Size: 533 bytes --]
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [auto-upgrade-helper] Should AUH send patches in-line instead of as attachments?
+  2023-06-02 23:49 [auto-upgrade-helper] Should AUH send patches in-line instead of as attachments? Tim Orling
+@ 2023-06-03 13:25 ` Alexander Kanavin
+       [not found]   ` <20230605-musty-chamber-0dd3ae@meerkat>
+  0 siblings, 1 reply; 4+ messages in thread
+From: Alexander Kanavin @ 2023-06-03 13:25 UTC (permalink / raw)
+  To: Tim Orling; +Cc: Yocto (yocto@lists.yoctoproject.org)
+
+AUH attaches not just the patch (if it was possible to produce), but
+also buildhistory and build failure logs (if something failed). It
+also provides a bit of explanation/context/apply-resend instructions
+in the email text. We can certainly consider options, I'm just not
+sure how to arrange all that if patches are sent directly as emails.
+
+Note that the whole patchset is also attached as a tarball to overall
+AUH status email, and both the tarballs and their content are also
+available online:
+https://autobuilder.yocto.io/pub/auh/
+
+Alex
+
+On Sat, 3 Jun 2023 at 01:49, Tim Orling <ticotimo@gmail.com> wrote:
+>
+> In the `b4 shazaam` workflow, you cannot consume patches from AUH emails because they are sent as attachments. This means a maintainer must first download the patch from an email or wget it from a lore.kernel.org copied url.
+>
+> Before I go implementing something that might be unwanted, is there a downside to sending AUH generated emails with the patches in the normal `git send-email` type approach?
+>
+> Regards
+> --Tim
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [auto-upgrade-helper] Should AUH send patches in-line instead of as attachments?
+       [not found]   ` <20230605-musty-chamber-0dd3ae@meerkat>
+@ 2023-06-06 18:09     ` Alexander Kanavin
+       [not found]       ` <20230606-monotype-ignore-885b91@meerkat>
+  0 siblings, 1 reply; 4+ messages in thread
+From: Alexander Kanavin @ 2023-06-06 18:09 UTC (permalink / raw)
+  To: Konstantin Ryabitsev; +Cc: Tim Orling, Yocto (yocto@lists.yoctoproject.org)
+
+[-- Attachment #1: Type: text/plain, Size: 2369 bytes --]
+
+On Mon 5. Jun 2023 at 23.46, Konstantin Ryabitsev <
+konstantin@linuxfoundation.org> wrote:
+
+> On Sat, Jun 03, 2023 at 03:25:59PM +0200, Alexander Kanavin wrote:
+> > AUH attaches not just the patch (if it was possible to produce), but
+> > also buildhistory and build failure logs (if something failed). It
+> > also provides a bit of explanation/context/apply-resend instructions
+> > in the email text. We can certainly consider options, I'm just not
+> > sure how to arrange all that if patches are sent directly as emails.
+>
+> It's actually pretty straightforward. Instead of attaching the patch to the
+> message, place it under the scissors line "-- >8 --".
+>
+> E.g. if we take this message:
+>
+>
+> https://lore.kernel.org/openembedded-core/010101887b289125-ddc413a5-24e2-4458-a329-e719e936d0e6-000000@us-west-2.amazonses.com/
+>
+> Make the body of the message as follows:
+>
+>         ... (skipped) ...
+>         Please review the attached files for further information and
+> build/update failures.
+>         Any problem please file a bug at
+> https://bugzilla.yoctoproject.org/enter_bug.cgi?product=Automated%20Update%20Handler
+>
+>         Regards,
+>         The Upgrade Helper
+>
+>         -- >8 --
+>         From e302d4d1d5eb9f8377ddcfac58e46b0d787f1e88 Mon Sep 17 00:00:00
+> 2001
+>         From: Upgrade Helper <auh@yoctoproject.org>
+>         Date: Fri, 2 Jun 2023 05:09:50 +0000
+>         Subject: [PATCH] at-spi2-core: upgrade 2.48.0 -> 2.48.3
+>
+>         ---
+>          .../atk/{at-spi2-core_2.48.0.bb => at-spi2-core_2.48.3.bb}
+> | 2 +-
+>          1 file changed, 1 insertion(+), 1 deletion(-)
+>          rename meta/recipes-support/atk/{at-spi2-core_2.48.0.bb =>
+> at-spi2-core_2.48.3.bb} (95%)
+>
+>         diff --git a/meta/recipes-support/atk/at-spi2-core_2.48.0.bb
+> b/meta/recipes-support/atk/at-spi2-core_2.48.3.bb
+>         ... (skipped) ...
+>
+> This should make it possible for someone to use this patch directly without
+> having to first save the attachment.
+>
+> Here's more info about the scissors line:
+>
+> https://git-scm.com/docs/git-mailinfo#Documentation/git-mailinfo.txt---scissors
+>
+> Hope this helps.
+
+
+Thanks, that seems reasonable, but is then it still ok to attach additional
+build artifacts (logs etc) to the message? Will the tools first discard the
+attachments, take the message body, then apply the scissors to get the
+patch out?
+
+>
+Alex
+
+[-- Attachment #2: Type: text/html, Size: 4133 bytes --]
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [auto-upgrade-helper] Should AUH send patches in-line instead of as attachments?
+       [not found]       ` <20230606-monotype-ignore-885b91@meerkat>
+@ 2023-06-12 10:46         ` Alexander Kanavin
+  0 siblings, 0 replies; 4+ messages in thread
+From: Alexander Kanavin @ 2023-06-12 10:46 UTC (permalink / raw)
+  To: Konstantin Ryabitsev; +Cc: Tim Orling, Yocto (yocto@lists.yoctoproject.org)
+
+On Tue, 6 Jun 2023 at 21:17, Konstantin Ryabitsev
+<konstantin@linuxfoundation.org> wrote:
+>
+> On Tue, Jun 06, 2023 at 08:09:40PM +0200, Alexander Kanavin wrote:
+> > Thanks, that seems reasonable, but is then it still ok to attach additional
+> > build artifacts (logs etc) to the message? Will the tools first discard the
+> > attachments, take the message body, then apply the scissors to get the
+> > patch out?
+>
+> Yes, I believe most tools will handle this situation just fine -- at least b4
+> does for sure, and so should patchwork.
+
+I added a tweak to AUH that would do the scissors thingy with the patch:
+https://lists.yoctoproject.org/g/yocto/message/60252
+
+Alex
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+end of thread, other threads:[~2023-06-12 10:46 UTC | newest]
+
+Thread overview: 4+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-06-02 23:49 [auto-upgrade-helper] Should AUH send patches in-line instead of as attachments? Tim Orling
+2023-06-03 13:25 ` Alexander Kanavin
+     [not found]   ` <20230605-musty-chamber-0dd3ae@meerkat>
+2023-06-06 18:09     ` Alexander Kanavin
+     [not found]       ` <20230606-monotype-ignore-885b91@meerkat>
+2023-06-12 10:46         ` Alexander Kanavin
+

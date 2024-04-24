@@ -1,0 +1,317 @@
+* [meta-zephyr][PATCH 1/5][langdale] CI: Add variables needed for k8s runners
+@ 2022-12-16 15:41 Peter Hoyes
+  2022-12-16 15:41 ` [meta-zephyr][PATCH 2/5][langdale] CI: add tags to all jobs Peter Hoyes
+                   ` (4 more replies)
+  0 siblings, 5 replies; 6+ messages in thread
+From: Peter Hoyes @ 2022-12-16 15:41 UTC (permalink / raw)
+  To: yocto; +Cc: Peter Hoyes, Ross Burton, Jon Mason
+
+From: Peter Hoyes <Peter.Hoyes@arm.com>
+
+The Kas container needs to use the entrypoint as that is where the user
+changes from root to a normal user.
+
+Also set the KUBERNETES_CPU_REQUEST to the variable CPU_REQUEST as this
+needs to be tuned per-deployment.
+
+CPU_REQUEST has no value outside of Arm Corp.  Gitlab CI allows for
+variables to be overridden by default.  So, we can give it a default
+value of NULL/empty and have everything work internally and externally
+by default.
+
+Signed-off-by: Ross Burton <ross.burton@arm.com>
+Signed-off-by: Jon Mason <jon.mason@arm.com>
+Signed-off-by: Peter Hoyes <Peter.Hoyes@arm.com>
+---
+ .gitlab-ci.yml | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/.gitlab-ci.yml b/.gitlab-ci.yml
+index 3f0e319..616626a 100644
+--- a/.gitlab-ci.yml
++++ b/.gitlab-ci.yml
+@@ -1,5 +1,12 @@
+ image: ghcr.io/siemens/kas/kas:latest-release
+ 
++variables:
++  CPU_REQUEST: ""
++  # These are needed as the k8s executor doesn't respect the container
++  # entrypoint by default
++  FF_USE_LEGACY_KUBERNETES_EXECUTION_STRATEGY: 0
++  FF_KUBERNETES_HONOR_ENTRYPOINT: 1
++
+ stages:
+   - prep
+   - build
+@@ -24,6 +31,8 @@ stages:
+ # Generalised fragment to do a Kas build
+ .build:
+   extends: .setup
++  variables:
++    KUBERNETES_CPU_REQUEST: $CPU_REQUEST
+   script:
+     - KASFILES=$(./ci/jobs-to-kas "$CI_JOB_NAME")
+     - kas shell --update --force-checkout $KASFILES -c 'cat conf/*.conf'
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 6+ messages in thread
+* [meta-zephyr][PATCH 2/5][langdale] CI: add tags to all jobs
+  2022-12-16 15:41 [meta-zephyr][PATCH 1/5][langdale] CI: Add variables needed for k8s runners Peter Hoyes
+@ 2022-12-16 15:41 ` Peter Hoyes
+  2022-12-16 15:41 ` [meta-zephyr][PATCH 3/5][langdale] CI: Set default branch to langdale Peter Hoyes
+                   ` (3 subsequent siblings)
+  4 siblings, 0 replies; 6+ messages in thread
+From: Peter Hoyes @ 2022-12-16 15:41 UTC (permalink / raw)
+  To: yocto; +Cc: Peter Hoyes, Ross Burton, Jon Mason
+
+From: Peter Hoyes <Peter.Hoyes@arm.com>
+
+Tag all jobs with the DEFAULT_TAG variable so each instance can control
+what tags the jobs have.
+
+Signed-off-by: Ross Burton <ross.burton@arm.com>
+Signed-off-by: Jon Mason <jon.mason@arm.com>
+Signed-off-by: Peter Hoyes <Peter.Hoyes@arm.com>
+---
+ .gitlab-ci.yml | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/.gitlab-ci.yml b/.gitlab-ci.yml
+index 616626a..7ec0bd0 100644
+--- a/.gitlab-ci.yml
++++ b/.gitlab-ci.yml
+@@ -2,6 +2,7 @@ image: ghcr.io/siemens/kas/kas:latest-release
+ 
+ variables:
+   CPU_REQUEST: ""
++  DEFAULT_TAG: ""
+   # These are needed as the k8s executor doesn't respect the container
+   # entrypoint by default
+   FF_USE_LEGACY_KUBERNETES_EXECUTION_STRATEGY: 0
+@@ -13,6 +14,8 @@ stages:
+ 
+ # Common job fragment to get a worker ready
+ .setup:
++  tags:
++    - $DEFAULT_TAG
+   stage: build
+   interruptible: true
+   variables:
+@@ -65,7 +68,8 @@ machine-coverage:
+   script:
+     - ./ci/check-machine-coverage
+   coverage: '/Coverage: \d+/'
+-
++  tags:
++    - $DEFAULT_TAG
+ 
+ #
+ # Build stage, the actual build jobs
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 6+ messages in thread
+* [meta-zephyr][PATCH 3/5][langdale] CI: Set default branch to langdale
+  2022-12-16 15:41 [meta-zephyr][PATCH 1/5][langdale] CI: Add variables needed for k8s runners Peter Hoyes
+  2022-12-16 15:41 ` [meta-zephyr][PATCH 2/5][langdale] CI: add tags to all jobs Peter Hoyes
+@ 2022-12-16 15:41 ` Peter Hoyes
+  2022-12-16 15:41 ` [meta-zephyr][PATCH 4/5][langdale] zephyr-core/zephyr-kernel: Use layer-relative require for version file Peter Hoyes
+                   ` (2 subsequent siblings)
+  4 siblings, 0 replies; 6+ messages in thread
+From: Peter Hoyes @ 2022-12-16 15:41 UTC (permalink / raw)
+  To: yocto; +Cc: Peter Hoyes
+
+From: Peter Hoyes <Peter.Hoyes@arm.com>
+
+Signed-off-by: Peter Hoyes <Peter.Hoyes@arm.com>
+---
+ ci/base.yml | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/ci/base.yml b/ci/base.yml
+index 70adac1..7b2203e 100644
+--- a/ci/base.yml
++++ b/ci/base.yml
+@@ -7,7 +7,7 @@ distro: zephyr
+ 
+ defaults:
+   repos:
+-    refspec: master
++    refspec: langdale
+ 
+ repos:
+   meta-zephyr:
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 6+ messages in thread
+* [meta-zephyr][PATCH 4/5][langdale] zephyr-core/zephyr-kernel: Use layer-relative require for version file
+  2022-12-16 15:41 [meta-zephyr][PATCH 1/5][langdale] CI: Add variables needed for k8s runners Peter Hoyes
+  2022-12-16 15:41 ` [meta-zephyr][PATCH 2/5][langdale] CI: add tags to all jobs Peter Hoyes
+  2022-12-16 15:41 ` [meta-zephyr][PATCH 3/5][langdale] CI: Set default branch to langdale Peter Hoyes
+@ 2022-12-16 15:41 ` Peter Hoyes
+  2022-12-16 15:41 ` [meta-zephyr][PATCH 5/5][langdale] zephyr-core/zephyr-kernel: Inhibit packaging steps with the Zephyr SDK Peter Hoyes
+  2023-01-15 20:17 ` [meta-zephyr][PATCH 1/5][langdale] CI: Add variables needed for k8s runners Jon Mason
+  4 siblings, 0 replies; 6+ messages in thread
+From: Peter Hoyes @ 2022-12-16 15:41 UTC (permalink / raw)
+  To: yocto; +Cc: Peter Hoyes
+
+From: Peter Hoyes <Peter.Hoyes@arm.com>
+
+The inclusion of the Zephyr version-specific .inc file is currently
+using a local include. Change to be layer-relative to support including
+files in other layers.
+
+Change to use 'require' instead of 'include' so that an earlier error is
+printed if the file does not exist.
+
+Signed-off-by: Peter Hoyes <Peter.Hoyes@arm.com>
+---
+ .../recipes-kernel/zephyr-kernel/zephyr-kernel-src.inc          | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-kernel-src.inc b/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-kernel-src.inc
+index f28d1d4..3383894 100644
+--- a/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-kernel-src.inc
++++ b/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-kernel-src.inc
+@@ -13,4 +13,4 @@ S = "${WORKDIR}/git"
+ 
+ # Default to a stable version
+ PREFERRED_VERSION_zephyr-kernel ??= "3.1.0"
+-include zephyr-kernel-src-${PREFERRED_VERSION_zephyr-kernel}.inc
++require recipes-kernel/zephyr-kernel/zephyr-kernel-src-${PREFERRED_VERSION_zephyr-kernel}.inc
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 6+ messages in thread
+* [meta-zephyr][PATCH 5/5][langdale] zephyr-core/zephyr-kernel: Inhibit packaging steps with the Zephyr SDK
+  2022-12-16 15:41 [meta-zephyr][PATCH 1/5][langdale] CI: Add variables needed for k8s runners Peter Hoyes
+                   ` (2 preceding siblings ...)
+  2022-12-16 15:41 ` [meta-zephyr][PATCH 4/5][langdale] zephyr-core/zephyr-kernel: Use layer-relative require for version file Peter Hoyes
+@ 2022-12-16 15:41 ` Peter Hoyes
+  2023-01-15 20:17 ` [meta-zephyr][PATCH 1/5][langdale] CI: Add variables needed for k8s runners Jon Mason
+  4 siblings, 0 replies; 6+ messages in thread
+From: Peter Hoyes @ 2022-12-16 15:41 UTC (permalink / raw)
+  To: yocto; +Cc: Peter Hoyes
+
+From: Peter Hoyes <Peter.Hoyes@arm.com>
+
+The packaging step includes post-processing of elf files using objcopy
+and strip from the Yocto toolchain. When using the Zephyr SDK, the Yocto
+toolchain is explicitly not built so it is not possible to run these
+steps. Therefore, inhibit them in zephyr-toolchain-zephyr.inc
+
+Signed-off-by: Peter Hoyes <Peter.Hoyes@arm.com>
+---
+ .../recipes-kernel/zephyr-kernel/zephyr-toolchain-zephyr.inc  | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-toolchain-zephyr.inc b/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-toolchain-zephyr.inc
+index 9987e3c..a193314 100644
+--- a/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-toolchain-zephyr.inc
++++ b/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-toolchain-zephyr.inc
+@@ -13,3 +13,7 @@ deltask generate_toolchain_file
+ # Provide a suitable location to store the toolchain capabilites cache
+ ZEPHYR_USER_CACHE_DIR = "${B}/.cache"
+ EXTRA_OECMAKE:append = " -DUSER_CACHE_DIR=${ZEPHYR_USER_CACHE_DIR}"
++
++# Inhibit packaging steps that require the Yocto toolchain
++INHIBIT_PACKAGE_DEBUG_SPLIT = "1"
++INHIBIT_PACKAGE_STRIP = "1"
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 6+ messages in thread
+* Re: [meta-zephyr][PATCH 1/5][langdale] CI: Add variables needed for k8s runners
+  2022-12-16 15:41 [meta-zephyr][PATCH 1/5][langdale] CI: Add variables needed for k8s runners Peter Hoyes
+                   ` (3 preceding siblings ...)
+  2022-12-16 15:41 ` [meta-zephyr][PATCH 5/5][langdale] zephyr-core/zephyr-kernel: Inhibit packaging steps with the Zephyr SDK Peter Hoyes
+@ 2023-01-15 20:17 ` Jon Mason
+  4 siblings, 0 replies; 6+ messages in thread
+From: Jon Mason @ 2023-01-15 20:17 UTC (permalink / raw)
+  To: Peter Hoyes; +Cc: yocto, Ross Burton, Jon Mason
+
+On Fri, Dec 16, 2022 at 03:41:43PM +0000, Peter Hoyes wrote:
+> From: Peter Hoyes <Peter.Hoyes@arm.com>
+> 
+> The Kas container needs to use the entrypoint as that is where the user
+> changes from root to a normal user.
+> 
+> Also set the KUBERNETES_CPU_REQUEST to the variable CPU_REQUEST as this
+> needs to be tuned per-deployment.
+> 
+> CPU_REQUEST has no value outside of Arm Corp.  Gitlab CI allows for
+> variables to be overridden by default.  So, we can give it a default
+> value of NULL/empty and have everything work internally and externally
+> by default.
+> 
+> Signed-off-by: Ross Burton <ross.burton@arm.com>
+> Signed-off-by: Jon Mason <jon.mason@arm.com>
+> Signed-off-by: Peter Hoyes <Peter.Hoyes@arm.com>
+
+I ran this series (batched with the other patches destined for the
+langdale branch) through CI and it passes.  See:
+https://gitlab.com/jonmason00/meta-zephyr/-/pipelines/747805268
+
+
+Tested-by: Jon Mason <jon.mason@arm.com>
+
+> ---
+>  .gitlab-ci.yml | 9 +++++++++
+>  1 file changed, 9 insertions(+)
+> 
+> diff --git a/.gitlab-ci.yml b/.gitlab-ci.yml
+> index 3f0e319..616626a 100644
+> --- a/.gitlab-ci.yml
+> +++ b/.gitlab-ci.yml
+> @@ -1,5 +1,12 @@
+>  image: ghcr.io/siemens/kas/kas:latest-release
+>  
+> +variables:
+> +  CPU_REQUEST: ""
+> +  # These are needed as the k8s executor doesn't respect the container
+> +  # entrypoint by default
+> +  FF_USE_LEGACY_KUBERNETES_EXECUTION_STRATEGY: 0
+> +  FF_KUBERNETES_HONOR_ENTRYPOINT: 1
+> +
+>  stages:
+>    - prep
+>    - build
+> @@ -24,6 +31,8 @@ stages:
+>  # Generalised fragment to do a Kas build
+>  .build:
+>    extends: .setup
+> +  variables:
+> +    KUBERNETES_CPU_REQUEST: $CPU_REQUEST
+>    script:
+>      - KASFILES=$(./ci/jobs-to-kas "$CI_JOB_NAME")
+>      - kas shell --update --force-checkout $KASFILES -c 'cat conf/*.conf'
+> -- 
+> 2.25.1
+> 
+> 
+
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+end of thread, other threads:[~2023-01-15 20:17 UTC | newest]
+
+Thread overview: 6+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-12-16 15:41 [meta-zephyr][PATCH 1/5][langdale] CI: Add variables needed for k8s runners Peter Hoyes
+2022-12-16 15:41 ` [meta-zephyr][PATCH 2/5][langdale] CI: add tags to all jobs Peter Hoyes
+2022-12-16 15:41 ` [meta-zephyr][PATCH 3/5][langdale] CI: Set default branch to langdale Peter Hoyes
+2022-12-16 15:41 ` [meta-zephyr][PATCH 4/5][langdale] zephyr-core/zephyr-kernel: Use layer-relative require for version file Peter Hoyes
+2022-12-16 15:41 ` [meta-zephyr][PATCH 5/5][langdale] zephyr-core/zephyr-kernel: Inhibit packaging steps with the Zephyr SDK Peter Hoyes
+2023-01-15 20:17 ` [meta-zephyr][PATCH 1/5][langdale] CI: Add variables needed for k8s runners Jon Mason
+

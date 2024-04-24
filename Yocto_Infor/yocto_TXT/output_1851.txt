@@ -1,0 +1,44 @@
+* Dependency clarification for image classes with bitbake?
+@ 2022-05-10 10:58 Heinz Wrobel
+  0 siblings, 0 replies; only message in thread
+From: Heinz Wrobel @ 2022-05-10 10:58 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2677 bytes --]
+
+Hi,
+
+I have some issues in sorting out dependency management for a custom image_types_*sdcard.bbclass and need some help/advice because the docs didn't solve my problems.
+
+As opposed to "normal" images where do_rootfs depends on the packages and do_image on do_rootfs and the image types on do_image, here we have extra do_image_sdcard[depends] for stuff outside the rootfs.
+My do_image_sdcard[depends] currently references do_populate_sysroot and do_deploy of some other recipes and I have a empirical/paranoia recrdeptask on do_packagedata to mimic image.bbclass.
+
+It appears now that bitbake only runs my do_image_sdcard task if the task hasn't been run yet, no matter the state of the dependencies. It doesn't seem to matter for do_image_sdcard if some do_image_sdcard[depends] dependency for that task is actually missing or newer.
+If I, e.g., cleansstate such a dependency and then bitbake my image again, the dependency is rebuilt, but the image isn't rebuilt because it already had been built before. A dependency build trigger downstream in the chain is not an execution trigger upstream.
+
+So now I have an image that is outdated, because a necessary dependency is more recent.
+This seems to be explained by the statement in the bitbake manual "Currently, invalid timestamps are only considered on a per recipe file basis.", i.e., if recipe A depends on B, A is not rebuilt if A already exists, even if B is more recent than A.
+
+For this simple case, I can fix it by cleansstate'ing the image and rebuilding it (or would it be enough to just clean the image?!).
+
+But what concerns me now are more complex recipe dependencies. If I have A->B-><many>->Z and rebuild Z without knowing that A needs Z then a later "bitbake A" would do nothing. A and the interim dependencies are then outdated because bitbake wouldn't execute on, e.g., C or B or A.
+So unless I know the dependency chain manually I would always have to cleanall because I can never be sure that my image is outdated somewhere just because I rebuilt some recipe somewhere? That wouldn't be efficient at all and kill most of the sstate usefulness.
+Alternatively I would always have to "-f -c image_sdcard", which also doesn't exactly seem like a good approach because then the datestamps for the underlying images wouldn't match anymore and the rootfs can't be found?
+
+It appears to me that I am missing something because this all just seems risky and so fundamental?
+
+The obvious question is of course: Is there a reasonable way to ensure my image gets recreated by executing my do_image_sdcard if any dependency has a more recent timestamp than the current image?
+
+Thanks,
+
+Heinz
+
+[-- Attachment #2: Type: text/html, Size: 5213 bytes --]
+
+^ permalink raw reply	[flat|nested] only message in thread
+only message in thread, other threads:[~2022-05-10 10:58 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-05-10 10:58 Dependency clarification for image classes with bitbake? Heinz Wrobel
+

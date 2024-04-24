@@ -1,0 +1,90 @@
+* [meta-selinux][PATCH] libselinux: mount selinuxfs with noexec
+@ 2021-11-05 15:15 Maximilian Blenk
+  0 siblings, 0 replies; only message in thread
+From: Maximilian Blenk @ 2021-11-05 15:15 UTC (permalink / raw)
+  To: yocto; +Cc: Maximilian Blenk
+
+Ensure that selinuxfs is mounted using the noxec and nosuid flags.
+The current master branch of meta-selinux already contains this commit.
+
+Change-Id: I38cba8ad0da17286f8b722c24717da5990ac1ee8
+Upstream-Status: Backport [https://github.com/SELinuxProject/selinux/commit/7eaea214a0a5d9e3fb517152ac6162449ed3ef40]
+---
+ ...ux-mount-selinuxfs-noexec-and-nosuid.patch | 36 +++++++++++++++++++
+ recipes-security/selinux/libselinux_3.0.bb    |  1 +
+ 2 files changed, 37 insertions(+)
+ create mode 100644 recipes-security/selinux/libselinux/0001-libselinux-mount-selinuxfs-noexec-and-nosuid.patch
+
+Hi there,
+
+this commit backports a patch of libselinux that ensures that the
+selinuxfs is mounted using the noexec and nosuid flag. Thought you guys
+might also be interested in backporting this one.
+
+BR Max
+
+
+diff --git a/recipes-security/selinux/libselinux/0001-libselinux-mount-selinuxfs-noexec-and-nosuid.patch b/recipes-security/selinux/libselinux/0001-libselinux-mount-selinuxfs-noexec-and-nosuid.patch
+new file mode 100644
+index 0000000..2de9573
+--- /dev/null
++++ b/recipes-security/selinux/libselinux/0001-libselinux-mount-selinuxfs-noexec-and-nosuid.patch
+@@ -0,0 +1,36 @@
++From a94f3791ddd3155dde94ed48ffd1566fbe8bf4e2 Mon Sep 17 00:00:00 2001
++From: Topi Miettinen <toiwoton@gmail.com>
++Date: Tue, 28 Apr 2020 14:11:42 +0300
++Subject: [PATCH] libselinux: mount selinuxfs noexec and nosuid
++
++Mount selinuxfs with mount flags noexec and nosuid. It's not likely
++that this has any effect, but it's visually more pleasing.
++
++Option nodev can't be used because of /sys/fs/selinux/null device,
++which is used by Android.
++
++Signed-off-by: Topi Miettinen <toiwoton@gmail.com>
++Acked-by: Stephen Smalley <stephen.smalley.work@gmail.com>
++---
++ libselinux/src/load_policy.c | 3 ++-
++ 1 file changed, 2 insertions(+), 1 deletion(-)
++
++Upstream-Status: Backport [git https://github.com/SELinuxProject/selinux/commit/7eaea214a0a5d9e3fb517152ac6162449ed3ef40]
++
++diff --git a/src/load_policy.c b/src/load_policy.c
++index 9e75292d..ccf73c95 100644
++--- a/src/load_policy.c
+++++ b/src/load_policy.c
++@@ -281,7 +281,8 @@ int selinux_init_load_policy(int *enforce)
++ 	const char *mntpoint = NULL;
++ 	/* First make sure /sys is mounted */
++ 	if (mount("sysfs", "/sys", "sysfs", 0, 0) == 0 || errno == EBUSY) {
++-		if (mount(SELINUXFS, SELINUXMNT, SELINUXFS, 0, 0) == 0 || errno == EBUSY) {
+++		/* MS_NODEV can't be set because of /sys/fs/selinux/null device, used by Android */
+++		if (mount(SELINUXFS, SELINUXMNT, SELINUXFS, MS_NOEXEC | MS_NOSUID, 0) == 0 || errno == EBUSY) {
++ 			mntpoint = SELINUXMNT;
++ 		} else {
++ 			/* check old mountpoint */
++-- 
++2.33.0
++
+diff --git a/recipes-security/selinux/libselinux_3.0.bb b/recipes-security/selinux/libselinux_3.0.bb
+index 4a60962..40defcd 100644
+--- a/recipes-security/selinux/libselinux_3.0.bb
++++ b/recipes-security/selinux/libselinux_3.0.bb
+@@ -13,4 +13,5 @@ SRC_URI += "\
+         file://libselinux-define-FD_CLOEXEC-as-necessary.patch \
+         file://0001-Fix-building-against-musl-and-uClibc-libc-libraries.patch \
+         file://0001-Fix-NULL-pointer-use-in-selinux_restorecon_set_sehandle.patch \
++        file://0001-libselinux-mount-selinuxfs-noexec-and-nosuid.patch \
+         "
+-- 
+2.33.0
+
+
+
+^ permalink raw reply related	[flat|nested] only message in thread
+only message in thread, other threads:[~2021-11-05 15:18 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-11-05 15:15 [meta-selinux][PATCH] libselinux: mount selinuxfs with noexec Maximilian Blenk
+

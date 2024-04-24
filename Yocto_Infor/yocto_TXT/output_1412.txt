@@ -1,0 +1,680 @@
+* [meta-raspberrypi][PATCH v2 0/7] Add support for multi kernel Raspberry Pi machines
+@ 2022-09-13 21:21 Andrei Gherzan
+  2022-09-13 21:21 ` [meta-raspberrypi][PATCH v2 1/7] sdcard_image-rpi.bbclass: Move SDIMG_KERNELIMAGE definitions to their machines Andrei Gherzan
+                   ` (6 more replies)
+  0 siblings, 7 replies; 8+ messages in thread
+From: Andrei Gherzan @ 2022-09-13 21:21 UTC (permalink / raw)
+  To: yocto; +Cc: andrei, Andrei Gherzan
+
+From: Andrei Gherzan <andrei.gherzan@huawei.com>
+
+PATCH v2:
+
+* the patches (depmod fixes) below were merged in oe-core/master (FYI)
+* added support for a similar (but simpler) armv8 machine - with CI
+
+PATCH v1:
+
+The new raspberrypi-armv7.conf aims at supporting all the armv7
+Raspberry Pi boards.
+
+This initial support was tested on:
+
+- Raspberry Pi 4 Model B
+- Raspberry Pi 3 Model B
+- Raspberry Pi 0 2 WiFi
+
+Tests:
+
+- Boot
+- WiFi
+- BT
+- Modules load
+
+There is a known limitation of the fact that the core doesn't handle
+image depmod for multiple kernels. A set of fixes were proposed for
+that:
+
+    https://lists.openembedded.org/g/openembedded-core/message/170505
+    https://lists.openembedded.org/g/openembedded-core/message/170506
+    https://lists.openembedded.org/g/openembedded-core/message/170507
+    https://lists.openembedded.org/g/openembedded-core/message/170508
+
+Without these (or similar patches) patches, an additional step is
+needed on any board but Raspberry Pi 4: for example running `depmod -a`
+at first boot.
+
+Andrei Gherzan (7):
+  sdcard_image-rpi.bbclass: Move SDIMG_KERNELIMAGE definitions to their
+    machines
+  raspberrypi0-2w.conf: Include the RPi 0-2w dtb for all 32-bit machines
+  rpi-base.inc: Split IMAGE_BOOT_FILES for kernel image
+  Add support for a ARMv7 machine supporting multiple Raspberry Pi
+    boards
+  ci: Add raspberrypi-armv7 to the build matrix
+  Add support for a ARMv8 machine supporting multiple Raspberry Pi
+    boards
+  ci: Add raspberrypi-armv8 to the build matrix
+
+ .github/workflows/yocto-builds.yml            |  2 +
+ classes/sdcard_image-rpi.bbclass              |  5 ---
+ conf/machine/include/rpi-base.inc             | 10 +++--
+ conf/machine/include/rpi-default-versions.inc |  1 +
+ conf/machine/raspberrypi-armv7.conf           | 39 +++++++++++++++++
+ conf/machine/raspberrypi-armv8.conf           | 43 +++++++++++++++++++
+ conf/machine/raspberrypi.conf                 |  4 +-
+ conf/machine/raspberrypi0-2w.conf             |  4 --
+ conf/machine/raspberrypi2.conf                |  2 +-
+ conf/machine/raspberrypi3-64.conf             |  7 ++-
+ docs/layer-contents.md                        | 22 ++++++++++
+ recipes-kernel/linux/linux-raspberrypi-v7.inc | 13 ++++++
+ .../linux/linux-raspberrypi-v7_5.10.bb        |  6 +++
+ .../linux/linux-raspberrypi-v7_5.15.bb        |  6 +++
+ recipes-kernel/linux/linux-raspberrypi.inc    |  2 +
+ .../linux/linux-raspberrypi_5.15.bb           | 12 ++++++
+ 16 files changed, 159 insertions(+), 19 deletions(-)
+ create mode 100644 conf/machine/raspberrypi-armv7.conf
+ create mode 100644 conf/machine/raspberrypi-armv8.conf
+ create mode 100644 recipes-kernel/linux/linux-raspberrypi-v7.inc
+ create mode 100644 recipes-kernel/linux/linux-raspberrypi-v7_5.10.bb
+ create mode 100644 recipes-kernel/linux/linux-raspberrypi-v7_5.15.bb
+
+-- 
+2.25.1
+
+
+
+^ permalink raw reply	[flat|nested] 8+ messages in thread
+* [meta-raspberrypi][PATCH v2 1/7] sdcard_image-rpi.bbclass: Move SDIMG_KERNELIMAGE definitions to their machines
+  2022-09-13 21:21 [meta-raspberrypi][PATCH v2 0/7] Add support for multi kernel Raspberry Pi machines Andrei Gherzan
+@ 2022-09-13 21:21 ` Andrei Gherzan
+  2022-09-13 21:21 ` [meta-raspberrypi][PATCH v2 2/7] raspberrypi0-2w.conf: Include the RPi 0-2w dtb for all 32-bit machines Andrei Gherzan
+                   ` (5 subsequent siblings)
+  6 siblings, 0 replies; 8+ messages in thread
+From: Andrei Gherzan @ 2022-09-13 21:21 UTC (permalink / raw)
+  To: yocto; +Cc: andrei, Andrei Gherzan
+
+From: Andrei Gherzan <andrei.gherzan@huawei.com>
+
+This unifies the configuration of SDIMG_KERNELIMAGE across machines.
+
+Signed-off-by: Andrei Gherzan <andrei.gherzan@huawei.com>
+---
+ classes/sdcard_image-rpi.bbclass  | 5 -----
+ conf/machine/raspberrypi.conf     | 4 ++--
+ conf/machine/raspberrypi2.conf    | 2 +-
+ conf/machine/raspberrypi3-64.conf | 7 +++----
+ 4 files changed, 6 insertions(+), 12 deletions(-)
+
+diff --git a/classes/sdcard_image-rpi.bbclass b/classes/sdcard_image-rpi.bbclass
+index a7b9ac8..178e4ef 100644
+--- a/classes/sdcard_image-rpi.bbclass
++++ b/classes/sdcard_image-rpi.bbclass
+@@ -25,11 +25,6 @@ inherit image_types
+ # This image depends on the rootfs image
+ IMAGE_TYPEDEP:rpi-sdimg = "${SDIMG_ROOTFS_TYPE}"
+ 
+-# Kernel image name
+-SDIMG_KERNELIMAGE:raspberrypi  ?= "kernel.img"
+-SDIMG_KERNELIMAGE:raspberrypi2 ?= "kernel7.img"
+-SDIMG_KERNELIMAGE:raspberrypi3-64 ?= "kernel8.img"
+-
+ # Boot partition volume id
+ # Shorten raspberrypi to just rpi to keep it under 11 characters
+ # now enforced by mkfs.vfat from dosfstools-4.2
+diff --git a/conf/machine/raspberrypi.conf b/conf/machine/raspberrypi.conf
+index b23687b..05263d7 100644
+--- a/conf/machine/raspberrypi.conf
++++ b/conf/machine/raspberrypi.conf
+@@ -7,8 +7,8 @@ DEFAULTTUNE ?= "arm1176jzfshf"
+ require conf/machine/include/tune-arm1176jzf-s.inc
+ include conf/machine/include/rpi-base.inc
+ 
+-SERIAL_CONSOLES ?= "115200;ttyAMA0"
+-
++SDIMG_KERNELIMAGE  ?= "kernel.img"
+ UBOOT_MACHINE = "rpi_config"
++SERIAL_CONSOLES ?= "115200;ttyAMA0"
+ 
+ ARMSTUB ?= "armstub.bin"
+diff --git a/conf/machine/raspberrypi2.conf b/conf/machine/raspberrypi2.conf
+index 403d15e..8cb859e 100644
+--- a/conf/machine/raspberrypi2.conf
++++ b/conf/machine/raspberrypi2.conf
+@@ -7,8 +7,8 @@ DEFAULTTUNE ?= "cortexa7thf-neon-vfpv4"
+ require conf/machine/include/arm/armv7a/tune-cortexa7.inc
+ include conf/machine/include/rpi-base.inc
+ 
++SDIMG_KERNELIMAGE ?= "kernel7.img"
+ SERIAL_CONSOLES ?= "115200;ttyAMA0"
+-
+ UBOOT_MACHINE = "rpi_2_config"
+ 
+ ARMSTUB ?= "armstub7.bin"
+diff --git a/conf/machine/raspberrypi3-64.conf b/conf/machine/raspberrypi3-64.conf
+index 95475f3..573b079 100644
+--- a/conf/machine/raspberrypi3-64.conf
++++ b/conf/machine/raspberrypi3-64.conf
+@@ -21,16 +21,15 @@ RPI_KERNEL_DEVICETREE = " \
+     broadcom/bcm2710-rpi-cm3.dtb \
+     "
+ 
+-SERIAL_CONSOLES ?= "115200;ttyS0"
+-
+-UBOOT_MACHINE = "rpi_arm64_config"
+-
++SDIMG_KERNELIMAGE ?= "kernel8.img"
+ # When u-boot is enabled we need to use the "Image" format and the "booti"
+ # command to load the kernel
+ KERNEL_IMAGETYPE_UBOOT ?= "Image"
+ # "zImage" not supported on arm64 and ".gz" images not supported by bootloader yet
+ KERNEL_IMAGETYPE_DIRECT ?= "Image"
+ KERNEL_BOOTCMD ?= "booti"
++UBOOT_MACHINE = "rpi_arm64_config"
++SERIAL_CONSOLES ?= "115200;ttyS0"
+ 
+ VC4DTBO ?= "vc4-fkms-v3d"
+ ARMSTUB ?= "armstub8.bin"
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 8+ messages in thread
+* [meta-raspberrypi][PATCH v2 2/7] raspberrypi0-2w.conf: Include the RPi 0-2w dtb for all 32-bit machines
+  2022-09-13 21:21 [meta-raspberrypi][PATCH v2 0/7] Add support for multi kernel Raspberry Pi machines Andrei Gherzan
+  2022-09-13 21:21 ` [meta-raspberrypi][PATCH v2 1/7] sdcard_image-rpi.bbclass: Move SDIMG_KERNELIMAGE definitions to their machines Andrei Gherzan
+@ 2022-09-13 21:21 ` Andrei Gherzan
+  2022-09-13 21:22 ` [meta-raspberrypi][PATCH v2 3/7] rpi-base.inc: Split IMAGE_BOOT_FILES for kernel image Andrei Gherzan
+                   ` (4 subsequent siblings)
+  6 siblings, 0 replies; 8+ messages in thread
+From: Andrei Gherzan @ 2022-09-13 21:21 UTC (permalink / raw)
+  To: yocto; +Cc: andrei, Andrei Gherzan
+
+From: Andrei Gherzan <andrei.gherzan@huawei.com>
+
+All 32-bit machines are sharing the list of machine dtbs with the
+exception of raspberrypi0-2w. Move this away too to unify the
+machine configurations.
+
+Signed-off-by: Andrei Gherzan <andrei.gherzan@huawei.com>
+---
+ conf/machine/include/rpi-base.inc | 1 +
+ conf/machine/raspberrypi0-2w.conf | 4 ----
+ 2 files changed, 1 insertion(+), 4 deletions(-)
+
+diff --git a/conf/machine/include/rpi-base.inc b/conf/machine/include/rpi-base.inc
+index a2edf06..beb1f08 100644
+--- a/conf/machine/include/rpi-base.inc
++++ b/conf/machine/include/rpi-base.inc
+@@ -68,6 +68,7 @@ RPI_KERNEL_DEVICETREE ?= " \
+     bcm2710-rpi-2-b.dtb \
+     bcm2710-rpi-3-b.dtb \
+     bcm2710-rpi-3-b-plus.dtb \
++    bcm2710-rpi-zero-2.dtb \
+     bcm2711-rpi-4-b.dtb \
+     bcm2711-rpi-400.dtb \
+     bcm2708-rpi-cm.dtb \
+diff --git a/conf/machine/raspberrypi0-2w.conf b/conf/machine/raspberrypi0-2w.conf
+index c360d90..63c7bfb 100644
+--- a/conf/machine/raspberrypi0-2w.conf
++++ b/conf/machine/raspberrypi0-2w.conf
+@@ -11,7 +11,3 @@ MACHINE_EXTRA_RRECOMMENDS += "\
+     linux-firmware-rpidistro-bcm43436s \
+     bluez-firmware-rpidistro-bcm43430b0-hcd \
+ "
+-
+-RPI_KERNEL_DEVICETREE = " \
+-    bcm2710-rpi-zero-2.dtb \
+-    "
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 8+ messages in thread
+* [meta-raspberrypi][PATCH v2 3/7] rpi-base.inc: Split IMAGE_BOOT_FILES for kernel image
+  2022-09-13 21:21 [meta-raspberrypi][PATCH v2 0/7] Add support for multi kernel Raspberry Pi machines Andrei Gherzan
+  2022-09-13 21:21 ` [meta-raspberrypi][PATCH v2 1/7] sdcard_image-rpi.bbclass: Move SDIMG_KERNELIMAGE definitions to their machines Andrei Gherzan
+  2022-09-13 21:21 ` [meta-raspberrypi][PATCH v2 2/7] raspberrypi0-2w.conf: Include the RPi 0-2w dtb for all 32-bit machines Andrei Gherzan
+@ 2022-09-13 21:22 ` Andrei Gherzan
+  2022-09-13 21:22 ` [meta-raspberrypi][PATCH v2 4/7] Add support for a ARMv7 machine supporting multiple Raspberry Pi boards Andrei Gherzan
+                   ` (3 subsequent siblings)
+  6 siblings, 0 replies; 8+ messages in thread
+From: Andrei Gherzan @ 2022-09-13 21:22 UTC (permalink / raw)
+  To: yocto; +Cc: andrei, Andrei Gherzan
+
+From: Andrei Gherzan <andrei.gherzan@huawei.com>
+
+The kernel image deployment is now defined in IMAGE_BOOT_FILES as a
+separate variable: RPI_EXTRA_IMAGE_BOOT_FILES. This allows a custom
+kernel image deployment by redefining this variable when needed.
+
+Signed-off-by: Andrei Gherzan <andrei.gherzan@huawei.com>
+---
+ conf/machine/include/rpi-base.inc | 9 ++++++---
+ 1 file changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/conf/machine/include/rpi-base.inc b/conf/machine/include/rpi-base.inc
+index beb1f08..313c7d9 100644
+--- a/conf/machine/include/rpi-base.inc
++++ b/conf/machine/include/rpi-base.inc
+@@ -134,12 +134,15 @@ def make_dtb_boot_files(d):
+ 
+     return ' '.join([transform(dtb) for dtb in alldtbs.split(' ') if dtb])
+ 
++RPI_EXTRA_IMAGE_BOOT_FILES ?= " \
++	${@bb.utils.contains('RPI_USE_U_BOOT', '1', \
++		'${KERNEL_IMAGETYPE} u-boot.bin;${SDIMG_KERNELIMAGE} boot.scr', \
++		'${KERNEL_IMAGETYPE};${SDIMG_KERNELIMAGE}', d)} \
++	"
+ 
+ IMAGE_BOOT_FILES ?= "${BOOTFILES_DIR_NAME}/* \
+                  ${@make_dtb_boot_files(d)} \
+-                 ${@bb.utils.contains('RPI_USE_U_BOOT', '1', \
+-                    '${KERNEL_IMAGETYPE} u-boot.bin;${SDIMG_KERNELIMAGE} boot.scr', \
+-                    '${KERNEL_IMAGETYPE};${SDIMG_KERNELIMAGE}', d)} \
++                 ${RPI_EXTRA_IMAGE_BOOT_FILES} \
+                  "
+ do_image_wic[depends] += " \
+     rpi-bootfiles:do_deploy \
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 8+ messages in thread
+* [meta-raspberrypi][PATCH v2 4/7] Add support for a ARMv7 machine supporting multiple Raspberry Pi boards
+  2022-09-13 21:21 [meta-raspberrypi][PATCH v2 0/7] Add support for multi kernel Raspberry Pi machines Andrei Gherzan
+                   ` (2 preceding siblings ...)
+  2022-09-13 21:22 ` [meta-raspberrypi][PATCH v2 3/7] rpi-base.inc: Split IMAGE_BOOT_FILES for kernel image Andrei Gherzan
+@ 2022-09-13 21:22 ` Andrei Gherzan
+  2022-09-13 21:22 ` [meta-raspberrypi][PATCH v2 5/7] ci: Add raspberrypi-armv7 to the build matrix Andrei Gherzan
+                   ` (2 subsequent siblings)
+  6 siblings, 0 replies; 8+ messages in thread
+From: Andrei Gherzan @ 2022-09-13 21:22 UTC (permalink / raw)
+  To: yocto; +Cc: andrei, Andrei Gherzan
+
+From: Andrei Gherzan <andrei.gherzan@huawei.com>
+
+The new raspberrypi-armv7.conf aims at supporting all the ARMv7
+Raspberry Pi boards.
+
+This initial support was tested on:
+* Raspberry Pi 4 Model B
+* Raspberry Pi 3 Model B
+* Raspberry Pi 0 2 WiFi
+
+Signed-off-by: Andrei Gherzan <andrei.gherzan@huawei.com>
+---
+ conf/machine/include/rpi-default-versions.inc |  1 +
+ conf/machine/raspberrypi-armv7.conf           | 39 +++++++++++++++++++
+ docs/layer-contents.md                        | 16 ++++++++
+ recipes-kernel/linux/linux-raspberrypi-v7.inc | 13 +++++++
+ .../linux/linux-raspberrypi-v7_5.10.bb        |  6 +++
+ .../linux/linux-raspberrypi-v7_5.15.bb        |  6 +++
+ recipes-kernel/linux/linux-raspberrypi.inc    |  1 +
+ .../linux/linux-raspberrypi_5.15.bb           | 12 ++++++
+ 8 files changed, 94 insertions(+)
+ create mode 100644 conf/machine/raspberrypi-armv7.conf
+ create mode 100644 recipes-kernel/linux/linux-raspberrypi-v7.inc
+ create mode 100644 recipes-kernel/linux/linux-raspberrypi-v7_5.10.bb
+ create mode 100644 recipes-kernel/linux/linux-raspberrypi-v7_5.15.bb
+
+diff --git a/conf/machine/include/rpi-default-versions.inc b/conf/machine/include/rpi-default-versions.inc
+index 8ff2839..a29fd5e 100644
+--- a/conf/machine/include/rpi-default-versions.inc
++++ b/conf/machine/include/rpi-default-versions.inc
+@@ -1,3 +1,4 @@
+ # RaspberryPi BSP default versions
+ 
+ PREFERRED_VERSION_linux-raspberrypi ??= "5.15.%"
++PREFERRED_VERSION_linux-raspberrypi-v7 ??= "${PREFERRED_VERSION_linux-raspberrypi}"
+diff --git a/conf/machine/raspberrypi-armv7.conf b/conf/machine/raspberrypi-armv7.conf
+new file mode 100644
+index 0000000..cb2e5a2
+--- /dev/null
++++ b/conf/machine/raspberrypi-armv7.conf
+@@ -0,0 +1,39 @@
++# SPDX-FileCopyrightText: Andrei Gherzan <andrei.gherzan@huawei.com>
++#
++# SPDX-License-Identifier: MIT
++
++#@TYPE: Machine
++#@NAME: RaspberryPi Development Boards (32bit)
++#@DESCRIPTION: Machine configuration for the RaspberryPi boards in 32 bit mode
++
++DEFAULTTUNE ?= "cortexa7thf-neon-vfpv4"
++require conf/machine/include/arm/armv7a/tune-cortexa7.inc
++include conf/machine/include/rpi-base.inc
++
++# This machine includes by default the kernel for v7l. We hook in support for
++# v7.
++RASPBERRYPI_v7_KERNEL = "linux-raspberrypi-v7"
++RASPBERRYPI_v7_KERNEL_PACKAGE_NAME = "kernel-v7"
++RASPBERRYPI_v7_KERNEL_FILE ?= "kernel7.img"
++# We don't need a lot for v7l because it is the default provider,
++# virtual/kernel.
++RASPBERRYPI_v7l_KERNEL_FILE ?= "kernel7l.img"
++
++MACHINE_FEATURES += "pci"
++MACHINE_EXTRA_RRECOMMENDS += "\
++    linux-firmware-rpidistro-bcm43430 \
++    linux-firmware-rpidistro-bcm43436 \
++    linux-firmware-rpidistro-bcm43436s \
++    linux-firmware-rpidistro-bcm43455 \
++    linux-firmware-rpidistro-bcm43456 \
++    bluez-firmware-rpidistro-bcm43430a1-hcd \
++    bluez-firmware-rpidistro-bcm43430b0-hcd \
++    bluez-firmware-rpidistro-bcm4345c0-hcd \
++    bluez-firmware-rpidistro-bcm4345c5-hcd \
++"
++
++# FIXME: This machine doesn't support u-boot (yet)
++RPI_EXTRA_IMAGE_BOOT_FILES = " \
++	${KERNEL_IMAGETYPE};${RASPBERRYPI_v7l_KERNEL_FILE} \
++	${RASPBERRYPI_v7_KERNEL_PACKAGE_NAME}/${KERNEL_IMAGETYPE};${RASPBERRYPI_v7_KERNEL_FILE} \
++"
+diff --git a/docs/layer-contents.md b/docs/layer-contents.md
+index d12cb88..aa28a23 100644
+--- a/docs/layer-contents.md
++++ b/docs/layer-contents.md
+@@ -16,6 +16,22 @@
+ 
+ Note: The raspberrypi3 machines include support for Raspberry Pi 3B+.
+ 
++## Multi-board Machines
++
++This layer generally provides support for machines that are targetting a single
++Raspberry Pi board (or a very few subsets of them). This is so that the build
++infrastructure can tune and tweak the configuration with the flexibility to
++optimise for both runtime performance and disk storage.
++
++For usecases where compatibility of more boards is required, the layer provides
++machines that are tagetting a wider support of Raspberry Pi boards.
++
++### raspberrypi-armv7
++
++This machine targets support for all the ARMv7-based Raspberry Pi boards. It
++will pull in the firmware and deploy the kernel image and kernel modules for
++all the relevant boards.
++
+ ## Images
+ 
+ * rpi-test-image
+diff --git a/recipes-kernel/linux/linux-raspberrypi-v7.inc b/recipes-kernel/linux/linux-raspberrypi-v7.inc
+new file mode 100644
+index 0000000..77debc4
+--- /dev/null
++++ b/recipes-kernel/linux/linux-raspberrypi-v7.inc
+@@ -0,0 +1,13 @@
++# SPDX-FileCopyrightText: Andrei Gherzan <andrei.gherzan@huawei.com>
++#
++# SPDX-License-Identifier: MIT
++
++KBUILD_DEFCONFIG:raspberrypi-armv7 = "bcm2709_defconfig"
++KERNEL_PACKAGE_NAME = "${RASPBERRYPI_v7_KERNEL_PACKAGE_NAME}"
++PROVIDES:remove = "virtual/kernel"
++
++KERNEL_IMAGETYPE_DIRECT ?= "zImage"
++
++COMPATIBLE_MACHINE = "^raspberrypi-armv7$"
++
++KERNEL_DEVICETREE = ""
+diff --git a/recipes-kernel/linux/linux-raspberrypi-v7_5.10.bb b/recipes-kernel/linux/linux-raspberrypi-v7_5.10.bb
+new file mode 100644
+index 0000000..d594b61
+--- /dev/null
++++ b/recipes-kernel/linux/linux-raspberrypi-v7_5.10.bb
+@@ -0,0 +1,6 @@
++# SPDX-FileCopyrightText: Andrei Gherzan <andrei.gherzan@huawei.com>
++#
++# SPDX-License-Identifier: MIT
++
++require linux-raspberrypi-v7.inc
++require linux-raspberrypi_5.10.bb
+diff --git a/recipes-kernel/linux/linux-raspberrypi-v7_5.15.bb b/recipes-kernel/linux/linux-raspberrypi-v7_5.15.bb
+new file mode 100644
+index 0000000..7883985
+--- /dev/null
++++ b/recipes-kernel/linux/linux-raspberrypi-v7_5.15.bb
+@@ -0,0 +1,6 @@
++# SPDX-FileCopyrightText: Andrei Gherzan <andrei.gherzan@huawei.com>
++#
++# SPDX-License-Identifier: MIT
++
++require linux-raspberrypi-v7.inc
++require linux-raspberrypi_5.15.bb
+diff --git a/recipes-kernel/linux/linux-raspberrypi.inc b/recipes-kernel/linux/linux-raspberrypi.inc
+index 6362a73..2a651bd 100644
+--- a/recipes-kernel/linux/linux-raspberrypi.inc
++++ b/recipes-kernel/linux/linux-raspberrypi.inc
+@@ -26,6 +26,7 @@ KBUILD_DEFCONFIG:raspberrypi3 ?= "bcm2709_defconfig"
+ KBUILD_DEFCONFIG:raspberrypi3-64 ?= "bcmrpi3_defconfig"
+ KBUILD_DEFCONFIG:raspberrypi4 ?= "bcm2711_defconfig"
+ KBUILD_DEFCONFIG:raspberrypi4-64 ?= "bcm2711_defconfig"
++KBUILD_DEFCONFIG:raspberrypi-armv7 ?= "bcm2711_defconfig"
+ 
+ LINUX_VERSION_EXTENSION ?= ""
+ 
+diff --git a/recipes-kernel/linux/linux-raspberrypi_5.15.bb b/recipes-kernel/linux/linux-raspberrypi_5.15.bb
+index db93537..468737c 100644
+--- a/recipes-kernel/linux/linux-raspberrypi_5.15.bb
++++ b/recipes-kernel/linux/linux-raspberrypi_5.15.bb
+@@ -17,3 +17,15 @@ SRC_URI = " \
+ require linux-raspberrypi.inc
+ 
+ KERNEL_DTC_FLAGS += "-@ -H epapr"
++
++RDEPENDS:${KERNEL_PACKAGE_NAME}:raspberrypi-armv7:append = " ${RASPBERRYPI_v7_KERNEL_PACKAGE_NAME}"
++RDEPENDS:${KERNEL_PACKAGE_NAME}-base:raspberrypi-armv7:append = " ${RASPBERRYPI_v7_KERNEL_PACKAGE_NAME}-base"
++RDEPENDS:${KERNEL_PACKAGE_NAME}-image:raspberrypi-armv7:append = " ${RASPBERRYPI_v7_KERNEL_PACKAGE_NAME}-image"
++RDEPENDS:${KERNEL_PACKAGE_NAME}-dev:raspberrypi-armv7:append = " ${RASPBERRYPI_v7_KERNEL_PACKAGE_NAME}-dev"
++RDEPENDS:${KERNEL_PACKAGE_NAME}-vmlinux:raspberrypi-armv7:append = " ${RASPBERRYPI_v7_KERNEL_PACKAGE_NAME}-vmlinux"
++RDEPENDS:${KERNEL_PACKAGE_NAME}-modules:raspberrypi-armv7:append = " ${RASPBERRYPI_v7_KERNEL_PACKAGE_NAME}-modules"
++RDEPENDS:${KERNEL_PACKAGE_NAME}-dbg:raspberrypi-armv7:append = " ${RASPBERRYPI_v7_KERNEL_PACKAGE_NAME}-dbg"
++
++DEPLOYDEP = ""
++DEPLOYDEP:raspberrypi-armv7 = "${RASPBERRYPI_v7_KERNEL}:do_deploy"
++do_deploy[depends] += "${DEPLOYDEP}"
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 8+ messages in thread
+* [meta-raspberrypi][PATCH v2 5/7] ci: Add raspberrypi-armv7 to the build matrix
+  2022-09-13 21:21 [meta-raspberrypi][PATCH v2 0/7] Add support for multi kernel Raspberry Pi machines Andrei Gherzan
+                   ` (3 preceding siblings ...)
+  2022-09-13 21:22 ` [meta-raspberrypi][PATCH v2 4/7] Add support for a ARMv7 machine supporting multiple Raspberry Pi boards Andrei Gherzan
+@ 2022-09-13 21:22 ` Andrei Gherzan
+  2022-09-13 21:22 ` [meta-raspberrypi][PATCH v2 6/7] Add support for a ARMv8 machine supporting multiple Raspberry Pi boards Andrei Gherzan
+  2022-09-13 21:22 ` [meta-raspberrypi][PATCH v2 7/7] ci: Add raspberrypi-armv8 to the build matrix Andrei Gherzan
+  6 siblings, 0 replies; 8+ messages in thread
+From: Andrei Gherzan @ 2022-09-13 21:22 UTC (permalink / raw)
+  To: yocto; +Cc: andrei, Andrei Gherzan
+
+From: Andrei Gherzan <andrei.gherzan@huawei.com>
+
+Signed-off-by: Andrei Gherzan <andrei.gherzan@huawei.com>
+---
+ .github/workflows/yocto-builds.yml | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/.github/workflows/yocto-builds.yml b/.github/workflows/yocto-builds.yml
+index 824745c..8644b13 100644
+--- a/.github/workflows/yocto-builds.yml
++++ b/.github/workflows/yocto-builds.yml
+@@ -27,6 +27,7 @@ jobs:
+           - raspberrypi4
+           - raspberrypi-cm3
+           - raspberrypi-cm
++          - raspberrypi-armv7
+         image: [rpi-test-image]
+         distro: [poky]
+     runs-on: [self-hosted, Linux]
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 8+ messages in thread
+* [meta-raspberrypi][PATCH v2 6/7] Add support for a ARMv8 machine supporting multiple Raspberry Pi boards
+  2022-09-13 21:21 [meta-raspberrypi][PATCH v2 0/7] Add support for multi kernel Raspberry Pi machines Andrei Gherzan
+                   ` (4 preceding siblings ...)
+  2022-09-13 21:22 ` [meta-raspberrypi][PATCH v2 5/7] ci: Add raspberrypi-armv7 to the build matrix Andrei Gherzan
+@ 2022-09-13 21:22 ` Andrei Gherzan
+  2022-09-13 21:22 ` [meta-raspberrypi][PATCH v2 7/7] ci: Add raspberrypi-armv8 to the build matrix Andrei Gherzan
+  6 siblings, 0 replies; 8+ messages in thread
+From: Andrei Gherzan @ 2022-09-13 21:22 UTC (permalink / raw)
+  To: yocto; +Cc: andrei, Andrei Gherzan
+
+From: Andrei Gherzan <andrei.gherzan@huawei.com>
+
+The new raspberrypi-armv8.conf aims at supporting all the ARMv8
+Raspberry Pi boards.
+
+This initial support was tested on:
+* Raspberry Pi 4 Model B
+* Raspberry Pi 3 Model B
+* Raspberry Pi 0 2 WiFi
+
+Signed-off-by: Andrei Gherzan <andrei.gherzan@huawei.com>
+---
+ conf/machine/raspberrypi-armv8.conf        | 43 ++++++++++++++++++++++
+ docs/layer-contents.md                     |  6 +++
+ recipes-kernel/linux/linux-raspberrypi.inc |  1 +
+ 3 files changed, 50 insertions(+)
+ create mode 100644 conf/machine/raspberrypi-armv8.conf
+
+diff --git a/conf/machine/raspberrypi-armv8.conf b/conf/machine/raspberrypi-armv8.conf
+new file mode 100644
+index 0000000..fb3ffa8
+--- /dev/null
++++ b/conf/machine/raspberrypi-armv8.conf
+@@ -0,0 +1,43 @@
++# SPDX-FileCopyrightText: Andrei Gherzan <andrei.gherzan@huawei.com>
++#
++# SPDX-License-Identifier: MIT
++
++#@TYPE: Machine
++#@NAME: RaspberryPi Development Boards (64bit)
++#@DESCRIPTION: Machine configuration for the RaspberryPi boards in 64 bit mode
++
++require conf/machine/include/arm/armv8a/tune-cortexa53.inc
++include conf/machine/include/rpi-base.inc
++
++MACHINE_FEATURES += "pci"
++MACHINE_EXTRA_RRECOMMENDS += "\
++    linux-firmware-rpidistro-bcm43430 \
++    linux-firmware-rpidistro-bcm43455 \
++    linux-firmware-rpidistro-bcm43456 \
++    linux-firmware-rpidistro-bcm43436 \
++    linux-firmware-rpidistro-bcm43436s \
++    bluez-firmware-rpidistro-bcm43430a1-hcd \
++    bluez-firmware-rpidistro-bcm43430b0-hcd \
++    bluez-firmware-rpidistro-bcm4345c0-hcd \
++    bluez-firmware-rpidistro-bcm4345c5-hcd \
++"
++
++RPI_KERNEL_DEVICETREE = " \
++    broadcom/bcm2710-rpi-3-b.dtb \
++    broadcom/bcm2710-rpi-3-b-plus.dtb \
++    broadcom/bcm2837-rpi-3-b.dtb \
++    broadcom/bcm2710-rpi-cm3.dtb \
++    broadcom/bcm2710-rpi-zero-2.dtb \
++    broadcom/bcm2711-rpi-4-b.dtb \
++    broadcom/bcm2711-rpi-400.dtb \
++    broadcom/bcm2711-rpi-cm4.dtb \
++"
++
++SDIMG_KERNELIMAGE ?= "kernel8.img"
++KERNEL_IMAGETYPE_UBOOT ?= "Image"
++KERNEL_IMAGETYPE_DIRECT ?= "Image"
++KERNEL_BOOTCMD ?= "booti"
++UBOOT_MACHINE = "rpi_arm64_config"
++SERIAL_CONSOLES ?= "115200;ttyS0"
++
++VC4DTBO ?= "vc4-fkms-v3d"
+diff --git a/docs/layer-contents.md b/docs/layer-contents.md
+index aa28a23..3882339 100644
+--- a/docs/layer-contents.md
++++ b/docs/layer-contents.md
+@@ -32,6 +32,12 @@ This machine targets support for all the ARMv7-based Raspberry Pi boards. It
+ will pull in the firmware and deploy the kernel image and kernel modules for
+ all the relevant boards.
+ 
++### raspberrypi-armv8
++
++This machine targets support for all the ARMv8-based Raspberry Pi boards. It
++will pull in the firmware and deploy the kernel image and kernel modules for
++all the relevant boards.
++
+ ## Images
+ 
+ * rpi-test-image
+diff --git a/recipes-kernel/linux/linux-raspberrypi.inc b/recipes-kernel/linux/linux-raspberrypi.inc
+index 2a651bd..be1883c 100644
+--- a/recipes-kernel/linux/linux-raspberrypi.inc
++++ b/recipes-kernel/linux/linux-raspberrypi.inc
+@@ -27,6 +27,7 @@ KBUILD_DEFCONFIG:raspberrypi3-64 ?= "bcmrpi3_defconfig"
+ KBUILD_DEFCONFIG:raspberrypi4 ?= "bcm2711_defconfig"
+ KBUILD_DEFCONFIG:raspberrypi4-64 ?= "bcm2711_defconfig"
+ KBUILD_DEFCONFIG:raspberrypi-armv7 ?= "bcm2711_defconfig"
++KBUILD_DEFCONFIG:raspberrypi-armv8 ?= "bcm2711_defconfig"
+ 
+ LINUX_VERSION_EXTENSION ?= ""
+ 
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 8+ messages in thread
+* [meta-raspberrypi][PATCH v2 7/7] ci: Add raspberrypi-armv8 to the build matrix
+  2022-09-13 21:21 [meta-raspberrypi][PATCH v2 0/7] Add support for multi kernel Raspberry Pi machines Andrei Gherzan
+                   ` (5 preceding siblings ...)
+  2022-09-13 21:22 ` [meta-raspberrypi][PATCH v2 6/7] Add support for a ARMv8 machine supporting multiple Raspberry Pi boards Andrei Gherzan
+@ 2022-09-13 21:22 ` Andrei Gherzan
+  6 siblings, 0 replies; 8+ messages in thread
+From: Andrei Gherzan @ 2022-09-13 21:22 UTC (permalink / raw)
+  To: yocto; +Cc: andrei, Andrei Gherzan
+
+From: Andrei Gherzan <andrei.gherzan@huawei.com>
+
+Signed-off-by: Andrei Gherzan <andrei.gherzan@huawei.com>
+---
+ .github/workflows/yocto-builds.yml | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/.github/workflows/yocto-builds.yml b/.github/workflows/yocto-builds.yml
+index 8644b13..3f21242 100644
+--- a/.github/workflows/yocto-builds.yml
++++ b/.github/workflows/yocto-builds.yml
+@@ -28,6 +28,7 @@ jobs:
+           - raspberrypi-cm3
+           - raspberrypi-cm
+           - raspberrypi-armv7
++          - raspberrypi-armv8
+         image: [rpi-test-image]
+         distro: [poky]
+     runs-on: [self-hosted, Linux]
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 8+ messages in thread
+end of thread, other threads:[~2022-09-13 21:22 UTC | newest]
+
+Thread overview: 8+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-09-13 21:21 [meta-raspberrypi][PATCH v2 0/7] Add support for multi kernel Raspberry Pi machines Andrei Gherzan
+2022-09-13 21:21 ` [meta-raspberrypi][PATCH v2 1/7] sdcard_image-rpi.bbclass: Move SDIMG_KERNELIMAGE definitions to their machines Andrei Gherzan
+2022-09-13 21:21 ` [meta-raspberrypi][PATCH v2 2/7] raspberrypi0-2w.conf: Include the RPi 0-2w dtb for all 32-bit machines Andrei Gherzan
+2022-09-13 21:22 ` [meta-raspberrypi][PATCH v2 3/7] rpi-base.inc: Split IMAGE_BOOT_FILES for kernel image Andrei Gherzan
+2022-09-13 21:22 ` [meta-raspberrypi][PATCH v2 4/7] Add support for a ARMv7 machine supporting multiple Raspberry Pi boards Andrei Gherzan
+2022-09-13 21:22 ` [meta-raspberrypi][PATCH v2 5/7] ci: Add raspberrypi-armv7 to the build matrix Andrei Gherzan
+2022-09-13 21:22 ` [meta-raspberrypi][PATCH v2 6/7] Add support for a ARMv8 machine supporting multiple Raspberry Pi boards Andrei Gherzan
+2022-09-13 21:22 ` [meta-raspberrypi][PATCH v2 7/7] ci: Add raspberrypi-armv8 to the build matrix Andrei Gherzan
+

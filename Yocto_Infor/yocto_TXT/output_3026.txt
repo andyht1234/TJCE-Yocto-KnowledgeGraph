@@ -1,0 +1,177 @@
+* Dependencies between recipes
+@ 2021-08-12 18:27 daniel_herrmann22
+  2021-08-13 16:56 ` [yocto] " Quentin Schulz
+  0 siblings, 1 reply; 2+ messages in thread
+From: daniel_herrmann22 @ 2021-08-12 18:27 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1722 bytes --]
+
+Hello,
+
+I'm stucking a little bit by compiling a cmake application which has dependencies
+on libs from another recipe.
+
+*1)*
+The recipe which provided my libs is a normal debian package which I installed in yocto like this:
+
+SRC_URI = "file://${BP}.deb"
+S = "${WORKDIR}"
+
+inherit bin_package pkgconfig
+
+do_install() {
+install -d ${D}/opt/package-name/include/
+install -d ${D}/opt/package-name/lib
+install -d ${D}/opt/package-name/lib/cmake
+}
+
+FILES_${PN} = "/opt/package-name/lib/folder"
+FILES_${PN} += "/opt/package-name/include/folder"
+
+*2)*
+The libs from 1) I want to use in the cmake-application
+
+*2.1)*
+*CmakeLists.txt is like this:*
+
+cmake_minimum_required(VERSION 2.8)
+project(test)
+set(package_DIR /opt/package-name/lib/cmake)   #path to cmake package -> Config.cmake
+find_package(package)
+add_executable(test main.cpp)
+target_link_libraries(test package::lib)
+
+*-> I dont know how to set the right path to the Config.cmake. At the moment it points to the host location.*
+*I have tried like this ${STAGING_DIR}/opt/... which should point to the sysroot, but no success.*
+
+*2.2)*
+*Recipe for the cmake-application in short*
+
+DEPENDS += "package-name"   # package from 1)
+inherit cmake
+SRC_URI="git://....
+SRCREV = "...."
+
+S = "${WORKDIR}/git"
+
+do_install(){
+install -d ${D}/${bindir}
+install -m0755 test ${D}/${bindir}
+}
+
+FILES_${PN} = "/usr/bin/test"
+
+RDEPENDS_${PN} += "package-name"
+
+When I make a sysroot from the hole image with bitbake -c populate_sdk  and I point directly to path where the Config.cmake is stored, everythings works..
+Is there any way to make it work in the yocto build process, without making a explicit sysroot ?
+
+*Thanks*
+
+[-- Attachment #2: Type: text/html, Size: 2307 bytes --]
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+* Re: [yocto] Dependencies between recipes
+  2021-08-12 18:27 Dependencies between recipes daniel_herrmann22
+@ 2021-08-13 16:56 ` Quentin Schulz
+  0 siblings, 0 replies; 2+ messages in thread
+From: Quentin Schulz @ 2021-08-13 16:56 UTC (permalink / raw)
+  To: yocto, daniel_herrmann22
+
+Hi Daniel,
+
+On August 12, 2021 6:27:50 PM UTC, daniel_herrmann22@web.de wrote:
+>Hello,
+>
+>I'm stucking a little bit by compiling a cmake application which has dependencies
+>on libs from another recipe.
+>
+>*1)*
+>The recipe which provided my libs is a normal debian package which I installed in yocto like this:
+>
+>SRC_URI = "file://${BP}.deb"
+>S = "${WORKDIR}"
+>
+>inherit bin_package pkgconfig
+>
+>do_install() {
+>install -d ${D}/opt/package-name/include/
+>install -d ${D}/opt/package-name/lib
+>install -d ${D}/opt/package-name/lib/cmake
+>}
+
+Those commands only add directories, you still need to copy your files to one of those directories. Use for example:
+
+install ${S}/path/to/lib.so.x.y ${D}${libdir}
+
+>
+>FILES_${PN} = "/opt/package-name/lib/folder"
+>FILES_${PN} += "/opt/package-name/include/folder"
+>
+
+Any specific reason for not putting your libs in ${libdir} instead of /opt/package-name/lib/folder?
+
+Also, if you can compile from scratch the software instead of including the Deb package, it'd be a better idea 😉
+
+>*2)*
+>The libs from 1) I want to use in the cmake-application
+>
+>*2.1)*
+>*CmakeLists.txt is like this:*
+>
+>cmake_minimum_required(VERSION 2.8)
+>project(test)
+>set(package_DIR /opt/package-name/lib/cmake)   #path to cmake package -> Config.cmake
+>find_package(package)
+>add_executable(test main.cpp)
+>target_link_libraries(test package::lib)
+>
+>*-> I dont know how to set the right path to the Config.cmake. At the moment it points to the host location.*
+>*I have tried like this ${STAGING_DIR}/opt/... which should point to the sysroot, but no success.*
+>
+>*2.2)*
+>*Recipe for the cmake-application in short*
+>
+>DEPENDS += "package-name"   # package from 1)
+>inherit cmake
+>SRC_URI="git://....
+>SRCREV = "...."
+>
+>S = "${WORKDIR}/git"
+>
+>do_install(){
+>install -d ${D}/${bindir}
+>install -m0755 test ${D}/${bindir}
+>}
+>
+>FILES_${PN} = "/usr/bin/test"
+>
+>RDEPENDS_${PN} += "package-name"
+>
+>When I make a sysroot from the hole image with bitbake -c populate_sdk  and I point directly to path where the Config.cmake is stored, everythings works..
+>Is there any way to make it work in the yocto build process, without making a explicit sysroot ?
+>
+
+I don't think your library package is correctly configured for starters. I would recommend installing your libs in ${D}${libdir} that's where most of the libs are and some variables default are set for those so it's all automagic.
+
+Otherwise, the issue is that the files from your library package aren't made available to other recipes. First because you're not installing your libs. Second, by default only a portion of files installed are made available to other recipes via their sysroot. The portions are listed in SYSROOT_DIRS (https://docs.yoctoproject.org/ref-manual/variables.html#term-SYSROOT_DIRS). If you want to keep using /opt/whatever directory for your libs, you'll need to add this directory to SYSROOT_DIRS. And probably will need to tweak a few other paths to point to ${RECIPE_SYSROOT}/opt for library lookup for the linker for example.
+
+If you install in ${D}${libdir} instead, everything is handled for you automagically ☺️
+
+Easier to maintain that way, highly recommend 😉
+
+Cheers,
+Quentin
+
+-- 
+Sent from my Android device with K-9 Mail. Please excuse my brevity.
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2021-08-13 16:56 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-08-12 18:27 Dependencies between recipes daniel_herrmann22
+2021-08-13 16:56 ` [yocto] " Quentin Schulz
+

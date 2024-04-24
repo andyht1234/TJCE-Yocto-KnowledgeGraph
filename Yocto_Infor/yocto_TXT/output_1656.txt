@@ -1,0 +1,134 @@
+* Re: [yocto] Installing gfortran into native sysroot for libgfortran
+       [not found] <AWI7.1657141765119571734.Ou9q@lists.yoctoproject.org>
+@ 2022-07-06 21:53 ` Khem Raj
+       [not found] ` <3678.1657201166691715156@lists.yoctoproject.org>
+  1 sibling, 0 replies; 3+ messages in thread
+From: Khem Raj @ 2022-07-06 21:53 UTC (permalink / raw)
+  To: Gregory Anders; +Cc: Yocto-mailing-list
+
+On Wed, Jul 6, 2022 at 5:51 PM Gregory Anders <greg@gpanders.com> wrote:
+>
+> Hello,
+>
+> I'm trying to compile libgfortran for a Xilinx Zynq SoC, which uses the arm-xilinx-linux-gnueabi toolchain.
+> I have added
+>
+>     FORTRAN:forcevariable = ",fortran"
+>
+> to my local.conf, which causes libgfortran to be built, but it fails in the configure stage with an error that
+> it cannot find arm-xilinx-linux-gnueabi-gfortran. When I check the recipe-sysroot-native directory of
+> libgfortran I indeed see that gfortran is not there (but -gcc, -g++, etc. are).
+>
+> Now I've been poking around the gcc recipe files trying to figure out why gfortran is
+> not being installed, but I am coming up empty. I'm hoping someone on list know how to do this.
+> How can I have gfortran installed into the native sysroot for libgfortran?
+
+in your fortran app recipe you have to add DEPENDS = "libgfortran"
+
+>
+> Thanks,
+>
+> Greg
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> You automatically follow any topics you start or reply to.
+> View/Reply Online (#57467): https://lists.yoctoproject.org/g/yocto/message/57467
+> Mute This Topic: https://lists.yoctoproject.org/mt/92216663/1997914
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [raj.khem@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] Installing gfortran into native sysroot for libgfortran
+       [not found] ` <3678.1657201166691715156@lists.yoctoproject.org>
+@ 2022-07-07 15:26   ` Richard Purdie
+       [not found]     ` <YsevoOp8KFQ8+dmC@gpanders.com>
+  0 siblings, 1 reply; 3+ messages in thread
+From: Richard Purdie @ 2022-07-07 15:26 UTC (permalink / raw)
+  To: Gregory Anders, yocto
+
+On Thu, 2022-07-07 at 06:39 -0700, Gregory Anders wrote:
+> Problem solved: the issue was actually that I was using a network
+> sstate cache,
+> and the cached output of gcc-cross did not contain gfortran.
+> Disabling the
+> sstate cache for gcc-cross causes gfortran to be included in the
+> sysroot and
+> now all is working as expected.
+
+You shouldn't have to disable the sstate cache but glad you got it
+working. Which release series is that with?
+
+It does sound like there is a bug to fix somewhere in there.
+
+Cheers,
+
+Richard
+
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] Installing gfortran into native sysroot for libgfortran
+       [not found]     ` <YsevoOp8KFQ8+dmC@gpanders.com>
+@ 2022-07-08 14:12       ` Khem Raj
+  0 siblings, 0 replies; 3+ messages in thread
+From: Khem Raj @ 2022-07-08 14:12 UTC (permalink / raw)
+  To: Gregory Anders; +Cc: Richard Purdie, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1535 bytes --]
+
+On Fri, Jul 8, 2022 at 2:25 AM Gregory Anders <greg@gpanders.com> wrote:
+
+> On Thu, 07 Jul 2022 16:26 +0100, Richard Purdie wrote:
+> >On Thu, 2022-07-07 at 06:39 -0700, Gregory Anders wrote:
+> >> Problem solved: the issue was actually that I was using a network
+> >> sstate cache,
+> >> and the cached output of gcc-cross did not contain gfortran.
+> >> Disabling the
+> >> sstate cache for gcc-cross causes gfortran to be included in the
+> >> sysroot and
+> >> now all is working as expected.
+> >
+> >You shouldn't have to disable the sstate cache but glad you got it
+> >working. Which release series is that with?
+>
+> I am using Xilinx's Petalinux tool, which uses honister under the
+> hood. Xilinx maintains an sstate cache for Petalinux, which is quite
+> convenient for cutting down build times, but apparently setting the
+> FORTRAN variable does not invalidate the sstate cache entry for the
+> gcc-cross recipe (which it should, as it affects the build outputs).
+
+
+Perhaps it’s using locked sstate which might be the reason
+
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> You automatically follow any topics you start or reply to.
+> View/Reply Online (#57480):
+> https://lists.yoctoproject.org/g/yocto/message/57480
+> Unfollow This Topic: https://lists.yoctoproject.org/unft/92216663/1997914
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> raj.khem@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 2496 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2022-07-08 14:12 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+     [not found] <AWI7.1657141765119571734.Ou9q@lists.yoctoproject.org>
+2022-07-06 21:53 ` [yocto] Installing gfortran into native sysroot for libgfortran Khem Raj
+     [not found] ` <3678.1657201166691715156@lists.yoctoproject.org>
+2022-07-07 15:26   ` Richard Purdie
+     [not found]     ` <YsevoOp8KFQ8+dmC@gpanders.com>
+2022-07-08 14:12       ` Khem Raj
+

@@ -1,0 +1,63 @@
+* [patchtest-oe][PATCH] test_mbox_signed_off_by: fix test
+@ 2023-06-12 17:31 Trevor Gamblin
+  0 siblings, 0 replies; only message in thread
+From: Trevor Gamblin @ 2023-06-12 17:31 UTC (permalink / raw)
+  To: yocto
+
+This fixes a consistent issue with false failures being reported when
+testing for authors' signed-off-bys in mboxes. Instead of manually
+compiling a regex pattern, use pyparsing's AtLineStart to check for the
+signature's presence at the beginning of the line.
+
+Signed-off-by: Trevor Gamblin <tgamblin@baylibre.com>
+---
+ tests/pyparsing/parse_signed_off_by.py | 4 ++--
+ tests/test_mbox_signed_off_by.py       | 5 ++---
+ 2 files changed, 4 insertions(+), 5 deletions(-)
+
+diff --git a/tests/pyparsing/parse_signed_off_by.py b/tests/pyparsing/parse_signed_off_by.py
+index fc39a6c..9338c49 100644
+--- a/tests/pyparsing/parse_signed_off_by.py
++++ b/tests/pyparsing/parse_signed_off_by.py
+@@ -30,5 +30,5 @@ email = pyparsing.Regex(r"(?P<user>[A-Za-z0-9._%+-]+)@(?P<hostname>[A-Za-z0-9.-]
+ 
+ email_enclosed = common.lessthan + email + common.greaterthan
+ 
+-signed_off_by_mark = pyparsing.Literal("Signed-off-by")
+-signed_off_by = common.start + signed_off_by_mark + common.colon + name + email_enclosed + common.end
++signed_off_by_mark = pyparsing.Literal("Signed-off-by:")
++signed_off_by = pyparsing.AtLineStart(signed_off_by_mark + name + email_enclosed)
+diff --git a/tests/test_mbox_signed_off_by.py b/tests/test_mbox_signed_off_by.py
+index e50bb8e..eae2816 100644
+--- a/tests/test_mbox_signed_off_by.py
++++ b/tests/test_mbox_signed_off_by.py
+@@ -28,15 +28,14 @@ class SignedOffBy(base.Base):
+     @classmethod
+     def setUpClassLocal(cls):
+         # match self.mark with no '+' preceding it
+-        cls.mark = str(parse_signed_off_by.signed_off_by_mark).strip('"')
+-        cls.prog = re.compile("(?<!\+)%s" % cls.mark)
++        cls.prog = parse_signed_off_by.signed_off_by
+ 
+     def test_signed_off_by_presence(self):
+         for commit in SignedOffBy.commits:
+             # skip those patches that revert older commits, these do not required the tag presence
+             if self.revert_shortlog_regex.match(commit.shortlog):
+                 continue
+-            if not SignedOffBy.prog.search(commit.payload):
++            if not SignedOffBy.prog.search_string(commit.payload):
+                 self.fail('Patch is missing Signed-off-by',
+                           'Sign off the patch (either manually or with "git commit --amend -s")',
+                           commit)
+-- 
+2.40.1
+
+
+
+^ permalink raw reply related	[flat|nested] only message in thread
+only message in thread, other threads:[~2023-06-12 17:31 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-06-12 17:31 [patchtest-oe][PATCH] test_mbox_signed_off_by: fix test Trevor Gamblin
+

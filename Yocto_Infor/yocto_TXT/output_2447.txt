@@ -1,0 +1,242 @@
+* do_rootfs: Taskhash mismatch due to BUILDNAME containing automatic date
+@ 2021-12-17 10:35 Jesper.Ahman
+  2021-12-17 11:19 ` [yocto] " Konrad Weihmann
+  0 siblings, 1 reply; 3+ messages in thread
+From: Jesper.Ahman @ 2021-12-17 10:35 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2184 bytes --]
+
+Hello,
+
+In my machine config, I have set buildname using:
+BUILDNAME = "my_Image_0.0.1_${@time.strftime('%Y%m%d',time.gmtime())}"
+In order to get a timestamp (date) in each build name.
+
+Although, this causes some error messages when building the rootfs:
+ERROR: When reparsing /home/buildserver/fsl/sources/meta-freescale-distro/recipes-fsl/images/fsl-image-multimedia-full.bb:do_rootfs, the basehash value changed from 6b1226a9fe10f08dd4f2fe634944a53cf03f7699a8553a9cc346c097027b24e to cbd5de79b73a1bc4dd02024bafd1e5c29d4baa8f43617c37eb8f5fc57ed738ed. The metadata is not deterministic and this needs to be fixed.
+ERROR: The following commands may help:
+ERROR: $ bitbake fsl-image-multimedia-full -cdo_rootfs -Snone
+ERROR: Then:
+ERROR: $ bitbake fsl-image-multimedia-full -cdo_rootfs -Sprintdiff
+
+I ran the suggested commands and found the following:
+Task fsl-image-multimedia-full:do_rootfs couldn't be used from the cache because:
+We need hash 066153e1a8d8ad0e8025f6409dbac96c277e6300541356b077f1823f195ef19c, closest matching task was 040147cd35d17688668c7435633fd8ff25d8cf7425a93d35efdd7799a47bdc85
+basehash changed from cbd5de79b73a1bc4dd02024bafd1e5c29d4baa8f43617c37eb8f5fc57ed738ed to 61b1226a9fe10f08dd4f2fe634944a53cf03f7699a8553a9cc346c097027b24e
+Variable BUILDNAME value changed from 'my_Image_0.0.1_20211214' to 'my_Image_0.0.1_${@time.strftime('%Y%m%d',time.gmtime())}'
+
+So when ${@time.strftime('%Y%m%d',time.gmtime())}' is converted to the actual date, it messes with Yocto.
+The build succeeds anyway, but it's quite annoying having a load of error messages on each build.
+
+How can these errors be avoided?
+
+I found in the Yocto FAQ:
+This is often something time-related e.g. a timestamp which is calculated every time an expression is expanded. The solution is to ensure the value is calculated once per build and then the expression expands to the same value for the duration of the build.
+
+Which sounds somewhat right, but the issue here is not that the value is changed due to recalculation (the date rarely changes during a build) but the expansion of the expression itself (from Pyhton code into its result).
+
+Running Yocto Dunfell.
+
+[-- Attachment #2: Type: text/html, Size: 2595 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] do_rootfs: Taskhash mismatch due to BUILDNAME containing automatic date
+  2021-12-17 10:35 do_rootfs: Taskhash mismatch due to BUILDNAME containing automatic date Jesper.Ahman
+@ 2021-12-17 11:19 ` Konrad Weihmann
+  2021-12-20  7:44   ` Sv: " Jesper Åhman
+  0 siblings, 1 reply; 3+ messages in thread
+From: Konrad Weihmann @ 2021-12-17 11:19 UTC (permalink / raw)
+  To: Jesper.Ahman, yocto
+
+Hi,
+
+according to my understanding BUILDNAME should not be used like that 
+since f85f1ef24e59c0c058f96f0dfa82e50969fd580b in bitbake.
+
+The variable should contain only references to other automatically 
+determined variables (default = ds.setVar("BUILDNAME", "${DATE}${TIME}")
+
+Judging from that if you would set 'BUILDNAME = 
+"my_Image_0.0.1_${DATE}"' the warning likely will go away.
+
+Please keep in mind that these inline functions (esp in early stages of 
+the parsing process, like machine.conf) are not expanded.
+Which explains the seen behavior.
+
+On 17.12.21 11:35, Jesper.Ahman@dasa.se wrote:
+> Hello,
+> 
+> In my machine config, I have set buildname using:
+> BUILDNAME = "my_Image_0.0.1_${@time.strftime('%Y%m%d',time.gmtime())}"
+> In order to get a timestamp (date) in each build name.
+> 
+> Although, this causes some error messages when building the rootfs:
+> /ERROR: When reparsing 
+> /home/buildserver/fsl/sources/meta-freescale-distro/recipes-fsl/images/fsl-image-multimedia-full.bb:do_rootfs, 
+> the basehash value changed from 
+> 6b1226a9fe10f08dd4f2fe634944a53cf03f7699a8553a9cc346c097027b24e to 
+> cbd5de79b73a1bc4dd02024bafd1e5c29d4baa8f43617c37eb8f5fc57ed738ed. The 
+> metadata is not deterministic and this needs to be fixed./
+> /ERROR: The following commands may help:/
+> /ERROR: $ bitbake fsl-image-multimedia-full -cdo_rootfs -Snone/
+> /ERROR: Then:/
+> /ERROR: $ bitbake fsl-image-multimedia-full -cdo_rootfs -Sprintdiff/
+> 
+> I ran the suggested commands and found the following:
+> /Task fsl-image-multimedia-full:do_rootfs couldn't be used from the 
+> cache because:/
+> /  We need hash 
+> 066153e1a8d8ad0e8025f6409dbac96c277e6300541356b077f1823f195ef19c, 
+> closest matching task was 
+> 040147cd35d17688668c7435633fd8ff25d8cf7425a93d35efdd7799a47bdc85/
+> /  basehash changed from 
+> cbd5de79b73a1bc4dd02024bafd1e5c29d4baa8f43617c37eb8f5fc57ed738ed to 
+> 61b1226a9fe10f08dd4f2fe634944a53cf03f7699a8553a9cc346c097027b24e/
+> /  Variable BUILDNAME value changed from 'my_Image_0.0.1_20211214' to 
+> 'my_Image_0.0.1_${@time.strftime('%Y%m%d',time.gmtime())}'
+> /
+> So when /${@time.strftime('%Y%m%d',time.gmtime())}' /is converted to the 
+> actual date, it messes with Yocto.
+> The build succeeds anyway, but it's quite annoying having a load of 
+> error messages on each build.
+> 
+> How can these errors be avoided?
+> 
+> I found in the Yocto FAQ:
+> /This is often something time-related e.g. a timestamp which is 
+> calculated every time an expression is expanded. The solution is to 
+> ensure the value is calculated once per build and then the expression 
+> expands to the same value for the duration of the build.
+> 
+> /Which sounds somewhat right, but the issue here is not that the value 
+> is changed due to recalculation (the date rarely changes during a build) 
+> but the expansion of the expression itself (from Pyhton code into its 
+> result).
+> 
+> Running Yocto Dunfell.
+> 
+> 
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#55608): https://lists.yoctoproject.org/g/yocto/message/55608
+> Mute This Topic: https://lists.yoctoproject.org/mt/87786852/3647476
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [kweihmann@outlook.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+> 
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Sv: [yocto] do_rootfs: Taskhash mismatch due to BUILDNAME containing automatic date
+  2021-12-17 11:19 ` [yocto] " Konrad Weihmann
+@ 2021-12-20  7:44   ` Jesper Åhman
+  0 siblings, 0 replies; 3+ messages in thread
+From: Jesper Åhman @ 2021-12-20  7:44 UTC (permalink / raw)
+  To: Konrad Weihmann, yocto
+
+Hello and thank you for your reply.
+
+> according to my understanding BUILDNAME should not be used like that since f85f1ef24e59c0c058f96f0dfa82e50969fd580b in bitbake.
+That explains why the same approach works in an older Yocto project that I have for another machine.
+
+> Judging from that if you would set 'BUILDNAME = "my_Image_0.0.1_${DATE}"' the warning likely will go away.
+Unfortunately, that did not make any difference. The same error is still there.
+
+There must be some way of doing this, right?
+Or are there some other approach available, to do about the same thing?
+I mainly want to set /etc/version to something useful.
+
+Best regards,
+
+
+-----Ursprungligt meddelande-----
+Från: Konrad Weihmann <kweihmann@outlook.com> 
+Skickat: den 17 december 2021 12:19
+Till: Jesper Åhman <jesper.ahman@dasa.se>; yocto@lists.yoctoproject.org
+Ämne: Re: [yocto] do_rootfs: Taskhash mismatch due to BUILDNAME containing automatic date
+
+Hi,
+
+according to my understanding BUILDNAME should not be used like that since f85f1ef24e59c0c058f96f0dfa82e50969fd580b in bitbake.
+
+The variable should contain only references to other automatically determined variables (default = ds.setVar("BUILDNAME", "${DATE}${TIME}")
+
+Judging from that if you would set 'BUILDNAME = "my_Image_0.0.1_${DATE}"' the warning likely will go away.
+
+Please keep in mind that these inline functions (esp in early stages of the parsing process, like machine.conf) are not expanded.
+Which explains the seen behavior.
+
+On 17.12.21 11:35, Jesper.Ahman@dasa.se wrote:
+> Hello,
+> 
+> In my machine config, I have set buildname using:
+> BUILDNAME = "my_Image_0.0.1_${@time.strftime('%Y%m%d',time.gmtime())}"
+> In order to get a timestamp (date) in each build name.
+> 
+> Although, this causes some error messages when building the rootfs:
+> /ERROR: When reparsing
+> /home/buildserver/fsl/sources/meta-freescale-distro/recipes-fsl/images
+> /fsl-image-multimedia-full.bb:do_rootfs,
+> the basehash value changed from
+> 6b1226a9fe10f08dd4f2fe634944a53cf03f7699a8553a9cc346c097027b24e to 
+> cbd5de79b73a1bc4dd02024bafd1e5c29d4baa8f43617c37eb8f5fc57ed738ed. The 
+> metadata is not deterministic and this needs to be fixed./
+> /ERROR: The following commands may help:/
+> /ERROR: $ bitbake fsl-image-multimedia-full -cdo_rootfs -Snone/
+> /ERROR: Then:/
+> /ERROR: $ bitbake fsl-image-multimedia-full -cdo_rootfs -Sprintdiff/
+> 
+> I ran the suggested commands and found the following:
+> /Task fsl-image-multimedia-full:do_rootfs couldn't be used from the 
+> cache because:/ /  We need hash 
+> 066153e1a8d8ad0e8025f6409dbac96c277e6300541356b077f1823f195ef19c,
+> closest matching task was
+> 040147cd35d17688668c7435633fd8ff25d8cf7425a93d35efdd7799a47bdc85/
+> /  basehash changed from
+> cbd5de79b73a1bc4dd02024bafd1e5c29d4baa8f43617c37eb8f5fc57ed738ed to 
+> 61b1226a9fe10f08dd4f2fe634944a53cf03f7699a8553a9cc346c097027b24e/
+> /  Variable BUILDNAME value changed from 'my_Image_0.0.1_20211214' to 
+> 'my_Image_0.0.1_${@time.strftime('%Y%m%d',time.gmtime())}'
+> /
+> So when /${@time.strftime('%Y%m%d',time.gmtime())}' /is converted to 
+> the actual date, it messes with Yocto.
+> The build succeeds anyway, but it's quite annoying having a load of 
+> error messages on each build.
+> 
+> How can these errors be avoided?
+> 
+> I found in the Yocto FAQ:
+> /This is often something time-related e.g. a timestamp which is 
+> calculated every time an expression is expanded. The solution is to 
+> ensure the value is calculated once per build and then the expression 
+> expands to the same value for the duration of the build.
+> 
+> /Which sounds somewhat right, but the issue here is not that the value 
+> is changed due to recalculation (the date rarely changes during a 
+> build) but the expansion of the expression itself (from Pyhton code 
+> into its result).
+> 
+> Running Yocto Dunfell.
+> 
+> 
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#55608): 
+> https://lists.yoctoproject.org/g/yocto/message/55608
+> Mute This Topic: https://lists.yoctoproject.org/mt/87786852/3647476
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub 
+> [kweihmann@outlook.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+> 
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2021-12-20  7:44 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-12-17 10:35 do_rootfs: Taskhash mismatch due to BUILDNAME containing automatic date Jesper.Ahman
+2021-12-17 11:19 ` [yocto] " Konrad Weihmann
+2021-12-20  7:44   ` Sv: " Jesper Åhman
+

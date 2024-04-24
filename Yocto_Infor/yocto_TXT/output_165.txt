@@ -1,0 +1,121 @@
+* Overriding package configuration as a distro
+@ 2023-09-18 14:43 Logan Grosz
+  2023-09-18 14:50 ` [yocto] " Quentin Schulz
+  0 siblings, 1 reply; 3+ messages in thread
+From: Logan Grosz @ 2023-09-18 14:43 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 701 bytes --]
+
+Hi, all
+
+I have two distros in the same meta layer, "A" and "B," and a recipe which installs a configuration file existing in a layer elsewhere. "A" and "B" should provide different configuration files, overriding the original configuration. It seems less than ideal to create a bbappend in this scenario as that would require the bbappend to know about the various distros and even handle the case where neither distro is chosen, some other "C" distro may be built for. My goal is a distro-centric configuration rather than a recipe/package-centric one. How can I do this? Does this align with the framework, or should I be looking into a different solution for this problem?
+
+Thank you,
+Logan
+
+[-- Attachment #2: Type: text/html, Size: 2448 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] Overriding package configuration as a distro
+  2023-09-18 14:43 Overriding package configuration as a distro Logan Grosz
+@ 2023-09-18 14:50 ` Quentin Schulz
+  2023-09-18 14:54   ` Logan Grosz
+  0 siblings, 1 reply; 3+ messages in thread
+From: Quentin Schulz @ 2023-09-18 14:50 UTC (permalink / raw)
+  To: Logan.Grosz, yocto
+
+Hi Logan,
+
+On 9/18/23 16:43, Logan Grosz via lists.yoctoproject.org wrote:
+> You don't often get email from logan.grosz=b9c.com@lists.yoctoproject.org. Learn why this is important<https://aka.ms/LearnAboutSenderIdentification>
+> Hi, all
+> 
+> I have two distros in the same meta layer, "A" and "B," and a recipe which installs a configuration file existing in a layer elsewhere. "A" and "B" should provide different configuration files, overriding the original configuration. It seems less than ideal to create a bbappend in this scenario as that would require the bbappend to know about the various distros and even handle the case where neither distro is chosen, some other "C" distro may be built for. My goal is a distro-centric configuration rather than a recipe/package-centric one. How can I do this? Does this align with the framework, or should I be looking into a different solution for this problem?
+> 
+
+The distro name is already part of FILESOVERRIDES so you can just add 
+your configuration file in a directory named after your distro. e.g. 
+provided your distro is called logan-distro, the following makes it 
+possible to override the configuration file from another layer:
+
+```
+# cat recipes-foo/bar/bar-1.0.0/logan-distro/file.conf
+meh
+# cat recipes-foo/bar/bar_1.0.0.bbappend
+FILESEXTRAPATHS:prepend := "${THISDIR}/${PN}-${PV}:"
+```
+
+no need to modify anything else if the file.conf file is added via 
+SRC_URI mechanism, otherwise you'll need to add a bit more to the 
+bbappend (or use patches instead), probably via a do_configure:prepend 
+or even do_patch:append (I think the file fetcher also allows to install 
+directly in the proper directory via subdir= parameter?).
+
+Cheers,
+Quentin
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] Overriding package configuration as a distro
+  2023-09-18 14:50 ` [yocto] " Quentin Schulz
+@ 2023-09-18 14:54   ` Logan Grosz
+  0 siblings, 0 replies; 3+ messages in thread
+From: Logan Grosz @ 2023-09-18 14:54 UTC (permalink / raw)
+  To: Quentin Schulz, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2171 bytes --]
+
+Hi, Quentin
+
+Ah, this is great. This looks exactly like what I was looking for. I appreciate the timely response.
+
+Thank you,
+Logan
+________________________________
+From: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+Sent: Monday, September 18, 2023 8:50 AM
+To: Logan Grosz <Logan.Grosz@b9c.com>; yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+Subject: Re: [yocto] Overriding package configuration as a distro
+
+Hi Logan,
+
+On 9/18/23 16:43, Logan Grosz via lists.yoctoproject.org wrote:
+> You don't often get email from logan.grosz=b9c.com@lists.yoctoproject.org. Learn why this is important<https://aka.ms/LearnAboutSenderIdentification>
+> Hi, all
+>
+> I have two distros in the same meta layer, "A" and "B," and a recipe which installs a configuration file existing in a layer elsewhere. "A" and "B" should provide different configuration files, overriding the original configuration. It seems less than ideal to create a bbappend in this scenario as that would require the bbappend to know about the various distros and even handle the case where neither distro is chosen, some other "C" distro may be built for. My goal is a distro-centric configuration rather than a recipe/package-centric one. How can I do this? Does this align with the framework, or should I be looking into a different solution for this problem?
+>
+
+The distro name is already part of FILESOVERRIDES so you can just add
+your configuration file in a directory named after your distro. e.g.
+provided your distro is called logan-distro, the following makes it
+possible to override the configuration file from another layer:
+
+```
+# cat recipes-foo/bar/bar-1.0.0/logan-distro/file.conf
+meh
+# cat recipes-foo/bar/bar_1.0.0.bbappend
+FILESEXTRAPATHS:prepend := "${THISDIR}/${PN}-${PV}:"
+```
+
+no need to modify anything else if the file.conf file is added via
+SRC_URI mechanism, otherwise you'll need to add a bit more to the
+bbappend (or use patches instead), probably via a do_configure:prepend
+or even do_patch:append (I think the file fetcher also allows to install
+directly in the proper directory via subdir= parameter?).
+
+Cheers,
+Quentin
+
+[-- Attachment #2: Type: text/html, Size: 4006 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2023-09-18 14:54 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-09-18 14:43 Overriding package configuration as a distro Logan Grosz
+2023-09-18 14:50 ` [yocto] " Quentin Schulz
+2023-09-18 14:54   ` Logan Grosz
+

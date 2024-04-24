@@ -1,0 +1,764 @@
+* File magic/sdk relocation
+@ 2023-06-19 15:50 Oleksiy Obitotskyi -X (oobitots - GLOBALLOGIC INC at Cisco)
+  2023-06-19 16:55 ` [yocto] " Alexander Kanavin
+       [not found] ` <176A1DBE70E5CC10.31313@lists.yoctoproject.org>
+  0 siblings, 2 replies; 14+ messages in thread
+From: Oleksiy Obitotskyi -X (oobitots - GLOBALLOGIC INC at Cisco) @ 2023-06-19 15:50 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1293 bytes --]
+
+Hi,
+
+I'm working on master oe core master branch and run into problem with file for nativesdk (buildtools tarball).
+File started to use MAGIC variable initialized from .../environment-setup.d/file.sh, like
+
+/usr/local/oe-sdk-hardcoded-buildpath/sysroots/x86_64-xesdk-linux/usr/share/misc/magic.mgc
+
+This path relocation does not covered by relocate_sdk.sh script.
+
+Commit that change behavior from wrapper that use relative path to environment variable with absolute path is:
+
+commit 47db876d09d9a4394048579c21d0b394450ce681
+Author: Chen Qi <Qi.Chen@windriver.com>
+Date:   Tue Jan 17 12:06:30 2023 +0800
+
+    file: export MAGIC in SDK
+
+    Previously, a wrapper is used for file, which adds '--magic-file'
+    option to it. But other components might use libmagic and in such
+    case, if there's no MAGIC environent variable set correctly, things
+    do not work. For example, rpmbuild makes use of libmagic and it
+    requries MAGIC to be set correctly.
+
+    Signed-off-by: Chen Qi <Qi.Chen@windriver.com>
+    Signed-off-by: Luca Ceresoli <luca.ceresoli@bootlin.com>
+    Signed-off-by: Richard Purdie <richard.purdie@linuxfoundation.org>
+
+
+I would like to ask if anybody else has such an issue. Any propositions other than reverting commit?
+
+Regards,
+Oleksiy
+
+[-- Attachment #2: Type: text/html, Size: 4774 bytes --]
+
+^ permalink raw reply	[flat|nested] 14+ messages in thread
+* Re: [yocto] File magic/sdk relocation
+  2023-06-19 15:50 File magic/sdk relocation Oleksiy Obitotskyi -X (oobitots - GLOBALLOGIC INC at Cisco)
+@ 2023-06-19 16:55 ` Alexander Kanavin
+       [not found] ` <176A1DBE70E5CC10.31313@lists.yoctoproject.org>
+  1 sibling, 0 replies; 14+ messages in thread
+From: Alexander Kanavin @ 2023-06-19 16:55 UTC (permalink / raw)
+  To: oobitots; +Cc: yocto
+
+I think there is a mistake in the file recipe (and rpm has the problem too):
+
+        cat <<- EOF > ${D}${SDKPATHNATIVE}/environment-setup.d/file.sh
+                export MAGIC="$OECORE_NATIVE_SYSROOT${datadir}/misc/magic.mgc"
+        EOF
+
+$OECORE_NATIVE_SYSROOT should be prefixed with a \ to prevent shell
+variable expansion at build time.
+
+Can you check that the problem is then fixed?
+
+Alex
+
+On Mon, 19 Jun 2023 at 17:50, Oleksiy Obitotskyy via
+lists.yoctoproject.org <oobitots=cisco.com@lists.yoctoproject.org>
+wrote:
+>
+> Hi,
+>
+> I'm working on master oe core master branch and run into problem with file for nativesdk (buildtools tarball).
+> File started to use MAGIC variable initialized from .../environment-setup.d/file.sh, like
+>
+> /usr/local/oe-sdk-hardcoded-buildpath/sysroots/x86_64-xesdk-linux/usr/share/misc/magic.mgc
+>
+> This path relocation does not covered by relocate_sdk.sh script.
+>
+> Commit that change behavior from wrapper that use relative path to environment variable with absolute path is:
+>
+> commit 47db876d09d9a4394048579c21d0b394450ce681
+> Author: Chen Qi <Qi.Chen@windriver.com>
+> Date:   Tue Jan 17 12:06:30 2023 +0800
+>
+>     file: export MAGIC in SDK
+>
+>     Previously, a wrapper is used for file, which adds '--magic-file'
+>     option to it. But other components might use libmagic and in such
+>     case, if there's no MAGIC environent variable set correctly, things
+>     do not work. For example, rpmbuild makes use of libmagic and it
+>     requries MAGIC to be set correctly.
+>
+>     Signed-off-by: Chen Qi <Qi.Chen@windriver.com>
+>     Signed-off-by: Luca Ceresoli <luca.ceresoli@bootlin.com>
+>     Signed-off-by: Richard Purdie <richard.purdie@linuxfoundation.org>
+>
+>
+> I would like to ask if anybody else has such an issue. Any propositions other than reverting commit?
+>
+> Regards,
+> Oleksiy
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#60348): https://lists.yoctoproject.org/g/yocto/message/60348
+> Mute This Topic: https://lists.yoctoproject.org/mt/99626082/1686489
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 14+ messages in thread
+* Re: [yocto] File magic/sdk relocation
+       [not found] ` <176A1DBE70E5CC10.31313@lists.yoctoproject.org>
+@ 2023-06-19 17:27   ` Alexander Kanavin
+  2023-06-21 10:43     ` Oleksiy Obitotskyi -X (oobitots - GLOBALLOGIC INC at Cisco)
+                       ` (2 more replies)
+  0 siblings, 3 replies; 14+ messages in thread
+From: Alexander Kanavin @ 2023-06-19 17:27 UTC (permalink / raw)
+  To: alex.kanavin; +Cc: oobitots, yocto
+
+On closer look, it should even say:
+export MAGIC="\$OECORE_NATIVE_SYSROOT/usr/share/misc/magic.mgc"
+
+If you can test this and confirm that it works, a patch would be welcome.
+
+Alex
+
+On Mon, 19 Jun 2023 at 18:55, Alexander Kanavin via
+lists.yoctoproject.org <alex.kanavin=gmail.com@lists.yoctoproject.org>
+wrote:
+>
+> I think there is a mistake in the file recipe (and rpm has the problem too):
+>
+>         cat <<- EOF > ${D}${SDKPATHNATIVE}/environment-setup.d/file.sh
+>                 export MAGIC="$OECORE_NATIVE_SYSROOT${datadir}/misc/magic.mgc"
+>         EOF
+>
+> $OECORE_NATIVE_SYSROOT should be prefixed with a \ to prevent shell
+> variable expansion at build time.
+>
+> Can you check that the problem is then fixed?
+>
+> Alex
+>
+> On Mon, 19 Jun 2023 at 17:50, Oleksiy Obitotskyy via
+> lists.yoctoproject.org <oobitots=cisco.com@lists.yoctoproject.org>
+> wrote:
+> >
+> > Hi,
+> >
+> > I'm working on master oe core master branch and run into problem with file for nativesdk (buildtools tarball).
+> > File started to use MAGIC variable initialized from .../environment-setup.d/file.sh, like
+> >
+> > /usr/local/oe-sdk-hardcoded-buildpath/sysroots/x86_64-xesdk-linux/usr/share/misc/magic.mgc
+> >
+> > This path relocation does not covered by relocate_sdk.sh script.
+> >
+> > Commit that change behavior from wrapper that use relative path to environment variable with absolute path is:
+> >
+> > commit 47db876d09d9a4394048579c21d0b394450ce681
+> > Author: Chen Qi <Qi.Chen@windriver.com>
+> > Date:   Tue Jan 17 12:06:30 2023 +0800
+> >
+> >     file: export MAGIC in SDK
+> >
+> >     Previously, a wrapper is used for file, which adds '--magic-file'
+> >     option to it. But other components might use libmagic and in such
+> >     case, if there's no MAGIC environent variable set correctly, things
+> >     do not work. For example, rpmbuild makes use of libmagic and it
+> >     requries MAGIC to be set correctly.
+> >
+> >     Signed-off-by: Chen Qi <Qi.Chen@windriver.com>
+> >     Signed-off-by: Luca Ceresoli <luca.ceresoli@bootlin.com>
+> >     Signed-off-by: Richard Purdie <richard.purdie@linuxfoundation.org>
+> >
+> >
+> > I would like to ask if anybody else has such an issue. Any propositions other than reverting commit?
+> >
+> > Regards,
+> > Oleksiy
+> >
+> >
+> >
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#60350): https://lists.yoctoproject.org/g/yocto/message/60350
+> Mute This Topic: https://lists.yoctoproject.org/mt/99626082/1686489
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 14+ messages in thread
+* Re: [yocto] File magic/sdk relocation
+  2023-06-19 17:27   ` Alexander Kanavin
+@ 2023-06-21 10:43     ` Oleksiy Obitotskyi -X (oobitots - GLOBALLOGIC INC at Cisco)
+  2023-06-27 16:09     ` Oleksandr Hnatiuk
+  2023-07-21 17:11     ` Oleksandr Hnatiuk
+  2 siblings, 0 replies; 14+ messages in thread
+From: Oleksiy Obitotskyi -X (oobitots - GLOBALLOGIC INC at Cisco) @ 2023-06-21 10:43 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 5807 bytes --]
+
+Hi,
+
+I have problem with reproducibility of this issue.
+
+What I did: build buildtools tarball and install it
+Than build sdk with this buildtools tarball.
+
+
+  1.  No changes. Buildtools tarball installed and relocated into.
+/nobackup/oobitots/btt-master/sysroots/x86_64-xesdk-linux/usr/bin/file point to file.file actual binary that use MAGIC
+/nobackup/oobitots/btt-master/sysroots/x86_64-xesdk-linux/environment-setup.d/file.sh contains:
+export MAGIC="/usr/local/oe-sdk-hardcoded-buildpath/sysroots/x86_64-xesdk-linux/usr/share/misc/magic.mgc"
+  2.   Fix file recipe as recommended with escaping dollar sign and reinstall tarball. Got strange results.
+/nobackup/oobitots/btt-master/sysroots/x86_64-xesdk-linux/environment-setup.d/file.sh contains:
+export MAGIC="OECORE_NATIVE_SYSROOT/nobackup/oobitots/btt-master/sysroots/x86_64-xesdk-linux/usr/share/misc/magic.mgc", i.e.
+proper path but OECORE_NATIVE_SYSROOT not replaced with value
+  3.   Cleanup and retest option (a). Get proper path
+export MAGIC="/nobackup/oobitots/btt-master/sysroots/x86_64-xesdk-linux/usr/share/misc/magic.mgc"
+
+And I can't reproduce the issue with magic path. Probably it was an issue on my side with inproper initialization or something.
+
+But still even with proper path to the magic file I have initial issue:
+
+ERROR: quilt-native-0.67-r0 do_populate_sysroot: Fatal errors occurred in subprocesses:
+Command '['file', '-b', '/nobackup/oobitots/sdk-master/test-file/tmp/work/x86_64-linux/quilt-native/0.67-r0/sysroot-destdir/nobackup/oobitots/sdk-master/test-file/tmp/work/x86_64-linux/quilt-native/0.67-r0/recipe-sysroot-native/usr/share/quilt/compat/sendmail']' returned non-zero exit status 1.
+
+It looks like 'file' executed during do_package is unable to find magic, so environment have no such MAGIC value.
+
+Trying to test with bitbake quilt-native -c devshell
+
+oobitots-> echo $MAGIC
+/nobackup/oobitots/btt-master/sysroots/x86_64-xesdk-linux/usr/share/misc/magic.mgc
+[/nobackup/oobitots/sdk-master/test-file/tmp/work/x86_64-linux/quilt-native/0.67-r0/quilt-0.67]
+oobitots-> which file
+/nobackup/oobitots/sdk-master/test-file/tmp/hosttools/file
+[/nobackup/oobitots/sdk-master/test-file/tmp/work/x86_64-linux/quilt-native/0.67-r0/quilt-0.67]
+oobitots-> file /nobackup/oobitots/btt-master/sysroots/x86_64-xesdk-linux/usr/bin/file.file
+/nobackup/oobitots/btt-master/sysroots/x86_64-xesdk-linux/usr/bin/file.file: ELF 64-bit LSB executable, x86-64, version 1 (SYSV), dynamically linked, interpreter /nobackup/oobitots/btt-master/sysroots/x86_64-xesdk-linux/lib/ld-linux-x86-64.so.2, BuildID[sha1]=a7344295f5f77b886e3bef6cab8e21ea6e8ad08b, for GNU/Linux 4.18.0, stripped
+
+Regards,
+Oleksiy
+
+________________________________
+From: Alexander Kanavin <alex.kanavin@gmail.com>
+Sent: Monday, June 19, 2023 19:27
+To: alex.kanavin@gmail.com <alex.kanavin@gmail.com>
+Cc: Oleksiy Obitotskyi -X (oobitots - GLOBALLOGIC INC at Cisco) <oobitots@cisco.com>; yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+Subject: Re: [yocto] File magic/sdk relocation
+
+On closer look, it should even say:
+export MAGIC="\$OECORE_NATIVE_SYSROOT/usr/share/misc/magic.mgc"
+
+If you can test this and confirm that it works, a patch would be welcome.
+
+Alex
+
+On Mon, 19 Jun 2023 at 18:55, Alexander Kanavin via
+lists.yoctoproject.org <alex.kanavin=gmail.com@lists.yoctoproject.org>
+wrote:
+>
+> I think there is a mistake in the file recipe (and rpm has the problem too):
+>
+>         cat <<- EOF > ${D}${SDKPATHNATIVE}/environment-setup.d/file.sh
+>                 export MAGIC="$OECORE_NATIVE_SYSROOT${datadir}/misc/magic.mgc"
+>         EOF
+>
+> $OECORE_NATIVE_SYSROOT should be prefixed with a \ to prevent shell
+> variable expansion at build time.
+>
+> Can you check that the problem is then fixed?
+>
+> Alex
+>
+> On Mon, 19 Jun 2023 at 17:50, Oleksiy Obitotskyy via
+> lists.yoctoproject.org <oobitots=cisco.com@lists.yoctoproject.org>
+> wrote:
+> >
+> > Hi,
+> >
+> > I'm working on master oe core master branch and run into problem with file for nativesdk (buildtools tarball).
+> > File started to use MAGIC variable initialized from .../environment-setup.d/file.sh, like
+> >
+> > /usr/local/oe-sdk-hardcoded-buildpath/sysroots/x86_64-xesdk-linux/usr/share/misc/magic.mgc
+> >
+> > This path relocation does not covered by relocate_sdk.sh script.
+> >
+> > Commit that change behavior from wrapper that use relative path to environment variable with absolute path is:
+> >
+> > commit 47db876d09d9a4394048579c21d0b394450ce681
+> > Author: Chen Qi <Qi.Chen@windriver.com>
+> > Date:   Tue Jan 17 12:06:30 2023 +0800
+> >
+> >     file: export MAGIC in SDK
+> >
+> >     Previously, a wrapper is used for file, which adds '--magic-file'
+> >     option to it. But other components might use libmagic and in such
+> >     case, if there's no MAGIC environent variable set correctly, things
+> >     do not work. For example, rpmbuild makes use of libmagic and it
+> >     requries MAGIC to be set correctly.
+> >
+> >     Signed-off-by: Chen Qi <Qi.Chen@windriver.com>
+> >     Signed-off-by: Luca Ceresoli <luca.ceresoli@bootlin.com>
+> >     Signed-off-by: Richard Purdie <richard.purdie@linuxfoundation.org>
+> >
+> >
+> > I would like to ask if anybody else has such an issue. Any propositions other than reverting commit?
+> >
+> > Regards,
+> > Oleksiy
+> >
+> >
+> >
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#60350): https://lists.yoctoproject.org/g/yocto/message/60350
+> Mute This Topic: https://lists.yoctoproject.org/mt/99626082/1686489
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+[-- Attachment #2: Type: text/html, Size: 12532 bytes --]
+
+^ permalink raw reply	[flat|nested] 14+ messages in thread
+* Re: File magic/sdk relocation
+  2023-06-19 17:27   ` Alexander Kanavin
+  2023-06-21 10:43     ` Oleksiy Obitotskyi -X (oobitots - GLOBALLOGIC INC at Cisco)
+@ 2023-06-27 16:09     ` Oleksandr Hnatiuk
+  2023-06-27 16:46       ` [yocto] " Alexander Kanavin
+  2023-07-21 17:11     ` Oleksandr Hnatiuk
+  2 siblings, 1 reply; 14+ messages in thread
+From: Oleksandr Hnatiuk @ 2023-06-27 16:09 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 674 bytes --]
+
+Hi. After debugging this, I found there is another issue apart from the way MAGIC is set in the recipe.
+
+The do_populate_sysroot task doesn't use the value of MAGIC variable that is available in tasks that build the code.
+`file -b` is invoked from is_elf function in meta/lib/oe/package.py via `subprocess.check_output`.
+The environment of that subprocess call doesn't have the MAGIC variable set so `file -b` fails.
+(It uses `file` from $BUILDDIR/tmp/hosttools/file)
+Verified this by providing a modified env with hardcoded MAGIC to `subprocess.check_output` after which the error is gone.
+
+What would the right solution for this look like?
+
+Regards,
+Oleksandr
+
+[-- Attachment #2: Type: text/html, Size: 718 bytes --]
+
+^ permalink raw reply	[flat|nested] 14+ messages in thread
+* Re: [yocto] File magic/sdk relocation
+  2023-06-27 16:09     ` Oleksandr Hnatiuk
+@ 2023-06-27 16:46       ` Alexander Kanavin
+  2023-07-03 12:53         ` Oleksandr Hnatiuk -X (ohnatiuk - GLOBALLOGIC INC at Cisco)
+  0 siblings, 1 reply; 14+ messages in thread
+From: Alexander Kanavin @ 2023-06-27 16:46 UTC (permalink / raw)
+  To: ohnatiuk; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1498 bytes --]
+
+Before we think of a solution, can you provide steps or a test case where
+the issue can be seen? It’s in one of the most important tasks, so I’d like
+to know why it hasn’t been a problem and what is the scenario where it is.
+
+Alex
+
+On Tue 27. Jun 2023 at 18.09, Oleksandr Hnatiuk via lists.yoctoproject.org
+<ohnatiuk=cisco.com@lists.yoctoproject.org> wrote:
+
+> Hi. After debugging this, I found there is another issue apart from the
+> way MAGIC is set in the recipe.
+>
+> The do_populate_sysroot task doesn't use the value of MAGIC variable that
+> is available in tasks that build the code.
+> `file -b` is invoked from is_elf function in meta/lib/oe/package.py via
+> `subprocess.check_output`.
+> The environment of that subprocess call doesn't have the MAGIC variable
+> set so `file -b` fails.
+> (It uses `file` from $BUILDDIR/tmp/hosttools/file)
+> Verified this by providing a modified env with hardcoded MAGIC to
+> `subprocess.check_output` after which the error is gone.
+>
+> What would the right solution for this look like?
+>
+> Regards,
+> Oleksandr
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#60460):
+> https://lists.yoctoproject.org/g/yocto/message/60460
+> Mute This Topic: https://lists.yoctoproject.org/mt/99626082/1686489
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> alex.kanavin@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 2356 bytes --]
+
+^ permalink raw reply	[flat|nested] 14+ messages in thread
+* Re: [yocto] File magic/sdk relocation
+  2023-06-27 16:46       ` [yocto] " Alexander Kanavin
+@ 2023-07-03 12:53         ` Oleksandr Hnatiuk -X (ohnatiuk - GLOBALLOGIC INC at Cisco)
+  2023-07-03 19:41           ` Alexander Kanavin
+  0 siblings, 1 reply; 14+ messages in thread
+From: Oleksandr Hnatiuk -X (ohnatiuk - GLOBALLOGIC INC at Cisco) @ 2023-07-03 12:53 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: yocto
+
+I think it hasn’t been noticed because openembedded-core doesn't build `file` in buildtools-tarball.
+
+To reproduce the error, you need to do the following:
+1. Download openembedded-core and bitbake, source init script
+2. Add nativesdk-file to TOOLCHAIN_HOST_TASK, e.g. add the following line to conf/local.conf:
+TOOLCHAIN_HOST_TASK:append = " nativesdk-file"
+3. Run `bitbake buildtools-tarball`
+4. Install buildtools: `tmp-glibc/deploy/sdk/x86_64-buildtools-nativesdk-standalone-nodistro.0.sh -y -d $buildtools_install_dir`
+5. Same as (1) but in a different empty directory (first one built the buildtools, this one will use them)
+6. Source the script provided by buildtools, e.g.: `source $buildtools_install_dir/environment-setup-x86_64-oesdk-linux`
+7. Run `bitbake quilt-native`
+
+You should get the following error:
+
+ERROR: quilt-native-0.67-r0 do_populate_sysroot: Fatal errors occurred in subprocesses:
+Command '['file', '-b', '/path/to/openembedded-core/build/tmp-glibc/work/x86_64-linux/quilt-native/0.67-r0/sysroot-destdir/path/to/openembedded-core/build/tmp-glibc/work/x86_64-linux/quilt-native/0.67-r0/recipe-sysroot-native/usr/bin/quilt']' returned non-zero exit status 1.
+
+The same error is repeated for each invocation of `file` in do_populate_sysroot
+
+Regards,
+Oleksandr
+
+
+From: Alexander Kanavin <alex.kanavin@gmail.com>
+Sent: Tuesday, June 27, 2023 7:46 PM
+To: Oleksandr Hnatiuk -X (ohnatiuk - GLOBALLOGIC INC at Cisco) <ohnatiuk@cisco.com>
+Cc: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+Subject: Re: [yocto] File magic/sdk relocation 
+ 
+Before we think of a solution, can you provide steps or a test case where the issue can be seen? It’s in one of the most important tasks, so I’d like to know why it hasn’t been a problem and what is the scenario where it is.
+
+Alex
+
+^ permalink raw reply	[flat|nested] 14+ messages in thread
+* Re: [yocto] File magic/sdk relocation
+  2023-07-03 12:53         ` Oleksandr Hnatiuk -X (ohnatiuk - GLOBALLOGIC INC at Cisco)
+@ 2023-07-03 19:41           ` Alexander Kanavin
+  2023-07-04 11:41             ` Oleksiy Obitotskyy
+  0 siblings, 1 reply; 14+ messages in thread
+From: Alexander Kanavin @ 2023-07-03 19:41 UTC (permalink / raw)
+  To: Oleksandr Hnatiuk -X (ohnatiuk - GLOBALLOGIC INC at Cisco); +Cc: yocto
+
+I think you might want to use create_wrapper helper, similar to how
+createrepo_c recipe does it:
+
+do_install:append:class-nativesdk() {
+        create_wrapper ${D}/${bindir}/createrepo_c \
+                RPM_CONFIGDIR=${SDKPATHNATIVE}${libdir_nativesdk}/rpm \
+                MAGIC=${datadir}/misc/magic.mgc
+        create_wrapper ${D}/${bindir}/modifyrepo_c \
+                MAGIC=${datadir}/misc/magic.mgc
+
+}
+
+I also just checked that MAGIC is relocated and exported correctly,
+e.g. running file from the buildtools tarball works fine on the
+'plain' command line after installing and setting up the tarball.
+
+Alex
+
+On Mon, 3 Jul 2023 at 14:53, Oleksandr Hnatiuk -X (ohnatiuk -
+GLOBALLOGIC INC at Cisco) <ohnatiuk@cisco.com> wrote:
+>
+> I think it hasn’t been noticed because openembedded-core doesn't build `file` in buildtools-tarball.
+>
+> To reproduce the error, you need to do the following:
+> 1. Download openembedded-core and bitbake, source init script
+> 2. Add nativesdk-file to TOOLCHAIN_HOST_TASK, e.g. add the following line to conf/local.conf:
+> TOOLCHAIN_HOST_TASK:append = " nativesdk-file"
+> 3. Run `bitbake buildtools-tarball`
+> 4. Install buildtools: `tmp-glibc/deploy/sdk/x86_64-buildtools-nativesdk-standalone-nodistro.0.sh -y -d $buildtools_install_dir`
+> 5. Same as (1) but in a different empty directory (first one built the buildtools, this one will use them)
+> 6. Source the script provided by buildtools, e.g.: `source $buildtools_install_dir/environment-setup-x86_64-oesdk-linux`
+> 7. Run `bitbake quilt-native`
+>
+> You should get the following error:
+>
+> ERROR: quilt-native-0.67-r0 do_populate_sysroot: Fatal errors occurred in subprocesses:
+> Command '['file', '-b', '/path/to/openembedded-core/build/tmp-glibc/work/x86_64-linux/quilt-native/0.67-r0/sysroot-destdir/path/to/openembedded-core/build/tmp-glibc/work/x86_64-linux/quilt-native/0.67-r0/recipe-sysroot-native/usr/bin/quilt']' returned non-zero exit status 1.
+>
+> The same error is repeated for each invocation of `file` in do_populate_sysroot
+>
+> Regards,
+> Oleksandr
+>
+>
+> From: Alexander Kanavin <alex.kanavin@gmail.com>
+> Sent: Tuesday, June 27, 2023 7:46 PM
+> To: Oleksandr Hnatiuk -X (ohnatiuk - GLOBALLOGIC INC at Cisco) <ohnatiuk@cisco.com>
+> Cc: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+> Subject: Re: [yocto] File magic/sdk relocation
+>
+> Before we think of a solution, can you provide steps or a test case where the issue can be seen? It’s in one of the most important tasks, so I’d like to know why it hasn’t been a problem and what is the scenario where it is.
+>
+> Alex
+
+
+^ permalink raw reply	[flat|nested] 14+ messages in thread
+* Re: File magic/sdk relocation
+  2023-07-03 19:41           ` Alexander Kanavin
+@ 2023-07-04 11:41             ` Oleksiy Obitotskyy
+  2023-07-04 11:44               ` [yocto] " Alexander Kanavin
+  0 siblings, 1 reply; 14+ messages in thread
+From: Oleksiy Obitotskyy @ 2023-07-04 11:41 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1041 bytes --]
+
+Hi Alexander.
+
+We already use temporary fix, like:
+> 
+> 
+> diff --git a/meta/recipes-devtools/file/file_5.44.bb
+> b/meta/recipes-devtools/file/file_5.44.bb
+> index 3090d346ed..3a23e7721d 100644
+> --- a/meta/recipes-devtools/file/file_5.44.bb
+> +++ b/meta/recipes-devtools/file/file_5.44.bb
+> @@ -45,10 +45,8 @@ do_install:append:class-native() {
+> }
+> 
+> do_install:append:class-nativesdk() {
+> -       mkdir -p ${D}${SDKPATHNATIVE}/environment-setup.d
+> -       cat <<- EOF > ${D}${SDKPATHNATIVE}/environment-setup.d/file.sh
+> -               export
+> MAGIC="$OECORE_NATIVE_SYSROOT${datadir}/misc/magic.mgc"
+> -       EOF
+> +       create_cmdline_wrapper ${D}/${bindir}/file \
+> +               --magic-file ${datadir}/misc/magic.mgc
+> }
+
+I would like to ask if it possible to have in upstream both MAGIC variable exported and wrapper for file.
+If another binaries use MAGIC it's ok, but if we have to use file in sub-shell it must work too.
+
+Regards,
+Oleksiy
+
+[-- Attachment #2: Type: text/html, Size: 1747 bytes --]
+
+^ permalink raw reply	[flat|nested] 14+ messages in thread
+* Re: [yocto] File magic/sdk relocation
+  2023-07-04 11:41             ` Oleksiy Obitotskyy
+@ 2023-07-04 11:44               ` Alexander Kanavin
+  2023-07-04 11:57                 ` Oleksiy Obitotskyy
+  0 siblings, 1 reply; 14+ messages in thread
+From: Alexander Kanavin @ 2023-07-04 11:44 UTC (permalink / raw)
+  To: oobitots; +Cc: yocto
+
+It's fine to have both, you just need to write a good commit message
+explaining the issue. Also you need to explain why you need file
+binaries from oe-core in the sdk/tarball, instead of relying on file
+the host system.
+
+Alex
+
+On Tue, 4 Jul 2023 at 13:41, Oleksiy Obitotskyy via
+lists.yoctoproject.org <oobitots=cisco.com@lists.yoctoproject.org>
+wrote:
+>
+> Hi Alexander.
+>
+> We already use temporary fix, like:
+>
+>
+> diff --git a/meta/recipes-devtools/file/file_5.44.bb b/meta/recipes-devtools/file/file_5.44.bb
+> index 3090d346ed..3a23e7721d 100644
+> --- a/meta/recipes-devtools/file/file_5.44.bb
+> +++ b/meta/recipes-devtools/file/file_5.44.bb
+> @@ -45,10 +45,8 @@ do_install:append:class-native() {
+>  }
+>
+>  do_install:append:class-nativesdk() {
+> -       mkdir -p ${D}${SDKPATHNATIVE}/environment-setup.d
+> -       cat <<- EOF > ${D}${SDKPATHNATIVE}/environment-setup.d/file.sh
+> -               export MAGIC="$OECORE_NATIVE_SYSROOT${datadir}/misc/magic.mgc"
+> -       EOF
+> +       create_cmdline_wrapper ${D}/${bindir}/file \
+> +               --magic-file ${datadir}/misc/magic.mgc
+>  }
+>
+> I would like to ask if it possible to have in upstream both MAGIC variable exported and wrapper for file.
+> If another binaries use MAGIC it's ok, but if we have to use file in sub-shell it must work too.
+>
+> Regards,
+> Oleksiy
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#60511): https://lists.yoctoproject.org/g/yocto/message/60511
+> Mute This Topic: https://lists.yoctoproject.org/mt/99626082/1686489
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 14+ messages in thread
+* Re: File magic/sdk relocation
+  2023-07-04 11:44               ` [yocto] " Alexander Kanavin
+@ 2023-07-04 11:57                 ` Oleksiy Obitotskyy
+  0 siblings, 0 replies; 14+ messages in thread
+From: Oleksiy Obitotskyy @ 2023-07-04 11:57 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 452 bytes --]
+
+Sdk could be build on different host platforms with slightly different OS versions.
+Some binaries could be missing, some have different behavior from version to version.
+Hence we prefer to share our own tool set, i.e. buildtools tarball to keep environment consistent.
+Another moment that different sdk versions could require different tools and it's easier to
+switch link to buildtools tarball then reconfigure build server.
+
+Regards,
+Oleksiy
+
+[-- Attachment #2: Type: text/html, Size: 481 bytes --]
+
+^ permalink raw reply	[flat|nested] 14+ messages in thread
+* Re: File magic/sdk relocation
+  2023-06-19 17:27   ` Alexander Kanavin
+  2023-06-21 10:43     ` Oleksiy Obitotskyi -X (oobitots - GLOBALLOGIC INC at Cisco)
+  2023-06-27 16:09     ` Oleksandr Hnatiuk
+@ 2023-07-21 17:11     ` Oleksandr Hnatiuk
+  2023-07-23 12:03       ` [yocto] " Alexander Kanavin
+  2 siblings, 1 reply; 14+ messages in thread
+From: Oleksandr Hnatiuk @ 2023-07-21 17:11 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 705 bytes --]
+
+On Mon, Jun 19, 2023 at 08:27 PM, Alexander Kanavin wrote:
+
+> 
+> On closer look, it should even say:
+> export MAGIC="\$OECORE_NATIVE_SYSROOT/usr/share/misc/magic.mgc"
+
+Hi Alexander,
+
+We have submitted the patch[1] which fixes the build for our case but doesn't change the contents of file.sh which is a separate issue.
+You suggested changing MAGIC to "\$OECORE_NATIVE_SYSROOT/usr/share/misc/magic.mgc".
+We can also get the same result with "${datadir}/misc/magic.mgc" which is what was used for create_cmdline_wrapper in this recipe.
+Which one is preferred?
+
+[1] see "[PATCH] file: return wrapper to fix builds when file is in buildtools-tarball" in openembedded-core
+
+Regards,
+Oleksandr
+
+[-- Attachment #2: Type: text/html, Size: 768 bytes --]
+
+^ permalink raw reply	[flat|nested] 14+ messages in thread
+* Re: [yocto] File magic/sdk relocation
+  2023-07-21 17:11     ` Oleksandr Hnatiuk
+@ 2023-07-23 12:03       ` Alexander Kanavin
+  2023-07-25 11:21         ` Richard Purdie
+  0 siblings, 1 reply; 14+ messages in thread
+From: Alexander Kanavin @ 2023-07-23 12:03 UTC (permalink / raw)
+  To: ohnatiuk; +Cc: yocto
+
+On Fri, 21 Jul 2023 at 19:11, Oleksandr Hnatiuk via
+lists.yoctoproject.org <ohnatiuk=cisco.com@lists.yoctoproject.org>
+wrote:
+>
+> On Mon, Jun 19, 2023 at 08:27 PM, Alexander Kanavin wrote:
+>
+> On closer look, it should even say:
+> export MAGIC="\$OECORE_NATIVE_SYSROOT/usr/share/misc/magic.mgc"
+>
+> Hi Alexander,
+>
+> We have submitted the patch[1] which fixes the build for our case but doesn't change the contents of file.sh which is a separate issue.
+> You suggested changing MAGIC to "\$OECORE_NATIVE_SYSROOT/usr/share/misc/magic.mgc".
+> We can also get the same result with "${datadir}/misc/magic.mgc" which is what was used for create_cmdline_wrapper in this recipe.
+> Which one is preferred?
+
+I don't have a preference. If both options work, there's clearly more
+sdk relocation magic in various places than I thought was happening,
+so I would pick the option that is less likely to quietly regress, but
+right now I can't say which one that would be.
+
+Alex
+
+
+^ permalink raw reply	[flat|nested] 14+ messages in thread
+* Re: [yocto] File magic/sdk relocation
+  2023-07-23 12:03       ` [yocto] " Alexander Kanavin
+@ 2023-07-25 11:21         ` Richard Purdie
+  0 siblings, 0 replies; 14+ messages in thread
+From: Richard Purdie @ 2023-07-25 11:21 UTC (permalink / raw)
+  To: Alexander Kanavin, ohnatiuk; +Cc: yocto
+
+On Sun, 2023-07-23 at 14:03 +0200, Alexander Kanavin wrote:
+> On Fri, 21 Jul 2023 at 19:11, Oleksandr Hnatiuk via
+> lists.yoctoproject.org <ohnatiuk=cisco.com@lists.yoctoproject.org>
+> wrote:
+> > 
+> > On Mon, Jun 19, 2023 at 08:27 PM, Alexander Kanavin wrote:
+> > 
+> > On closer look, it should even say:
+> > export MAGIC="\$OECORE_NATIVE_SYSROOT/usr/share/misc/magic.mgc"
+> > 
+> > Hi Alexander,
+> > 
+> > We have submitted the patch[1] which fixes the build for our case but doesn't change the contents of file.sh which is a separate issue.
+> > You suggested changing MAGIC to "\$OECORE_NATIVE_SYSROOT/usr/share/misc/magic.mgc".
+> > We can also get the same result with "${datadir}/misc/magic.mgc" which is what was used for create_cmdline_wrapper in this recipe.
+> > Which one is preferred?
+> 
+> I don't have a preference. If both options work, there's clearly more
+> sdk relocation magic in various places than I thought was happening,
+> so I would pick the option that is less likely to quietly regress, but
+> right now I can't say which one that would be.
+
+Personally, I'd really like to patch libmagic to move the path to it's
+own section, then we can use the relocation technique we use with gcc
+to change the patch and most of these issues go away...
+
+Cheers,
+
+Richard
+
+
+^ permalink raw reply	[flat|nested] 14+ messages in thread
+end of thread, other threads:[~2023-07-25 11:21 UTC | newest]
+
+Thread overview: 14+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-06-19 15:50 File magic/sdk relocation Oleksiy Obitotskyi -X (oobitots - GLOBALLOGIC INC at Cisco)
+2023-06-19 16:55 ` [yocto] " Alexander Kanavin
+     [not found] ` <176A1DBE70E5CC10.31313@lists.yoctoproject.org>
+2023-06-19 17:27   ` Alexander Kanavin
+2023-06-21 10:43     ` Oleksiy Obitotskyi -X (oobitots - GLOBALLOGIC INC at Cisco)
+2023-06-27 16:09     ` Oleksandr Hnatiuk
+2023-06-27 16:46       ` [yocto] " Alexander Kanavin
+2023-07-03 12:53         ` Oleksandr Hnatiuk -X (ohnatiuk - GLOBALLOGIC INC at Cisco)
+2023-07-03 19:41           ` Alexander Kanavin
+2023-07-04 11:41             ` Oleksiy Obitotskyy
+2023-07-04 11:44               ` [yocto] " Alexander Kanavin
+2023-07-04 11:57                 ` Oleksiy Obitotskyy
+2023-07-21 17:11     ` Oleksandr Hnatiuk
+2023-07-23 12:03       ` [yocto] " Alexander Kanavin
+2023-07-25 11:21         ` Richard Purdie
+

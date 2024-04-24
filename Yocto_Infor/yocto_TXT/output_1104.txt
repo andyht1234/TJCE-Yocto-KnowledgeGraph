@@ -1,0 +1,159 @@
+* [layerindex-web] [PATCH] layerindex/utils.py: Add to baseconfig=True for bb.parse.handle()
+@ 2022-12-20  7:26 Robert Yang
+  2022-12-20 16:39 ` [yocto] " Tim Orling
+  0 siblings, 1 reply; 3+ messages in thread
+From: Robert Yang @ 2022-12-20  7:26 UTC (permalink / raw)
+  To: yocto; +Cc: tim.orling, martin.jansa, richard.purdie
+
+Bitbake's api has been changed via:
+afb8478d3 parse: Add support for addpylib conf file directive and BB_GLOBAL_PYMODULES
+
+The conf file won't be parsed without baseconfig=True:
+bb.parse.ParseError: ParseError at /path/to/oe-core/meta/conf/layer.conf:132: unparsed line: 'addpylib ${LAYERDIR}/lib oe'
+
+Signed-off-by: Robert Yang <liezhi.yang@windriver.com>
+---
+ layerindex/utils.py | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/layerindex/utils.py b/layerindex/utils.py
+index 6566710..9d94015 100644
+--- a/layerindex/utils.py
++++ b/layerindex/utils.py
+@@ -314,7 +314,10 @@ def is_branch_valid(layerdir, branch):
+ def parse_conf(conf_file, d):
+     if hasattr(bb.parse, "handle"):
+         # Newer BitBake
+-        data = bb.parse.handle(conf_file, d, include=True)
++        if hasattr(bb.parse.parse_py.ConfHandler, "__addpylib_regexp__"):
++            data = bb.parse.handle(conf_file, d, include=True, baseconfig=True)
++        else:
++            data = bb.parse.handle(conf_file, d, include=True)
+     else:
+         # Older BitBake (1.18 and below)
+         data = bb.cooker._parse(conf_file, d)
+-- 
+2.37.1
+
+
+
+^ permalink raw reply related	[flat|nested] 3+ messages in thread
+* Re: [yocto] [layerindex-web] [PATCH] layerindex/utils.py: Add to baseconfig=True for bb.parse.handle()
+  2022-12-20  7:26 [layerindex-web] [PATCH] layerindex/utils.py: Add to baseconfig=True for bb.parse.handle() Robert Yang
+@ 2022-12-20 16:39 ` Tim Orling
+  2022-12-21  4:01   ` Robert Yang
+  0 siblings, 1 reply; 3+ messages in thread
+From: Tim Orling @ 2022-12-20 16:39 UTC (permalink / raw)
+  To: Robert Yang; +Cc: yocto, tim.orling, martin.jansa, richard.purdie
+
+[-- Attachment #1: Type: text/plain, Size: 910 bytes --]
+
+On Mon, Dec 19, 2022 at 11:26 PM Robert Yang <liezhi.yang@windriver.com>
+wrote:
+
+> Bitbake's api has been changed via:
+> afb8478d3 parse: Add support for addpylib conf file directive and
+> BB_GLOBAL_PYMODULES
+>
+> The conf file won't be parsed without baseconfig=True:
+> bb.parse.ParseError: ParseError at
+> /path/to/oe-core/meta/conf/layer.conf:132: unparsed line: 'addpylib
+> ${LAYERDIR}/lib oe'
+>
+> Merged. Thank you!
+
+
+> Signed-off-by: Robert Yang <liezhi.yang@windriver.com>
+> ---
+> <snip>
+> --
+> 2.37.1
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#58837):
+> https://lists.yoctoproject.org/g/yocto/message/58837
+> Mute This Topic: https://lists.yoctoproject.org/mt/95781944/924729
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> ticotimo@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 1939 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] [layerindex-web] [PATCH] layerindex/utils.py: Add to baseconfig=True for bb.parse.handle()
+  2022-12-20 16:39 ` [yocto] " Tim Orling
+@ 2022-12-21  4:01   ` Robert Yang
+  0 siblings, 0 replies; 3+ messages in thread
+From: Robert Yang @ 2022-12-21  4:01 UTC (permalink / raw)
+  To: Tim Orling; +Cc: yocto, tim.orling, martin.jansa, richard.purdie
+
+
+
+On 12/21/22 00:39, Tim Orling wrote:
+> 
+> 
+> On Mon, Dec 19, 2022 at 11:26 PM Robert Yang <liezhi.yang@windriver.com 
+> <mailto:liezhi.yang@windriver.com>> wrote:
+> 
+>     Bitbake's api has been changed via:
+>     afb8478d3 parse: Add support for addpylib conf file directive and
+>     BB_GLOBAL_PYMODULES
+> 
+>     The conf file won't be parsed without baseconfig=True:
+>     bb.parse.ParseError: ParseError at
+>     /path/to/oe-core/meta/conf/layer.conf:132: unparsed line: 'addpylib
+>     ${LAYERDIR}/lib oe'
+> 
+> Merged. Thank you!
+
+Glad to see that layerindex is back to active.
+
+I've also sent you another 3 patches just now:
+
+utils.py: Prefer the one which matches branchname for depends layer
+recipeparse.py: Checkout deplayerbranch before parsing
+util.py: Fix for removing non-existed dependencies
+
+I think that I had sent them before, but not get merged, layerindex may not work 
+well without these fixes.
+
+// Robert
+
+> 
+>     Signed-off-by: Robert Yang <liezhi.yang@windriver.com
+>     <mailto:liezhi.yang@windriver.com>>
+>     ---
+>     <snip>
+>     -- 
+>     2.37.1
+> 
+> 
+>     -=-=-=-=-=-=-=-=-=-=-=-
+>     Links: You receive all messages sent to this group.
+>     View/Reply Online (#58837):
+>     https://lists.yoctoproject.org/g/yocto/message/58837
+>     <https://urldefense.com/v3/__https://lists.yoctoproject.org/g/yocto/message/58837__;!!AjveYdw8EvQ!f82pFsZIjTXfpv3B6LSr7x_5u225kNcUYM4LAUVvBu-7OS0E-2XR9CWbMzZvGBQ8fAk7X9lL9YGOQelM8Imvyw$>
+>     Mute This Topic: https://lists.yoctoproject.org/mt/95781944/924729
+>     <https://urldefense.com/v3/__https://lists.yoctoproject.org/mt/95781944/924729__;!!AjveYdw8EvQ!f82pFsZIjTXfpv3B6LSr7x_5u225kNcUYM4LAUVvBu-7OS0E-2XR9CWbMzZvGBQ8fAk7X9lL9YGOQekkj_SwmA$>
+>     Group Owner: yocto+owner@lists.yoctoproject.org
+>     <mailto:yocto%2Bowner@lists.yoctoproject.org>
+>     Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub
+>     <https://urldefense.com/v3/__https://lists.yoctoproject.org/g/yocto/unsub__;!!AjveYdw8EvQ!f82pFsZIjTXfpv3B6LSr7x_5u225kNcUYM4LAUVvBu-7OS0E-2XR9CWbMzZvGBQ8fAk7X9lL9YGOQekx9xA53A$> [ticotimo@gmail.com <mailto:ticotimo@gmail.com>]
+>     -=-=-=-=-=-=-=-=-=-=-=-
+> 
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2022-12-21  4:01 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-12-20  7:26 [layerindex-web] [PATCH] layerindex/utils.py: Add to baseconfig=True for bb.parse.handle() Robert Yang
+2022-12-20 16:39 ` [yocto] " Tim Orling
+2022-12-21  4:01   ` Robert Yang
+

@@ -1,0 +1,226 @@
+* Yocto suddenly creating directories with 700 instead 755.
+@ 2021-11-11 16:10 Manuel Wagesreither
+  2021-11-11 22:33 ` [yocto] " Richard Purdie
+  2021-11-11 23:28 ` Stephen John Smoogen
+  0 siblings, 2 replies; 5+ messages in thread
+From: Manuel Wagesreither @ 2021-11-11 16:10 UTC (permalink / raw)
+  To: yocto
+
+Hello all,
+
+sorry, wall of text incoming.
+
+tl;dr:
+If recipes install directories with `install -d path/to/dir`, how is the default mode determined? What can cause it suddenly (that is, without updating metalayers or similar) to change from 755 to 700?
+
+
+full version:
+
+our CI is throwing "Transaction check errors" of the following form:
+
+```
+file /etc conflicts between attempted installs of redactedone-appconfig-1.0-r0.aarch64 and modemmanager-1.12.12-r0.aarch64
+file /etc conflicts between attempted installs of tegra-configs-udev-32.4.3-r0.armv8a_tegra and redactedone-appconfig-1.0-r0.aarch64
+file /usr conflicts between attempted installs of redactedtwo-scripts-1.0-r0.aarch64 and nvidia-docker-2.2.2-r0.aarch64
+file /usr/bin conflicts between attempted installs of redactedtwo-scripts-1.0-r0.aarch64 and nvidia-docker-2.2.2-r0.aarch64
+file /usr conflicts between attempted installs of iptables-dev-1.8.4-r0.aarch64 and redactedtwo-scripts-1.0-r0.aarch64
+file /usr/bin conflicts between attempted installs of systemd-1:244.5-r0.aarch64 and redactedtwo-scripts-1.0-r0.aarch64
+```
+
+I examined/unpacked the .rpms in tmp/work/deploy/rpm/aarch64 and really, they do differ in the mode bits for /etc, /usr and /usr/bin. While these dirs have a mode of 755 in poky/oe packages, they have a mode of 700 in our packages. The puzzling thing is that this issue has arised only recently with a totally independent change in some recipe not mentioned above. The change consisted of changing the URI of a tarball we fetch from AWS S3 and using sha256 instead md5 for checksumming the file.
+
+At first, this issue appeared somewhat reproducible, but I think that was just coincedence. Perhaps there is some cache poisoning at play here. Now builds are also failling which don't have this "bad" commit. Tests are still going on. I'm now testing if deleting the tmp dir changes anything.
+
+So this mail is rather about: Do you know anything which can point me into the right direction? The recipes in question all install the directories with `install -d ${D}/somedir`. I changed some recipes to have `-m 0755` as well, and one build did indeed succeed then, but then builds started to fail with the same symptoms but other packages being the culprit, that is, having the dirs with 700.
+
+I heard the default mode of files/dirs in unix is set with umask, but I have no idea how to check if/how Yocto is fiddling with that.
+
+Also, sometimes we have these errors: They seem to go away with cleaning the tmp dir, while the errors above persist. But the sample size is very small so that might be a wrong lead.
+
+```
+INFO     - NOTE: Running task 12010 of 12044 (/opt/buildagent/work/77acccee8c88a2cf/meta-nellie/recipes-nellie/images/our-image.bb:do_rootfs)
+INFO     - NOTE: recipe our-image-1.0-r0: task do_rootfs: Started
+ERROR    - ERROR: Task (/opt/buildagent/work/77acccee8c88a2cf/meta-nellie/recipes-nellie/images/our-image.bb:do_rootfs) failed with exit code '134'
+INFO     - NOTE: Tasks Summary: Attempted 12034 tasks of which 12001 didn't need to be rerun and 1 failed.
+INFO     -
+INFO     - Summary: 1 task failed:
+INFO     - /opt/buildagent/work/77acccee8c88a2cf/meta-nellie/recipes-nellie/images/our-image.bb:do_rootfs
+ERROR    - Command "/opt/buildagent/work/77acccee8c88a2cf/build$ /opt/buildagent/work/77acccee8c88a2cf/poky/bitbake/bin/bitbake -c build our-image" failed
+--- Error summary ---
+ERROR: Task (/opt/buildagent/work/77acccee8c88a2cf/meta-nellie/recipes-nellie/images/our-image.bb:do_rootfs) failed with exit code '134'
+```
+Google said exit code 134 means the process received a SIGABRT, but... I'm quite sure no-one sent one.
+
+
+Thank you all,
+regards,
+Manuel
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] Yocto suddenly creating directories with 700 instead 755.
+  2021-11-11 16:10 Yocto suddenly creating directories with 700 instead 755 Manuel Wagesreither
+@ 2021-11-11 22:33 ` Richard Purdie
+  2021-11-11 23:28 ` Stephen John Smoogen
+  1 sibling, 0 replies; 5+ messages in thread
+From: Richard Purdie @ 2021-11-11 22:33 UTC (permalink / raw)
+  To: Manuel Wagesreither, yocto
+
+On Thu, 2021-11-11 at 17:10 +0100, Manuel Wagesreither wrote:
+> tl;dr:
+> If recipes install directories with `install -d path/to/dir`, how is the default
+> mode determined? What can cause it suddenly (that is, without updating
+> metalayers or similar) to change from 755 to 700?
+
+You don't mention which version of the project this is with which may be
+important and relevant as we've fixed things related to these kinds of issues.
+
+Bottom line is that file mode you see on disk will be determined by the umask
+bitbake is being run under. The file modes on disk are not the file modes used
+though since pseudo emulates modes as well as users like root.
+
+The 134 exit code is usually pseudo aborting and there should be information in
+the rootfs logs about which files it had concerns over, likely inode mismatches.
+Also see the WORKDIR/pseudo/pseudo.log. This has it's own wiki page:
+
+https://wiki.yoctoproject.org/wiki/Pseudo_Abort
+
+I'd also add that the core directories have permissions determined by:
+
+http://git.yoctoproject.org/cgit.cgi/poky/tree/meta/files/fs-perms.txt
+
+and code in package.bbclass should be ensuring those directories always have
+consistent permission bits.
+
+This brings me back to which release/version of the metadata is this?
+
+Cheers,
+
+Richard
+
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] Yocto suddenly creating directories with 700 instead 755.
+  2021-11-11 16:10 Yocto suddenly creating directories with 700 instead 755 Manuel Wagesreither
+  2021-11-11 22:33 ` [yocto] " Richard Purdie
+@ 2021-11-11 23:28 ` Stephen John Smoogen
+  2021-11-12 10:35   ` Richard Purdie
+  1 sibling, 1 reply; 5+ messages in thread
+From: Stephen John Smoogen @ 2021-11-11 23:28 UTC (permalink / raw)
+  To: Manuel Wagesreither; +Cc: yocto
+
+On Thu, 11 Nov 2021 at 11:10, Manuel Wagesreither <ManWag@fastmail.fm> wrote:
+>
+> Hello all,
+>
+> sorry, wall of text incoming.
+>
+> tl;dr:
+> If recipes install directories with `install -d path/to/dir`, how is the default mode determined? What can cause it suddenly (that is, without updating metalayers or similar) to change from 755 to 700?
+>
+
+when I did this to myself recently, I had changed the shells default
+umask value to 077 which caused exactly what you are listing. I would
+check to see if the users or system wide umask was changed recently by
+an update.
+
+
+
+
+-- 
+Stephen J Smoogen.
+Let us be kind to one another, for most of us are fighting a hard
+battle. -- Ian MacClaren
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] Yocto suddenly creating directories with 700 instead 755.
+  2021-11-11 23:28 ` Stephen John Smoogen
+@ 2021-11-12 10:35   ` Richard Purdie
+  2021-11-12 12:38     ` Manuel Wagesreither
+  0 siblings, 1 reply; 5+ messages in thread
+From: Richard Purdie @ 2021-11-12 10:35 UTC (permalink / raw)
+  To: Stephen John Smoogen, Manuel Wagesreither; +Cc: yocto
+
+On Thu, 2021-11-11 at 18:28 -0500, Stephen John Smoogen wrote:
+> On Thu, 11 Nov 2021 at 11:10, Manuel Wagesreither <ManWag@fastmail.fm> wrote:
+> > 
+> > Hello all,
+> > 
+> > sorry, wall of text incoming.
+> > 
+> > tl;dr:
+> > If recipes install directories with `install -d path/to/dir`, how is the default mode determined? What can cause it suddenly (that is, without updating metalayers or similar) to change from 755 to 700?
+> > 
+> 
+> when I did this to myself recently, I had changed the shells default
+> umask value to 077 which caused exactly what you are listing. I would
+> check to see if the users or system wide umask was changed recently by
+> an update.
+
+I'd note there were a number of fixes for umask issues in master/honister:
+
+http://git.yoctoproject.org/cgit.cgi/poky/commit/?id=f4fb74465787b50030d7fed5e0b293774ccb371b
+http://git.yoctoproject.org/cgit.cgi/poky/commit/?id=c4ecf7c1122380cdbc74fe692aa91756dc5bdf6b
+http://git.yoctoproject.org/cgit.cgi/poky/commit/?id=522607e704876c67ed093bac47dde9238709ccae
+http://git.yoctoproject.org/cgit.cgi/poky/commit/?id=58c97902933cced2981dfc7480fc0a458b4fb900
+
+Cheers,
+
+Richard
+
+
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] Yocto suddenly creating directories with 700 instead 755.
+  2021-11-12 10:35   ` Richard Purdie
+@ 2021-11-12 12:38     ` Manuel Wagesreither
+  0 siblings, 0 replies; 5+ messages in thread
+From: Manuel Wagesreither @ 2021-11-12 12:38 UTC (permalink / raw)
+  To: Richard Purdie, yocto
+
+Am Fr, 12. Nov 2021, um 11:35, schrieb Richard Purdie:
+> On Thu, 2021-11-11 at 18:28 -0500, Stephen John Smoogen wrote:
+>> On Thu, 11 Nov 2021 at 11:10, Manuel Wagesreither <ManWag@fastmail.fm> wrote:
+>> > 
+>> > Hello all,
+>> > 
+>> > sorry, wall of text incoming.
+>> > 
+>> > tl;dr:
+>> > If recipes install directories with `install -d path/to/dir`, how is the default mode determined? What can cause it suddenly (that is, without updating metalayers or similar) to change from 755 to 700?
+>> > 
+>> 
+>> when I did this to myself recently, I had changed the shells default
+>> umask value to 077 which caused exactly what you are listing. I would
+>> check to see if the users or system wide umask was changed recently by
+>> an update.
+>
+> I'd note there were a number of fixes for umask issues in master/honister:
+>
+> http://git.yoctoproject.org/cgit.cgi/poky/commit/?id=f4fb74465787b50030d7fed5e0b293774ccb371b
+> http://git.yoctoproject.org/cgit.cgi/poky/commit/?id=c4ecf7c1122380cdbc74fe692aa91756dc5bdf6b
+> http://git.yoctoproject.org/cgit.cgi/poky/commit/?id=522607e704876c67ed093bac47dde9238709ccae
+> http://git.yoctoproject.org/cgit.cgi/poky/commit/?id=58c97902933cced2981dfc7480fc0a458b4fb900
+
+Thanks a lot. I will read through the links and commits provided and see if that helps us.
+
+We are currently using poky on dunfell as it were on early September: http://git.yoctoproject.org/cgit/cgit.cgi/poky/commit/?id=bdd30be1a3815f70062d8febca91eaf042a77c3d.
+
+Regards,
+Manuel
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+end of thread, other threads:[~2021-11-12 12:38 UTC | newest]
+
+Thread overview: 5+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-11-11 16:10 Yocto suddenly creating directories with 700 instead 755 Manuel Wagesreither
+2021-11-11 22:33 ` [yocto] " Richard Purdie
+2021-11-11 23:28 ` Stephen John Smoogen
+2021-11-12 10:35   ` Richard Purdie
+2021-11-12 12:38     ` Manuel Wagesreither
+

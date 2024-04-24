@@ -1,0 +1,82 @@
+* [meta-security][dunfell][PATCH 1/2] sssd: re-package to fix QA issues
+@ 2022-04-11 23:53 Jeremy A. Puhlman
+  0 siblings, 0 replies; only message in thread
+From: Jeremy A. Puhlman @ 2022-04-11 23:53 UTC (permalink / raw)
+  To: yocto; +Cc: Jeremy A. Puhlman, Kai Kang, Armin Kuster
+
+Source: meta-security:honister
+MR: 113808
+Type: Defect Fix
+Disposition: Merged from honister
+ChangeID: be0e4f3c73eeb04d1c79d99d3377c89659abe420
+Description:
+
+It packages all file in ${libdir} to package sssd, including the .so
+symlink files. Then it causes QA issues:
+
+| ERROR: QA Issue: sssd rdepends on dbus-dev [dev-deps]
+| ERROR: QA Issue: sssd rdepends on ding-libs-dev [dev-deps]
+
+So re-package sssd then the .so symlink files and .pc files are packaged
+to sssd-dev which should be.
+
+File ${libdir}/libsss_sudo.so is not a symlink file but packaged to
+sssd-dev too. Then causes another QA issue:
+
+| ERROR: sssd-2.5.2-r0 do_package_qa: QA Issue:
+    -dev package sssd-dev contains non-symlink .so '/usr/lib/libsss_sudo.so' [dev-elf]
+
+So create a new sub-package libsss-sudo to package file libsss_sudo.so
+and make sssd rdepends on it.
+
+JP: Update for version differences.
+
+Signed-off-by: Kai Kang <kai.kang@windriver.com>
+Signed-off-by: Armin Kuster <akuster808@gmail.com>
+(cherry picked from commit e81c15f851ca5396c78c8737967ee38db0ebe0cd)
+Signed-off-by: Jeremy A. Puhlman <jpuhlman@mvista.com>
+---
+ recipes-security/sssd/sssd_1.16.4.bb | 21 ++++++++++++++-------
+ 1 file changed, 14 insertions(+), 7 deletions(-)
+
+diff --git a/recipes-security/sssd/sssd_1.16.4.bb b/recipes-security/sssd/sssd_1.16.4.bb
+index 916f1ac..186c9e0 100644
+--- a/recipes-security/sssd/sssd_1.16.4.bb
++++ b/recipes-security/sssd/sssd_1.16.4.bb
+@@ -116,10 +116,17 @@ SYSTEMD_SERVICE_${PN} = " \
+ "
+ SYSTEMD_AUTO_ENABLE = "disable"
+ 
+-FILES_${PN} += "${libdir} ${datadir} ${base_libdir}/security/pam_sss.so"
+-FILES_${PN}-dev = " ${includedir}/* ${libdir}/*la ${libdir}/*/*la"
+-
+-# The package contains symlinks that trip up insane
+-INSANE_SKIP_${PN} = "dev-so"
+-
+-RDEPENDS_${PN} = "bind dbus libldb libpam"
++PACKAGES =+ "libsss-sudo libsss-autofs"
++ALLOW_EMPTY_libsss-sudo = "1"
++ALLOW_EMPTY_libsss-autofs = "1"
++
++FILES_${PN}-dev += "${libdir}/sssd/modules/lib*.so"
++FILES_${PN} += "${base_libdir}/security/pam_sss*.so  \
++                ${datadir}/dbus-1/system-services/*.service \
++                ${libdir}/krb5/* \
++                ${libdir}/ldb/* \
++                "
++FILES_libsss-autofs = "${libdir}/sssd/modules/libsss_autofs.so"
++FILES_libsss-sudo = "${libdir}/libsss_sudo.so"
++
++RDEPENDS_${PN} = "bind dbus libldb libpam libsss-sudo libsss-autofs"
+-- 
+2.31.1
+
+
+
+^ permalink raw reply related	[flat|nested] only message in thread
+only message in thread, other threads:[~2022-04-12 16:46 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-04-11 23:53 [meta-security][dunfell][PATCH 1/2] sssd: re-package to fix QA issues Jeremy A. Puhlman
+

@@ -1,0 +1,190 @@
+* Re: [yocto] enabling symbols for debug in clinfo
+       [not found] <MADEUP.16ED6A72C4624DE7.14253@lists.yoctoproject.org>
+@ 2022-05-09 11:04 ` Quentin Schulz
+  2022-05-09 11:55 ` Ross Burton
+  1 sibling, 0 replies; 3+ messages in thread
+From: Quentin Schulz @ 2022-05-09 11:04 UTC (permalink / raw)
+  To: steven.monsees, yocto
+
+Hi Steve,
+
+On 5/9/22 12:54, Monsees, Steven C (US) via lists.yoctoproject.org wrote:
+> 
+> Hello:
+> 
+> I'd like to build clinfo w/ "-g" option to do some debugging with GDB...
+> 
+> I am looking at: meta-openembedded/meta-oe/recipes-support/opencl/clinfo_2.2.18.04.06.bb
+> 
+> I created a "bbapend" file to modify the build recipes "Makefile.am" file prior to build, to introduce '-g' for CFLAGS & CPPFLAGS, i.e. at top of Makefile.am added:
+> 
+>                  AM_CFLAGS - -g
+>                  AM_CPPFLAGS = -g
+> 
+> I checked the build tree and see my modified "Makefile.am" updated as expected, the update occurs at the end of the install process, using do_install_append... so the build should have used my modified file... but I do not have symbols for the clinfo package when I go to use GDB.
+> 
+
+The install task runs after the software has been built. It is therefore 
+expected your changes aren't actually taken into account.
+
+c.f. https://docs.yoctoproject.org/ref-manual/tasks.html#do-install, I 
+guess it is not THAT obvious that it happens after compilation. Maybe a 
+patch to the documentation would help clear things out.
+
+You shouldn't need to modify the makefile and just add "-g" to 
+TARGET_CFLAGS/ TARGET_CXXFLAGS or CFLAGS/CXXFLAGS in your recipe.
+
+Also, I have never used it but we do have support for debuginfod which 
+should make it easier to debug remotely without installing the binary 
+with debug symbols, c.f. 
+https://docs.yoctoproject.org/dev-manual/common-tasks.html#debugging-with-the-gnu-project-debugger-gdb-remotely
+
+Cheers,
+Quentin
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] enabling symbols for debug in clinfo
+       [not found] <MADEUP.16ED6A72C4624DE7.14253@lists.yoctoproject.org>
+  2022-05-09 11:04 ` [yocto] enabling symbols for debug in clinfo Quentin Schulz
+@ 2022-05-09 11:55 ` Ross Burton
+  2022-05-09 13:36   ` Monsees, Steven C (US)
+  1 sibling, 1 reply; 3+ messages in thread
+From: Ross Burton @ 2022-05-09 11:55 UTC (permalink / raw)
+  To: steven.monsees; +Cc: yocto
+
+Unless clinfo is doing something wrong, it will be built with -g anyway.  You’ll just need to install clinfo-dbg to get the symbols, as they’ll be split out into a separate package during packaging.
+
+Ross
+
+> On 9 May 2022, at 11:54, Monsees, Steven C (US) via lists.yoctoproject.org <steven.monsees=baesystems.com@lists.yoctoproject.org> wrote:
+>
+>
+> Hello:
+>
+> I’d like to build clinfo w/ “-g” option to do some debugging with GDB…
+>
+> I am looking at: meta-openembedded/meta-oe/recipes-support/opencl/clinfo_2.2.18.04.06.bb
+>
+> I created a “bbapend” file to modify the build recipes “Makefile.am” file prior to build, to introduce ‘-g’ for CFLAGS & CPPFLAGS, i.e. at top of Makefile.am added:
+>
+>                 AM_CFLAGS - -g
+>                 AM_CPPFLAGS = -g
+>
+> I checked the build tree and see my modified “Makefile.am” updated as expected, the update occurs at the end of the install process, using do_install_append… so the build should have used my modified file… but I do not have symbols for the clinfo package when I go to use GDB.
+>
+> Is there a simple way to enable debug symbols for this package ?
+>
+> Did I modify the wrong configuration file?, Should I be modifying configure ?
+>
+> I am new to auto-build configurations…
+> Could someone tell me the easiest way to add “-g” to the clinfo standard build ?
+>
+> Thanks,
+> Steve
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#57026): https://lists.yoctoproject.org/g/yocto/message/57026
+> Mute This Topic: https://lists.yoctoproject.org/mt/90986357/6875888
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [ross.burton@arm.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+
+IMPORTANT NOTICE: The contents of this email and any attachments are confidential and may also be privileged. If you are not the intended recipient, please notify the sender immediately and do not disclose the contents to any other person, use it for any purpose, or store or copy the information in any medium. Thank you.
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* RE: [yocto] enabling symbols for debug in clinfo
+  2022-05-09 11:55 ` Ross Burton
+@ 2022-05-09 13:36   ` Monsees, Steven C (US)
+  0 siblings, 0 replies; 3+ messages in thread
+From: Monsees, Steven C (US) @ 2022-05-09 13:36 UTC (permalink / raw)
+  To: Ross Burton; +Cc: yocto
+
+
+I will need to test but, that appears to have done the trick...
+
+
+root@sbcb-default gdb clinfo
+GNU gdb (GDB) 8.3.1
+Copyright (C) 2019 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.
+Type "show copying" and "show warranty" for details.
+This GDB was configured as "x86_64-poky-linux".
+Type "show configuration" for configuration details.
+For bug reporting instructions, please see:
+<http://www.gnu.org/software/gdb/bugs/>.
+Find the GDB manual and other documentation resources online at:
+    <http://www.gnu.org/software/gdb/documentation/>.
+
+For help, type "help".
+Type "apropos word" to search for commands related to "word"...
+Reading symbols from clinfo...
+Reading symbols from /usr/bin/.debug/clinfo...
+(gdb)
+
+Thanks
+Steve
+
+-----Original Message-----
+From: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org> On Behalf Of Ross Burton
+Sent: Monday, May 9, 2022 7:56 AM
+To: Monsees, Steven C (US) <steven.monsees@baesystems.com>
+Cc: yocto@lists.yoctoproject.org
+Subject: Re: [yocto] enabling symbols for debug in clinfo
+
+External Email Alert
+
+This email has been sent from an account outside of the BAE Systems network.
+
+Please treat the email with caution, especially if you are requested to click on a link, decrypt/open an attachment, or enable macros.  For further information on how to spot phishing, access “Cybersecurity OneSpace Page” and report phishing by clicking the button “Report Phishing” on the Outlook toolbar.
+
+
+Unless clinfo is doing something wrong, it will be built with -g anyway.  You’ll just need to install clinfo-dbg to get the symbols, as they’ll be split out into a separate package during packaging.
+
+Ross
+
+> On 9 May 2022, at 11:54, Monsees, Steven C (US) via lists.yoctoproject.org <steven.monsees=baesystems.com@lists.yoctoproject.org> wrote:
+>
+>
+> Hello:
+>
+> I’d like to build clinfo w/ “-g” option to do some debugging with GDB…
+>
+> I am looking at: 
+> meta-openembedded/meta-oe/recipes-support/opencl/clinfo_2.2.18.04.06.b
+> b
+>
+> I created a “bbapend” file to modify the build recipes “Makefile.am” file prior to build, to introduce ‘-g’ for CFLAGS & CPPFLAGS, i.e. at top of Makefile.am added:
+>
+>                 AM_CFLAGS - -g
+>                 AM_CPPFLAGS = -g
+>
+> I checked the build tree and see my modified “Makefile.am” updated as expected, the update occurs at the end of the install process, using do_install_append… so the build should have used my modified file… but I do not have symbols for the clinfo package when I go to use GDB.
+>
+> Is there a simple way to enable debug symbols for this package ?
+>
+> Did I modify the wrong configuration file?, Should I be modifying configure ?
+>
+> I am new to auto-build configurations… Could someone tell me the 
+> easiest way to add “-g” to the clinfo standard build ?
+>
+> Thanks,
+> Steve
+>
+> 
+
+IMPORTANT NOTICE: The contents of this email and any attachments are confidential and may also be privileged. If you are not the intended recipient, please notify the sender immediately and do not disclose the contents to any other person, use it for any purpose, or store or copy the information in any medium. Thank you.
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2022-05-09 13:37 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+     [not found] <MADEUP.16ED6A72C4624DE7.14253@lists.yoctoproject.org>
+2022-05-09 11:04 ` [yocto] enabling symbols for debug in clinfo Quentin Schulz
+2022-05-09 11:55 ` Ross Burton
+2022-05-09 13:36   ` Monsees, Steven C (US)
+

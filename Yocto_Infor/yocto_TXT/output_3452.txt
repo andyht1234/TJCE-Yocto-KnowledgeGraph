@@ -1,0 +1,219 @@
+* [meta-rockchip][PATCH] trusted-firmware-a: Fix rk3399 build with gcc11
+@ 2021-05-11 19:14 Khem Raj
+  2021-05-12 16:09 ` Trevor Woerner
+  0 siblings, 1 reply; 2+ messages in thread
+From: Khem Raj @ 2021-05-11 19:14 UTC (permalink / raw)
+  To: yocto; +Cc: twoerner, Khem Raj, Ross Burton
+
+Signed-off-by: Khem Raj <raj.khem@gmail.com>
+Cc: Ross Burton <ross.burton@arm.com>
+---
+ .../files/0001-Fix-build-with-gcc-11.patch    | 34 ++++++++++++++++++
+ .../0001-dram-Fix-build-with-gcc-11.patch     | 34 ++++++++++++++++++
+ ...-Use-compatible-.asciz-asm-directive.patch | 31 ++++++++++++++++
+ ...rk-already-defined-functions-as-weak.patch | 35 +++++++++++++++++++
+ .../trusted-firmware-a_%.bbappend             |  4 +++
+ 5 files changed, 138 insertions(+)
+ create mode 100644 recipes-bsp/trusted-firmware-a/files/0001-Fix-build-with-gcc-11.patch
+ create mode 100644 recipes-bsp/trusted-firmware-a/files/0001-dram-Fix-build-with-gcc-11.patch
+ create mode 100644 recipes-bsp/trusted-firmware-a/files/0001-plat_macros.S-Use-compatible-.asciz-asm-directive.patch
+ create mode 100644 recipes-bsp/trusted-firmware-a/files/0001-pmu-Do-not-mark-already-defined-functions-as-weak.patch
+
+diff --git a/recipes-bsp/trusted-firmware-a/files/0001-Fix-build-with-gcc-11.patch b/recipes-bsp/trusted-firmware-a/files/0001-Fix-build-with-gcc-11.patch
+new file mode 100644
+index 0000000..7956717
+--- /dev/null
++++ b/recipes-bsp/trusted-firmware-a/files/0001-Fix-build-with-gcc-11.patch
+@@ -0,0 +1,34 @@
++From d4c60a312271e000e8339f0b47a302c325313758 Mon Sep 17 00:00:00 2001
++From: Khem Raj <raj.khem@gmail.com>
++Date: Tue, 11 May 2021 11:46:30 -0700
++Subject: [PATCH] Fix build with gcc 11
++
++Fixes
++plat/rockchip/rk3399/drivers/dram/dram.c:13:22: error: ignoring attribute 'section (".pmusram.data")' because it conflicts with previous 'section (".sram.data")' [-Werror=attributes]
++
++See [1]
++
++[1] https://developer.trustedfirmware.org/T925
++
++Upstream-Status: Pending
++Signed-off-by: Khem Raj <raj.khem@gmail.com>
++---
++ plat/rockchip/rk3399/drivers/dram/dram.h | 2 +-
++ 1 file changed, 1 insertion(+), 1 deletion(-)
++
++diff --git a/plat/rockchip/rk3399/drivers/dram/dram.h b/plat/rockchip/rk3399/drivers/dram/dram.h
++index 0eb12cf29..5572b1612 100644
++--- a/plat/rockchip/rk3399/drivers/dram/dram.h
+++++ b/plat/rockchip/rk3399/drivers/dram/dram.h
++@@ -149,7 +149,7 @@ struct rk3399_sdram_params {
++ 	uint32_t rx_cal_dqs[2][4];
++ };
++ 
++-extern __sramdata struct rk3399_sdram_params sdram_config;
+++extern struct rk3399_sdram_params sdram_config;
++ 
++ void dram_init(void);
++ 
++-- 
++2.31.1
++
+diff --git a/recipes-bsp/trusted-firmware-a/files/0001-dram-Fix-build-with-gcc-11.patch b/recipes-bsp/trusted-firmware-a/files/0001-dram-Fix-build-with-gcc-11.patch
+new file mode 100644
+index 0000000..14defed
+--- /dev/null
++++ b/recipes-bsp/trusted-firmware-a/files/0001-dram-Fix-build-with-gcc-11.patch
+@@ -0,0 +1,34 @@
++From a09a1de53aba422249a8376b0d95024200021317 Mon Sep 17 00:00:00 2001
++From: Khem Raj <raj.khem@gmail.com>
++Date: Tue, 11 May 2021 11:55:31 -0700
++Subject: [PATCH] dram: Fix build with gcc 11
++
++This is a redundant assignment which GCC warns about.
++
++Fixes
++
++plat/rockchip/rk3399/drivers/dram/dram_spec_timing.c:781:11: error: explicitly assigning value of variable of type 'uint32_t' (aka 'unsigned int') to itself [-Werror,-Wself-assign]
++                twr_tmp = twr_tmp;
++                ~~~~~~~ ^ ~~~~~~~
++
++Signed-off-by: Khem Raj <raj.khem@gmail.com>
++---
++ plat/rockchip/rk3399/drivers/dram/dram_spec_timing.c | 2 +-
++ 1 file changed, 1 insertion(+), 1 deletion(-)
++
++diff --git a/plat/rockchip/rk3399/drivers/dram/dram_spec_timing.c b/plat/rockchip/rk3399/drivers/dram/dram_spec_timing.c
++index 3cdb7a296..76bc5ee96 100644
++--- a/plat/rockchip/rk3399/drivers/dram/dram_spec_timing.c
+++++ b/plat/rockchip/rk3399/drivers/dram/dram_spec_timing.c
++@@ -778,7 +778,7 @@ static void lpddr3_get_parameter(struct timing_related_config *timing_config,
++ 	else if (twr_tmp <= 8)
++ 		twr_tmp = 8;
++ 	else if (twr_tmp <= 12)
++-		twr_tmp = twr_tmp;
+++		; /* do nothing */
++ 	else if (twr_tmp <= 14)
++ 		twr_tmp = 14;
++ 	else
++-- 
++2.31.1
++
+diff --git a/recipes-bsp/trusted-firmware-a/files/0001-plat_macros.S-Use-compatible-.asciz-asm-directive.patch b/recipes-bsp/trusted-firmware-a/files/0001-plat_macros.S-Use-compatible-.asciz-asm-directive.patch
+new file mode 100644
+index 0000000..8807fca
+--- /dev/null
++++ b/recipes-bsp/trusted-firmware-a/files/0001-plat_macros.S-Use-compatible-.asciz-asm-directive.patch
+@@ -0,0 +1,31 @@
++From 5f78ce7eb9ab6bf5af682a715a9264d2a5ee7666 Mon Sep 17 00:00:00 2001
++From: Khem Raj <raj.khem@gmail.com>
++Date: Tue, 11 May 2021 12:06:34 -0700
++Subject: [PATCH] plat_macros.S: Use compatible .asciz asm directive
++
++clang asm does not like two strings to .asciz therefore make it single
++string which works on clang too.
++
++Upstream-Status: Pending
++Signed-off-by: Khem Raj <raj.khem@gmail.com>
++---
++ plat/rockchip/common/include/plat_macros.S | 3 +--
++ 1 file changed, 1 insertion(+), 2 deletions(-)
++
++diff --git a/plat/rockchip/common/include/plat_macros.S b/plat/rockchip/common/include/plat_macros.S
++index 691beeb44..c07be9ca9 100644
++--- a/plat/rockchip/common/include/plat_macros.S
+++++ b/plat/rockchip/common/include/plat_macros.S
++@@ -23,8 +23,7 @@ icc_regs:
++ 
++ /* Registers common to both GICv2 and GICv3 */
++ gicd_pend_reg:
++-	.asciz "gicd_ispendr regs (Offsets 0x200 - 0x278)\n"	\
++-		" Offset:\t\t\tvalue\n"
+++	.asciz "gicd_ispendr regs (Offsets 0x200 - 0x278)\n Offset:\t\t\tvalue\n"
++ newline:
++ 	.asciz "\n"
++ spacer:
++-- 
++2.31.1
++
+diff --git a/recipes-bsp/trusted-firmware-a/files/0001-pmu-Do-not-mark-already-defined-functions-as-weak.patch b/recipes-bsp/trusted-firmware-a/files/0001-pmu-Do-not-mark-already-defined-functions-as-weak.patch
+new file mode 100644
+index 0000000..bd4d2b5
+--- /dev/null
++++ b/recipes-bsp/trusted-firmware-a/files/0001-pmu-Do-not-mark-already-defined-functions-as-weak.patch
+@@ -0,0 +1,35 @@
++From 9d963cd69faf94bdcb80624132fd10392f57875b Mon Sep 17 00:00:00 2001
++From: Khem Raj <raj.khem@gmail.com>
++Date: Tue, 11 May 2021 12:11:51 -0700
++Subject: [PATCH] pmu: Do not mark already defined functions as weak
++
++These functions are already defined as static functions in same header
++Fixes
++
++| plat/rockchip/common/drivers/pmu/pmu_com.h:35:14: error: weak identifier 'pmu_power_domain_ctr' never declared [-Werror]                                                                                      | #pragma weak pmu_power_domain_ctr                                                                                                                                                                             |              ^
++| plat/rockchip/common/drivers/pmu/pmu_com.h:36:14: error: weak identifier 'check_cpu_wfie' never declared [-Werror]
++| #pragma weak check_cpu_wfie
++|              ^
++
++Upstream-Status: Pending
++Signed-off-by: Khem Raj <raj.khem@gmail.com>
++---
++ plat/rockchip/common/drivers/pmu/pmu_com.h | 2 --
++ 1 file changed, 2 deletions(-)
++
++diff --git a/plat/rockchip/common/drivers/pmu/pmu_com.h b/plat/rockchip/common/drivers/pmu/pmu_com.h
++index 5359f73b4..3f9ce7df9 100644
++--- a/plat/rockchip/common/drivers/pmu/pmu_com.h
+++++ b/plat/rockchip/common/drivers/pmu/pmu_com.h
++@@ -32,8 +32,6 @@ enum pmu_pd_state {
++ };
++ 
++ #pragma weak plat_ic_get_pending_interrupt_id
++-#pragma weak pmu_power_domain_ctr
++-#pragma weak check_cpu_wfie
++ 
++ static inline uint32_t pmu_power_domain_st(uint32_t pd)
++ {
++-- 
++2.31.1
++
+diff --git a/recipes-bsp/trusted-firmware-a/trusted-firmware-a_%.bbappend b/recipes-bsp/trusted-firmware-a/trusted-firmware-a_%.bbappend
+index 1942c17..c90673e 100644
+--- a/recipes-bsp/trusted-firmware-a/trusted-firmware-a_%.bbappend
++++ b/recipes-bsp/trusted-firmware-a/trusted-firmware-a_%.bbappend
+@@ -8,4 +8,8 @@ COMPATIBLE_MACHINE_append_rk3328 = "|rk3328"
+ FILESEXTRAPATHS_prepend := "${THISDIR}/files:"
+ SRC_URI += "\
+     file://serial-console-baudrate.patch \
++    file://0001-Fix-build-with-gcc-11.patch \
++    file://0001-dram-Fix-build-with-gcc-11.patch \
++    file://0001-plat_macros.S-Use-compatible-.asciz-asm-directive.patch \
++    file://0001-pmu-Do-not-mark-already-defined-functions-as-weak.patch \
+ "
+-- 
+2.31.1
+
+
+^ permalink raw reply related	[flat|nested] 2+ messages in thread
+* Re: [meta-rockchip][PATCH] trusted-firmware-a: Fix rk3399 build with gcc11
+  2021-05-11 19:14 [meta-rockchip][PATCH] trusted-firmware-a: Fix rk3399 build with gcc11 Khem Raj
+@ 2021-05-12 16:09 ` Trevor Woerner
+  0 siblings, 0 replies; 2+ messages in thread
+From: Trevor Woerner @ 2021-05-12 16:09 UTC (permalink / raw)
+  To: Khem Raj; +Cc: yocto, Ross Burton
+
+On Tue 2021-05-11 @ 12:14:24 PM, Khem Raj wrote:
+> Signed-off-by: Khem Raj <raj.khem@gmail.com>
+> Cc: Ross Burton <ross.burton@arm.com>
+
+Awesome! Thanks for sorting this one out :-)
+Applied to meta-rockchip master.
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2021-05-12 16:09 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-05-11 19:14 [meta-rockchip][PATCH] trusted-firmware-a: Fix rk3399 build with gcc11 Khem Raj
+2021-05-12 16:09 ` Trevor Woerner
+

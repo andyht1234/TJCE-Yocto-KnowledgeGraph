@@ -1,0 +1,258 @@
+* [meta-rockchip][PATCH v2 1/2] layer: Convert to new override syntax
+@ 2021-08-03 19:51 Khem Raj
+  2021-08-03 19:51 ` [meta-rockchip][PATCH v2 2/2] layer.conf: Drop compatibility with older than hardknott releases Khem Raj
+  2021-08-04 17:53 ` [meta-rockchip][PATCH v2 1/2] layer: Convert to new override syntax Trevor Woerner
+  0 siblings, 2 replies; 4+ messages in thread
+From: Khem Raj @ 2021-08-03 19:51 UTC (permalink / raw)
+  To: yocto; +Cc: twoerner, Khem Raj
+
+Signed-off-by: Khem Raj <raj.khem@gmail.com>
+---
+v2: Fix remaining appends
+
+ classes/rockchip-gpt-img.bbclass              |  2 +-
+ conf/machine/include/rockchip-wic.inc         |  2 +-
+ .../recipes-qt/qt5/qtbase_%.bbappend          | 10 +++----
+ .../trusted-firmware-a_%.bbappend             |  8 +++---
+ recipes-bsp/u-boot/u-boot%.bbappend           | 11 ++++----
+ recipes-graphics/mesa/mesa_%.bbappend         |  4 +--
+ recipes-kernel/linux/linux-yocto%.bbappend    | 28 +++++++++----------
+ recipes-kernel/linux/linux-yocto_5.4.bbappend |  5 ++--
+ 8 files changed, 34 insertions(+), 36 deletions(-)
+
+diff --git a/classes/rockchip-gpt-img.bbclass b/classes/rockchip-gpt-img.bbclass
+index 3ee46c8..4d22e3a 100644
+--- a/classes/rockchip-gpt-img.bbclass
++++ b/classes/rockchip-gpt-img.bbclass
+@@ -40,7 +40,7 @@ do_image_rockchip_gpt_img[depends] = "parted-native:do_populate_sysroot \
+ PER_CHIP_IMG_GENERATION_COMMAND_rk3288 = "generate_rk3288_loader1_image"
+ PER_CHIP_IMG_GENERATION_COMMAND_rock2-square = "generate_rock2_loader1_image"
+
+-IMAGE_CMD_rockchip-gpt-img () {
++IMAGE_CMD:rockchip-gpt-img () {
+ 	# Change to image directory
+ 	cd ${DEPLOY_DIR_IMAGE}
+
+diff --git a/conf/machine/include/rockchip-wic.inc b/conf/machine/include/rockchip-wic.inc
+index 61d9f3d..b5939f7 100644
+--- a/conf/machine/include/rockchip-wic.inc
++++ b/conf/machine/include/rockchip-wic.inc
+@@ -23,7 +23,7 @@ RK_CONSOLE_DEVICE ?= "${@d.getVar('SERIAL_CONSOLES').split(';')[1].split()[0]}"
+ # boot device (sd-card/emmc)
+ RK_BOOT_DEVICE ??= "mmcblk0"
+
+-WICVARS_append = " \
++WICVARS:append = " \
+ 	RK_BOOT_DEVICE \
+ 	RK_CONSOLE_BAUD \
+ 	RK_CONSOLE_DEVICE \
+diff --git a/dynamic-layers/qt5-layer/recipes-qt/qt5/qtbase_%.bbappend b/dynamic-layers/qt5-layer/recipes-qt/qt5/qtbase_%.bbappend
+index a977229..0ced545 100644
+--- a/dynamic-layers/qt5-layer/recipes-qt/qt5/qtbase_%.bbappend
++++ b/dynamic-layers/qt5-layer/recipes-qt/qt5/qtbase_%.bbappend
+@@ -1,9 +1,9 @@
+-PACKAGECONFIG_GL_rk3399 = "${@bb.utils.contains('DISTRO_FEATURES', 'x11 opengl', 'gl', \
++PACKAGECONFIG_GL:rk3399 = "${@bb.utils.contains('DISTRO_FEATURES', 'x11 opengl', 'gl', \
+                               bb.utils.contains('DISTRO_FEATURES', 'opengl', 'eglfs gles2', \
+                                                 '', d), d)}"
+-PACKAGECONFIG_GL_append_rk3399 = " kms gbm"
++PACKAGECONFIG_GL:append:rk3399 = " kms gbm"
+
+-PACKAGECONFIG_FONTS_rk3399 = "fontconfig"
++PACKAGECONFIG_FONTS:rk3399 = "fontconfig"
+
+-PACKAGECONFIG_append_rk3399 = " libinput examples tslib xkbcommon"
+-PACKAGECONFIG_remove_rk3399 = "tests"
++PACKAGECONFIG:append:rk3399 = " libinput examples tslib xkbcommon"
++PACKAGECONFIG:remove:rk3399 = "tests"
+diff --git a/recipes-bsp/trusted-firmware-a/trusted-firmware-a_%.bbappend b/recipes-bsp/trusted-firmware-a/trusted-firmware-a_%.bbappend
+index c90673e..f7777a7 100644
+--- a/recipes-bsp/trusted-firmware-a/trusted-firmware-a_%.bbappend
++++ b/recipes-bsp/trusted-firmware-a/trusted-firmware-a_%.bbappend
+@@ -1,11 +1,11 @@
+ # Rockchip RK3399 compiles some M0 firmware which requires an arm-none-eabi GCC
+ # toolchain
+-DEPENDS_append_rk3399 = " virtual/arm-none-eabi-gcc-native"
++DEPENDS:append:rk3399 = " virtual/arm-none-eabi-gcc-native"
+
+-COMPATIBLE_MACHINE_append_rk3399 = "|rk3399"
+-COMPATIBLE_MACHINE_append_rk3328 = "|rk3328"
++COMPATIBLE_MACHINE:append:rk3399 = "|rk3399"
++COMPATIBLE_MACHINE:append:rk3328 = "|rk3328"
+
+-FILESEXTRAPATHS_prepend := "${THISDIR}/files:"
++FILESEXTRAPATHS:prepend := "${THISDIR}/files:"
+ SRC_URI += "\
+     file://serial-console-baudrate.patch \
+     file://0001-Fix-build-with-gcc-11.patch \
+diff --git a/recipes-bsp/u-boot/u-boot%.bbappend b/recipes-bsp/u-boot/u-boot%.bbappend
+index 95c019d..f692850 100644
+--- a/recipes-bsp/u-boot/u-boot%.bbappend
++++ b/recipes-bsp/u-boot/u-boot%.bbappend
+@@ -1,4 +1,4 @@
+-do_compile_append_rock2-square () {
++do_compile:append:rock2-square () {
+ 	# copy to default search path
+ 	if [ "${SPL_BINARY}" = "u-boot-spl-dtb.bin" ]; then
+ 		cp ${B}/spl/${SPL_BINARY} ${B}
+@@ -7,10 +7,9 @@ do_compile_append_rock2-square () {
+
+ ATF_DEPENDS ??= ""
+
+-EXTRA_OEMAKE_append_rk3399 = " BL31=${DEPLOY_DIR_IMAGE}/bl31-rk3399.elf"
+-ATF_DEPENDS_rk3399 = " virtual/trusted-firmware-a:do_deploy"
+-EXTRA_OEMAKE_append_rk3328 = " BL31=${DEPLOY_DIR_IMAGE}/bl31-rk3328.elf"
+-ATF_DEPENDS_rk3328 = " virtual/trusted-firmware-a:do_deploy"
++EXTRA_OEMAKE:append:rk3399 = " BL31=${DEPLOY_DIR_IMAGE}/bl31-rk3399.elf"
++ATF_DEPENDS:rk3399 = " virtual/trusted-firmware-a:do_deploy"
++EXTRA_OEMAKE:append:rk3328 = " BL31=${DEPLOY_DIR_IMAGE}/bl31-rk3328.elf"
++ATF_DEPENDS:rk3328 = " virtual/trusted-firmware-a:do_deploy"
+
+ do_compile[depends] .= "${ATF_DEPENDS}"
+-
+diff --git a/recipes-graphics/mesa/mesa_%.bbappend b/recipes-graphics/mesa/mesa_%.bbappend
+index 3e8711c..b9089c9 100644
+--- a/recipes-graphics/mesa/mesa_%.bbappend
++++ b/recipes-graphics/mesa/mesa_%.bbappend
+@@ -1,2 +1,2 @@
+-PACKAGECONFIG_append_rk3288 = " kmsro panfrost"
+-PACKAGECONFIG_append_rk3399 = " kmsro panfrost"
++PACKAGECONFIG:append:rk3288 = " kmsro panfrost"
++PACKAGECONFIG:append:rk3399 = " kmsro panfrost"
+diff --git a/recipes-kernel/linux/linux-yocto%.bbappend b/recipes-kernel/linux/linux-yocto%.bbappend
+index c2fe9ad..cf63a30 100644
+--- a/recipes-kernel/linux/linux-yocto%.bbappend
++++ b/recipes-kernel/linux/linux-yocto%.bbappend
+@@ -1,17 +1,17 @@
+-COMPATIBLE_MACHINE_marsboard-rk3066 = "marsboard-rk3066"
+-COMPATIBLE_MACHINE_rock2-square = "rock2-square"
+-COMPATIBLE_MACHINE_radxarock = "radxarock"
+-COMPATIBLE_MACHINE_firefly-rk3288 = "firefly-rk3288"
+-COMPATIBLE_MACHINE_vyasa-rk3288 = "vyasa-rk3288"
+-COMPATIBLE_MACHINE_tinker-board = "tinker-board"
+-COMPATIBLE_MACHINE_tinker-board-s = "tinker-board-s"
+-COMPATIBLE_MACHINE_rock-pi-4 = "rock-pi-4"
+-COMPATIBLE_MACHINE_nanopi-m4 = "nanopi-m4"
+-COMPATIBLE_MACHINE_nanopi-m4-2gb = "nanopi-m4-2gb"
+-COMPATIBLE_MACHINE_rock64 = "rock64"
+-COMPATIBLE_MACHINE_rock-pi-e = "rock-pi-e"
++COMPATIBLE_MACHINE:marsboard-rk3066 = "marsboard-rk3066"
++COMPATIBLE_MACHINE:rock2-square = "rock2-square"
++COMPATIBLE_MACHINE:radxarock = "radxarock"
++COMPATIBLE_MACHINE:firefly-rk3288 = "firefly-rk3288"
++COMPATIBLE_MACHINE:vyasa-rk3288 = "vyasa-rk3288"
++COMPATIBLE_MACHINE:tinker-board = "tinker-board"
++COMPATIBLE_MACHINE:tinker-board-s = "tinker-board-s"
++COMPATIBLE_MACHINE:rock-pi-4 = "rock-pi-4"
++COMPATIBLE_MACHINE:nanopi-m4 = "nanopi-m4"
++COMPATIBLE_MACHINE:nanopi-m4-2gb = "nanopi-m4-2gb"
++COMPATIBLE_MACHINE:rock64 = "rock64"
++COMPATIBLE_MACHINE:rock-pi-e = "rock-pi-e"
+
+-FILESEXTRAPATHS_prepend := "${THISDIR}/files:"
++FILESEXTRAPATHS:prepend := "${THISDIR}/files:"
+
+ # indeed applicable to all rk3328 boards
+-SRC_URI_append_rock64 = " file://0001-ayufan-dtsi-rk3328-add-mmc0-mmc1-aliases.patch"
++SRC_URI:append:rock64 = " file://0001-ayufan-dtsi-rk3328-add-mmc0-mmc1-aliases.patch"
+diff --git a/recipes-kernel/linux/linux-yocto_5.4.bbappend b/recipes-kernel/linux/linux-yocto_5.4.bbappend
+index e832529..6a37cbf 100644
+--- a/recipes-kernel/linux/linux-yocto_5.4.bbappend
++++ b/recipes-kernel/linux/linux-yocto_5.4.bbappend
+@@ -1,5 +1,4 @@
+-FILESEXTRAPATHS_prepend := "${THISDIR}/${PN}:"
++FILESEXTRAPATHS:prepend := "${THISDIR}/${PN}:"
+
+ # tinker-board and tinker-board-s. rk3288 covers both
+-SRC_URI_append_rk3288 = " file://0001-ARM-dts-rockchip-Keep-rk3288-tinker-SD-card-IO-power.patch"
+-
++SRC_URI:append:rk3288 = " file://0001-ARM-dts-rockchip-Keep-rk3288-tinker-SD-card-IO-power.patch"
+--
+2.32.0
+
+^ permalink raw reply related	[flat|nested] 4+ messages in thread
+* [meta-rockchip][PATCH v2 2/2] layer.conf: Drop compatibility with older than hardknott releases
+  2021-08-03 19:51 [meta-rockchip][PATCH v2 1/2] layer: Convert to new override syntax Khem Raj
+@ 2021-08-03 19:51 ` Khem Raj
+  2021-08-04 17:53 ` [meta-rockchip][PATCH v2 1/2] layer: Convert to new override syntax Trevor Woerner
+  1 sibling, 0 replies; 4+ messages in thread
+From: Khem Raj @ 2021-08-03 19:51 UTC (permalink / raw)
+  To: yocto; +Cc: twoerner, Khem Raj
+
+New override syntax requires it
+
+Signed-off-by: Khem Raj <raj.khem@gmail.com>
+---
+v2: Rebase
+
+ conf/layer.conf | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/conf/layer.conf b/conf/layer.conf
+index f97fb69..25b0a99 100644
+--- a/conf/layer.conf
++++ b/conf/layer.conf
+@@ -14,7 +14,7 @@ BBFILE_PRIORITY_rockchip = "1"
+ # This should only be incremented on significant changes that will
+ # cause compatibility issues with other layers
+ LAYERVERSION_rockchip = "1"
+-LAYERSERIES_COMPAT_rockchip = "hardknott"
++LAYERSERIES_COMPAT_rockchip = "honister"
+ LAYERDEPENDS_rockchip = "core meta-arm"
+
+ BBFILES_DYNAMIC += " \
+--
+2.32.0
+
+^ permalink raw reply related	[flat|nested] 4+ messages in thread
+* Re: [meta-rockchip][PATCH v2 1/2] layer: Convert to new override syntax
+  2021-08-03 19:51 [meta-rockchip][PATCH v2 1/2] layer: Convert to new override syntax Khem Raj
+  2021-08-03 19:51 ` [meta-rockchip][PATCH v2 2/2] layer.conf: Drop compatibility with older than hardknott releases Khem Raj
+@ 2021-08-04 17:53 ` Trevor Woerner
+  2021-08-04 21:14   ` Khem Raj
+  1 sibling, 1 reply; 4+ messages in thread
+From: Trevor Woerner @ 2021-08-04 17:53 UTC (permalink / raw)
+  To: Khem Raj; +Cc: yocto
+
+There are still some cases which are being missed. For example, this patch
+doesn't build successfully for marsboard-rk3066, rock2-square, and
+tinker-board.
+
+I had been working on a similar patch yesterday as well which I had been
+build-testing and run-testing when your patches came in ;-)
+
+I've added your SOB to them since they're so similar.
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [meta-rockchip][PATCH v2 1/2] layer: Convert to new override syntax
+  2021-08-04 17:53 ` [meta-rockchip][PATCH v2 1/2] layer: Convert to new override syntax Trevor Woerner
+@ 2021-08-04 21:14   ` Khem Raj
+  0 siblings, 0 replies; 4+ messages in thread
+From: Khem Raj @ 2021-08-04 21:14 UTC (permalink / raw)
+  To: Trevor Woerner; +Cc: yocto
+
+
+
+On 8/4/21 10:53 AM, Trevor Woerner wrote:
+> There are still some cases which are being missed. For example, this patch
+> doesn't build successfully for marsboard-rk3066, rock2-square, and
+> tinker-board.
+> 
+> I had been working on a similar patch yesterday as well which I had been
+> build-testing and run-testing when your patches came in ;-)
+> 
+> I've added your SOB to them since they're so similar.
+> 
+
+sounds good.
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+end of thread, other threads:[~2021-08-04 21:14 UTC | newest]
+
+Thread overview: 4+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-08-03 19:51 [meta-rockchip][PATCH v2 1/2] layer: Convert to new override syntax Khem Raj
+2021-08-03 19:51 ` [meta-rockchip][PATCH v2 2/2] layer.conf: Drop compatibility with older than hardknott releases Khem Raj
+2021-08-04 17:53 ` [meta-rockchip][PATCH v2 1/2] layer: Convert to new override syntax Trevor Woerner
+2021-08-04 21:14   ` Khem Raj
+

@@ -1,0 +1,174 @@
+* SSTATE_DIR by MACHINE target?
+@ 2023-01-19 16:37 mattwood2000
+  2023-01-20 12:08 ` [yocto] " Quentin Schulz
+  0 siblings, 1 reply; 4+ messages in thread
+From: mattwood2000 @ 2023-01-19 16:37 UTC (permalink / raw)
+  To: Yocto-mailing-list
+
+Hi,
+
+is it possible to have SSTATE_DIR overrides based on the MACHINE
+target or SOC family?
+
+For example, is this valid:
+
+SSTATE_DIR:sama5 = "/path/to/sstate_a5"
+SSTATE_DIR:rpi = "/path/to/sstate_rpi"
+...
+
+Thanks, Matt.
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] SSTATE_DIR by MACHINE target?
+  2023-01-19 16:37 SSTATE_DIR by MACHINE target? mattwood2000
+@ 2023-01-20 12:08 ` Quentin Schulz
+  2023-01-20 13:23   ` mattwood2000
+  0 siblings, 1 reply; 4+ messages in thread
+From: Quentin Schulz @ 2023-01-20 12:08 UTC (permalink / raw)
+  To: mattwood2000, Yocto-mailing-list
+
+Hi Matt,
+
+On 1/19/23 17:37, mattwood2000@gmail.com wrote:
+> Hi,
+> 
+> is it possible to have SSTATE_DIR overrides based on the MACHINE
+> target or SOC family?
+> 
+
+What are you trying to do? Which problem are you trying to solve that 
+would require this?
+
+> For example, is this valid:
+> 
+> SSTATE_DIR:sama5 = "/path/to/sstate_a5"
+> SSTATE_DIR:rpi = "/path/to/sstate_rpi"
+> ...
+> 
+
+It depends what exactly you want to do, because this would apply only to 
+SSTATE cache for the recipes to build for the target. A Yocto build 
+however is made of native and target recipes. The native recipes are 
+compiled and run on the host, while target recipes are compiled on the 
+host with native binaries from native recipes and run on the target. So 
+native recipes would have their SSTATE cache in a common directory, 
+whether you pick rpi or sama5 as your MACHINE.
+
+Cheers,
+Quentin
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] SSTATE_DIR by MACHINE target?
+  2023-01-20 12:08 ` [yocto] " Quentin Schulz
+@ 2023-01-20 13:23   ` mattwood2000
+  2023-01-20 13:34     ` Quentin Schulz
+  0 siblings, 1 reply; 4+ messages in thread
+From: mattwood2000 @ 2023-01-20 13:23 UTC (permalink / raw)
+  To: Quentin Schulz; +Cc: Yocto-mailing-list
+
+[-- Attachment #1: Type: text/plain, Size: 1480 bytes --]
+
+Hi Quentin,
+
+I work with many different hardware platforms and architectures.  I keep my
+SSTATE cache on a NAS drive and I was hoping to set up a site.conf that
+would organize the full build  SSTATE cache by architecture.  It sounds
+like this isn't exactly possible.
+
+I tried it and the SSTATE directory is still created in the default
+location in the build directory instead of on my mount point.  I guess this
+is the native SSTATE you are referring to.
+
+Thanks, Matt.
+
+
+On Fri, Jan 20, 2023, 7:08 AM Quentin Schulz <
+quentin.schulz@theobroma-systems.com> wrote:
+
+> Hi Matt,
+>
+> On 1/19/23 17:37, mattwood2000@gmail.com wrote:
+> > Hi,
+> >
+> > is it possible to have SSTATE_DIR overrides based on the MACHINE
+> > target or SOC family?
+> >
+>
+> What are you trying to do? Which problem are you trying to solve that
+> would require this?
+>
+> > For example, is this valid:
+> >
+> > SSTATE_DIR:sama5 = "/path/to/sstate_a5"
+> > SSTATE_DIR:rpi = "/path/to/sstate_rpi"
+> > ...
+> >
+>
+> It depends what exactly you want to do, because this would apply only to
+> SSTATE cache for the recipes to build for the target. A Yocto build
+> however is made of native and target recipes. The native recipes are
+> compiled and run on the host, while target recipes are compiled on the
+> host with native binaries from native recipes and run on the target. So
+> native recipes would have their SSTATE cache in a common directory,
+> whether you pick rpi or sama5 as your MACHINE.
+>
+> Cheers,
+> Quentin
+>
+
+[-- Attachment #2: Type: text/html, Size: 2148 bytes --]
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] SSTATE_DIR by MACHINE target?
+  2023-01-20 13:23   ` mattwood2000
+@ 2023-01-20 13:34     ` Quentin Schulz
+  0 siblings, 0 replies; 4+ messages in thread
+From: Quentin Schulz @ 2023-01-20 13:34 UTC (permalink / raw)
+  To: mattwood2000; +Cc: Yocto-mailing-list
+
+Hi Matt,
+
+On 1/20/23 14:23, mattwood2000@gmail.com wrote:
+> Hi Quentin,
+> 
+> I work with many different hardware platforms and architectures.  I keep my
+> SSTATE cache on a NAS drive and I was hoping to set up a site.conf that
+> would organize the full build  SSTATE cache by architecture.  It sounds
+> like this isn't exactly possible.
+> 
+
+Except because of a personal preference of having things spatially 
+separated, it doesn't make much sense to me. When you're building for 
+multiple machines, some sstate-cache is shared. Such is the case of 
+native recipes, but also some target architecture-specific recipes (e.g. 
+something that is built for cortex-a55 cpu, will be reused for all 
+machines based on this cpu). So it actually makes a lot of sense to 
+share as much as possible between all your machines so that your builds 
+are faster, feeding from other machines' builds, and you even save some 
+space on your NAS.
+
+> I tried it and the SSTATE directory is still created in the default
+> location in the build directory instead of on my mount point.  I guess this
+> is the native SSTATE you are referring to.
+> 
+
+You could have a .conf file specific to each machine and use it. Or also 
+have this SSTATE_DIR variable directly in your machine.conf file. But 
+again, I don't think there's much benefit in doing that :/
+
+Cheers,
+Quentin
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+end of thread, other threads:[~2023-01-20 13:35 UTC | newest]
+
+Thread overview: 4+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-01-19 16:37 SSTATE_DIR by MACHINE target? mattwood2000
+2023-01-20 12:08 ` [yocto] " Quentin Schulz
+2023-01-20 13:23   ` mattwood2000
+2023-01-20 13:34     ` Quentin Schulz
+

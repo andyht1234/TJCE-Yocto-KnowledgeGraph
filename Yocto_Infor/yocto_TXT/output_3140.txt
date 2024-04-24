@@ -1,0 +1,383 @@
+* Trying to get Kivy running on imx8 platform #yocto #linux #imx8
+@ 2021-07-16  1:41 whuang8933
+  2021-07-16 15:54 ` [yocto] " Randy MacLeod
+  0 siblings, 1 reply; 2+ messages in thread
+From: whuang8933 @ 2021-07-16  1:41 UTC (permalink / raw)
+  To: yocto
+
+
+[-- Attachment #1.1: Type: text/plain, Size: 1711 bytes --]
+
+Hi community!
+I would like to get Kivy recipe going for this project as I think it would be great to add an extra GUI framework to the project; however, I'm running into an issue that I've been stuck on for a couple days now.
+I initially got it running on a rockchip (but it keeps falling back on LLVM pipe for some reason), and would like to do the same on an imx8mp platform. Unfortunately, I get a segmentation fault when getting Kivy to run on the imx8 and I couldn't find any help with Kivy's support group. I was hoping the community can lend me an extra hand/give me an extra set of eyes as I'm currently stumped.
+
+Things I have tried so far:
+o.      played around Kivy's USE_X11 & USE_WAYLAND switches
+o.      Originally it was using Python 3.8.10. The Kivy I got going on rockchip was on Python 3.8.2, so I downgraded to that version.
+o.      Tried using different weston versions (weston_9.0.0.imx and weston_8.0.0.imx)
+o.      The stacktrace mentioned missing pthread_mutex_lock file.. thought it was pthreads related so I added glibc and libgcc to the image install
+o.      Some googling showed that others use KIVY_GL_BACKEND=gl, but this did not work.
+
+I've attached the recipe I've written up so far and related patch files. (Kivy's current setup.py doesn't seem to look for GLESv2 libraries for non-android/ios/rpi platforms), a recipe that installs Kivy examples, and attached my stacktrace for extra information.
+
+Any help would be very much appreciated!
+Thanks,
+William Huang
+
+PS: It's my first time posting to a mailing list. Is it proper to send source code as attachments or just copy and paste into message body? Anyways, I've attached the files for now.
+
+[-- Attachment #1.2: Type: text/html, Size: 1849 bytes --]
+
+[-- Attachment #2: python3-kivy_2.0.0.bb --]
+[-- Type: application/octet-stream, Size: 1960 bytes --]
+
+# Recipes were "glued" together using information from
+# https://www.zilogic.com/porting-kivy-a-multi-touch-ui-framework-to-colibri-t20/
+# https://jerome.flesch.info/blog/post/13/Kivy-recipe-for-Yocto
+# https://discordapp.com/channels/423249981340778496/490493814281338890/771097327380463616
+#   o   a guy named octavio and his team were able to get Kivy running on imx6
+# Also, remember to compile SDL2 with gles2 option enabled
+
+SUMMARY = "Recipie to embedded the Python PiP Package Kivy"
+HOMEPAGE = "https://kivy.org/"
+LICENSE = "MIT"
+
+LIC_FILES_CHKSUM = "file://LICENSE;md5=f0c851d60495c7e27225a819e179208a"
+
+inherit setuptools3
+
+SRC_URI = "\
+    git://github.com/kivy/kivy.git;protocol=git;\
+    "
+
+# Kivy's setup files only look for GLES libraries for android, iOs, Raspberry Pi, and mali-based OS's
+# We need to patch the setup file to tell Kivy setup that our machine has GLES libaries installed as well
+SRC_URI += " \
+    file://0001-add-support-for-glesv2.patch \
+"
+SRCREV = "dedcb6bcabe3d8d6758dcee607e8c33b174d782b"
+
+S = "${WORKDIR}/git"
+
+
+# These are different switches used in Kivy's setup ....
+#USE_WAYLAND = "1"
+#export USE_WAYLAND
+
+# theoretically we can use X11 switch with Wayland because of weston/xwayland
+USE_X11="1"
+export USE_X11
+
+# Use OpenGL ES 2.0 library
+KIVY_GRAPHICS = "gles"
+export KIVY_GRAPHICS
+
+KIVY_CROSS_SYSROOT="${WORKDIR}/recipe-sysroot"
+export KIVY_CROSS_SYSROOT
+
+DEPENDS += " \
+    mesa \
+    gstreamer1.0 \
+    gstreamer1.0-python \
+    libsdl2 \
+    libsdl2-ttf \
+    libsdl2-image \
+    libsdl2-mixer \
+    pango \
+    python3 \
+    python3-cython-native \
+"
+
+RDEPENDS_${PN} = " \
+    mesa \
+    gstreamer1.0 \
+    gstreamer1.0-python \
+    libsdl2 \
+    libsdl2-ttf \
+    libsdl2-image \
+    libsdl2-mixer \
+    pango \
+    python3 \
+    python3-docutils \
+    python3-fcntl \
+    python3-image \
+    python3-pillow \
+    python3-pygments \
+"
+
+# remove kivy-examples
+do_install_append() {
+    rm -rf ${D}/usr/share
+}
+
+[-- Attachment #3: 0001-add-support-for-glesv2.patch --]
+[-- Type: application/octet-stream, Size: 707 bytes --]
+
+diff --git a/setup.py b/setup.py
+index 9a507c6c4..3f5b70866 100644
+--- a/setup.py
++++ b/setup.py
+@@ -680,7 +680,18 @@ def determine_gl_flags():
+         c_options['use_x11'] = True
+         c_options['use_egl'] = True
+     else:
+-        flags['libraries'] = ['GL']
++        if cross_sysroot:
++            flags['include_dirs'] = [cross_sysroot + '/usr/include']
++            flags['library_dirs'] = [cross_sysroot + '/usr/lib']
++
++        if c_options['use_opengl_es2']:
++            print("using GLESv2 libraries")
++            flags['libraries'] = ['GLESv2']
++        else:
++            flags['libraries'] = ['GL']
++
++
++    print("cross_sysroot: " + str(cross_sysroot))
+     return flags, base_flags
+ 
+ 
+
+[-- Attachment #4: kivy-examples_2.0.0.bb --]
+[-- Type: application/octet-stream, Size: 510 bytes --]
+
+SUMMARY = "Recipie to embedded the Python PiP Package Kivy"
+HOMEPAGE = "https://kivy.org/"
+LICENSE = "MIT"
+
+LIC_FILES_CHKSUM = "file://LICENSE;md5=f0c851d60495c7e27225a819e179208a"
+
+SRC_URI = "\
+    git://github.com/kivy/kivy.git;protocol=git;\
+    "
+SRCREV = "dedcb6bcabe3d8d6758dcee607e8c33b174d782b"
+
+S = "${WORKDIR}/git"
+
+
+do_compile() {
+}
+
+do_configure() {
+}
+
+do_install() {
+    install -d ${D}/usr/share/kivy-examples
+    cp -r ${S}/examples ${D}/usr/share/kivy-examples
+}
+
+FILES_${PN} += "${S}/examples"
+
+[-- Attachment #5: libsdl2__.bbappend --]
+[-- Type: application/octet-stream, Size: 116 bytes --]
+
+FILESEXTRAPATHS_prepend := "${THISDIR}/${PN}:"
+
+# Configure SDL2 with opengles libraries
+PACKAGECONFIG_GL = "gles2"
+
+[-- Attachment #6: stacktrace --]
+[-- Type: application/octet-stream, Size: 7920 bytes --]
+
+root@verdin-imx8mp:~# gdb --args python3 /usr/share/kivy-examples/examples/3Drendering/main.py
+GNU gdb (GDB) 9.1
+Copyright (C) 2020 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.
+Type "show copying" and "show warranty" for details.
+This GDB was configured as "aarch64-tdx-linux".
+Type "show configuration" for configuration details.
+For bug reporting instructions, please see:
+<http://www.gnu.org/software/gdb/bugs/>.
+Find the GDB manual and other documentation resources online at:
+    <http://www.gnu.org/software/gdb/documentation/>.
+
+For help, type "help".
+Type "apropos word" to search for commands related to "word"...
+Reading symbols from python3...
+(No debugging symbols found in python3)
+(gdb) run
+Starting program: /usr/bin/python3 /usr/share/kivy-examples/examples/3Drendering/main.py
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/libthread_db.so.1".
+[INFO   ] [Logger      ] Record log in /home/root/.kivy/logs/kivy_21-07-16_2.txt
+[INFO   ] [Kivy        ] v2.0.0
+[INFO   ] [Kivy        ] Installed at "/usr/lib/python3.8/site-packages/kivy/__init__.py"
+[INFO   ] [Python      ] v3.8.2 (default, Feb 25 2020, 10:39:28)
+[GCC 9.3.0]
+[INFO   ] [Python      ] Interpreter at "/usr/bin/python3"
+[Detaching after fork from child process 1111]
+[INFO   ] [Factory     ] 186 symbols loaded
+[DEBUG  ] [Cache       ] register <kv.lang> with limit=None, timeout=None
+[DEBUG  ] [Cache       ] register <kv.image> with limit=None, timeout=60
+[DEBUG  ] [Cache       ] register <kv.atlas> with limit=None, timeout=None
+[INFO   ] [Image       ] Providers: img_tex, img_dds, img_sdl2, img_pil (img_ffpyplayer ignored)
+[DEBUG  ] [Cache       ] register <kv.texture> with limit=1000, timeout=60
+[DEBUG  ] [Cache       ] register <kv.shader> with limit=1000, timeout=3600
+[INFO   ] [Window      ] Provider: sdl2
+[New Thread 0xffffe43bf1e0 (LWP 1121)]
+[New Thread 0xffffe3bbe1e0 (LWP 1122)]
+
+Thread 1 "python3" received signal SIGSEGV, Segmentation fault.
+0x0000fffff7afc7fc in __GI___pthread_mutex_lock (mutex=0xf3) at pthread_mutex_lock.c:67
+67	pthread_mutex_lock.c: No such file or directory.
+(gdb) backtrace
+#0  0x0000fffff7afc7fc in __GI___pthread_mutex_lock (mutex=0xf3) at pthread_mutex_lock.c:67
+#1  0x0000fffff4413248 in wl_proxy_create_wrapper () from /usr/lib/libwayland-client.so.0
+#2  0x0000fffff447a0e0 in ?? () from /usr/lib/libEGL.so.1
+#3  0x0000fffff446c7ac in eglInitialize () from /usr/lib/libEGL.so.1
+#4  0x0000fffff6441ea8 in ?? () from /usr/lib/libSDL2-2.0.so.0
+#5  0x0000fffff644c86c in ?? () from /usr/lib/libSDL2-2.0.so.0
+#6  0x0000fffff644e85c in ?? () from /usr/lib/libSDL2-2.0.so.0
+#7  0x0000fffff5ce59ac in ?? () from /usr/lib/python3.8/site-packages/kivy/core/window/_window_sdl2.cpython-38-aarch64-linux-gnu.so
+#8  0x0000fffff7d23f1c in ?? () from /usr/lib/libpython3.8.so.1.0
+#9  0x0000fffff7cf5fc8 in ?? () from /usr/lib/libpython3.8.so.1.0
+#10 0x0000fffff7cf7d34 in _PyEval_EvalFrameDefault () from /usr/lib/libpython3.8.so.1.0
+#11 0x0000fffff7dd0434 in _PyEval_EvalCodeWithName () from /usr/lib/libpython3.8.so.1.0
+#12 0x0000fffff7d19a48 in _PyFunction_Vectorcall () from /usr/lib/libpython3.8.so.1.0
+#13 0x0000fffff7cf5fc8 in ?? () from /usr/lib/libpython3.8.so.1.0
+#14 0x0000fffff7cf7d34 in _PyEval_EvalFrameDefault () from /usr/lib/libpython3.8.so.1.0
+#15 0x0000fffff7dd0434 in _PyEval_EvalCodeWithName () from /usr/lib/libpython3.8.so.1.0
+#16 0x0000fffff7d19a48 in _PyFunction_Vectorcall () from /usr/lib/libpython3.8.so.1.0
+#17 0x0000fffff7d1d2ec in ?? () from /usr/lib/libpython3.8.so.1.0
+#18 0x0000fffff7cf5fc8 in ?? () from /usr/lib/libpython3.8.so.1.0
+#19 0x0000fffff7cfacb8 in _PyEval_EvalFrameDefault () from /usr/lib/libpython3.8.so.1.0
+#20 0x0000fffff7dd0434 in _PyEval_EvalCodeWithName () from /usr/lib/libpython3.8.so.1.0
+#21 0x0000fffff7d19a48 in _PyFunction_Vectorcall () from /usr/lib/libpython3.8.so.1.0
+#22 0x0000fffff7d1b48c in _PyObject_FastCallDict () from /usr/lib/libpython3.8.so.1.0
+#23 0x0000fffff7d1b5f4 in _PyObject_Call_Prepend () from /usr/lib/libpython3.8.so.1.0
+#24 0x0000fffff7d6e174 in ?? () from /usr/lib/libpython3.8.so.1.0
+#25 0x0000fffff7d6a64c in ?? () from /usr/lib/libpython3.8.so.1.0
+#26 0x0000fffff7d19cc0 in _PyObject_MakeTpCall () from /usr/lib/libpython3.8.so.1.0
+#27 0x0000fffff7cf603c in ?? () from /usr/lib/libpython3.8.so.1.0
+#28 0x0000fffff7cf968c in _PyEval_EvalFrameDefault () from /usr/lib/libpython3.8.so.1.0
+#29 0x0000fffff7dd0434 in _PyEval_EvalCodeWithName () from /usr/lib/libpython3.8.so.1.0
+#30 0x0000fffff7d19a48 in _PyFunction_Vectorcall () from /usr/lib/libpython3.8.so.1.0
+#31 0x0000fffff7cf5fc8 in ?? () from /usr/lib/libpython3.8.so.1.0
+#32 0x0000fffff7cf968c in _PyEval_EvalFrameDefault () from /usr/lib/libpython3.8.so.1.0
+#33 0x0000fffff7dd0434 in _PyEval_EvalCodeWithName () from /usr/lib/libpython3.8.so.1.0
+#34 0x0000fffff7dd0780 in PyEval_EvalCodeEx () from /usr/lib/libpython3.8.so.1.0
+#35 0x0000fffff7dd07bc in PyEval_EvalCode () from /usr/lib/libpython3.8.so.1.0
+#36 0x0000fffff7dcce30 in ?? () from /usr/lib/libpython3.8.so.1.0
+#37 0x0000fffff7d53694 in ?? () from /usr/lib/libpython3.8.so.1.0
+#38 0x0000fffff7d1b680 in PyVectorcall_Call () from /usr/lib/libpython3.8.so.1.0
+#39 0x0000fffff7cfb6f4 in _PyEval_EvalFrameDefault () from /usr/lib/libpython3.8.so.1.0
+#40 0x0000fffff7dd0434 in _PyEval_EvalCodeWithName () from /usr/lib/libpython3.8.so.1.0
+#41 0x0000fffff7d19a48 in _PyFunction_Vectorcall () from /usr/lib/libpython3.8.so.1.0
+#42 0x0000fffff7cf5fc8 in ?? () from /usr/lib/libpython3.8.so.1.0
+#43 0x0000fffff7cfacb8 in _PyEval_EvalFrameDefault () from /usr/lib/libpython3.8.so.1.0
+#44 0x0000fffff7cf4f44 in ?? () from /usr/lib/libpython3.8.so.1.0
+#45 0x0000fffff7cf5fc8 in ?? () from /usr/lib/libpython3.8.so.1.0
+#46 0x0000fffff7cf7d34 in _PyEval_EvalFrameDefault () from /usr/lib/libpython3.8.so.1.0
+#47 0x0000fffff7cf4f44 in ?? () from /usr/lib/libpython3.8.so.1.0
+#48 0x0000fffff7cf5fc8 in ?? () from /usr/lib/libpython3.8.so.1.0
+#49 0x0000fffff7cf968c in _PyEval_EvalFrameDefault () from /usr/lib/libpython3.8.so.1.0
+#50 0x0000fffff7cf4f44 in ?? () from /usr/lib/libpython3.8.so.1.0
+#51 0x0000fffff7cf5fc8 in ?? () from /usr/lib/libpython3.8.so.1.0
+#52 0x0000fffff7cf968c in _PyEval_EvalFrameDefault () from /usr/lib/libpython3.8.so.1.0
+#53 0x0000fffff7cf4f44 in ?? () from /usr/lib/libpython3.8.so.1.0
+#54 0x0000fffff7d1a080 in ?? () from /usr/lib/libpython3.8.so.1.0
+#55 0x0000fffff7d1a374 in _PyObject_CallMethodIdObjArgs () from /usr/lib/libpython3.8.so.1.0
+#56 0x0000fffff7defa18 in PyImport_ImportModuleLevelObject () from /usr/lib/libpython3.8.so.1.0
+#57 0x0000fffff7cfb124 in _PyEval_EvalFrameDefault () from /usr/lib/libpython3.8.so.1.0
+#58 0x0000fffff7dd0434 in _PyEval_EvalCodeWithName () from /usr/lib/libpython3.8.so.1.0
+#59 0x0000fffff7dd0780 in PyEval_EvalCodeEx () from /usr/lib/libpython3.8.so.1.0
+#60 0x0000fffff7dd07bc in PyEval_EvalCode () from /usr/lib/libpython3.8.so.1.0
+#61 0x0000fffff7e04750 in ?? () from /usr/lib/libpython3.8.so.1.0
+#62 0x0000fffff7e04834 in ?? () from /usr/lib/libpython3.8.so.1.0
+#63 0x0000fffff7e071d8 in PyRun_FileExFlags () from /usr/lib/libpython3.8.so.1.0
+#64 0x0000fffff7e07364 in PyRun_SimpleFileExFlags () from /usr/lib/libpython3.8.so.1.0
+#65 0x0000fffff7e2011c in Py_RunMain () from /usr/lib/libpython3.8.so.1.0
+#66 0x0000fffff7e205ac in Py_BytesMain () from /usr/lib/libpython3.8.so.1.0
+#67 0x0000fffff7b45110 in __libc_start_main (main=0xaaaaaaaaa8e0 <main>, argc=2, argv=0xfffffffffb98, init=<optimized out>, fini=<optimized out>, rtld_fini=<optimized out>, stack_end=<optimized out>) at ../csu/libc-start.c:308
+#68 0x0000aaaaaaaaa918 in _start ()
+Backtrace stopped: previous frame identical to this frame (corrupt stack?)
+
+^ permalink raw reply related	[flat|nested] 2+ messages in thread
+* Re: [yocto] Trying to get Kivy running on imx8 platform #yocto #linux #imx8
+  2021-07-16  1:41 Trying to get Kivy running on imx8 platform #yocto #linux #imx8 whuang8933
+@ 2021-07-16 15:54 ` Randy MacLeod
+  0 siblings, 0 replies; 2+ messages in thread
+From: Randy MacLeod @ 2021-07-16 15:54 UTC (permalink / raw)
+  To: whuang8933, yocto
+
+Hi William,
+
+On 2021-07-15 9:41 p.m., whuang8933@gmail.com wrote:
+> Hi community!
+> I would like to get Kivy recipe going for this project as I think it 
+
+For anyone else wondering what kivy is:
+  Kivy - Open source Python library for rapid development of applications
+  that make use of innovative user interfaces, such as multi-touch apps.
+https://kivy.org/#home
+
+> would be great to add an extra GUI framework to the project; however, 
+> I'm running into an issue that I've been stuck on for a couple days now.
+> I initially got it running on a rockchip (but it keeps falling back on 
+> LLVM pipe for some reason), and would like to do the same on an imx8mp 
+> platform. Unfortunately, I get a segmentation fault when getting Kivy to 
+> run on the imx8 and I couldn't find any help with Kivy's support group. 
+> I was hoping the community can lend me an extra hand/give me an extra 
+> set of eyes as I'm currently stumped.
+> 
+> Things I have tried so far:
+> o.      played around Kivy's USE_X11 & USE_WAYLAND switches
+> o.      Originally it was using Python 3.8.10. The Kivy I got going on 
+> rockchip was on Python 3.8.2, so I downgraded to that version.
+> o.      Tried using different weston versions (weston_9.0.0.imx and 
+> weston_8.0.0.imx)
+> o.      The stacktrace mentioned missing pthread_mutex_lock file.. 
+> thought it was pthreads related so I added glibc and libgcc to the image 
+> install
+> o.      Some googling showed that others use KIVY_GL_BACKEND=gl, but 
+> this did not work.
+> 
+> I've attached the recipe I've written up so far and related patch files. 
+> (Kivy's current setup.py 
+> <https://urldefense.com/v3/__http://setup.py__;!!AjveYdw8EvQ!Kd4lPl_lXtJ_MWzMo3dmsN8miHiYrX4Fe0ldI5FxXKMlAxs7HnLkx-jBi5uWIlllQsDgZQ$> 
+> doesn't seem to look for GLESv2 libraries for non-android/ios/rpi 
+> platforms), a recipe that installs Kivy examples, and attached my 
+> stacktrace for extra information.
+> 
+> Any help would be very much appreciated!
+
+I don't  have time to help but you might get more feedback if you
+post your recipes as an RFC to:
+   openembedded-devel@lists.openembedded.org
+with a meta-python prefix as mentioned in:
+   http://git.openembedded.org/meta-openembedded/tree/meta-python/README
+
+Also kivy was mentioned a few times previously:
+ 
+https://lists.yoctoproject.org/g/yocto/search?p=created%2C0%2C%2C1%2C1%2C2699%2C0&q=kivy
+
+Good luck,
+../Randy
+
+> Thanks,
+> William Huang
+> 
+> PS: It's my first time posting to a mailing list. Is it proper to send 
+> source code as attachments or just copy and paste into message body? 
+> Anyways, I've attached the files for now.
+> 
+> 
+> 
+> 
+
+
+-- 
+# Randy MacLeod
+# Wind River Linux
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2021-07-16 15:54 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-07-16  1:41 Trying to get Kivy running on imx8 platform #yocto #linux #imx8 whuang8933
+2021-07-16 15:54 ` [yocto] " Randy MacLeod
+

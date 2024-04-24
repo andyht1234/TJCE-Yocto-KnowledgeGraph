@@ -1,0 +1,398 @@
+* readonly rootfs - storing data in separate partition
+@ 2019-02-18 16:36 Belisko Marek
+  2019-02-18 16:52 ` Marc Ferland
+  2019-02-18 17:05 ` Joshua Watt
+  0 siblings, 2 replies; 11+ messages in thread
+From: Belisko Marek @ 2019-02-18 16:36 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 865 bytes --]
+
+Hi,
+
+I plan to use readonly rootfs option and store some custom data in separate
+partition (like hostname, wpa_supplicant.conf etc). I have wic file which
+create rootfs + then rest is for data storage. I can adjust various recipes
+to symlink to /data partition. My question is if there exists some
+mechanism how to store some pieces in non-rootfs partition? I know some
+projects which put those extra files to deploy dir and then by dd create
+dummy storage nd put files there and finally create partition from that.
+Thanks a log for any pointers.
+
+BR,
+
+marek
+
+-- 
+as simple and primitive as possible
+-------------------------------------------------
+Marek Belisko - OPEN-NANDRA
+Freelance Developer
+
+Ruska Nova Ves 219 | Presov, 08005 Slovak Republic
+Tel: +421 915 052 184
+skype: marekwhite
+twitter: #opennandra
+web: http://open-nandra.com
+
+[-- Attachment #2: Type: text/html, Size: 1124 bytes --]
+
+^ permalink raw reply	[flat|nested] 11+ messages in thread
+* Re: readonly rootfs - storing data in separate partition
+  2019-02-18 16:36 readonly rootfs - storing data in separate partition Belisko Marek
+@ 2019-02-18 16:52 ` Marc Ferland
+  2019-02-19  7:34   ` Belisko Marek
+  2019-02-18 17:05 ` Joshua Watt
+  1 sibling, 1 reply; 11+ messages in thread
+From: Marc Ferland @ 2019-02-18 16:52 UTC (permalink / raw)
+  To: Belisko Marek; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 846 bytes --]
+
+On Mon, Feb 18, 2019 at 11:37 AM Belisko Marek <marek.belisko@gmail.com>
+wrote:
+
+> Hi,
+>
+> I plan to use readonly rootfs option and store some custom data in
+> separate partition (like hostname, wpa_supplicant.conf etc). I have wic
+> file which create rootfs + then rest is for data storage. I can adjust
+> various recipes to symlink to /data partition. My question is if there
+> exists some mechanism how to store some pieces in non-rootfs partition? I
+> know some projects which put those extra files to deploy dir and then by dd
+> create dummy storage nd put files there and finally create partition from
+> that. Thanks a log for any pointers.
+>
+>
+
+You could potentially use overlayfs to have a RO rootfs and a separate RW
+layer in another partition for example. I think linux-yocto also support
+AUFS.
+
+Good luck,
+
+Marc
+
+[-- Attachment #2: Type: text/html, Size: 1209 bytes --]
+
+^ permalink raw reply	[flat|nested] 11+ messages in thread
+* Re: readonly rootfs - storing data in separate partition
+  2019-02-18 16:36 readonly rootfs - storing data in separate partition Belisko Marek
+  2019-02-18 16:52 ` Marc Ferland
+@ 2019-02-18 17:05 ` Joshua Watt
+  2019-02-19  7:36   ` Belisko Marek
+  2022-02-07  8:13   ` Marco Cavallini
+  1 sibling, 2 replies; 11+ messages in thread
+From: Joshua Watt @ 2019-02-18 17:05 UTC (permalink / raw)
+  To: Belisko Marek, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 938 bytes --]
+
+On Mon, 2019-02-18 at 17:36 +0100, Belisko Marek wrote:
+> Hi,
+> I plan to use readonly rootfs option and store some custom data in
+> separate partition (like hostname, wpa_supplicant.conf etc). I have
+> wic file which create rootfs + then rest is for data storage. I can
+> adjust various recipes to symlink to /data partition. My question is
+> if there exists some mechanism how to store some pieces in non-rootfs 
+> partition? I know some projects which put those extra files to deploy
+> dir and then by dd create dummy storage nd put files there and
+> finally create partition from that. Thanks a log for any pointers.
+
+We do this a lot using volatiles files. The best documentation is the
+core volatiles file: 
+https://git.yoctoproject.org/cgit/cgit.cgi/poky/tree/meta/recipes-core/initscripts/initscripts-1.0/volatiles id="-x-evo-selection-start-marker">
+> BR,
+> 
+> marek
+> 
+-- 
+Joshua Watt <JPEWhacker@gmail.com>
+
+[-- Attachment #2: Type: text/html, Size: 1574 bytes --]
+
+^ permalink raw reply	[flat|nested] 11+ messages in thread
+* Re: readonly rootfs - storing data in separate partition
+  2019-02-18 16:52 ` Marc Ferland
+@ 2019-02-19  7:34   ` Belisko Marek
+  2022-02-06 21:13     ` readonly-rootfs-overlay Howard
+  2022-02-06 21:15     ` readonly rootfs - storing data in separate partition Howard
+  0 siblings, 2 replies; 11+ messages in thread
+From: Belisko Marek @ 2019-02-19  7:34 UTC (permalink / raw)
+  To: Marc Ferland; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1157 bytes --]
+
+On Mon, Feb 18, 2019 at 5:52 PM Marc Ferland <marc.ferland@gmail.com> wrote:
+
+> On Mon, Feb 18, 2019 at 11:37 AM Belisko Marek <marek.belisko@gmail.com>
+> wrote:
+>
+>> Hi,
+>>
+>> I plan to use readonly rootfs option and store some custom data in
+>> separate partition (like hostname, wpa_supplicant.conf etc). I have wic
+>> file which create rootfs + then rest is for data storage. I can adjust
+>> various recipes to symlink to /data partition. My question is if there
+>> exists some mechanism how to store some pieces in non-rootfs partition? I
+>> know some projects which put those extra files to deploy dir and then by dd
+>> create dummy storage nd put files there and finally create partition from
+>> that. Thanks a log for any pointers.
+>>
+>>
+>
+> You could potentially use overlayfs to have a RO rootfs and a separate RW
+> layer in another partition for example. I think linux-yocto also support
+> AUFS.
+>
+This one seems promising:
+https://github.com/cmhe/meta-readonly-rootfs-overlay
+This is not exactly what I was looking for but I think it can be usable.
+Anyone using this? Thanks.
+
+>
+> Good luck,
+>
+> Marc
+>
+
+/marek
+
+[-- Attachment #2: Type: text/html, Size: 2133 bytes --]
+
+^ permalink raw reply	[flat|nested] 11+ messages in thread
+* Re: readonly rootfs - storing data in separate partition
+  2019-02-18 17:05 ` Joshua Watt
+@ 2019-02-19  7:36   ` Belisko Marek
+  2019-02-19 14:36     ` Joshua Watt
+  2022-02-07  8:13   ` Marco Cavallini
+  1 sibling, 1 reply; 11+ messages in thread
+From: Belisko Marek @ 2019-02-19  7:36 UTC (permalink / raw)
+  To: Joshua Watt; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1086 bytes --]
+
+On Mon, Feb 18, 2019 at 6:05 PM Joshua Watt <jpewhacker@gmail.com> wrote:
+
+> On Mon, 2019-02-18 at 17:36 +0100, Belisko Marek wrote:
+>
+> Hi,
+>
+> I plan to use readonly rootfs option and store some custom data in
+> separate partition (like hostname, wpa_supplicant.conf etc). I have wic
+> file which create rootfs + then rest is for data storage. I can adjust
+> various recipes to symlink to /data partition. My question is if there
+> exists some mechanism how to store some pieces in non-rootfs partition? I
+> know some projects which put those extra files to deploy dir and then by dd
+> create dummy storage nd put files there and finally create partition from
+> that. Thanks a log for any pointers.
+>
+>
+> We do this a lot using volatiles files. The best documentation is the core
+> volatiles file:
+> https://git.yoctoproject.org/cgit/cgit.cgi/poky/tree/meta/recipes-core/initscripts/initscripts-1.0/volatiles
+>
+Can this be used when systemd is init manager? Thanks.
+
+>
+>
+> BR,
+>
+> marek
+>
+> --
+>
+> Joshua Watt <JPEWhacker@gmail.com>
+>
+
+BR,
+
+/marek
+
+[-- Attachment #2: Type: text/html, Size: 2289 bytes --]
+
+^ permalink raw reply	[flat|nested] 11+ messages in thread
+* Re: readonly rootfs - storing data in separate partition
+  2019-02-19  7:36   ` Belisko Marek
+@ 2019-02-19 14:36     ` Joshua Watt
+  0 siblings, 0 replies; 11+ messages in thread
+From: Joshua Watt @ 2019-02-19 14:36 UTC (permalink / raw)
+  To: Belisko Marek; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1396 bytes --]
+
+On Tue, 2019-02-19 at 08:36 +0100, Belisko Marek wrote:
+> On Mon, Feb 18, 2019 at 6:05 PM Joshua Watt <jpewhacker@gmail.com>
+> wrote:
+> > On Mon, 2019-02-18 at 17:36 +0100, Belisko Marek wrote:
+> > > Hi,
+> > > I plan to use readonly rootfs option and store some custom data
+> > > in separate partition (like hostname, wpa_supplicant.conf etc). I
+> > > have wic file which create rootfs + then rest is for data
+> > > storage. I can adjust various recipes to symlink to /data
+> > > partition. My question is if there exists some mechanism how to
+> > > store some pieces in non-rootfs partition? I know some projects
+> > > which put those extra files to deploy dir and then by dd create
+> > > dummy storage nd put files there and finally create partition
+> > > from that. Thanks a log for any pointers.
+> > 
+> > We do this a lot using volatiles files. The best documentation is
+> > the core volatiles file: 
+> > https://git.yoctoproject.org/cgit/cgit.cgi/poky/tree/meta/recipes-core/initscripts/initscripts-1.0/volatiles
+> Can this be used when systemd is init manager? Thanks.
+
+I'm pretty sure systemd processes volatiles as well, although I can't
+find the exact code to point to at the moment to confirm it.
+> > > BR,
+> > > 
+> > > marek
+> > > 
+> > -- 
+> > Joshua Watt <JPEWhacker@gmail.com>
+> 
+> BR,
+> 
+> /marek
+> 
+> 
+> 
+-- 
+Joshua Watt <JPEWhacker@gmail.com>
+
+[-- Attachment #2: Type: text/html, Size: 2947 bytes --]
+
+^ permalink raw reply	[flat|nested] 11+ messages in thread
+* readonly-rootfs-overlay
+  2019-02-19  7:34   ` Belisko Marek
+@ 2022-02-06 21:13     ` Howard
+  2022-02-07  8:04       ` AW: [yocto] readonly-rootfs-overlay Matthias Klein
+  2022-02-06 21:15     ` readonly rootfs - storing data in separate partition Howard
+  1 sibling, 1 reply; 11+ messages in thread
+From: Howard @ 2022-02-06 21:13 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 92 bytes --]
+
+Hi:
+
+I was wondering if anybody is using meta-readonly-rootfs-overlay?
+
+Thanks
+Howard
+
+[-- Attachment #2: Type: text/html, Size: 112 bytes --]
+
+^ permalink raw reply	[flat|nested] 11+ messages in thread
+* Re: readonly rootfs - storing data in separate partition
+  2019-02-19  7:34   ` Belisko Marek
+  2022-02-06 21:13     ` readonly-rootfs-overlay Howard
+@ 2022-02-06 21:15     ` Howard
+  2022-02-07  8:17       ` tomzy
+  1 sibling, 1 reply; 11+ messages in thread
+From: Howard @ 2022-02-06 21:15 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 92 bytes --]
+
+Hi:
+
+I was wondering if anybody is using meta-readonly-rootfs-overlay?
+
+Thanks
+Howard
+
+[-- Attachment #2: Type: text/html, Size: 112 bytes --]
+
+^ permalink raw reply	[flat|nested] 11+ messages in thread
+* AW: [yocto] readonly-rootfs-overlay
+  2022-02-06 21:13     ` readonly-rootfs-overlay Howard
+@ 2022-02-07  8:04       ` Matthias Klein
+  0 siblings, 0 replies; 11+ messages in thread
+From: Matthias Klein @ 2022-02-07  8:04 UTC (permalink / raw)
+  To: howard.egan, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 587 bytes --]
+
+Hello Howard,
+
+i use parts of it (without a writeable partition, just a tmpfs) in a separate layer: https://github.com/matthiasklein/meta-distro-coffee/blob/master/recipes-core/readonly-rootfs-overlay/readonly-rootfs-overlay_1.0.bb
+Best regards,
+Matthias
+Von: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org> Im Auftrag von Howard via lists.yoctoproject.org
+Gesendet: Sonntag, 6. Februar 2022 22:14
+An: yocto@lists.yoctoproject.org
+Betreff: [yocto] readonly-rootfs-overlay
+
+Hi:
+
+I was wondering if anybody is using meta-readonly-rootfs-overlay?
+
+Thanks
+Howard
+
+[-- Attachment #2: Type: text/html, Size: 3019 bytes --]
+
+^ permalink raw reply	[flat|nested] 11+ messages in thread
+* Re: readonly rootfs - storing data in separate partition
+  2019-02-18 17:05 ` Joshua Watt
+  2019-02-19  7:36   ` Belisko Marek
+@ 2022-02-07  8:13   ` Marco Cavallini
+  1 sibling, 0 replies; 11+ messages in thread
+From: Marco Cavallini @ 2022-02-07  8:13 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 221 bytes --]
+
+rootfs-overlay ( https://github.com/cmhe/meta-readonly-rootfs-overlay ) is the perfect solution for your case.
+
+--
+Marco Cavallini | KOAN sas
+Bergamo - Italia
+embedded software engineering
+https://KoanSoftware.com
+
+[-- Attachment #2: Type: text/html, Size: 303 bytes --]
+
+^ permalink raw reply	[flat|nested] 11+ messages in thread
+* Re: readonly rootfs - storing data in separate partition
+  2022-02-06 21:15     ` readonly rootfs - storing data in separate partition Howard
+@ 2022-02-07  8:17       ` tomzy
+  0 siblings, 0 replies; 11+ messages in thread
+From: tomzy @ 2022-02-07  8:17 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 356 bytes --]
+
+Hi
+
+Not long ago we use it in couple of projects. Main repo can be found
+here, https://github.com/cmhe/meta-readonly-rootfs-overlay
+
+You can also find our fork with couple of changes (on of them is for example
+adjustions for honister release.
+
+--
+Tomasz Żyjewski
+Embedded Systems Engineer
+GPG: 5C495EA3EBEECA59
+https://3mdeb.com | @3mdeb_com
+
+[-- Attachment #2: Type: text/html, Size: 566 bytes --]
+
+^ permalink raw reply	[flat|nested] 11+ messages in thread
+end of thread, other threads:[~2022-02-07  8:17 UTC | newest]
+
+Thread overview: 11+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2019-02-18 16:36 readonly rootfs - storing data in separate partition Belisko Marek
+2019-02-18 16:52 ` Marc Ferland
+2019-02-19  7:34   ` Belisko Marek
+2022-02-06 21:13     ` readonly-rootfs-overlay Howard
+2022-02-07  8:04       ` AW: [yocto] readonly-rootfs-overlay Matthias Klein
+2022-02-06 21:15     ` readonly rootfs - storing data in separate partition Howard
+2022-02-07  8:17       ` tomzy
+2019-02-18 17:05 ` Joshua Watt
+2019-02-19  7:36   ` Belisko Marek
+2019-02-19 14:36     ` Joshua Watt
+2022-02-07  8:13   ` Marco Cavallini
+

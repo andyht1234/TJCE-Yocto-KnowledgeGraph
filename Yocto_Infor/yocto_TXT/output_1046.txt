@@ -1,0 +1,193 @@
+* [meta-zephyr][PATCH 1/2][kirkstone] CI: Add variables needed for k8s runners
+@ 2022-12-16 15:44 Peter Hoyes
+  2022-12-16 15:44 ` [meta-zephyr][PATCH 2/2][kirkstone] CI: add tags to all jobs Peter Hoyes
+  2023-01-15 20:17 ` [meta-zephyr][PATCH 1/2][kirkstone] CI: Add variables needed for k8s runners Jon Mason
+  0 siblings, 2 replies; 3+ messages in thread
+From: Peter Hoyes @ 2022-12-16 15:44 UTC (permalink / raw)
+  To: yocto; +Cc: Peter Hoyes, Ross Burton, Jon Mason
+
+From: Peter Hoyes <Peter.Hoyes@arm.com>
+
+The Kas container needs to use the entrypoint as that is where the user
+changes from root to a normal user.
+
+Also set the KUBERNETES_CPU_REQUEST to the variable CPU_REQUEST as this
+needs to be tuned per-deployment.
+
+CPU_REQUEST has no value outside of Arm Corp.  Gitlab CI allows for
+variables to be overridden by default.  So, we can give it a default
+value of NULL/empty and have everything work internally and externally
+by default.
+
+Signed-off-by: Ross Burton <ross.burton@arm.com>
+Signed-off-by: Jon Mason <jon.mason@arm.com>
+Signed-off-by: Peter Hoyes <Peter.Hoyes@arm.com>
+---
+ .gitlab-ci.yml | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/.gitlab-ci.yml b/.gitlab-ci.yml
+index 8d22654..03bd9c9 100644
+--- a/.gitlab-ci.yml
++++ b/.gitlab-ci.yml
+@@ -1,5 +1,12 @@
+ image: ghcr.io/siemens/kas/kas:latest-release
+ 
++variables:
++  CPU_REQUEST: ""
++  # These are needed as the k8s executor doesn't respect the container
++  # entrypoint by default
++  FF_USE_LEGACY_KUBERNETES_EXECUTION_STRATEGY: 0
++  FF_KUBERNETES_HONOR_ENTRYPOINT: 1
++
+ stages:
+   - prep
+   - build
+@@ -24,6 +31,8 @@ stages:
+ # Generalised fragment to do a Kas build
+ .build:
+   extends: .setup
++  variables:
++    KUBERNETES_CPU_REQUEST: $CPU_REQUEST
+   script:
+     - KASFILES=$(./ci/jobs-to-kas "$CI_JOB_NAME")
+     - kas shell --update --force-checkout $KASFILES -c 'cat conf/*.conf'
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 3+ messages in thread
+* [meta-zephyr][PATCH 2/2][kirkstone] CI: add tags to all jobs
+  2022-12-16 15:44 [meta-zephyr][PATCH 1/2][kirkstone] CI: Add variables needed for k8s runners Peter Hoyes
+@ 2022-12-16 15:44 ` Peter Hoyes
+  2023-01-15 20:17 ` [meta-zephyr][PATCH 1/2][kirkstone] CI: Add variables needed for k8s runners Jon Mason
+  1 sibling, 0 replies; 3+ messages in thread
+From: Peter Hoyes @ 2022-12-16 15:44 UTC (permalink / raw)
+  To: yocto; +Cc: Peter Hoyes, Ross Burton, Jon Mason
+
+From: Peter Hoyes <Peter.Hoyes@arm.com>
+
+Tag all jobs with the DEFAULT_TAG variable so each instance can control
+what tags the jobs have.
+
+Signed-off-by: Ross Burton <ross.burton@arm.com>
+Signed-off-by: Jon Mason <jon.mason@arm.com>
+Signed-off-by: Peter Hoyes <Peter.Hoyes@arm.com>
+---
+ .gitlab-ci.yml | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/.gitlab-ci.yml b/.gitlab-ci.yml
+index 03bd9c9..e88d6e5 100644
+--- a/.gitlab-ci.yml
++++ b/.gitlab-ci.yml
+@@ -2,6 +2,7 @@ image: ghcr.io/siemens/kas/kas:latest-release
+ 
+ variables:
+   CPU_REQUEST: ""
++  DEFAULT_TAG: ""
+   # These are needed as the k8s executor doesn't respect the container
+   # entrypoint by default
+   FF_USE_LEGACY_KUBERNETES_EXECUTION_STRATEGY: 0
+@@ -13,6 +14,8 @@ stages:
+ 
+ # Common job fragment to get a worker ready
+ .setup:
++  tags:
++    - $DEFAULT_TAG
+   stage: build
+   interruptible: true
+   variables:
+@@ -65,7 +68,8 @@ machine-coverage:
+   script:
+     - ./ci/check-machine-coverage
+   coverage: '/Coverage: \d+/'
+-
++  tags:
++    - $DEFAULT_TAG
+ 
+ #
+ # Build stage, the actual build jobs
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 3+ messages in thread
+* Re: [meta-zephyr][PATCH 1/2][kirkstone] CI: Add variables needed for k8s runners
+  2022-12-16 15:44 [meta-zephyr][PATCH 1/2][kirkstone] CI: Add variables needed for k8s runners Peter Hoyes
+  2022-12-16 15:44 ` [meta-zephyr][PATCH 2/2][kirkstone] CI: add tags to all jobs Peter Hoyes
+@ 2023-01-15 20:17 ` Jon Mason
+  1 sibling, 0 replies; 3+ messages in thread
+From: Jon Mason @ 2023-01-15 20:17 UTC (permalink / raw)
+  To: Peter Hoyes; +Cc: yocto, Ross Burton, Jon Mason
+
+On Fri, Dec 16, 2022 at 03:44:22PM +0000, Peter Hoyes wrote:
+> From: Peter Hoyes <Peter.Hoyes@arm.com>
+> 
+> The Kas container needs to use the entrypoint as that is where the user
+> changes from root to a normal user.
+> 
+> Also set the KUBERNETES_CPU_REQUEST to the variable CPU_REQUEST as this
+> needs to be tuned per-deployment.
+> 
+> CPU_REQUEST has no value outside of Arm Corp.  Gitlab CI allows for
+> variables to be overridden by default.  So, we can give it a default
+> value of NULL/empty and have everything work internally and externally
+> by default.
+> 
+> Signed-off-by: Ross Burton <ross.burton@arm.com>
+> Signed-off-by: Jon Mason <jon.mason@arm.com>
+> Signed-off-by: Peter Hoyes <Peter.Hoyes@arm.com>
+
+I ran this series through CI and it passes.  See:
+https://gitlab.com/jonmason00/meta-zephyr/-/pipelines/747732461
+
+Tested-by: Jon Mason <jon.mason@arm.com>
+
+> ---
+>  .gitlab-ci.yml | 9 +++++++++
+>  1 file changed, 9 insertions(+)
+> 
+> diff --git a/.gitlab-ci.yml b/.gitlab-ci.yml
+> index 8d22654..03bd9c9 100644
+> --- a/.gitlab-ci.yml
+> +++ b/.gitlab-ci.yml
+> @@ -1,5 +1,12 @@
+>  image: ghcr.io/siemens/kas/kas:latest-release
+>  
+> +variables:
+> +  CPU_REQUEST: ""
+> +  # These are needed as the k8s executor doesn't respect the container
+> +  # entrypoint by default
+> +  FF_USE_LEGACY_KUBERNETES_EXECUTION_STRATEGY: 0
+> +  FF_KUBERNETES_HONOR_ENTRYPOINT: 1
+> +
+>  stages:
+>    - prep
+>    - build
+> @@ -24,6 +31,8 @@ stages:
+>  # Generalised fragment to do a Kas build
+>  .build:
+>    extends: .setup
+> +  variables:
+> +    KUBERNETES_CPU_REQUEST: $CPU_REQUEST
+>    script:
+>      - KASFILES=$(./ci/jobs-to-kas "$CI_JOB_NAME")
+>      - kas shell --update --force-checkout $KASFILES -c 'cat conf/*.conf'
+> -- 
+> 2.25.1
+> 
+> 
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2023-01-15 20:17 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-12-16 15:44 [meta-zephyr][PATCH 1/2][kirkstone] CI: Add variables needed for k8s runners Peter Hoyes
+2022-12-16 15:44 ` [meta-zephyr][PATCH 2/2][kirkstone] CI: add tags to all jobs Peter Hoyes
+2023-01-15 20:17 ` [meta-zephyr][PATCH 1/2][kirkstone] CI: Add variables needed for k8s runners Jon Mason
+

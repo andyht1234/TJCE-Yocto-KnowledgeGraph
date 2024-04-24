@@ -1,0 +1,107 @@
+* [yocto-autobuilder-helper][PATCH] clobberdir: only move dirs more than 60s old
+@ 2023-06-07 19:41 Trevor Gamblin
+  2023-06-13  8:43 ` [yocto] " Richard Purdie
+  0 siblings, 1 reply; 2+ messages in thread
+From: Trevor Gamblin @ 2023-06-07 19:41 UTC (permalink / raw)
+  To: yocto
+
+See: https://bugzilla.yoctoproject.org/show_bug.cgi?id=14952
+
+Help avoid contention by adding a check to ensure targets are at
+least 60s old when attempting to move them into a trash directory.
+
+Signed-off-by: Trevor Gamblin <tgamblin@baylibre.com>
+---
+ janitor/clobberdir | 10 +++++++---
+ 1 file changed, 7 insertions(+), 3 deletions(-)
+
+diff --git a/janitor/clobberdir b/janitor/clobberdir
+index 16b019e..832173c 100755
+--- a/janitor/clobberdir
++++ b/janitor/clobberdir
+@@ -52,8 +52,12 @@ trashdir = utils.getconfig("TRASH_DIR", ourconfig)
+ for x in [clobberdir]:
+     if os.path.exists(x) and os.path.exists(trashdir):
+         if (os.stat(trashdir).st_dev == os.stat(x).st_dev):
+-            trashdest = trashdir + "/" + str(int(time.time())) + '-'  + str(random.randrange(100, 100000, 2))
+-            mkdir(trashdest)
+-            subprocess.check_call(['mv', x, trashdest])
++            x_age = time.time() - os.path.getmtime(x)
++            if x_age > 60:
++                trashdest = trashdir + "/" + str(int(time.time())) + '-'  + str(random.randrange(100, 100000, 2))
++                mkdir(trashdest)
++                subprocess.check_call(['mv', x, trashdest])
++            else:
++                print("Not moving '%s' - age is only %s seconds. There may be another process using it" % (x, str(int(x_age))))
+         else:
+             subprocess.check_call(['rm', "-rf", x])
+-- 
+2.40.1
+
+
+
+^ permalink raw reply related	[flat|nested] 2+ messages in thread
+* Re: [yocto] [yocto-autobuilder-helper][PATCH] clobberdir: only move dirs more than 60s old
+  2023-06-07 19:41 [yocto-autobuilder-helper][PATCH] clobberdir: only move dirs more than 60s old Trevor Gamblin
+@ 2023-06-13  8:43 ` Richard Purdie
+  0 siblings, 0 replies; 2+ messages in thread
+From: Richard Purdie @ 2023-06-13  8:43 UTC (permalink / raw)
+  To: Trevor Gamblin, yocto
+
+On Wed, 2023-06-07 at 15:41 -0400, Trevor Gamblin wrote:
+> See: https://bugzilla.yoctoproject.org/show_bug.cgi?id=14952
+> 
+> Help avoid contention by adding a check to ensure targets are at
+> least 60s old when attempting to move them into a trash directory.
+> 
+> Signed-off-by: Trevor Gamblin <tgamblin@baylibre.com>
+> ---
+>  janitor/clobberdir | 10 +++++++---
+>  1 file changed, 7 insertions(+), 3 deletions(-)
+> 
+> diff --git a/janitor/clobberdir b/janitor/clobberdir
+> index 16b019e..832173c 100755
+> --- a/janitor/clobberdir
+> +++ b/janitor/clobberdir
+> @@ -52,8 +52,12 @@ trashdir = utils.getconfig("TRASH_DIR", ourconfig)
+>  for x in [clobberdir]:
+>      if os.path.exists(x) and os.path.exists(trashdir):
+>          if (os.stat(trashdir).st_dev == os.stat(x).st_dev):
+> -            trashdest = trashdir + "/" + str(int(time.time())) + '-'  + str(random.randrange(100, 100000, 2))
+> -            mkdir(trashdest)
+> -            subprocess.check_call(['mv', x, trashdest])
+> +            x_age = time.time() - os.path.getmtime(x)
+> +            if x_age > 60:
+> +                trashdest = trashdir + "/" + str(int(time.time())) + '-'  + str(random.randrange(100, 100000, 2))
+> +                mkdir(trashdest)
+> +                subprocess.check_call(['mv', x, trashdest])
+> +            else:
+> +                print("Not moving '%s' - age is only %s seconds. There may be another process using it" % (x, str(int(x_age))))
+>          else:
+>              subprocess.check_call(['rm', "-rf", x])
+
+I think we need to do this on the other side of the setup.
+
+If we ask to run clobberdir, it needs to succeed and I don't think the
+move causes us issues. What does cause problems is if a bitbake server
+was still active on a build directory and shutting down. If we move the
+directory from under it, that is ok, what causes problems is if we
+actually delete it.
+
+The age check therefore needs to be in trash_processor() in janitor/ab-
+janitor.
+
+Cheers,
+
+Richard
+
+
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2023-06-13  8:43 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-06-07 19:41 [yocto-autobuilder-helper][PATCH] clobberdir: only move dirs more than 60s old Trevor Gamblin
+2023-06-13  8:43 ` [yocto] " Richard Purdie
+

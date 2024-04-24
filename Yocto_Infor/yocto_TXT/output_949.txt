@@ -1,0 +1,293 @@
+* Importance of ECC RAM on the build computer
+@ 2023-02-17  5:08 davidskeck
+  2023-02-17  8:31 ` [yocto] " Yoann CONGAL
+  0 siblings, 1 reply; 5+ messages in thread
+From: davidskeck @ 2023-02-17  5:08 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 418 bytes --]
+
+Is there generally suggested advice regarding the importance of ECC on the build computer? I'm very new to Yocto so I'm not sure if there is a chance the final build image could experience some corruption due to flipped bits in RAM or if I'm totally overthinking this. It is also possible that Yocto does some kind of CRC checking of its own that makes this a non-issue. Any guidance would be appreciated. Thank you!
+
+[-- Attachment #2: Type: text/html, Size: 418 bytes --]
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] Importance of ECC RAM on the build computer
+  2023-02-17  5:08 Importance of ECC RAM on the build computer davidskeck
+@ 2023-02-17  8:31 ` Yoann CONGAL
+  2023-02-17  9:41   ` Alexander Kanavin
+  0 siblings, 1 reply; 5+ messages in thread
+From: Yoann CONGAL @ 2023-02-17  8:31 UTC (permalink / raw)
+  To: davidskeck; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1110 bytes --]
+
+Hi!
+
+Le ven. 17 févr. 2023 à 06:08, <davidskeck@fastmail.com> a écrit :
+
+> Is there generally suggested advice regarding the importance of ECC on the
+> build computer? I'm very new to Yocto so I'm not sure if there is a chance
+> the final build image could experience some corruption due to flipped bits
+> in RAM or if I'm totally overthinking this.
+
+
+Last time I checked. The ECC vs non-ECC price difference was not worth the
+time you may spend in case of a RAM bitflip.
+Here, we put ECC RAM in our build systems and I guess it's quite the
+industry standard.
+
+It is also possible that Yocto does some kind of CRC checking of its own
+> that makes this a non-issue. Any guidance would be appreciated. Thank you!
+>
+
+Yocto does source integrity checks (the stuff it downloads from the
+internet) but it can't do much more after that.
+
+I've yet to debug a RAM bitflip but I guess it may trigger any kind of
+weird behavior which may be hard to debug and time consuming.
+
+My advice is : keep your time and sanity, use ECC RAM.
+
+Regards,
+-- 
+Yoann Congal
+Smile ECS - Expert technique
+
+[-- Attachment #2: Type: text/html, Size: 1823 bytes --]
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] Importance of ECC RAM on the build computer
+  2023-02-17  8:31 ` [yocto] " Yoann CONGAL
+@ 2023-02-17  9:41   ` Alexander Kanavin
+  2023-02-17 14:14     ` Alexandre Belloni
+  0 siblings, 1 reply; 5+ messages in thread
+From: Alexander Kanavin @ 2023-02-17  9:41 UTC (permalink / raw)
+  To: Yoann Congal; +Cc: davidskeck, yocto
+
+On the other hand, I'm yet to hear an actual case of a broken build
+due to non-ECC. It's not impossible, but it seems exceedingly rare.
+You're far more likely to spend 100x as much time on logical errors or
+out-of-resources problems.
+
+Alex
+
+On Fri, 17 Feb 2023 at 09:31, Yoann Congal <yoann.congal@smile.fr> wrote:
+>
+> Hi!
+>
+> Le ven. 17 févr. 2023 à 06:08, <davidskeck@fastmail.com> a écrit :
+>>
+>> Is there generally suggested advice regarding the importance of ECC on the build computer? I'm very new to Yocto so I'm not sure if there is a chance the final build image could experience some corruption due to flipped bits in RAM or if I'm totally overthinking this.
+>
+>
+> Last time I checked. The ECC vs non-ECC price difference was not worth the time you may spend in case of a RAM bitflip.
+> Here, we put ECC RAM in our build systems and I guess it's quite the industry standard.
+>
+>> It is also possible that Yocto does some kind of CRC checking of its own that makes this a non-issue. Any guidance would be appreciated. Thank you!
+>
+>
+> Yocto does source integrity checks (the stuff it downloads from the internet) but it can't do much more after that.
+>
+> I've yet to debug a RAM bitflip but I guess it may trigger any kind of weird behavior which may be hard to debug and time consuming.
+>
+> My advice is : keep your time and sanity, use ECC RAM.
+>
+> Regards,
+> --
+> Yoann Congal
+> Smile ECS - Expert technique
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#59237): https://lists.yoctoproject.org/g/yocto/message/59237
+> Mute This Topic: https://lists.yoctoproject.org/mt/97022997/1686489
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] Importance of ECC RAM on the build computer
+  2023-02-17  9:41   ` Alexander Kanavin
+@ 2023-02-17 14:14     ` Alexandre Belloni
+  2023-02-17 15:41       ` Leon Woestenberg
+  0 siblings, 1 reply; 5+ messages in thread
+From: Alexandre Belloni @ 2023-02-17 14:14 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: Yoann Congal, davidskeck, yocto
+
+On 17/02/2023 10:41:37+0100, Alexander Kanavin wrote:
+> On the other hand, I'm yet to hear an actual case of a broken build
+> due to non-ECC. It's not impossible, but it seems exceedingly rare.
+> You're far more likely to spend 100x as much time on logical errors or
+> out-of-resources problems.
+
+It actually happened in one of our build, were we had a bitflip in the
+final binary which was then not working as expected.
+
+We also had multiple cases of headers/source file corruption after the
+tarball is extracted but usually those are either caught by the compiler
+or don't matter at all.
+
+> 
+> Alex
+> 
+> On Fri, 17 Feb 2023 at 09:31, Yoann Congal <yoann.congal@smile.fr> wrote:
+> >
+> > Hi!
+> >
+> > Le ven. 17 fï¿½vr. 2023 ï¿½ 06:08, <davidskeck@fastmail.com> a ï¿½crit :
+> >>
+> >> Is there generally suggested advice regarding the importance of ECC on the build computer? I'm very new to Yocto so I'm not sure if there is a chance the final build image could experience some corruption due to flipped bits in RAM or if I'm totally overthinking this.
+> >
+> >
+> > Last time I checked. The ECC vs non-ECC price difference was not worth the time you may spend in case of a RAM bitflip.
+> > Here, we put ECC RAM in our build systems and I guess it's quite the industry standard.
+> >
+> >> It is also possible that Yocto does some kind of CRC checking of its own that makes this a non-issue. Any guidance would be appreciated. Thank you!
+> >
+> >
+> > Yocto does source integrity checks (the stuff it downloads from the internet) but it can't do much more after that.
+> >
+> > I've yet to debug a RAM bitflip but I guess it may trigger any kind of weird behavior which may be hard to debug and time consuming.
+> >
+> > My advice is : keep your time and sanity, use ECC RAM.
+> >
+> > Regards,
+> > --
+> > Yoann Congal
+> > Smile ECS - Expert technique
+> >
+> > 
+> >
+
+> 
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#59239): https://lists.yoctoproject.org/g/yocto/message/59239
+> Mute This Topic: https://lists.yoctoproject.org/mt/97022997/3617179
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alexandre.belloni@bootlin.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+> 
+
+
+-- 
+Alexandre Belloni, co-owner and COO, Bootlin
+Embedded Linux and Kernel engineering
+https://bootlin.com
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] Importance of ECC RAM on the build computer
+  2023-02-17 14:14     ` Alexandre Belloni
+@ 2023-02-17 15:41       ` Leon Woestenberg
+  0 siblings, 0 replies; 5+ messages in thread
+From: Leon Woestenberg @ 2023-02-17 15:41 UTC (permalink / raw)
+  To: alexandre.belloni; +Cc: Alexander Kanavin, Yoann Congal, davidskeck, yocto
+
+Hello,
+
+Interesting question, and I especially would like to hear on the MTBF
+*measured* through the ECC detection algorithm. It can usually detect
+more errors than it can correct, and I wonder if the systems admin are
+notified when bitflips where detected.
+
+
+Regards,
+
+Leon.
+
+-- 
+Leon Woestenberg
+leon@sidebranch.com
+T: +31 40 711 42 76
+M: +31 6 472 30 372
+
+Sidebranch Embedded Systems
+Eindhoven, The Netherlands
+http://www.sidebranch.com
+
+
+
+On Fri, Feb 17, 2023 at 3:14 PM Alexandre Belloni via
+lists.yoctoproject.org
+<alexandre.belloni=bootlin.com@lists.yoctoproject.org> wrote:
+>
+> On 17/02/2023 10:41:37+0100, Alexander Kanavin wrote:
+> > On the other hand, I'm yet to hear an actual case of a broken build
+> > due to non-ECC. It's not impossible, but it seems exceedingly rare.
+> > You're far more likely to spend 100x as much time on logical errors or
+> > out-of-resources problems.
+>
+> It actually happened in one of our build, were we had a bitflip in the
+> final binary which was then not working as expected.
+>
+> We also had multiple cases of headers/source file corruption after the
+> tarball is extracted but usually those are either caught by the compiler
+> or don't matter at all.
+>
+> >
+> > Alex
+> >
+> > On Fri, 17 Feb 2023 at 09:31, Yoann Congal <yoann.congal@smile.fr> wrote:
+> > >
+> > > Hi!
+> > >
+> > > Le ven. 17 févr. 2023 à 06:08, <davidskeck@fastmail.com> a écrit :
+> > >>
+> > >> Is there generally suggested advice regarding the importance of ECC on the build computer? I'm very new to Yocto so I'm not sure if there is a chance the final build image could experience some corruption due to flipped bits in RAM or if I'm totally overthinking this.
+> > >
+> > >
+> > > Last time I checked. The ECC vs non-ECC price difference was not worth the time you may spend in case of a RAM bitflip.
+> > > Here, we put ECC RAM in our build systems and I guess it's quite the industry standard.
+> > >
+> > >> It is also possible that Yocto does some kind of CRC checking of its own that makes this a non-issue. Any guidance would be appreciated. Thank you!
+> > >
+> > >
+> > > Yocto does source integrity checks (the stuff it downloads from the internet) but it can't do much more after that.
+> > >
+> > > I've yet to debug a RAM bitflip but I guess it may trigger any kind of weird behavior which may be hard to debug and time consuming.
+> > >
+> > > My advice is : keep your time and sanity, use ECC RAM.
+> > >
+> > > Regards,
+> > > --
+> > > Yoann Congal
+> > > Smile ECS - Expert technique
+> > >
+> > >
+> > >
+>
+> >
+> >
+> >
+>
+>
+> --
+> Alexandre Belloni, co-owner and COO, Bootlin
+> Embedded Linux and Kernel engineering
+> https://bootlin.com
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#59241): https://lists.yoctoproject.org/g/yocto/message/59241
+> Mute This Topic: https://lists.yoctoproject.org/mt/97022997/1051774
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [leon@sidebranch.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+end of thread, other threads:[~2023-02-17 15:41 UTC | newest]
+
+Thread overview: 5+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-02-17  5:08 Importance of ECC RAM on the build computer davidskeck
+2023-02-17  8:31 ` [yocto] " Yoann CONGAL
+2023-02-17  9:41   ` Alexander Kanavin
+2023-02-17 14:14     ` Alexandre Belloni
+2023-02-17 15:41       ` Leon Woestenberg
+

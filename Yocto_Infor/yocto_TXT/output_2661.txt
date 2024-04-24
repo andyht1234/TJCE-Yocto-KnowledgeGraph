@@ -1,0 +1,169 @@
+* BusyBox pTest failure
+@ 2021-10-27 10:52 rpaluri
+       [not found] ` <db2f4384600521faa4aeb18151b343e925038087.camel@linuxfoundation.org>
+  0 siblings, 1 reply; 2+ messages in thread
+From: rpaluri @ 2021-10-27 10:52 UTC (permalink / raw)
+  To: automated-testing, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1414 bytes --]
+
+Hi, 
+
+    We are executing busybox pTests and we see that the test case execution
+stops at md5sum test case.
+
+We analyzed and see that the execution gets stuck here
+<https://github.com/sailfishos-mirror/busybox/blob/master/testsuite/md5sum.t
+ests#L29>  at Line no 29.
+
+ 
+
+Below are the relevant code lines:
+
+Line no. 28: text="The quick brown fox jumps over the lazy dog"
+
+Line no. 29: text=`yes "$text" | head -c 9999`
+
+ 
+
+I executed above two lines on my host machine and the I get the shell prompt
+back but when executed on target machine, I'm not getting the shell prompt,
+it gets stuck.
+
+/usr/lib/busybox/ptest # text="The quick brown fox jumps over the lazy dog"
+
+/usr/lib/busybox/ptest # text=`yes "$text" | head -c 9999`
+
+<<get stuck here indefinitely and I don't get the shell prompt>>
+
+ 
+
+I modified Line no. 29 as below (removed " around $text) and the test case
+execution proceeds further with "yes: Broken Pipe" error. With the same
+modification, I don't see this error on my host machine though.
+
+Line no. 29: text=`yes $text | head -c 9999`
+
+ 
+
+/usr/lib/busybox/ptest # text="The quick brown fox jumps over the lazy dog"
+
+/usr/lib/busybox/ptest # text=`yes $text | head -c 9999`
+
+yes: Broken pipe
+
+ 
+
+My host machine uses Bash as my default shell where as my target uses
+busybox sh as my default shell. Does this make any difference?
+
+Any pointers on this will be appreciated.
+
+ 
+
+Thanks,
+
+Ravi
+
+ 
+
+
+[-- Attachment #2: Type: text/html, Size: 3986 bytes --]
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+* Re: [Automated-testing] BusyBox pTest failure
+       [not found] ` <db2f4384600521faa4aeb18151b343e925038087.camel@linuxfoundation.org>
+@ 2021-10-27 21:13   ` Khem Raj
+  0 siblings, 0 replies; 2+ messages in thread
+From: Khem Raj @ 2021-10-27 21:13 UTC (permalink / raw)
+  To: Richard Purdie; +Cc: automated-testing, rpaluri, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2676 bytes --]
+
+On Wed, Oct 27, 2021 at 1:40 PM Richard Purdie <
+richard.purdie@linuxfoundation.org> wrote:
+
+> On Wed, 2021-10-27 at 16:22 +0530, rpaluri@codeaurora.org wrote:
+> > Hi,
+> >     We are executing busybox pTests and we see that the test case
+> execution
+> > stops at md5sum test case.
+> > We analyzed and see that the execution gets stuck here at Line no 29.
+> >
+> > Below are the relevant code lines:
+> > Line no. 28: text="The quick brown fox jumps over the lazy dog"
+> > Line no. 29: text=`yes "$text" | head -c 9999`
+> >
+> > I executed above two lines on my host machine and the I get the shell
+> prompt
+> > back but when executed on target machine, I’m not getting the shell
+> prompt, it
+> > gets stuck.
+> > /usr/lib/busybox/ptest # text="The quick brown fox jumps over the lazy
+> dog"
+> > /usr/lib/busybox/ptest # text=`yes “$text” | head -c 9999`
+> > <<get stuck here indefinitely and I don’t get the shell prompt>>
+> >
+> > I modified Line no. 29 as below (removed “ around $text) and the test
+> case
+> > execution proceeds further with “yes: Broken Pipe” error. With the same
+> > modification, I don’t see this error on my host machine though.
+> > Line no. 29: text=`yes $text | head -c 9999`
+> >
+> > /usr/lib/busybox/ptest # text="The quick brown fox jumps over the lazy
+> dog"
+> > /usr/lib/busybox/ptest # text=`yes $text | head -c 9999`
+> > yes: Broken pipe
+> >
+> > My host machine uses Bash as my default shell where as my target uses
+> busybox
+> > sh as my default shell. Does this make any difference?
+> > Any pointers on this will be appreciated.
+> >
+>
+> The shell the test is run under could make a difference, it is probably
+> supposed
+> to be running under busybox's own sh. I think we put the busybox utils
+> into PATH
+> in the ptest to try and ensure this is the case but you'd have to double
+> check
+> that.
+>
+> It seems odd you're hitting that as I'd assume we run the busybox ptests
+> ourselves and don't see a hang...
+>
+
+It’s also good to post your build configuration that bitbake prints at the
+beginning of build this could also be other policies like default libc
+being musl vs glibc is in play etc
+
+
+> Cheers,
+>
+> Richard
+>
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#971):
+> https://lists.yoctoproject.org/g/automated-testing/message/971
+> Mute This Topic: https://lists.yoctoproject.org/mt/86624536/1997914
+> Group Owner: automated-testing+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/automated-testing/unsub [
+> raj.khem@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 3903 bytes --]
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2021-10-27 21:14 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-10-27 10:52 BusyBox pTest failure rpaluri
+     [not found] ` <db2f4384600521faa4aeb18151b343e925038087.camel@linuxfoundation.org>
+2021-10-27 21:13   ` [Automated-testing] " Khem Raj
+

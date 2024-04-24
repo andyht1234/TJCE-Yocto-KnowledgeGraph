@@ -1,0 +1,475 @@
+* do_install hangs on native tasks
+@ 2022-12-06 18:36 Christopher Friedt
+  2022-12-06 18:37 ` Christopher Friedt
+                   ` (2 more replies)
+  0 siblings, 3 replies; 10+ messages in thread
+From: Christopher Friedt @ 2022-12-06 18:36 UTC (permalink / raw)
+  To: yocto
+
+Hey all,
+
+I've done some digging with this myself, but have not found a root
+cause, fix, or workaround. Google shows me that a number of other
+users have encountered this problem as well with Yocto, but I have not
+found a solution with those either.
+
+Native targets are stuck in the do_install phase and can literally
+hang for days.
+
+Currently  2 running tasks (2004 of 2078)  96%
+...
+0: nativesdk-dtc-1.6.0-r0 do_install - 1h17m52s (pid 2572369)
+1: nativesdk-kmod-27-r0 do_install - 1h16m2s (pid 2656202)
+
+Does anyone have any debugging suggestions?
+
+$ strace -p 2572369
+strace: Process 2572369 attached
+pselect6(15, [12 14], [], [], {tv_sec=0, tv_nsec=526887424}, NULL) = 0 (Timeout)
+wait4(2572898, 0x7ffd153a439c, WNOHANG, NULL) = 0
+pselect6(15, [12 14], [], [], {tv_sec=0, tv_nsec=526887424}, NULL) = 0 (Timeout)
+wait4(2572898, 0x7ffd153a439c, WNOHANG, NULL) = 0
+pselect6(15, [12 14], [], [], {tv_sec=0, tv_nsec=526887424}, NULL) = 0 (Timeout)
+wait4(2572898, 0x7ffd153a439c, WNOHANG, NULL) = 0
+...
+
+$ ps -fw 2572368
+... /bin/sh ... temp/run.do_install.2572369
+
+I can send a signal to the parent process (e.g. kill -USR1 2572368)
+but then the process fails. I can do a clean on the targets, but the
+exact same problem repeats itself.
+
+Manually stepping through build phases also does not work, as
+do_install simply hangs again when I get there.
+
+It seems to be a pretty serious problem and not an isolated issue.
+Complete showstopper, as the Yocto build cannot proceed beyond this
+point without manual hacks.
+
+I've encountered this while building the Zephyr SDK [1] on a company
+machine (where it actually matters) but am unable to reproduce the
+issue inside of a
+centos-stream-9 docker container [2] (where it doesn't matter).
+
+I've tried rebooting, completely wiping all of the build directories,
+standing on one foot, trying to forget about it, sleeping on it, etc.
+Nothing seems to fix the issue.
+
+So yea, the fun continues!
+
+Any ideas?
+
+[1] https://github.com/zephyrproject-rtos/sdk-ng
+[2] https://github.com/cfriedt/zephyr-sdk-builder/tree/using-centos-stream-9
+
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+* Re: do_install hangs on native tasks
+  2022-12-06 18:36 do_install hangs on native tasks Christopher Friedt
+@ 2022-12-06 18:37 ` Christopher Friedt
+  2022-12-06 19:15 ` Christopher Friedt
+       [not found] ` <172E4A3E9370D7CD.20831@lists.yoctoproject.org>
+  2 siblings, 0 replies; 10+ messages in thread
+From: Christopher Friedt @ 2022-12-06 18:37 UTC (permalink / raw)
+  To: yocto
+
+Build Configuration:
+BB_VERSION           = "1.48.0"
+BUILD_SYS            = "x86_64-linux"
+NATIVELSBSTRING      = "universal"
+TARGET_SYS           = "i686-zephyr-linux"
+MACHINE              = "qemux86"
+DISTRO               = "zephyr-sdk"
+DISTRO_VERSION       = "0.9"
+TUNE_FEATURES        = "m32 core2"
+TARGET_FPU           = ""
+meta
+meta-poky
+meta-yocto-bsp       = "HEAD:8daedc01101e686fc640c164004c0ec4e5f90b4e"
+meta-zephyr-sdk      = "HEAD:43582cc208d97cf32c49973ff4ff5d994ae41264"
+
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+* Re: do_install hangs on native tasks
+  2022-12-06 18:36 do_install hangs on native tasks Christopher Friedt
+  2022-12-06 18:37 ` Christopher Friedt
+@ 2022-12-06 19:15 ` Christopher Friedt
+       [not found] ` <172E4A3E9370D7CD.20831@lists.yoctoproject.org>
+  2 siblings, 0 replies; 10+ messages in thread
+From: Christopher Friedt @ 2022-12-06 19:15 UTC (permalink / raw)
+  To: yocto
+
+cfriedt  2572369 3821910  0 11:07 ?        Ss     0:00 python3
+/home/cfriedt/build-zephyr-sdk/sdk-ng/poky/bitbake/bin/bitbake-worker
+decafbadbeef
+
+Perhaps the error is -ENOCAFFEINE?
+
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+* Re: [yocto] do_install hangs on native tasks
+       [not found] ` <172E4A3E9370D7CD.20831@lists.yoctoproject.org>
+@ 2022-12-06 22:06   ` Christopher Friedt
+  2022-12-07 13:37     ` Bruce Ashfield
+  0 siblings, 1 reply; 10+ messages in thread
+From: Christopher Friedt @ 2022-12-06 22:06 UTC (permalink / raw)
+  To: yocto
+
+In all cases, the problem is traced back to a Makefile, where
+something calls $(shell git ... ) to get a git version.
+
+I was able to find out because one shell had executed a script called
+scripts/setlocalversion that looked kind of suspicious in terms of
+error propagation. In this script, if I manually echoed "1.6.0" and
+then exited, do_install would not hang.
+
+Some early discussion suggests that it might be avoidable with 'set -o
+pipefail' in the shell, but I haven't investigated further.
+
+C
+
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+* Re: [yocto] do_install hangs on native tasks
+  2022-12-06 22:06   ` [yocto] " Christopher Friedt
+@ 2022-12-07 13:37     ` Bruce Ashfield
+  2022-12-07 14:08       ` Josef Holzmayr
+  2022-12-08 17:54       ` Christopher Friedt
+  0 siblings, 2 replies; 10+ messages in thread
+From: Bruce Ashfield @ 2022-12-07 13:37 UTC (permalink / raw)
+  To: Christopher Friedt; +Cc: yocto
+
+On Tue, Dec 6, 2022 at 5:07 PM Christopher Friedt <chrisfriedt@gmail.com> wrote:
+>
+> In all cases, the problem is traced back to a Makefile, where
+> something calls $(shell git ... ) to get a git version.
+>
+> I was able to find out because one shell had executed a script called
+> scripts/setlocalversion that looked kind of suspicious in terms of
+> error propagation. In this script, if I manually echoed "1.6.0" and
+> then exited, do_install would not hang.
+>
+> Some early discussion suggests that it might be avoidable with 'set -o
+> pipefail' in the shell, but I haven't investigated further.
+>
+
+I don't have anything super helpful to add, but when that git command
+is hung, are you seeing any stalled network connections or processes
+in D state ?
+
+It wasn't clear from your first message. Are all native processes hanging
+at do_install ? or is it a subset ?
+
+Bruce
+
+> C
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#58743): https://lists.yoctoproject.org/g/yocto/message/58743
+> Mute This Topic: https://lists.yoctoproject.org/mt/95499663/1050810
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [bruce.ashfield@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+-- 
+- Thou shalt not follow the NULL pointer, for chaos and madness await
+thee at its end
+- "Use the force Harry" - Gandalf, Star Trek II
+
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+* Re: [yocto] do_install hangs on native tasks
+  2022-12-07 13:37     ` Bruce Ashfield
+@ 2022-12-07 14:08       ` Josef Holzmayr
+  2022-12-12 20:05         ` Christopher Friedt
+  2022-12-08 17:54       ` Christopher Friedt
+  1 sibling, 1 reply; 10+ messages in thread
+From: Josef Holzmayr @ 2022-12-07 14:08 UTC (permalink / raw)
+  To: Bruce Ashfield; +Cc: Christopher Friedt, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1813 bytes --]
+
+Is it maybe the restricted network access thats biting you?
+See third item:
+https://docs.yoctoproject.org/migration-guides/release-notes-4.0.html#new-features-enhancements-in-4-0
+
+On Wed, Dec 7, 2022 at 2:37 PM Bruce Ashfield <bruce.ashfield@gmail.com>
+wrote:
+
+> On Tue, Dec 6, 2022 at 5:07 PM Christopher Friedt <chrisfriedt@gmail.com>
+> wrote:
+> >
+> > In all cases, the problem is traced back to a Makefile, where
+> > something calls $(shell git ... ) to get a git version.
+> >
+> > I was able to find out because one shell had executed a script called
+> > scripts/setlocalversion that looked kind of suspicious in terms of
+> > error propagation. In this script, if I manually echoed "1.6.0" and
+> > then exited, do_install would not hang.
+> >
+> > Some early discussion suggests that it might be avoidable with 'set -o
+> > pipefail' in the shell, but I haven't investigated further.
+> >
+>
+> I don't have anything super helpful to add, but when that git command
+> is hung, are you seeing any stalled network connections or processes
+> in D state ?
+>
+> It wasn't clear from your first message. Are all native processes hanging
+> at do_install ? or is it a subset ?
+>
+> Bruce
+>
+> > C
+> >
+> >
+> >
+>
+>
+> --
+> - Thou shalt not follow the NULL pointer, for chaos and madness await
+> thee at its end
+> - "Use the force Harry" - Gandalf, Star Trek II
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> You automatically follow any topics you start or reply to.
+> View/Reply Online (#58746):
+> https://lists.yoctoproject.org/g/yocto/message/58746
+> Mute This Topic: https://lists.yoctoproject.org/mt/95499663/4689568
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> jester@theyoctojester.info]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 2936 bytes --]
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+* Re: [yocto] do_install hangs on native tasks
+  2022-12-07 13:37     ` Bruce Ashfield
+  2022-12-07 14:08       ` Josef Holzmayr
+@ 2022-12-08 17:54       ` Christopher Friedt
+  2022-12-08 20:30         ` Alexander Kanavin
+  1 sibling, 1 reply; 10+ messages in thread
+From: Christopher Friedt @ 2022-12-08 17:54 UTC (permalink / raw)
+  To: Bruce Ashfield; +Cc: yocto
+
+On Wed, Dec 7, 2022 at 8:37 AM Bruce Ashfield <bruce.ashfield@gmail.com> wrote:
+> I don't have anything super helpful to add, but when that git command
+> is hung, are you seeing any stalled network connections or processes
+> in D state ?
+
+The hung commands are in the S state (sleeping).
+
+> It wasn't clear from your first message. Are all native processes hanging
+> at do_install ? or is it a subset ?
+
+The build gets hung on bitbake hosttools-tarball and it seems to be
+all of the native targets
+
+Currently  4 running tasks (1519 of 2078)  73%
+0: nativesdk-kmod-27-r0 do_install - 5s (pid 3450165)
+1: nativesdk-xilinx-qemu-git-r0 do_install - 5s (pid 3450167)
+2: nativesdk-zephyr-qemu-git-r0 do_install - 5s (pid 3450169)
+3: nativesdk-arc-qemu-git-r0 do_install - 5s (pid 3450172)
+
+If I pass in -vvv -DDD to bitbake I get this output
+
++ make -j 32 DESTDIR=/home/cfriedt/build-zephyr-sdk/sdk-ng/poky/build-zephyr-tools/tmp/work/x86_64-nativesdk-pokysdk-linux/nativesdk-kmod/27-r0/image
+install
+...
++ make -j 32 DESTDIR=/home/cfriedt/build-zephyr-sdk/sdk-ng/poky/build-zephyr-tools/tmp/work/x86_64-nativesdk-pokysdk-linux/nativesdk-xilinx-qemu/git-r0/image
+install
+...
++ make -j 32 DESTDIR=/home/cfriedt/build-zephyr-sdk/sdk-ng/poky/build-zephyr-tools/tmp/work/x86_64-nativesdk-pokysdk-linux/nativesdk-zephyr-qemu/git-r0/image
+install
+...
++ make -j 32 DESTDIR=/home/cfriedt/build-zephyr-sdk/sdk-ng/poky/build-zephyr-tools/tmp/work/x86_64-nativesdk-pokysdk-linux/nativesdk-arc-qemu/git-r0/image
+install
+
+The exact commands that are hanging are
+kmod: /bin/bash -c git describe  2>/dev/null
+nativesdk-xilinx-qemu: /bin/bash -c git describe  2>/dev/null
+
+In the kmod case, if I go to the build directory and do what the
+Makefile does, it's obvious that git will fail since there is no .git
+subdirectory.
+
+$ git describe
+fatal: No names found, cannot describe anything.
+
+If I swap out the Makefile for something utterly trivial like this, it
+still hangs
+
+.PHONY: all install bar
+
+foo-%:
+        touch $@
+
+bar: foo-$(shell git describe 2>/dev/null)
+
+all: bar
+
+install: bar
+
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+* Re: [yocto] do_install hangs on native tasks
+  2022-12-08 17:54       ` Christopher Friedt
+@ 2022-12-08 20:30         ` Alexander Kanavin
+  2022-12-08 21:12           ` Christopher Friedt
+  0 siblings, 1 reply; 10+ messages in thread
+From: Alexander Kanavin @ 2022-12-08 20:30 UTC (permalink / raw)
+  To: Christopher Friedt; +Cc: Bruce Ashfield, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2720 bytes --]
+
+Is it specifically make processes that are hanging?
+
+Alex
+
+On Thu 8. Dec 2022 at 18.54, Christopher Friedt <chrisfriedt@gmail.com>
+wrote:
+
+> On Wed, Dec 7, 2022 at 8:37 AM Bruce Ashfield <bruce.ashfield@gmail.com>
+> wrote:
+> > I don't have anything super helpful to add, but when that git command
+> > is hung, are you seeing any stalled network connections or processes
+> > in D state ?
+>
+> The hung commands are in the S state (sleeping).
+>
+> > It wasn't clear from your first message. Are all native processes hanging
+> > at do_install ? or is it a subset ?
+>
+> The build gets hung on bitbake hosttools-tarball and it seems to be
+> all of the native targets
+>
+> Currently  4 running tasks (1519 of 2078)  73%
+> 0: nativesdk-kmod-27-r0 do_install - 5s (pid 3450165)
+> 1: nativesdk-xilinx-qemu-git-r0 do_install - 5s (pid 3450167)
+> 2: nativesdk-zephyr-qemu-git-r0 do_install - 5s (pid 3450169)
+> 3: nativesdk-arc-qemu-git-r0 do_install - 5s (pid 3450172)
+>
+> If I pass in -vvv -DDD to bitbake I get this output
+>
+> + make -j 32
+> DESTDIR=/home/cfriedt/build-zephyr-sdk/sdk-ng/poky/build-zephyr-tools/tmp/work/x86_64-nativesdk-pokysdk-linux/nativesdk-kmod/27-r0/image
+> install
+> ...
+> + make -j 32
+> DESTDIR=/home/cfriedt/build-zephyr-sdk/sdk-ng/poky/build-zephyr-tools/tmp/work/x86_64-nativesdk-pokysdk-linux/nativesdk-xilinx-qemu/git-r0/image
+> install
+> ...
+> + make -j 32
+> DESTDIR=/home/cfriedt/build-zephyr-sdk/sdk-ng/poky/build-zephyr-tools/tmp/work/x86_64-nativesdk-pokysdk-linux/nativesdk-zephyr-qemu/git-r0/image
+> install
+> ...
+> + make -j 32
+> DESTDIR=/home/cfriedt/build-zephyr-sdk/sdk-ng/poky/build-zephyr-tools/tmp/work/x86_64-nativesdk-pokysdk-linux/nativesdk-arc-qemu/git-r0/image
+> install
+>
+> The exact commands that are hanging are
+> kmod: /bin/bash -c git describe  2>/dev/null
+> nativesdk-xilinx-qemu: /bin/bash -c git describe  2>/dev/null
+>
+> In the kmod case, if I go to the build directory and do what the
+> Makefile does, it's obvious that git will fail since there is no .git
+> subdirectory.
+>
+> $ git describe
+> fatal: No names found, cannot describe anything.
+>
+> If I swap out the Makefile for something utterly trivial like this, it
+> still hangs
+>
+> .PHONY: all install bar
+>
+> foo-%:
+>         touch $@
+>
+> bar: foo-$(shell git describe 2>/dev/null)
+>
+> all: bar
+>
+> install: bar
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#58765):
+> https://lists.yoctoproject.org/g/yocto/message/58765
+> Mute This Topic: https://lists.yoctoproject.org/mt/95499663/1686489
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> alex.kanavin@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 3835 bytes --]
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+* Re: [yocto] do_install hangs on native tasks
+  2022-12-08 20:30         ` Alexander Kanavin
+@ 2022-12-08 21:12           ` Christopher Friedt
+  0 siblings, 0 replies; 10+ messages in thread
+From: Christopher Friedt @ 2022-12-08 21:12 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: Bruce Ashfield, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 337 bytes --]
+
+On Thu, Dec 8, 2022, 3:30 PM Alexander Kanavin <alex.kanavin@gmail.com>
+wrote:
+
+> Is it specifically make processes that are hanging?
+>
+> Alex
+>
+
+Not specifically, make has worked without issue.
+
+Specifically, it seems to be restricted to do_install, on these nativesdk
+recipes, when calling git in a subshell or script from make.
+
+>
+>>
+
+[-- Attachment #2: Type: text/html, Size: 1182 bytes --]
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+* Re: [yocto] do_install hangs on native tasks
+  2022-12-07 14:08       ` Josef Holzmayr
+@ 2022-12-12 20:05         ` Christopher Friedt
+  0 siblings, 0 replies; 10+ messages in thread
+From: Christopher Friedt @ 2022-12-12 20:05 UTC (permalink / raw)
+  To: yocto; +Cc: Bruce Ashfield, Josef Holzmayr
+
+Aha!
+
+Some internal tooling has "optimized" git... but apparently needs
+further "optimization". So it looks as though this is a "user error".
+
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+end of thread, other threads:[~2022-12-12 20:05 UTC | newest]
+
+Thread overview: 10+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-12-06 18:36 do_install hangs on native tasks Christopher Friedt
+2022-12-06 18:37 ` Christopher Friedt
+2022-12-06 19:15 ` Christopher Friedt
+     [not found] ` <172E4A3E9370D7CD.20831@lists.yoctoproject.org>
+2022-12-06 22:06   ` [yocto] " Christopher Friedt
+2022-12-07 13:37     ` Bruce Ashfield
+2022-12-07 14:08       ` Josef Holzmayr
+2022-12-12 20:05         ` Christopher Friedt
+2022-12-08 17:54       ` Christopher Friedt
+2022-12-08 20:30         ` Alexander Kanavin
+2022-12-08 21:12           ` Christopher Friedt
+

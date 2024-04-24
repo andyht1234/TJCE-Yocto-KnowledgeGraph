@@ -1,0 +1,167 @@
+* Re: [yocto] [ptest-runner][PATCH 1/2] utils.c: rework pty setup
+       [not found] <174E85801C847E62.22739@lists.yoctoproject.org>
+@ 2023-04-11  5:45 ` Ovidiu Panait
+  0 siblings, 0 replies; only message in thread
+From: Ovidiu Panait @ 2023-04-11  5:45 UTC (permalink / raw)
+  To: yocto; +Cc: anibal.limon, limon.anibal
+
++cc Anibal's gmail account, the Linaro one seems not valid anymore.
+
+On 3/21/23 21:21, Ovidiu Panait via lists.yoctoproject.org wrote:
+> The run-read bash ptest fails when it's being run by ptest-runner, but
+> it is successful when run manually:
+>   0 0 0
+>   0
+>   0
+> -0
+> +1
+>   timeout 1: ok
+>   unset or null 1
+> -1
+> +timeout 2: ok
+>   unset or null 2
+>   timeout 3: ok
+>   unset or null 3
+> FAIL: run-read
+>
+> The actual testcase that is failing is:
+> tests/read6.sub:
+> read -t 0
+> echo $?
+>
+> This failure seems to be related to how the pty setup is handled:
+> openpty() is called in the child process and the master/slave file
+> descriptors are left dangling.
+>
+> To fix this:
+> - move the openpty() call in the parent process, before fork()-ing
+> - assign the slave end of the pty as the stdin for the child process
+> - adjust the TIOCSCTTY ioctl call to use the file descriptor of the pty file
+>
+> Fixes: 59381a643e1f ("utils: ensure child can be session leader")
+> Signed-off-by: Ovidiu Panait <ovidiu.panait@windriver.com>
+> ---
+>   utils.c | 45 +++++++++++++++++++++++++--------------------
+>   1 file changed, 25 insertions(+), 20 deletions(-)
+>
+> diff --git a/utils.c b/utils.c
+> index a67ac11..87ac20e 100644
+> --- a/utils.c
+> +++ b/utils.c
+> @@ -385,18 +385,9 @@ wait_child(pid_t pid)
+>    * fp should be writable, likely stdout/err.
+>    */
+>   static int
+> -setup_slave_pty(FILE *fp) {
+> -	int pty_master = -1;
+> -	int pty_slave = -1;
+> -	char pty_name[256];
+> +setup_slave_pty(FILE *fp, char *pty_name) {
+>   	struct group *gptr;
+>   	gid_t gid;
+> -	int slave = -1;
+> -
+> -	if (openpty(&pty_master, &pty_slave, pty_name, NULL, NULL) < 0) {
+> -		fprintf(fp, "ERROR: openpty() failed with: %s.\n", strerror(errno));
+> -		return -1;
+> -	}
+>   
+>   	if ((gptr = getgrnam(pty_name)) != 0) {
+>   		gid = gptr->gr_gid;
+> @@ -419,10 +410,7 @@ setup_slave_pty(FILE *fp) {
+>   		fprintf(fp, "ERROR: chmod() failed with: %s.\n", strerror(errno));
+>   	}
+>   
+> -	if ((slave = open(pty_name, O_RDWR)) == -1) {
+> -		fprintf(fp, "ERROR: open() failed with: %s.\n", strerror(errno));
+> -	}
+> -	return (slave);
+> +	return 0;
+>   }
+>   
+>   
+> @@ -441,10 +429,14 @@ run_ptests(struct ptest_list *head, const struct ptest_options opts,
+>   	int pipefd_stderr[2];
+>   	time_t sttime, entime;
+>   	time_t duration;
+> -	int slave;
+>   	int pgid = -1;
+>   	pthread_t tid;
+>   
+> +	int pty_master = -1;
+> +	int pty_slave = -1;
+> +	char pty_name[256];
+> +	int fd = -1;
+> +
+>   	if (opts.xml_filename) {
+>   		xh = xml_create(ptest_list_length(head), opts.xml_filename);
+>   		if (!xh)
+> @@ -493,15 +485,22 @@ run_ptests(struct ptest_list *head, const struct ptest_options opts,
+>   				fprintf(fp, "ERROR: getpgid() failed, %s\n", strerror(errno));
+>   			}
+>   
+> +			if (openpty(&pty_master, &pty_slave, pty_name, NULL, NULL) < 0) {
+> +				fprintf(fp, "ERROR: openpty() failed with: %s.\n", strerror(errno));
+> +				return -1;
+> +			}
+> +
+>   			child = fork();
+>   			if (child == -1) {
+>   				fprintf(fp, "ERROR: Fork %s\n", strerror(errno));
+>   				rc = -1;
+>   				break;
+>   			} else if (child == 0) {
+> -				close(0);
+> -				if ((slave = setup_slave_pty(fp)) < 0) {
+> -					fprintf(fp, "ERROR: could not setup pty (%d).", slave);
+> +				close(pty_master);
+> +				dup2(pty_slave, STDIN_FILENO);
+> +
+> +				if ((rc = setup_slave_pty(fp, pty_name)) < 0) {
+> +					fprintf(fp, "ERROR: could not setup pty (%d).", rc);
+>   				}
+>   				if (setpgid(0,pgid) == -1) {
+>   					fprintf(fp, "ERROR: setpgid() failed, %s\n", strerror(errno));
+> @@ -511,8 +510,12 @@ run_ptests(struct ptest_list *head, const struct ptest_options opts,
+>   					fprintf(fp, "ERROR: setsid() failed, %s\n", strerror(errno));
+>   				}
+>   
+> -				if (ioctl(0, TIOCSCTTY, NULL) == -1) {
+> -					fprintf(fp, "ERROR: Unable to attach to controlling tty, %s\n", strerror(errno));
+> +				if ((fd = open(pty_name, O_RDWR)) >= 0) {
+> +					if (ioctl(fd, TIOCSCTTY, NULL) == -1) {
+> +						fprintf(fp, "ERROR: Unable to attach to controlling tty, %s\n", strerror(errno));
+> +					}
+> +
+> +					close(fd);
+>   				}
+>   
+>   				run_child(p->run_ptest, pipefd_stdout[1], pipefd_stderr[1]);
+> @@ -549,6 +552,8 @@ run_ptests(struct ptest_list *head, const struct ptest_options opts,
+>   				fprintf(fp, "END: %s\n", ptest_dir);
+>   				fprintf(fp, "%s\n", get_stime(stime, GET_STIME_BUF_SIZE, entime));
+>   			}
+> +			close(pty_master);
+> +			close(pty_slave);
+>   			free(ptest_dir);
+>   		PTEST_LIST_ITERATE_END
+>   		fprintf(fp, "STOP: %s\n", progname);
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#59485): https://lists.yoctoproject.org/g/yocto/message/59485
+> Mute This Topic: https://lists.yoctoproject.org/mt/97762755/3616968
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [ovidiu.panait@windriver.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] only message in thread
+only message in thread, other threads:[~2023-04-11  5:45 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+     [not found] <174E85801C847E62.22739@lists.yoctoproject.org>
+2023-04-11  5:45 ` [yocto] [ptest-runner][PATCH 1/2] utils.c: rework pty setup Ovidiu Panait
+

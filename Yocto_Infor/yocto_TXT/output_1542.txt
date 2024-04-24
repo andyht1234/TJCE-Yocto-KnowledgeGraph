@@ -1,0 +1,119 @@
+* wireguard fails with "exports duplicate symbol blake2s_final (owned by kernel)" in latest poky / meta-openembedded #dunfell
+@ 2022-08-03 16:12 Colin Finck
+  2022-08-03 17:46 ` Colin Finck
+  2022-08-03 20:24 ` [yocto] " akuster808
+  0 siblings, 2 replies; 4+ messages in thread
+From: Colin Finck @ 2022-08-03 16:12 UTC (permalink / raw)
+  To: yocto
+
+Hi all,
+
+I've just upgraded to latest poky and meta-openembedded and deployed a build to one of our devices.
+Unfortunately, wireguard no longer works. It fails with
+
+    wireguard: exports duplicate symbol blake2s_final (owned by kernel)
+
+when the module is loaded.
+
+Judging from the message, it looks like https://git.yoctoproject.org/poky/commit/?h=dunfell&id=387d23c02ea0e59ea31d52a40917556648389e96 is related.
+Could someone have a look?
+
+Thanks!
+
+Colin
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: wireguard fails with "exports duplicate symbol blake2s_final (owned by kernel)" in latest poky / meta-openembedded #dunfell
+  2022-08-03 16:12 wireguard fails with "exports duplicate symbol blake2s_final (owned by kernel)" in latest poky / meta-openembedded #dunfell Colin Finck
+@ 2022-08-03 17:46 ` Colin Finck
+  2022-08-03 20:24 ` [yocto] " akuster808
+  1 sibling, 0 replies; 4+ messages in thread
+From: Colin Finck @ 2022-08-03 17:46 UTC (permalink / raw)
+  To: yocto
+
+I confirm that this problem doesn't occur when reverting poky back to 232fdbf0e5fe27ab1a6130f9435b359d975e1c72.
+Which makes it even more likely that 387d23c02ea0e59ea31d52a40917556648389e96 is the culprit.
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] wireguard fails with "exports duplicate symbol blake2s_final (owned by kernel)" in latest poky / meta-openembedded #dunfell
+  2022-08-03 16:12 wireguard fails with "exports duplicate symbol blake2s_final (owned by kernel)" in latest poky / meta-openembedded #dunfell Colin Finck
+  2022-08-03 17:46 ` Colin Finck
+@ 2022-08-03 20:24 ` akuster808
+  2022-08-31 14:32   ` Colin Finck
+  1 sibling, 1 reply; 4+ messages in thread
+From: akuster808 @ 2022-08-03 20:24 UTC (permalink / raw)
+  To: c.finck; +Cc: yocto
+
+Colin,
+
+
+On 8/3/22 09:12, Colin Finck wrote:
+> Hi all,
+>
+> I've just upgraded to latest poky and meta-openembedded and deployed a build to one of our devices.
+> Unfortunately, wireguard no longer works. It fails with
+>
+>      wireguard: exports duplicate symbol blake2s_final (owned by kernel)
+
+This wireguard commit appears to address the issue.
+
+https://git.zx2c4.com/wireguard-linux-compat/commit/?id=52978fcc265c472773b0b334d31705573ae8cb98
+
+can you try this and send a patch if it works?
+
+-armin
+>
+> when the module is loaded.
+>
+> Judging from the message, it looks like https://git.yoctoproject.org/poky/commit/?h=dunfell&id=387d23c02ea0e59ea31d52a40917556648389e96 is related.
+> Could someone have a look?
+>
+> Thanks!
+>
+> Colin
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#57771): https://lists.yoctoproject.org/g/yocto/message/57771
+> Mute This Topic: https://lists.yoctoproject.org/mt/92795671/3616698
+> Mute #dunfell:https://lists.yoctoproject.org/g/yocto/mutehashtag/dunfell
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [akuster808@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: wireguard fails with "exports duplicate symbol blake2s_final (owned by kernel)" in latest poky / meta-openembedded #dunfell
+  2022-08-03 20:24 ` [yocto] " akuster808
+@ 2022-08-31 14:32   ` Colin Finck
+  0 siblings, 0 replies; 4+ messages in thread
+From: Colin Finck @ 2022-08-31 14:32 UTC (permalink / raw)
+  To: yocto
+
+Thanks for the quick response, Armin!
+
+After talking to Jason A. Donenfeld, it turned out that updating to the latest wireguard 1.0.x version is the only solution supported by the author. We should never maintain our own fork of wireguard 1.0.20200401, even less so considering that it's a highly security-critical component.
+The major and minor version of the latest wireguard stays the same. Hence, this is even a solution for a Yocto LTS release like dunfell.
+
+As a consequence, I'm importing the latest wireguard version in this PR: https://github.com/openembedded/meta-openembedded/pull/599
+
+I have tested that PR and it works like a charm on latest Yocto/Poky dunfell.
+Even no longer reports a "dirty" version or warns about "loading out-of-tree module taints kernel".
+
+Colin
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+end of thread, other threads:[~2022-08-31 14:32 UTC | newest]
+
+Thread overview: 4+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-08-03 16:12 wireguard fails with "exports duplicate symbol blake2s_final (owned by kernel)" in latest poky / meta-openembedded #dunfell Colin Finck
+2022-08-03 17:46 ` Colin Finck
+2022-08-03 20:24 ` [yocto] " akuster808
+2022-08-31 14:32   ` Colin Finck
+

@@ -1,0 +1,103 @@
+* Yocto poky/meta/recipes-devtool/perl
+@ 2022-03-29 13:10 Mike Ulan
+  2022-03-29 20:44 ` [yocto] " Alexander Kanavin
+  0 siblings, 1 reply; 2+ messages in thread
+From: Mike Ulan @ 2022-03-29 13:10 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1041 bytes --]
+
+Hi,
+I have the question: is anybody aware that patches in a recipe are not
+fully applied?
+
+When retrieved the archive for package unpacked.
+Аttributes of multiple files are set as readonly.
+
+For 5.30.1 https://www.cpan.org/src/5.0/perl-${PV}.tar.gz;name=perl
+or for 5.22.1 and 5.22 and 5.20 http://www.cpan.org/src/5.0/${BP}.tar.xz
+lots of read only files in archives.
+
+Form  man of Patch behavior --read-only=warn by default.
+So files to be patched with read only attributes remain unchanged.
+
+For override patch default behavior on --read-only, i placed in
+poky/bitbake/bin file with name patch and content:
+#!/bin/sh
+/usr/bin/patch --read-only=fail "$@"
+exvar=$?
+echo "patch wraper readonly fail" "$@"
+perror $exvar
+exit $exvar
+
+And as a clearly predictable result, the build of perl failed.
+To fix problem and apply all patches and particularly my patch to backport
+issue for my host environment
+I added to perl_${PV}.bb recipe this:
+do_patch_prepend() {
+    os.system('chmod -R +rw %s' % d.getVar('S'))
+}
+
+[-- Attachment #2: Type: text/html, Size: 1885 bytes --]
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+* Re: [yocto] Yocto poky/meta/recipes-devtool/perl
+  2022-03-29 13:10 Yocto poky/meta/recipes-devtool/perl Mike Ulan
+@ 2022-03-29 20:44 ` Alexander Kanavin
+  0 siblings, 0 replies; 2+ messages in thread
+From: Alexander Kanavin @ 2022-03-29 20:44 UTC (permalink / raw)
+  To: Mike Ulan; +Cc: Yocto-mailing-list
+
+Can you please attach log.do_patch where the problem can be seen?
+
+Alex
+
+On Tue, 29 Mar 2022 at 15:11, Mike Ulan <mausvt@gmail.com> wrote:
+>
+> Hi,
+> I have the question: is anybody aware that patches in a recipe are not fully applied?
+>
+> When retrieved the archive for package unpacked.
+> Аttributes of multiple files are set as readonly.
+>
+> For 5.30.1 https://www.cpan.org/src/5.0/perl-${PV}.tar.gz;name=perl
+> or for 5.22.1 and 5.22 and 5.20 http://www.cpan.org/src/5.0/${BP}.tar.xz
+> lots of read only files in archives.
+>
+> Form  man of Patch behavior --read-only=warn by default.
+> So files to be patched with read only attributes remain unchanged.
+>
+> For override patch default behavior on --read-only, i placed in poky/bitbake/bin file with name patch and content:
+> #!/bin/sh
+> /usr/bin/patch --read-only=fail "$@"
+> exvar=$?
+> echo "patch wraper readonly fail" "$@"
+> perror $exvar
+> exit $exvar
+>
+> And as a clearly predictable result, the build of perl failed.
+> To fix problem and apply all patches and particularly my patch to backport issue for my host environment
+> I added to perl_${PV}.bb recipe this:
+> do_patch_prepend() {
+>     os.system('chmod -R +rw %s' % d.getVar('S'))
+> }
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#56577): https://lists.yoctoproject.org/g/yocto/message/56577
+> Mute This Topic: https://lists.yoctoproject.org/mt/90107596/1686489
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2022-03-29 20:44 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-03-29 13:10 Yocto poky/meta/recipes-devtool/perl Mike Ulan
+2022-03-29 20:44 ` [yocto] " Alexander Kanavin
+

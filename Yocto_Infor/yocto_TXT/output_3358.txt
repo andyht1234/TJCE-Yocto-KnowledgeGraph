@@ -1,0 +1,139 @@
+* precedence problem with custom xserver-xf86-config_0.1.bbappend recipe
+@ 2021-05-30 22:10 Stefan Seefeld
+  2021-05-31  9:09 ` [yocto] " Quentin Schulz
+  0 siblings, 1 reply; 3+ messages in thread
+From: Stefan Seefeld @ 2021-05-30 22:10 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 687 bytes --]
+
+Hello,
+
+I'm trying to add a custom `xorg.conf` file to my yocto build, by 
+defining a 
+`recipes-graphics/xorg-xserver/xserver-xf86-config_0.1.bbappend` recipe 
+to my layer.
+
+However, it seems like I always end up getting the (empty) `xorg.conf` 
+file from 
+`meta-yocto-bsp/recipes-graphics/xorg-xserver/xserver-xf86-config_0.1.bbappend`, 
+even though poky's `meta-yocto-bsp` layer has lower priority (5) than my 
+own (6).
+I do get my own `xorg.conf` file if I remove (or rename) the 
+meta-yocto-bsp recipe, so this really looks like a precedence problem.
+
+Any idea what I may be missing ?
+
+Thanks !
+
+Stefan
+-- 
+
+       ...ich hab' noch einen Koffer in Berlin...
+
+
+[-- Attachment #2.1: Type: text/html, Size: 1503 bytes --]
+
+[-- Attachment #2.2: .signature.png --]
+[-- Type: image/png, Size: 2754 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] precedence problem with custom xserver-xf86-config_0.1.bbappend recipe
+  2021-05-30 22:10 precedence problem with custom xserver-xf86-config_0.1.bbappend recipe Stefan Seefeld
+@ 2021-05-31  9:09 ` Quentin Schulz
+  2021-05-31 13:18   ` Stefan Seefeld
+  0 siblings, 1 reply; 3+ messages in thread
+From: Quentin Schulz @ 2021-05-31  9:09 UTC (permalink / raw)
+  To: Stefan Seefeld; +Cc: yocto
+
+Hi Stefan,
+
+On Sun, May 30, 2021 at 06:10:48PM -0400, Stefan Seefeld wrote:
+> Hello,
+> 
+> I'm trying to add a custom `xorg.conf` file to my yocto build, by defining a
+> `recipes-graphics/xorg-xserver/xserver-xf86-config_0.1.bbappend` recipe to
+> my layer.
+> 
+> However, it seems like I always end up getting the (empty) `xorg.conf` file
+> from `meta-yocto-bsp/recipes-graphics/xorg-xserver/xserver-xf86-config_0.1.bbappend`,
+> even though poky's `meta-yocto-bsp` layer has lower priority (5) than my own
+> (6).
+> I do get my own `xorg.conf` file if I remove (or rename) the meta-yocto-bsp
+> recipe, so this really looks like a precedence problem.
+> 
+> Any idea what I may be missing ?
+> 
+
+A common mistake would be the forgotten semi-colon and/or _prepend:
+FILESEXTRAPATHS_prepend := "${THISDIR}/files"
+
+Another common mistake is to not respect the tree layout of the original
+path relative to the original recipe (or for that matter, the one you
+want to override coming from the bbappend) for xorg.conf.
+In that case, you can see that in meta-yocto-bsp, there's a parent
+directory of xorg.conf that is not the one listed in
+FILESEXTRAPATHS_prepend. You should add this directory in the path of
+your bbappend.
+
+https://pretalx.com/media/yocto-project-summit-2021/submissions/WTT3UV/resources/Demystifying_the_OVERRIDES_mechan_no6J6fb.pdf
+slides 70 to 80 might help you. The recording should be available in a
+few days/weeks.
+
+Cheers,
+Quentin
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] precedence problem with custom xserver-xf86-config_0.1.bbappend recipe
+  2021-05-31  9:09 ` [yocto] " Quentin Schulz
+@ 2021-05-31 13:18   ` Stefan Seefeld
+  0 siblings, 0 replies; 3+ messages in thread
+From: Stefan Seefeld @ 2021-05-31 13:18 UTC (permalink / raw)
+  To: Quentin Schulz; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1132 bytes --]
+
+
+On 2021-05-31 5:09 a.m., Quentin Schulz wrote:
+> A common mistake would be the forgotten semi-colon and/or _prepend:
+> FILESEXTRAPATHS_prepend := "${THISDIR}/files"
+>
+> Another common mistake is to not respect the tree layout of the original
+> path relative to the original recipe (or for that matter, the one you
+> want to override coming from the bbappend) for xorg.conf.
+> In that case, you can see that in meta-yocto-bsp, there's a parent
+> directory of xorg.conf that is not the one listed in
+> FILESEXTRAPATHS_prepend. You should add this directory in the path of
+> your bbappend.
+
+Indeed, I was basing my layout on the original recipe, not on the poky 
+override (which adds the $MACHINE as a subdirectory).
+
+With that adjustment everything appears to be working fine.
+
+> https://pretalx.com/media/yocto-project-summit-2021/submissions/WTT3UV/resources/Demystifying_the_OVERRIDES_mechan_no6J6fb.pdf
+> slides 70 to 80 might help you. The recording should be available in a
+> few days/weeks.
+
+Thanks a lot, this looks really useful !
+
+Stefan
+-- 
+
+       ...ich hab' noch einen Koffer in Berlin...
+
+
+[-- Attachment #2.1: Type: text/html, Size: 2143 bytes --]
+
+[-- Attachment #2.2: .signature.png --]
+[-- Type: image/png, Size: 2754 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2021-05-31 13:18 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-05-30 22:10 precedence problem with custom xserver-xf86-config_0.1.bbappend recipe Stefan Seefeld
+2021-05-31  9:09 ` [yocto] " Quentin Schulz
+2021-05-31 13:18   ` Stefan Seefeld
+

@@ -1,0 +1,173 @@
+* Yocto Autobuilder: Latency Monitor and AB-INT - Meeting notes: June 24, 2021
+@ 2021-06-24 17:09 Randy MacLeod
+  0 siblings, 0 replies; only message in thread
+From: Randy MacLeod @ 2021-06-24 17:09 UTC (permalink / raw)
+  To: Sakib Sajal, alexandre.belloni, richard.purdie, Wold, Saul,
+	Trevor Gamblin
+  Cc: Yocto discussion list, Tascioglu, Tony
+
+
+YP AB Intermittent failures meeting - June 24, 2021, 9 AM ET
+https://windriver.zoom.us/j/3696693975
+
+Attendees:  Alex, Richard, Saul, Randy, Tony, Trevor, Sakib
+
+
+Summary: Things are improving somewhat on the autobuilder,
+          RCU stalls are still the top problem now.
+
+
+Meeting Notes:
+==============
+
+1. The most common problem is still the qemu RCU hang.
+
+Alex found the qemu machine protocol debugging commands:
+
+   {"execute": "qmp_capabilities"}
+ 
+{"execute":"dump-guest-memory","arguments":{"paging":false,"protocol":"file:/tmp/vmcore.img"}}
+
+This generates a kernel core.
+
+Saul is going to send a patch to do that when qemu hangs.
+
+
+RP investigated a few things (ACPI table alignement, etc)
+and while there are differences between crashes, there's nothing
+that is apparently significant so we still don't have a good
+understanding of the cause of the stalls.
+
+Richard summarized the situation here:
+    https://lists.yoctoproject.org/g/swat/message/177
+
+2. We had an interesting AB failure:
+    Core image sato failed to start since
+    image copy took longer than 300 seconds:
+
+https://autobuilder.yoctoproject.org/typhoon/#/builders/74/builds/3559/steps/13/logs/stdio 
+
+
+System load was ~ 140.
+Nothing in qemu log file so qemu never started.
+
+There was a qemu mips in the logs so qemu was running but not fast enough.
+
+
+There was no AB INT log produced so the trigger was not effective.
+( We may have to change out trigger to use iostat or something else. )
+
+
+Can't tell from logs if the image 'start cmd' in QMP should be
+put in logs. - Saul to add a log after QMP port has connected.
+(maybe also add a log before?).
+
+
+
+RP did some experiments with starting qemu in a controlled
+stressful env. He wasn't able to cause the RCU hang.
+
+  - stress-ng could cause the qemu to pause itself but not crash.
+    The pause may have been due to running out of disk space.
+    qemu was running in snapshot mode initially after that
+    also from a tmpfs like we use for our testing.
+    The test generated load of ~ 3000+ and the qemu's were trying
+    to boot.
+
+
+Any testimage failure should run Sakib's report generator.
+  - Sakib to send patch.
+
+
+
+3. System load: make, ninja jobs
+
+    make:
+    Trevor and Randy were looking at some tools:
+
+       https://github.com/gscano/libjobserver.git
+       https://github.com/olsner/jobclient.git
+
+    that use the jobserver feature of make but they seemed awkward
+    and we weren't actually able to see them be useful.
+    They passed self-tests in one case but in the limited time we
+    used them, it seemed like a dead end.
+    The primary purpose of the job server feature is to enable a
+    single recursive make to limit the number of jobs dispatched.
+    It is likely possible to have independent builds using 'make'
+    co-operate but we have not yet figured out how to do that,
+    This document by Paul Smith:
+      http://make.mad-scientist.net/papers/jobserver-implementation/
+    in point "7.", explains what needs to be set to use the jobserver
+    but exactly how to achieve that use wasn't yet clear to us.
+
+    Luckily Trevor noticed in the make source that in 2017,
+    there was a patch added to make the load average calculation
+    more timely:
+       https://github.com/mirror/make/blob/master/src/job.c#L1947
+ 
+https://github.com/mirror/make/commit/d8728efc80b720c630e6b12dbd34a3d44e060690
+
+    We're confirming that this actually works on a buld server and
+    for all versions of make in the cluster.
+
+We can just re-use this variable:
+
+    PARALLEL_MAKE = "-j 4"
+    and add -l <NUM> in addition to -j <NUM>
+
+
+  - Randy may write to Paul Smith about the general problem
+    we are having since they worked together years ago.
+
+
+4. ptest issues are improving.
+   Valgrind ptest results are getting better. Thanks Tony!
+
+
+5. discussed Sakib's summary script. It's coming along.
+    TO DO:
+       - collapse compile pipeline (cc1, as, ...) to one line.
+    The update was just merged to master-next, let us know if
+    you'd like to see other info in the summary or the logs.
+
+
+6. Timeouts:
+
+  - qemu-runner? timeout increase 120 -> 240
+      Increased qemu-runner timeout.
+  - ptest timeouts 300 -> 450?
+      Not happening.
+
+
+7. The iostat output is in some of the AB logs:
+     https://autobuilder.yocto.io/pub/non-release/
+     for example:
+ 
+https://autobuilder.yocto.io/pub/non-release/20210623-17/testresults/meta-oe/2021-06-23--21-51/host_stats_0_top.txt
+     search for "start: iostat"
+     it looks like the io sub-systems are 100% utilized but
+     we need more time, data and the summary script to be able to easily
+     make a general statement about AB INT issues and IO load and
+     to be able to identify what is typically generating the IO load.
+
+   Plans for the week:
+
+   Richard: RCU stall
+   Alex: qemu debugging of core
+   Sakib: - testimage failure dump summary.
+   Trevor: make job server
+   Tony: nothing this week for YP.
+   Saul: QMP logs
+   Randy: make job w/ Trevor, herd cats!! Here kitty,....
+
+
+../Randy
+
+^ permalink raw reply	[flat|nested] only message in thread
+only message in thread, other threads:[~2021-06-24 17:10 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-06-24 17:09 Yocto Autobuilder: Latency Monitor and AB-INT - Meeting notes: June 24, 2021 Randy MacLeod
+

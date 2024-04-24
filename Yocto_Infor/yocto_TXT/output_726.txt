@@ -1,0 +1,195 @@
+* [meta-zephyr][PATCH] zephyr-core/zephyr-kernel: Fix arm32 binutils 2.40 incompatibility
+@ 2023-04-19 16:01 Peter Hoyes
+  2023-04-20 17:08 ` Jon Mason
+  0 siblings, 1 reply; 2+ messages in thread
+From: Peter Hoyes @ 2023-04-19 16:01 UTC (permalink / raw)
+  To: yocto; +Cc: Peter Hoyes
+
+From: Peter Hoyes <Peter.Hoyes@arm.com>
+
+Armv7 boards are currently failing with binutils 2.40 if certain
+statements are combined on the same line without a semicolon. Introduce
+a patch to fix this by inserting a semicolon.
+
+Signed-off-by: Peter Hoyes <Peter.Hoyes@arm.com>
+---
+ ...x-separator-between-directives-on-sa.patch | 44 +++++++++++++++++++
+ .../zephyr-kernel/zephyr-kernel-src-3.3.0.inc |  1 +
+ 2 files changed, 45 insertions(+)
+ create mode 100644 meta-zephyr-core/recipes-kernel/zephyr-kernel/files/0002-3.3-toolchain-gcc-Fix-separator-between-directives-on-sa.patch
+
+diff --git a/meta-zephyr-core/recipes-kernel/zephyr-kernel/files/0002-3.3-toolchain-gcc-Fix-separator-between-directives-on-sa.patch b/meta-zephyr-core/recipes-kernel/zephyr-kernel/files/0002-3.3-toolchain-gcc-Fix-separator-between-directives-on-sa.patch
+new file mode 100644
+index 0000000..84750b8
+--- /dev/null
++++ b/meta-zephyr-core/recipes-kernel/zephyr-kernel/files/0002-3.3-toolchain-gcc-Fix-separator-between-directives-on-sa.patch
+@@ -0,0 +1,44 @@
++From e709258cd766a7b4a3b02e6910f980d501ef1493 Mon Sep 17 00:00:00 2001
++From: Peter Hoyes <Peter.Hoyes@arm.com>
++Date: Sun, 26 Feb 2023 21:18:04 +0000
++Subject: [PATCH] toolchain: gcc: Fix separator between directives on same
++ line
++
++The Arm assembler in binutils 2.40 contains a change [1] which affects
++how multiple directives on the same line are parsed.
++
++Previously, the following combination of directives parsed successfully:
++
++    .code 32 .balign 4
++
++With binutils 2.40, the following error is now seen:
++
++    Error: junk at end of line, first unrecognised character is `.'
++
++To fix, insert a semicolon after '.code 32', as there already is after
++'.thumb'.
++
++[1] https://sourceware.org/git/?p=binutils-gdb.git;a=commitdiff;h=a37854f9162fac592b669eda53f465fc190c9341
++
++Upstream-Status: Backport [https://github.com/zephyrproject-rtos/zephyr/commit/2f2f3edacdf13bb9bc0be1ce3b80726dce6fb1c0]
++Signed-off-by: Peter Hoyes <Peter.Hoyes@arm.com>
++---
++ include/zephyr/toolchain/gcc.h | 2 +-
++ 1 file changed, 1 insertion(+), 1 deletion(-)
++
++diff --git a/include/zephyr/toolchain/gcc.h b/include/zephyr/toolchain/gcc.h
++index ede21a47fe..f81cb0a309 100644
++--- a/include/zephyr/toolchain/gcc.h
+++++ b/include/zephyr/toolchain/gcc.h
++@@ -312,7 +312,7 @@ do {                                                                    \
++ 
++ #else
++ 
++-#define FUNC_CODE() .code 32
+++#define FUNC_CODE() .code 32;
++ #define FUNC_INSTR(a)
++ 
++ #endif /* CONFIG_ASSEMBLER_ISA_THUMB2 */
++-- 
++2.34.1
++
+diff --git a/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-kernel-src-3.3.0.inc b/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-kernel-src-3.3.0.inc
+index 245ba81..035c8fa 100644
+--- a/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-kernel-src-3.3.0.inc
++++ b/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-kernel-src-3.3.0.inc
+@@ -116,6 +116,7 @@ SRC_URI_ZEPHYR_THRIFT ?= "git://github.com/zephyrproject-rtos/thrift;protocol=ht
+ 
+ SRC_URI_PATCHES ?= "\
+     file://0001-3.3-x86-fix-efi-binary-generation-issue-in-cross-compila.patch;patchdir=zephyr \
++    file://0002-3.3-toolchain-gcc-Fix-separator-between-directives-on-sa.patch;patchdir=zephyr \
+ "
+ 
+ SRC_URI = "\
+-- 
+2.34.1
+
+
+
+^ permalink raw reply related	[flat|nested] 2+ messages in thread
+* Re: [meta-zephyr][PATCH] zephyr-core/zephyr-kernel: Fix arm32 binutils 2.40 incompatibility
+  2023-04-19 16:01 [meta-zephyr][PATCH] zephyr-core/zephyr-kernel: Fix arm32 binutils 2.40 incompatibility Peter Hoyes
+@ 2023-04-20 17:08 ` Jon Mason
+  0 siblings, 0 replies; 2+ messages in thread
+From: Jon Mason @ 2023-04-20 17:08 UTC (permalink / raw)
+  To: Peter Hoyes; +Cc: yocto
+
+On Wed, Apr 19, 2023 at 05:01:58PM +0100, Peter Hoyes wrote:
+> From: Peter Hoyes <Peter.Hoyes@arm.com>
+> 
+> Armv7 boards are currently failing with binutils 2.40 if certain
+> statements are combined on the same line without a semicolon. Introduce
+> a patch to fix this by inserting a semicolon.
+> 
+> Signed-off-by: Peter Hoyes <Peter.Hoyes@arm.com>
+
+CI run against this patch (and the prior series)
+https://gitlab.com/jonmason00/meta-zephyr/-/pipelines/843637362
+
+There is still the outstanding issue with qemu-cortex-a9 with the
+yocto toolchain failing the poll test, but the issues being seen other
+than that are now fixed.
+
+Tested-by: Jon Mason <jon.mason@arm.com>
+
+> ---
+>  ...x-separator-between-directives-on-sa.patch | 44 +++++++++++++++++++
+>  .../zephyr-kernel/zephyr-kernel-src-3.3.0.inc |  1 +
+>  2 files changed, 45 insertions(+)
+>  create mode 100644 meta-zephyr-core/recipes-kernel/zephyr-kernel/files/0002-3.3-toolchain-gcc-Fix-separator-between-directives-on-sa.patch
+> 
+> diff --git a/meta-zephyr-core/recipes-kernel/zephyr-kernel/files/0002-3.3-toolchain-gcc-Fix-separator-between-directives-on-sa.patch b/meta-zephyr-core/recipes-kernel/zephyr-kernel/files/0002-3.3-toolchain-gcc-Fix-separator-between-directives-on-sa.patch
+> new file mode 100644
+> index 0000000..84750b8
+> --- /dev/null
+> +++ b/meta-zephyr-core/recipes-kernel/zephyr-kernel/files/0002-3.3-toolchain-gcc-Fix-separator-between-directives-on-sa.patch
+> @@ -0,0 +1,44 @@
+> +From e709258cd766a7b4a3b02e6910f980d501ef1493 Mon Sep 17 00:00:00 2001
+> +From: Peter Hoyes <Peter.Hoyes@arm.com>
+> +Date: Sun, 26 Feb 2023 21:18:04 +0000
+> +Subject: [PATCH] toolchain: gcc: Fix separator between directives on same
+> + line
+> +
+> +The Arm assembler in binutils 2.40 contains a change [1] which affects
+> +how multiple directives on the same line are parsed.
+> +
+> +Previously, the following combination of directives parsed successfully:
+> +
+> +    .code 32 .balign 4
+> +
+> +With binutils 2.40, the following error is now seen:
+> +
+> +    Error: junk at end of line, first unrecognised character is `.'
+> +
+> +To fix, insert a semicolon after '.code 32', as there already is after
+> +'.thumb'.
+> +
+> +[1] https://sourceware.org/git/?p=binutils-gdb.git;a=commitdiff;h=a37854f9162fac592b669eda53f465fc190c9341
+> +
+> +Upstream-Status: Backport [https://github.com/zephyrproject-rtos/zephyr/commit/2f2f3edacdf13bb9bc0be1ce3b80726dce6fb1c0]
+> +Signed-off-by: Peter Hoyes <Peter.Hoyes@arm.com>
+> +---
+> + include/zephyr/toolchain/gcc.h | 2 +-
+> + 1 file changed, 1 insertion(+), 1 deletion(-)
+> +
+> +diff --git a/include/zephyr/toolchain/gcc.h b/include/zephyr/toolchain/gcc.h
+> +index ede21a47fe..f81cb0a309 100644
+> +--- a/include/zephyr/toolchain/gcc.h
+> ++++ b/include/zephyr/toolchain/gcc.h
+> +@@ -312,7 +312,7 @@ do {                                                                    \
+> + 
+> + #else
+> + 
+> +-#define FUNC_CODE() .code 32
+> ++#define FUNC_CODE() .code 32;
+> + #define FUNC_INSTR(a)
+> + 
+> + #endif /* CONFIG_ASSEMBLER_ISA_THUMB2 */
+> +-- 
+> +2.34.1
+> +
+> diff --git a/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-kernel-src-3.3.0.inc b/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-kernel-src-3.3.0.inc
+> index 245ba81..035c8fa 100644
+> --- a/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-kernel-src-3.3.0.inc
+> +++ b/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-kernel-src-3.3.0.inc
+> @@ -116,6 +116,7 @@ SRC_URI_ZEPHYR_THRIFT ?= "git://github.com/zephyrproject-rtos/thrift;protocol=ht
+>  
+>  SRC_URI_PATCHES ?= "\
+>      file://0001-3.3-x86-fix-efi-binary-generation-issue-in-cross-compila.patch;patchdir=zephyr \
+> +    file://0002-3.3-toolchain-gcc-Fix-separator-between-directives-on-sa.patch;patchdir=zephyr \
+>  "
+>  
+>  SRC_URI = "\
+> -- 
+> 2.34.1
+> 
+> 
+
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2023-04-20 17:08 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-04-19 16:01 [meta-zephyr][PATCH] zephyr-core/zephyr-kernel: Fix arm32 binutils 2.40 incompatibility Peter Hoyes
+2023-04-20 17:08 ` Jon Mason
+

@@ -1,0 +1,124 @@
+* [meta-mingw] [PATCH] grpc: use the new PACKAGECONFIG to disable shared
+@ 2021-08-24 16:48 Sinan Kaya
+  2021-08-27 12:41 ` Joshua Watt
+  0 siblings, 1 reply; 3+ messages in thread
+From: Sinan Kaya @ 2021-08-24 16:48 UTC (permalink / raw)
+  To: yocto; +Cc: jpewhacker, Sinan Kaya
+
+There is a new PACKAGECONFIG for grpc to allows us
+to selectively enable/disable shared builds.
+
+Signed-off-by: Sinan Kaya <okaya@kernel.org>
+---
+ .../openembedded-layers/recipes-devtools/grpc/grpc_%.bbappend  | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/dynamic-layers/openembedded-layers/recipes-devtools/grpc/grpc_%.bbappend b/dynamic-layers/openembedded-layers/recipes-devtools/grpc/grpc_%.bbappend
+index dc0ea42..4cbd1a4 100644
+--- a/dynamic-layers/openembedded-layers/recipes-devtools/grpc/grpc_%.bbappend
++++ b/dynamic-layers/openembedded-layers/recipes-devtools/grpc/grpc_%.bbappend
+@@ -1,5 +1,4 @@
+ # doesn't build and not required
+ DEPENDS:remove:mingw32 = "libnsl2"
+ 
+-EXTRA_OECMAKE:remove:mingw32 = "-DBUILD_SHARED_LIBS=ON"
+-EXTRA_OECMAKE:append:mingw32 = " -DBUILD_SHARED_LIBS=OFF"
++PACKAGECONFIG:remove:mingw32 = "shared"
+-- 
+2.17.1
+
+
+^ permalink raw reply related	[flat|nested] 3+ messages in thread
+* Re: [meta-mingw] [PATCH] grpc: use the new PACKAGECONFIG to disable shared
+  2021-08-24 16:48 [meta-mingw] [PATCH] grpc: use the new PACKAGECONFIG to disable shared Sinan Kaya
+@ 2021-08-27 12:41 ` Joshua Watt
+  2021-08-27 20:47   ` Sinan Kaya
+  0 siblings, 1 reply; 3+ messages in thread
+From: Joshua Watt @ 2021-08-27 12:41 UTC (permalink / raw)
+  To: Sinan Kaya, yocto
+
+
+On 8/24/21 11:48 AM, Sinan Kaya wrote:
+> There is a new PACKAGECONFIG for grpc to allows us
+> to selectively enable/disable shared builds.
+>
+> Signed-off-by: Sinan Kaya <okaya@kernel.org>
+> ---
+>   .../openembedded-layers/recipes-devtools/grpc/grpc_%.bbappend  | 3 +--
+>   1 file changed, 1 insertion(+), 2 deletions(-)
+>
+> diff --git a/dynamic-layers/openembedded-layers/recipes-devtools/grpc/grpc_%.bbappend b/dynamic-layers/openembedded-layers/recipes-devtools/grpc/grpc_%.bbappend
+> index dc0ea42..4cbd1a4 100644
+> --- a/dynamic-layers/openembedded-layers/recipes-devtools/grpc/grpc_%.bbappend
+> +++ b/dynamic-layers/openembedded-layers/recipes-devtools/grpc/grpc_%.bbappend
+> @@ -1,5 +1,4 @@
+>   # doesn't build and not required
+>   DEPENDS:remove:mingw32 = "libnsl2"
+>   
+> -EXTRA_OECMAKE:remove:mingw32 = "-DBUILD_SHARED_LIBS=ON"
+> -EXTRA_OECMAKE:append:mingw32 = " -DBUILD_SHARED_LIBS=OFF"
+> +PACKAGECONFIG:remove:mingw32 = "shared"
+
+This is good, thanks. Is the libnsl2 also tied to some feature? Perhaps 
+you can explain why it needs to be removed from MinGW
+
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [meta-mingw] [PATCH] grpc: use the new PACKAGECONFIG to disable shared
+  2021-08-27 12:41 ` Joshua Watt
+@ 2021-08-27 20:47   ` Sinan Kaya
+  0 siblings, 0 replies; 3+ messages in thread
+From: Sinan Kaya @ 2021-08-27 20:47 UTC (permalink / raw)
+  To: Joshua Watt, yocto
+
+On 8/27/2021 8:41 AM, Joshua Watt wrote:
+
+>> @@ -1,5 +1,4 @@
+>>   # doesn't build and not required
+>>   DEPENDS:remove:mingw32 = "libnsl2"
+
+> 
+> This is good, thanks. Is the libnsl2 also tied to some feature? Perhaps
+> you can explain why it needs to be removed from MinGW
+> 
+
+My research says libnsl is a soft requirement for c-ares.
+GRPC assumes libnsl to be present and used by default.
+However, it will build without it too.
+
+https://www.linuxfromscratch.org/blfs/view/svn/basicnet/libnsl.html
+
+We should be turning libnsl off if you want to enable GRPC's backward
+compatibility mode. Maybe, because previous versions didn't support
+libnsl.
+
+
+c-ares
+-------------
+CMakeLists.txt:CARES_FUNCTION_IN_LIBRARY (gethostbyname nsl HAVE_LIBNSL)
+CMakeLists.txt: LIST (APPEND CARES_DEPENDENT_LIBS nsl)
+
+
+grpc
+-------------
+  if(gRPC_BACKWARDS_COMPATIBILITY_MODE)
+    # See https://github.com/grpc/grpc/issues/17255
+    set(HAVE_LIBNSL OFF CACHE BOOL "avoid cares dependency on libnsl")
+  endif()
+
+CMakeLists.txt:option(gRPC_BACKWARDS_COMPATIBILITY_MODE "Build libraries
+that are binary compatible across a larger number of OS and libc
+versions" OFF)
+CMakeLists.txt:if(gRPC_BACKWARDS_COMPATIBILITY_MODE)
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2021-08-27 20:47 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-08-24 16:48 [meta-mingw] [PATCH] grpc: use the new PACKAGECONFIG to disable shared Sinan Kaya
+2021-08-27 12:41 ` Joshua Watt
+2021-08-27 20:47   ` Sinan Kaya
+

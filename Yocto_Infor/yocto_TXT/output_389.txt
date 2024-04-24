@@ -1,0 +1,213 @@
+* [meta-security][PATCH v2] openscap: fix buildpaths issue
+@ 2023-06-29  7:25 kai.kang
+  2023-07-07 17:45 ` akuster808
+  0 siblings, 1 reply; 2+ messages in thread
+From: kai.kang @ 2023-06-29  7:25 UTC (permalink / raw)
+  To: akuster808; +Cc: yocto
+
+From: Kai Kang <kai.kang@windriver.com>
+
+Variables PREFERRED_PYTHON_PATH and PYTHON3_PATH are set with
+${PYTHON_EXECUTABLE}. For cross compile, ${PYTHON_EXECUTABLE} may point
+to other path rather than standard dir such as /usr/bin. Then the
+generated library file contains such path which should NOT. Update to
+make variables PREFERRED_PYTHON_PATH and PYTHON3_PATH configurable to
+fix buildpaths issue:
+
+| WARNING: openscap-1.3.7-r0 do_package_qa: QA Issue: File
+| /usr/lib/libopenscap.so.25.5.1 in package openscap contains reference
+| to TMPDIR [buildpaths]
+
+Signed-off-by: Kai Kang <kai.kang@windriver.com>
+---
+ ...ts.txt-make-2-variables-configurable.patch | 37 +++++++++++++++++++
+ recipes-compliance/openscap/openscap_1.3.8.bb |  5 ++-
+ 2 files changed, 41 insertions(+), 1 deletion(-)
+ create mode 100644 recipes-compliance/openscap/files/0003-CMakeLists.txt-make-2-variables-configurable.patch
+
+diff --git a/recipes-compliance/openscap/files/0003-CMakeLists.txt-make-2-variables-configurable.patch b/recipes-compliance/openscap/files/0003-CMakeLists.txt-make-2-variables-configurable.patch
+new file mode 100644
+index 0000000..953b0d9
+--- /dev/null
++++ b/recipes-compliance/openscap/files/0003-CMakeLists.txt-make-2-variables-configurable.patch
+@@ -0,0 +1,37 @@
++From f99c3f1f516a84d33794f8e3da59adea1a12ef54 Mon Sep 17 00:00:00 2001
++From: Kai Kang <kai.kang@windriver.com>
++Date: Tue, 20 Jun 2023 22:42:51 +0800
++Subject: [PATCH] CMakeLists.txt: make 2 variables configurable
++
++Variables PREFERRED_PYTHON_PATH and PYTHON3_PATH are set with
++${PYTHON_EXECUTABLE}. For cross compile, ${PYTHON_EXECUTABLE} may point
++to other path rather than standard dir such as /usr/bin. Then the
++generated library file contains such path which should NOT. Update to
++make variables PREFERRED_PYTHON_PATH and PYTHON3_PATH configurable to
++avoid such issue.
++
++Upstream-Status: Submitted [https://github.com/OpenSCAP/openscap/pull/1990]
++
++Signed-off-by: Kai Kang <kai.kang@windriver.com>
++---
++ CMakeLists.txt | 4 ++--
++ 1 file changed, 2 insertions(+), 2 deletions(-)
++
++diff --git a/CMakeLists.txt b/CMakeLists.txt
++index 5db014e77..74628cdd4 100644
++--- a/CMakeLists.txt
+++++ b/CMakeLists.txt
++@@ -125,8 +125,8 @@ endif()
++ find_package(PythonInterp 3)
++ find_package(PythonLibs 3)
++ 
++-set(PREFERRED_PYTHON_PATH "${PYTHON_EXECUTABLE}")
++-set(PYTHON3_PATH "${PYTHON_EXECUTABLE}")
+++set(PREFERRED_PYTHON_PATH "${PYTHON_EXECUTABLE}" CACHE PATH "Path to preferred Python")
+++set(PYTHON3_PATH "${PYTHON_EXECUTABLE}" CACHE PATH "Path to Python3")
++ 
++ find_package(RPM)
++ if(RPM_FOUND)
++-- 
++2.34.1
++
+diff --git a/recipes-compliance/openscap/openscap_1.3.8.bb b/recipes-compliance/openscap/openscap_1.3.8.bb
+index ecc347c..5abd5a6 100644
+--- a/recipes-compliance/openscap/openscap_1.3.8.bb
++++ b/recipes-compliance/openscap/openscap_1.3.8.bb
+@@ -12,6 +12,7 @@ DEPENDS:class-native = "pkgconfig-native swig-native curl-native libxml2-native
+ #Jun 22th, 2023
+ SRCREV = "a81c66d9bc36612dd1ca83a8c959a59e172eb4b9"
+ SRC_URI = "git://github.com/OpenSCAP/openscap.git;branch=maint-1.3;protocol=https \
++           file://0003-CMakeLists.txt-make-2-variables-configurable.patch \
+            "
+ 
+ S = "${WORKDIR}/git"
+@@ -35,7 +36,9 @@ EXTRA_OECMAKE += "-DENABLE_PROBES_LINUX=ON -DENABLE_PROBES_UNIX=ON \
+                   -DENABLE_PROBES_WINDOWS=OFF -DENABLE_VALGRIND=OFF \
+                   -DENABLE_SCE=ON -DENABLE_MITRE=OFF -DENABLE_TESTS=OFF \
+                   -DCMAKE_SKIP_INSTALL_RPATH=ON -DCMAKE_SKIP_RPATH=ON \
+-                 "
++                  -DPREFERRED_PYTHON_PATH=${bindir}/python3 \
++                  -DPYTHON3_PATH=${bindir}/python3 \
++                  "
+ 
+ STAGING_OSCAP_DIR = "${TMPDIR}/work-shared/${MACHINE}/oscap-source"
+ STAGING_OSCAP_BUILDDIR = "${TMPDIR}/work-shared/openscap/oscap-build-artifacts"
+-- 
+2.34.1
+
+
+
+^ permalink raw reply related	[flat|nested] 2+ messages in thread
+* Re: [meta-security][PATCH v2] openscap: fix buildpaths issue
+  2023-06-29  7:25 [meta-security][PATCH v2] openscap: fix buildpaths issue kai.kang
+@ 2023-07-07 17:45 ` akuster808
+  0 siblings, 0 replies; 2+ messages in thread
+From: akuster808 @ 2023-07-07 17:45 UTC (permalink / raw)
+  To: kai.kang; +Cc: yocto
+
+
+Hello Kai,
+
+My apologies, I just notice this sitting in my inbox.  it should go in 
+shortly.
+
+BR,
+Armin
+
+On 6/29/23 3:25 AM, kai.kang@windriver.com wrote:
+> From: Kai Kang <kai.kang@windriver.com>
+>
+> Variables PREFERRED_PYTHON_PATH and PYTHON3_PATH are set with
+> ${PYTHON_EXECUTABLE}. For cross compile, ${PYTHON_EXECUTABLE} may point
+> to other path rather than standard dir such as /usr/bin. Then the
+> generated library file contains such path which should NOT. Update to
+> make variables PREFERRED_PYTHON_PATH and PYTHON3_PATH configurable to
+> fix buildpaths issue:
+>
+> | WARNING: openscap-1.3.7-r0 do_package_qa: QA Issue: File
+> | /usr/lib/libopenscap.so.25.5.1 in package openscap contains reference
+> | to TMPDIR [buildpaths]
+>
+> Signed-off-by: Kai Kang <kai.kang@windriver.com>
+> ---
+>   ...ts.txt-make-2-variables-configurable.patch | 37 +++++++++++++++++++
+>   recipes-compliance/openscap/openscap_1.3.8.bb |  5 ++-
+>   2 files changed, 41 insertions(+), 1 deletion(-)
+>   create mode 100644 recipes-compliance/openscap/files/0003-CMakeLists.txt-make-2-variables-configurable.patch
+>
+> diff --git a/recipes-compliance/openscap/files/0003-CMakeLists.txt-make-2-variables-configurable.patch b/recipes-compliance/openscap/files/0003-CMakeLists.txt-make-2-variables-configurable.patch
+> new file mode 100644
+> index 0000000..953b0d9
+> --- /dev/null
+> +++ b/recipes-compliance/openscap/files/0003-CMakeLists.txt-make-2-variables-configurable.patch
+> @@ -0,0 +1,37 @@
+> +From f99c3f1f516a84d33794f8e3da59adea1a12ef54 Mon Sep 17 00:00:00 2001
+> +From: Kai Kang <kai.kang@windriver.com>
+> +Date: Tue, 20 Jun 2023 22:42:51 +0800
+> +Subject: [PATCH] CMakeLists.txt: make 2 variables configurable
+> +
+> +Variables PREFERRED_PYTHON_PATH and PYTHON3_PATH are set with
+> +${PYTHON_EXECUTABLE}. For cross compile, ${PYTHON_EXECUTABLE} may point
+> +to other path rather than standard dir such as /usr/bin. Then the
+> +generated library file contains such path which should NOT. Update to
+> +make variables PREFERRED_PYTHON_PATH and PYTHON3_PATH configurable to
+> +avoid such issue.
+> +
+> +Upstream-Status: Submitted [https://github.com/OpenSCAP/openscap/pull/1990]
+> +
+> +Signed-off-by: Kai Kang <kai.kang@windriver.com>
+> +---
+> + CMakeLists.txt | 4 ++--
+> + 1 file changed, 2 insertions(+), 2 deletions(-)
+> +
+> +diff --git a/CMakeLists.txt b/CMakeLists.txt
+> +index 5db014e77..74628cdd4 100644
+> +--- a/CMakeLists.txt
+> ++++ b/CMakeLists.txt
+> +@@ -125,8 +125,8 @@ endif()
+> + find_package(PythonInterp 3)
+> + find_package(PythonLibs 3)
+> +
+> +-set(PREFERRED_PYTHON_PATH "${PYTHON_EXECUTABLE}")
+> +-set(PYTHON3_PATH "${PYTHON_EXECUTABLE}")
+> ++set(PREFERRED_PYTHON_PATH "${PYTHON_EXECUTABLE}" CACHE PATH "Path to preferred Python")
+> ++set(PYTHON3_PATH "${PYTHON_EXECUTABLE}" CACHE PATH "Path to Python3")
+> +
+> + find_package(RPM)
+> + if(RPM_FOUND)
+> +--
+> +2.34.1
+> +
+> diff --git a/recipes-compliance/openscap/openscap_1.3.8.bb b/recipes-compliance/openscap/openscap_1.3.8.bb
+> index ecc347c..5abd5a6 100644
+> --- a/recipes-compliance/openscap/openscap_1.3.8.bb
+> +++ b/recipes-compliance/openscap/openscap_1.3.8.bb
+> @@ -12,6 +12,7 @@ DEPENDS:class-native = "pkgconfig-native swig-native curl-native libxml2-native
+>   #Jun 22th, 2023
+>   SRCREV = "a81c66d9bc36612dd1ca83a8c959a59e172eb4b9"
+>   SRC_URI = "git://github.com/OpenSCAP/openscap.git;branch=maint-1.3;protocol=https \
+> +           file://0003-CMakeLists.txt-make-2-variables-configurable.patch \
+>              "
+>   
+>   S = "${WORKDIR}/git"
+> @@ -35,7 +36,9 @@ EXTRA_OECMAKE += "-DENABLE_PROBES_LINUX=ON -DENABLE_PROBES_UNIX=ON \
+>                     -DENABLE_PROBES_WINDOWS=OFF -DENABLE_VALGRIND=OFF \
+>                     -DENABLE_SCE=ON -DENABLE_MITRE=OFF -DENABLE_TESTS=OFF \
+>                     -DCMAKE_SKIP_INSTALL_RPATH=ON -DCMAKE_SKIP_RPATH=ON \
+> -                 "
+> +                  -DPREFERRED_PYTHON_PATH=${bindir}/python3 \
+> +                  -DPYTHON3_PATH=${bindir}/python3 \
+> +                  "
+>   
+>   STAGING_OSCAP_DIR = "${TMPDIR}/work-shared/${MACHINE}/oscap-source"
+>   STAGING_OSCAP_BUILDDIR = "${TMPDIR}/work-shared/openscap/oscap-build-artifacts"
+
+
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2023-07-07 17:46 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-06-29  7:25 [meta-security][PATCH v2] openscap: fix buildpaths issue kai.kang
+2023-07-07 17:45 ` akuster808
+

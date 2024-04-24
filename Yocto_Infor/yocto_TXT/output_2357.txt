@@ -1,0 +1,142 @@
+* gdb with a broken sdk
+@ 2022-01-12  2:15 dacav
+  2022-01-16 23:26 ` dacav
+  0 siblings, 1 reply; 3+ messages in thread
+From: dacav @ 2022-01-12  2:15 UTC (permalink / raw)
+  To: yocto
+
+Hello!
+
+
+I'd like debug an application that is running on my target board.
+I installed gdbserver on the target, and I'd like to connect to it
+from a gdb instance running locally.
+
+Because of a broken 3rd party meta-layer, I'm currently unable to
+build the SDK.  In short, the `populate_sdk` task fails, as well as
+`meta-toolchain`.
+
+This page[1] of the documentation suggests to run
+`bitbake gdb-cross-<architecture>` (where <architecture>=aarch65, in
+my case).  The task completes successfully.
+
+I can find my gtb binary:
+
+	$ find $tmp -name aarch64-foobar-gdb
+
+It ends up being in a sysroot:
+
+	$tmp/sysroots-components/x86_64/gdb-cross-aarch64/usr/bin/aarch64-foobar/aarch64-foobar-gdb
+
+Unfortunately, invoking such binary fails because of runtime
+dependencies (python) being missing.  It will dump a stack trace
+and say:
+
+	AttributeError: module 'sys' has no attribute 'lib'
+
+This is most likely due to some PATH-like environment variable not
+being set.  I've asked for advice on #yocto, where I was suggested to
+try with `bitbake -c devshell`.
+
+The trick seems to work in that I can find various aarch64-foobar-*
+executables, but I can't find aarch64-foobar-gdb.  There are also
+a few incompatible binaries, e.g. aarch64-none-elf-gdb, arm-none-...gdb.
+None of them seem to be useful agains my target.
+
+How can I include aarch64-foobar-gdb in the devshell's PATH?
+
+
+
+Thanks in advance,
+- dacav
+
+
+[1] https://docs.yoctoproject.org/dev-manual/common-tasks.html?highlight=gdb#using-the-gdbserver-method
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: gdb with a broken sdk
+  2022-01-12  2:15 gdb with a broken sdk dacav
+@ 2022-01-16 23:26 ` dacav
+  2022-01-18 17:57   ` [yocto] " Khem Raj
+  0 siblings, 1 reply; 3+ messages in thread
+From: dacav @ 2022-01-16 23:26 UTC (permalink / raw)
+  To: yocto
+
+On Wed, Jan 12, 2022 at 02:15:38AM +0000, dacav wrote:
+> How can I include aarch64-foobar-gdb in the devshell's PATH?
+
+Follow up on this thread: I've been kindly helped by kroon on #yocto.
+The trick consists in adding a build-time dependency to gdb-cross-aarch64
+in my recipe:
+
+	DEPEND = "gdb-cross-aarch64"
+
+At this point I can just use `bitbake -c devshell $myrecipe` and the
+debugger is available.
+
+Bonus: the devshell turns out to be very useful as a replacement
+for the SDK: the environment allows me to do the cross-compilation
+with just a `make`, while earlier I needed to run `bitbake $myrecipe`
+and wait several seconds.
+
+
+- dacav
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] gdb with a broken sdk
+  2022-01-16 23:26 ` dacav
+@ 2022-01-18 17:57   ` Khem Raj
+  0 siblings, 0 replies; 3+ messages in thread
+From: Khem Raj @ 2022-01-18 17:57 UTC (permalink / raw)
+  To: dacav, yocto
+
+
+
+On 1/16/22 3:26 PM, dacav wrote:
+> On Wed, Jan 12, 2022 at 02:15:38AM +0000, dacav wrote:
+>> How can I include aarch64-foobar-gdb in the devshell's PATH?
+> 
+> Follow up on this thread: I've been kindly helped by kroon on #yocto.
+> The trick consists in adding a build-time dependency to gdb-cross-aarch64
+> in my recipe:
+> 
+> 	DEPEND = "gdb-cross-aarch64"
+
+perhaps gdb-cross-${TARGET_ARCH} would be more generic.
+
+> 
+> At this point I can just use `bitbake -c devshell $myrecipe` and the
+> debugger is available.
+> 
+> Bonus: the devshell turns out to be very useful as a replacement
+> for the SDK: the environment allows me to do the cross-compilation
+> with just a `make`, while earlier I needed to run `bitbake $myrecipe`
+> and wait several seconds.
+> 
+> 
+> - dacav
+> 
+> 
+> 
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> You automatically follow any topics you start or reply to.
+> View/Reply Online (#55899): https://lists.yoctoproject.org/g/yocto/message/55899
+> Mute This Topic: https://lists.yoctoproject.org/mt/88397912/1997914
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [raj.khem@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+> 
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2022-01-18 17:57 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-01-12  2:15 gdb with a broken sdk dacav
+2022-01-16 23:26 ` dacav
+2022-01-18 17:57   ` [yocto] " Khem Raj
+

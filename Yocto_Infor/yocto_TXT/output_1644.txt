@@ -1,0 +1,430 @@
+* Binary compliance validation
+@ 2021-08-31 15:45 Anatol Belski
+  2021-08-31 15:58 ` [yocto] " Bruce Ashfield
+  2022-07-13  0:14 ` Maia Xiao
+  0 siblings, 2 replies; 5+ messages in thread
+From: Anatol Belski @ 2021-08-31 15:45 UTC (permalink / raw)
+  To: yocto; +Cc: Karissa Sanchez
+
+Hi,
+
+I'm writing to present an ABI compliance check mechanism for Poky
+recently developed to help improve the product stability. It is still
+an early work which however has already proven itself useful and thus
+the time seems right to ask for the community view.
+
+Binary compliance is an important metric, when a distrubition intends
+to provide stability guarantees to consumers outside the monolithic
+image build. For example, projects utilizing the SDK might not be in
+sync with the image builds from even the same branch. Even in stable
+branches where bugfixes, security patches or even non breaching
+upgrades have to flow in as necessary, there's is currently no
+verifiable mechainsm to ensure the binary compatibility long term.
+
+The currently implemented validation is based on libabigail and as such
+is focused on the ABI compliance. Libabigail is a tool developed by Red
+Hat and is in use for Fedora and RHEL RPM builds. Some companies are
+known to utilize libabigail to support the kernel maintanance (Linux
+kernel for Android). The meta layer contains a bbclass extending the
+buildhistory functionality with the ABI serialization and comparison.
+One buildhistory version taken as a baseline would serve the comparison
+with any follow up builds. The ABI changes detected are then reported.
+
+The handling routines in Poky are currently attached to the install
+task, which implies the baseline build needs to take place with the
+sstate disabled. The follow up buids can use sstate and in that case
+the postinstall routines will be invoked only if some change took place
+and thus do_install has been called.
+
+The implementation is made as a core Python module, which can be used
+in a Yocto layer or imported in any other script. The layer is
+available under:
+https://github.com/clio-project/meta-binaryaudit
+
+and the accompanying python module (which moves at some faster pace and
+is synchronized into the layer) and a command line tool:
+https://github.com/clio-project/python-binaryaudit
+
+The layer is yet an early work and the impluementation doesn't exhaust
+all the possible features of Poky and libabigail. However, it already
+proves itself helpful and is used for some real products to esure the
+ABI stability. Certainly the mechanisms and the integration can be
+improved.
+
+The future for this layer is open containing at least the topics below:
+
+- Binary size auditing.
+- Security auditing.
+
+As a shorter term serviceableness, the ABI compliance validation
+mechanism seems to be a useful tool in helping to keep promises on LTS,
+but would most likely also help maintaining non LTS branches. It would
+be great to receive any feedback, reviews and ideas in regard to meta-
+binaryaudit.
+
+Thanks!
+
+Anatol 
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] Binary compliance validation
+  2021-08-31 15:45 Binary compliance validation Anatol Belski
+@ 2021-08-31 15:58 ` Bruce Ashfield
+  2021-08-31 16:16   ` Anatol Belski
+  2022-07-13  0:14 ` Maia Xiao
+  1 sibling, 1 reply; 5+ messages in thread
+From: Bruce Ashfield @ 2021-08-31 15:58 UTC (permalink / raw)
+  To: anbelski; +Cc: yocto, Karissa Sanchez
+
+On Tue, Aug 31, 2021 at 11:48 AM Anatol Belski
+<anbelski@linux.microsoft.com> wrote:
+>
+> Hi,
+>
+> I'm writing to present an ABI compliance check mechanism for Poky
+> recently developed to help improve the product stability. It is still
+> an early work which however has already proven itself useful and thus
+> the time seems right to ask for the community view.
+>
+> Binary compliance is an important metric, when a distrubition intends
+> to provide stability guarantees to consumers outside the monolithic
+> image build. For example, projects utilizing the SDK might not be in
+> sync with the image builds from even the same branch. Even in stable
+> branches where bugfixes, security patches or even non breaching
+> upgrades have to flow in as necessary, there's is currently no
+> verifiable mechainsm to ensure the binary compatibility long term.
+>
+> The currently implemented validation is based on libabigail and as such
+> is focused on the ABI compliance. Libabigail is a tool developed by Red
+> Hat and is in use for Fedora and RHEL RPM builds. Some companies are
+> known to utilize libabigail to support the kernel maintanance (Linux
+> kernel for Android). The meta layer contains a bbclass extending the
+> buildhistory functionality with the ABI serialization and comparison.
+> One buildhistory version taken as a baseline would serve the comparison
+> with any follow up builds. The ABI changes detected are then reported.
+>
+> The handling routines in Poky are currently attached to the install
+> task, which implies the baseline build needs to take place with the
+> sstate disabled. The follow up buids can use sstate and in that case
+> the postinstall routines will be invoked only if some change took place
+> and thus do_install has been called.
+>
+> The implementation is made as a core Python module, which can be used
+> in a Yocto layer or imported in any other script. The layer is
+> available under:
+> https://github.com/clio-project/meta-binaryaudit
+>
+> and the accompanying python module (which moves at some faster pace and
+> is synchronized into the layer) and a command line tool:
+> https://github.com/clio-project/python-binaryaudit
+>
+> The layer is yet an early work and the impluementation doesn't exhaust
+> all the possible features of Poky and libabigail. However, it already
+> proves itself helpful and is used for some real products to esure the
+> ABI stability. Certainly the mechanisms and the integration can be
+> improved.
+>
+> The future for this layer is open containing at least the topics below:
+>
+> - Binary size auditing.
+> - Security auditing.
+>
+> As a shorter term serviceableness, the ABI compliance validation
+> mechanism seems to be a useful tool in helping to keep promises on LTS,
+> but would most likely also help maintaining non LTS branches. It would
+> be great to receive any feedback, reviews and ideas in regard to meta-
+> binaryaudit.
+
+Out of curiosity, are you coordinating with the work sent in March by BMW ?
+
+see the email with the subject: [yocto] Demo of abi checker hook with hashequiv
+
+And the associated layers: https://github.com/bmwcarit/meta-abicompat
+and https://github.com/bmwcarit/meta-abicompat-poky
+
+Bruce
+
+>
+> Thanks!
+>
+> Anatol
+>
+>
+> 
+>
+
+
+--
+- Thou shalt not follow the NULL pointer, for chaos and madness await
+thee at its end
+- "Use the force Harry" - Gandalf, Star Trek II
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] Binary compliance validation
+  2021-08-31 15:58 ` [yocto] " Bruce Ashfield
+@ 2021-08-31 16:16   ` Anatol Belski
+  0 siblings, 0 replies; 5+ messages in thread
+From: Anatol Belski @ 2021-08-31 16:16 UTC (permalink / raw)
+  To: Bruce Ashfield; +Cc: yocto, Karissa Sanchez
+
+[-- Attachment #1: Type: text/plain, Size: 3868 bytes --]
+
+Hi,
+
+On 8/31/2021 5:58 PM, Bruce Ashfield wrote:
+> On Tue, Aug 31, 2021 at 11:48 AM Anatol Belski
+> <anbelski@linux.microsoft.com> wrote:
+>> Hi,
+>>
+>> I'm writing to present an ABI compliance check mechanism for Poky
+>> recently developed to help improve the product stability. It is still
+>> an early work which however has already proven itself useful and thus
+>> the time seems right to ask for the community view.
+>>
+>> Binary compliance is an important metric, when a distrubition intends
+>> to provide stability guarantees to consumers outside the monolithic
+>> image build. For example, projects utilizing the SDK might not be in
+>> sync with the image builds from even the same branch. Even in stable
+>> branches where bugfixes, security patches or even non breaching
+>> upgrades have to flow in as necessary, there's is currently no
+>> verifiable mechainsm to ensure the binary compatibility long term.
+>>
+>> The currently implemented validation is based on libabigail and as such
+>> is focused on the ABI compliance. Libabigail is a tool developed by Red
+>> Hat and is in use for Fedora and RHEL RPM builds. Some companies are
+>> known to utilize libabigail to support the kernel maintanance (Linux
+>> kernel for Android). The meta layer contains a bbclass extending the
+>> buildhistory functionality with the ABI serialization and comparison.
+>> One buildhistory version taken as a baseline would serve the comparison
+>> with any follow up builds. The ABI changes detected are then reported.
+>>
+>> The handling routines in Poky are currently attached to the install
+>> task, which implies the baseline build needs to take place with the
+>> sstate disabled. The follow up buids can use sstate and in that case
+>> the postinstall routines will be invoked only if some change took place
+>> and thus do_install has been called.
+>>
+>> The implementation is made as a core Python module, which can be used
+>> in a Yocto layer or imported in any other script. The layer is
+>> available under:
+>> https://github.com/clio-project/meta-binaryaudit
+>>
+>> and the accompanying python module (which moves at some faster pace and
+>> is synchronized into the layer) and a command line tool:
+>> https://github.com/clio-project/python-binaryaudit
+>>
+>> The layer is yet an early work and the impluementation doesn't exhaust
+>> all the possible features of Poky and libabigail. However, it already
+>> proves itself helpful and is used for some real products to esure the
+>> ABI stability. Certainly the mechanisms and the integration can be
+>> improved.
+>>
+>> The future for this layer is open containing at least the topics below:
+>>
+>> - Binary size auditing.
+>> - Security auditing.
+>>
+>> As a shorter term serviceableness, the ABI compliance validation
+>> mechanism seems to be a useful tool in helping to keep promises on LTS,
+>> but would most likely also help maintaining non LTS branches. It would
+>> be great to receive any feedback, reviews and ideas in regard to meta-
+>> binaryaudit.
+> Out of curiosity, are you coordinating with the work sent in March by BMW ?
+>
+> see the email with the subject: [yocto] Demo of abi checker hook with hashequiv
+>
+> And the associated layers: https://github.com/bmwcarit/meta-abicompat
+> and https://github.com/bmwcarit/meta-abicompat-poky
+
+Thanks for the pointer! Nope, there's no coordination, it's a separate 
+effort and seems the approach and goals are somewhat different. The 
+sstate handling is however a very interesting approach. One could check 
+if these works can be merged together, if there's an interest.
+
+Regards
+
+Anatol
+
+> Bruce
+>
+>> Thanks!
+>>
+>> Anatol
+>>
+>>
+>>
+>>
+>
+> --
+> - Thou shalt not follow the NULL pointer, for chaos and madness await
+> thee at its end
+> - "Use the force Harry" - Gandalf, Star Trek II
+>
+> 
+>
+
+[-- Attachment #2: Type: text/html, Size: 5183 bytes --]
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: Binary compliance validation
+  2021-08-31 15:45 Binary compliance validation Anatol Belski
+  2021-08-31 15:58 ` [yocto] " Bruce Ashfield
+@ 2022-07-13  0:14 ` Maia Xiao
+  2022-07-13  6:53   ` [yocto] " Pavel Zhukov
+  1 sibling, 1 reply; 5+ messages in thread
+From: Maia Xiao @ 2022-07-13  0:14 UTC (permalink / raw)
+  To: yocto; +Cc: pauleg
+
+Hello everyone,
+
+On 8/31/2021 8:45 AM, Anatol Belski wrote:
+> I'm writing to present an ABI compliance check mechanism for Poky
+> recently developed to help improve the product stability. It is still
+> an early work which however has already proven itself useful and thus
+> the time seems right to ask for the community view.
+> 
+> The implementation is made as a core Python module, which can be used
+> in a Yocto layer or imported in any other script. The layer is
+> available under:
+> https://github.com/clio-project/meta-binaryaudit
+> 
+> and the accompanying python module (which moves at some faster pace and
+> is synchronized into the layer) and a command line tool:
+> https://github.com/clio-project/python-binaryaudit
+
+Microsoft is going to pick this up (the ABI compliance layer[0]) as an 
+intern project again this summer, with a particular focus on improving 
+code quality. I’ll be working on it for the next two months or so, and 
+here are some of my preliminary ideas so far.
+
+One goal is to make the layer provide helpful enough logs on its own, so 
+that the layer could be used without extra scripting. This means 
+emitting actual BitBake logs, using standard QA error/warning logic to 
+log ABI issues, and making sure the actual ABI differences go into logs. 
+These improvements should hopefully make the layer easier to integrate 
+into CI/CD.
+
+Anatol’s original post also mentions potential extensions like binary 
+size auditing, which I’ll investigate as time permits (probably in the 
+form of another layer).
+
+There will, of course, be efforts in the genre of code cleanup and 
+usability improvement. For example, better error handling, refactoring 
+the accompanying Python library so that only the minimal supporting code 
+is included, etc.
+
+If anyone has any feature suggestions or improvements that they want to 
+see made, please feel free to share! To quickly recap, the OP[1] has the 
+context behind this project and the basic idea of how it works: dumping 
+ABI into buildhistory and comparing against them afterwards during 
+another build. There was some chatter here[2] about doing ABI checking 
+for the LTS branches as well, which briefly mentions this project.
+
+Thanks!
+
+~ maia
+
+[0] https://github.com/clio-project/meta-binaryaudit
+[1] https://lists.yoctoproject.org/g/yocto/topic/85279259
+[2] https://lists.yoctoproject.org/g/yocto/topic/89009568
+
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] Binary compliance validation
+  2022-07-13  0:14 ` Maia Xiao
+@ 2022-07-13  6:53   ` Pavel Zhukov
+  0 siblings, 0 replies; 5+ messages in thread
+From: Pavel Zhukov @ 2022-07-13  6:53 UTC (permalink / raw)
+  To: t-maiaxiao; +Cc: pauleg, yocto
+
+
+"t-maiaxiao" <t-maiaxiao@linux.microsoft.com> writes:
+
+> Hello everyone,
+>
+> On 8/31/2021 8:45 AM, Anatol Belski wrote:
+>> I'm writing to present an ABI compliance check mechanism for Poky
+>> recently developed to help improve the product stability. It is still
+>> an early work which however has already proven itself useful and thus
+>> the time seems right to ask for the community view.
+>> The implementation is made as a core Python module, which can be
+>> used
+>> in a Yocto layer or imported in any other script. The layer is
+>> available under:
+>> https://github.com/clio-project/meta-binaryaudit
+>> and the accompanying python module (which moves at some faster pace
+>> and
+>> is synchronized into the layer) and a command line tool:
+>> https://github.com/clio-project/python-binaryaudit
+>
+> Microsoft is going to pick this up (the ABI compliance layer[0]) as an
+> intern project again this summer, with a particular focus on improving
+> code quality. I’ll be working on it for the next two months or so, and
+> here are some of my preliminary ideas so far.
+>
+> One goal is to make the layer provide helpful enough logs on its own,
+> so that the layer could be used without extra scripting. This means
+> emitting actual BitBake logs, using standard QA error/warning logic to
+> log ABI issues, and making sure the actual ABI differences go into
+> logs. These improvements should hopefully make the layer easier to
+> integrate into CI/CD.
+>
+I've been working on meta-binaryaudit integration into CI in the Oniro
+Project [1]. We had to fork the project due to maintainer being
+unresponsive for quite a while. 
+The main issue is error handling. abicheck exits on any non-zero code
+returned by abidw  which is not acceptable for CI. Besides of that I've
+decided to make abicheck a task, not postfunc so it behaves pretty much
+like cvecheck. 
+
+[1] https://gitlab.eclipse.org/eclipse/oniro-core/meta-binaryaudit
+
+> Anatol’s original post also mentions potential extensions like binary
+> size auditing, which I’ll investigate as time permits (probably in the
+> form of another layer).
+>
+> There will, of course, be efforts in the genre of code cleanup and
+> usability improvement. For example, better error handling, refactoring
+> the accompanying Python library so that only the minimal supporting
+> code is included, etc.
+>
+> If anyone has any feature suggestions or improvements that they want
+> to see made, please feel free to share! To quickly recap, the OP[1]
+> has the context behind this project and the basic idea of how it
+> works: dumping ABI into buildhistory and comparing against them
+> afterwards during another build. There was some chatter here[2] about
+> doing ABI checking for the LTS branches as well, which briefly
+> mentions this project.
+>
+> Thanks!
+>
+> ~ maia
+>
+> [0] https://github.com/clio-project/meta-binaryaudit
+> [1] https://lists.yoctoproject.org/g/yocto/topic/85279259
+> [2] https://lists.yoctoproject.org/g/yocto/topic/89009568
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#57518): https://lists.yoctoproject.org/g/yocto/message/57518
+> Mute This Topic: https://lists.yoctoproject.org/mt/85279259/6390638
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [pavel@zhukoff.net]
+> -=-=-=-=-=-=-=-=-=-=-=-
+
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+end of thread, other threads:[~2022-07-13  7:08 UTC | newest]
+
+Thread overview: 5+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-08-31 15:45 Binary compliance validation Anatol Belski
+2021-08-31 15:58 ` [yocto] " Bruce Ashfield
+2021-08-31 16:16   ` Anatol Belski
+2022-07-13  0:14 ` Maia Xiao
+2022-07-13  6:53   ` [yocto] " Pavel Zhukov
+

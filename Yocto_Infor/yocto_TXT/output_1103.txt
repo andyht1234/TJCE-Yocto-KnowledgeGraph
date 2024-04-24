@@ -1,0 +1,545 @@
+* Yocto with Monorepo - best practice for building apps that have source within the repo?
+@ 2022-12-13 21:11 David Antliff
+  2022-12-14  8:38 ` [yocto] " Alexander Kanavin
+  0 siblings, 1 reply; 13+ messages in thread
+From: David Antliff @ 2022-12-13 21:11 UTC (permalink / raw)
+  To: yocto
+
+Hello,
+
+I'm seeking advice around using Yocto in a mono-repository, 
+specifically how to include my own C/C++ applications that have their 
+source code stored elsewhere in the same repository (and specifically
+not under the recipe's files/ directory, or anywhere in the layer structure).
+
+For example, my project might be structured like this:
+
+  myproject/   (root of repository)
+      - src/myapp1  (C++ app with Makefile)
+      - src/myapp2  (C app with CMakeLists.txt)
+      - yocto/layers/meta-local/myapps/
+          - myapp1.bb
+          - myapp2.bb
+
+The core of the matter is that the applications' source is not in a 
+separate repository, so bitbake's fetcher needs to look locally, rather 
+than remote. Having bitbake download the same repository again via git 
+seems inefficient, and it's also potentially a huge download.
+
+I've looked at using EXTERNALSRC but it disables devtool, which I really 
+need to use. When set to an absolute path (based on TOPDIR), it also 
+does weird things with the paths in the build directory, resulting in a 
+directory tree that depends on the user's environment (the path to their
+home directory, the path to where they checked out the mono-repo, etc).
+It is also considered "hacky" and not for production use according to 
+some sources. I don't think I can use this.
+
+I've also looked at setting FILESEXTRAPATHS to an absolute directory 
+based on TOPDIR, and this actually works, but the Yocto docs seem to 
+implicitly discourage this, as my recipe is in a .bb file:
+
+| Best practices dictate that you accomplish this by using FILESEXTRAPATHS from within a .bbappend file
+
+What would go wrong if I did set this in a .bb file?
+
+Another option is to have the external system that invokes bitbake (in 
+my case, a GitLab-CI pipeline script) make sure that a fresh tarball is 
+created from the original source and put into the files/ directory at 
+build time. Although this will work, and it seems clunky, if it's the 
+best option then I'll use it. Not sure yet how to handle tarball
+checksums in this case though.
+
+Is anyone using Yocto in a monorepo? If so, what approach would you
+recommend for the mono-repo project structure?
+
+Note: my applications' source files are outside of the Yocto layer tree
+because they are independent of Yocto and can be built with other
+toolchains - that's why I haven't put them under the files/ directory.
+
+-- David.
+
+^ permalink raw reply	[flat|nested] 13+ messages in thread
+* Re: [yocto] Yocto with Monorepo - best practice for building apps that have source within the repo?
+  2022-12-13 21:11 Yocto with Monorepo - best practice for building apps that have source within the repo? David Antliff
+@ 2022-12-14  8:38 ` Alexander Kanavin
+  2022-12-14  9:34   ` David Antliff
+  0 siblings, 1 reply; 13+ messages in thread
+From: Alexander Kanavin @ 2022-12-14  8:38 UTC (permalink / raw)
+  To: David Antliff; +Cc: yocto
+
+It helps if you explain why you want a monorepo in the first place.
+What use case is being solved by that?
+
+Alex
+
+On Tue, 13 Dec 2022 at 22:11, David Antliff <d.antliff@unsw.edu.au> wrote:
+>
+> Hello,
+>
+> I'm seeking advice around using Yocto in a mono-repository,
+> specifically how to include my own C/C++ applications that have their
+> source code stored elsewhere in the same repository (and specifically
+> not under the recipe's files/ directory, or anywhere in the layer structure).
+>
+> For example, my project might be structured like this:
+>
+>   myproject/   (root of repository)
+>       - src/myapp1  (C++ app with Makefile)
+>       - src/myapp2  (C app with CMakeLists.txt)
+>       - yocto/layers/meta-local/myapps/
+>           - myapp1.bb
+>           - myapp2.bb
+>
+> The core of the matter is that the applications' source is not in a
+> separate repository, so bitbake's fetcher needs to look locally, rather
+> than remote. Having bitbake download the same repository again via git
+> seems inefficient, and it's also potentially a huge download.
+>
+> I've looked at using EXTERNALSRC but it disables devtool, which I really
+> need to use. When set to an absolute path (based on TOPDIR), it also
+> does weird things with the paths in the build directory, resulting in a
+> directory tree that depends on the user's environment (the path to their
+> home directory, the path to where they checked out the mono-repo, etc).
+> It is also considered "hacky" and not for production use according to
+> some sources. I don't think I can use this.
+>
+> I've also looked at setting FILESEXTRAPATHS to an absolute directory
+> based on TOPDIR, and this actually works, but the Yocto docs seem to
+> implicitly discourage this, as my recipe is in a .bb file:
+>
+> | Best practices dictate that you accomplish this by using FILESEXTRAPATHS from within a .bbappend file
+>
+> What would go wrong if I did set this in a .bb file?
+>
+> Another option is to have the external system that invokes bitbake (in
+> my case, a GitLab-CI pipeline script) make sure that a fresh tarball is
+> created from the original source and put into the files/ directory at
+> build time. Although this will work, and it seems clunky, if it's the
+> best option then I'll use it. Not sure yet how to handle tarball
+> checksums in this case though.
+>
+> Is anyone using Yocto in a monorepo? If so, what approach would you
+> recommend for the mono-repo project structure?
+>
+> Note: my applications' source files are outside of the Yocto layer tree
+> because they are independent of Yocto and can be built with other
+> toolchains - that's why I haven't put them under the files/ directory.
+>
+> -- David.
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#58787): https://lists.yoctoproject.org/g/yocto/message/58787
+> Mute This Topic: https://lists.yoctoproject.org/mt/95654029/1686489
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 13+ messages in thread
+* Re: [yocto] Yocto with Monorepo - best practice for building apps that have source within the repo?
+  2022-12-14  8:38 ` [yocto] " Alexander Kanavin
+@ 2022-12-14  9:34   ` David Antliff
+  2022-12-14  9:40     ` Alexander Kanavin
+  0 siblings, 1 reply; 13+ messages in thread
+From: David Antliff @ 2022-12-14  9:34 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 560 bytes --]
+
+Alexander Kanavin wrote:
+> It helps if you explain why you want a monorepo in the first place.
+> What use case is being solved by that?
+
+Good question! I would prefer not to use a monorepo but it has been imposed on me. It predates my involvement and I’m stuck with it, unfortunately. Consider it an unavoidable constraint. There's a lot in the repo, and the yocto project is just one part of it.
+
+Frankly it would make my life a lot easier if I didn't have to work with a monorepo, but my leaders insist that it makes things "easier"...
+
+-- David.
+
+
+[-- Attachment #2: Type: text/html, Size: 2388 bytes --]
+
+^ permalink raw reply	[flat|nested] 13+ messages in thread
+* Re: [yocto] Yocto with Monorepo - best practice for building apps that have source within the repo?
+  2022-12-14  9:34   ` David Antliff
+@ 2022-12-14  9:40     ` Alexander Kanavin
+  2022-12-14 11:08       ` David Antliff
+                         ` (2 more replies)
+  0 siblings, 3 replies; 13+ messages in thread
+From: Alexander Kanavin @ 2022-12-14  9:40 UTC (permalink / raw)
+  To: David Antliff; +Cc: yocto
+
+On Wed, 14 Dec 2022 at 10:34, David Antliff <d.antliff@unsw.edu.au> wrote:
+> Good question! I would prefer not to use a monorepo but it has been imposed on me. It predates my involvement and I’m stuck with it, unfortunately. Consider it an unavoidable constraint. There's a lot in the repo, and the yocto project is just one part of it.
+>
+> Frankly it would make my life a lot easier if I didn't have to work with a monorepo, but my leaders insist that it makes things "easier"...
+
+Let me guess: they heard that facebook is using a monorepo, so that
+makes it a 'best practice'?
+
+I would symlink the sources directory to the sub-directory of 'files'
+('files' is in the same directory as the recipe), then list the
+symlink in SRC_URI, so bitbake can copy the content into $WORKDIR. But
+I have no idea if it's going to work. It's not a setup that is tested
+or used much.
+
+Alex
+
+
+^ permalink raw reply	[flat|nested] 13+ messages in thread
+* Re: [yocto] Yocto with Monorepo - best practice for building apps that have source within the repo?
+  2022-12-14  9:40     ` Alexander Kanavin
+@ 2022-12-14 11:08       ` David Antliff
+  2022-12-14 11:33         ` Alexander Kanavin
+  2022-12-14 21:49         ` David Antliff
+  2022-12-14 13:28       ` [yocto] " Junling Zheng
+  2022-12-14 17:06       ` Chuck Wolber
+  2 siblings, 2 replies; 13+ messages in thread
+From: David Antliff @ 2022-12-14 11:08 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1746 bytes --]
+
+
+Alexander Kanavin wrote:
+> On Wed, 14 Dec 2022 at 10:34, David Antliff <d.antliff@unsw.edu.au> wrote:
+> > Good question! I would prefer not to use a monorepo but it has been imposed on me. It predates my involvement and I’m stuck with it, unfortunately. Consider it an unavoidable constraint. There's a lot in the repo, and the yocto project is just one part of it.
+> >
+> > Frankly it would make my life a lot easier if I didn't have to work with a monorepo, but my leaders insist that it makes things "easier"...
+>
+> Let me guess: they heard that facebook is using a monorepo, so that
+> makes it a 'best practice'?
+
+Yeah, something like that. Several senior members have used them before and think they are the best solution to dependency management. I disagree that the end result is better than using multiple repositories; it greatly complicates the build pipeline, confuses who is responsible for what, and can make interface boundaries unclear, in an effort to have changes across the repository "easier" to execute. I'm always wary of people who want to make things easier instead of simpler, as it's often a false economy.
+
+> I would symlink the sources directory to the sub-directory of 'files'
+> ('files' is in the same directory as the recipe), then list the
+> symlink in SRC_URI, so bitbake can copy the content into $WORKDIR. But
+> I have no idea if it's going to work. It's not a setup that is tested
+> or used much.
+
+Seems like a reasonable idea - I will give it a try.
+
+Using FILESEXTRAPATHS also works but it's in a .bb not a .bbappend. I suppose there's nothing stopping me splitting my recipe into those two files, actually... then I'd be technically compliant with the docs.
+
+Thank you,
+
+-- David.
+
+
+[-- Attachment #2: Type: text/html, Size: 2854 bytes --]
+
+^ permalink raw reply	[flat|nested] 13+ messages in thread
+* Re: [yocto] Yocto with Monorepo - best practice for building apps that have source within the repo?
+  2022-12-14 11:08       ` David Antliff
+@ 2022-12-14 11:33         ` Alexander Kanavin
+  2022-12-14 21:49         ` David Antliff
+  1 sibling, 0 replies; 13+ messages in thread
+From: Alexander Kanavin @ 2022-12-14 11:33 UTC (permalink / raw)
+  To: David Antliff; +Cc: yocto
+
+On Wed, 14 Dec 2022 at 12:08, David Antliff <d.antliff@unsw.edu.au> wrote:
+> Using FILESEXTRAPATHS also works but it's in a .bb not a .bbappend. I suppose there's nothing stopping me splitting my recipe into those two files, actually... then I'd be technically compliant with the docs.
+
+I think the documentation might have confused you. It's not always
+correct :). Setting FILESEXTRAPATHS from .bb is totally fine, as long
+as you don't abuse it (e.g. cross over to something outside of the
+repository that .bb is in).
+
+Alex
+
+
+^ permalink raw reply	[flat|nested] 13+ messages in thread
+* Re: [yocto] Yocto with Monorepo - best practice for building apps that have source within the repo?
+  2022-12-14  9:40     ` Alexander Kanavin
+  2022-12-14 11:08       ` David Antliff
+@ 2022-12-14 13:28       ` Junling Zheng
+  2022-12-14 13:55         ` Alexander Kanavin
+  2022-12-14 17:06       ` Chuck Wolber
+  2 siblings, 1 reply; 13+ messages in thread
+From: Junling Zheng @ 2022-12-14 13:28 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: Wang Nan, yocto
+
+在 2022/12/14 17:40, Alexander Kanavin 写道:
+> On Wed, 14 Dec 2022 at 10:34, David Antliff <d.antliff@unsw.edu.au> wrote:
+>> Good question! I would prefer not to use a monorepo but it has been imposed on me. It predates my involvement and I’m stuck with it, unfortunately. Consider it an unavoidable constraint. There's a lot in the repo, and the yocto project is just one part of it.
+>>
+>> Frankly it would make my life a lot easier if I didn't have to work with a monorepo, but my leaders insist that it makes things "easier"...
+> 
+> Let me guess: they heard that facebook is using a monorepo, so that
+> makes it a 'best practice'?
+> 
+> I would symlink the sources directory to the sub-directory of 'files'
+> ('files' is in the same directory as the recipe), then list the
+> symlink in SRC_URI, so bitbake can copy the content into $WORKDIR. But
+> I have no idea if it's going to work. It's not a setup that is tested
+> or used much.
+> 
+
+Hi, Alex
+Can this method detect source code changes for incremental building?
+
+> Alex
+> 
+> 
+> 
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#58794): https://lists.yoctoproject.org/g/yocto/message/58794
+> Mute This Topic: https://lists.yoctoproject.org/mt/95654029/3618678
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [zhengjunling@huawei.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+> 
+
+
+
+^ permalink raw reply	[flat|nested] 13+ messages in thread
+* Re: [yocto] Yocto with Monorepo - best practice for building apps that have source within the repo?
+  2022-12-14 13:28       ` [yocto] " Junling Zheng
+@ 2022-12-14 13:55         ` Alexander Kanavin
+  2022-12-14 16:34           ` Junling Zheng
+  0 siblings, 1 reply; 13+ messages in thread
+From: Alexander Kanavin @ 2022-12-14 13:55 UTC (permalink / raw)
+  To: Junling Zheng; +Cc: Wang Nan, yocto
+
+On Wed, 14 Dec 2022 at 14:28, Junling Zheng <zhengjunling@huawei.com> wrote:
+> Can this method detect source code changes for incremental building?
+
+You need to experiment with this. If you list a local directory in
+SRC_URI, bitbake will checksum everything in it, and will detect when
+things change and then copy over the new tree, but whether this can
+allow incremental builds, I'm not sure.
+
+'devtool modify' is designed specifically for incremental builds.
+
+Alex
+
+
+^ permalink raw reply	[flat|nested] 13+ messages in thread
+* Re: [yocto] Yocto with Monorepo - best practice for building apps that have source within the repo?
+  2022-12-14 13:55         ` Alexander Kanavin
+@ 2022-12-14 16:34           ` Junling Zheng
+  0 siblings, 0 replies; 13+ messages in thread
+From: Junling Zheng @ 2022-12-14 16:34 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: Wang Nan, yocto
+
+在 2022/12/14 21:55, Alexander Kanavin 写道:
+> On Wed, 14 Dec 2022 at 14:28, Junling Zheng <zhengjunling@huawei.com> wrote:
+>> Can this method detect source code changes for incremental building?
+> 
+> You need to experiment with this. If you list a local directory in
+> SRC_URI, bitbake will checksum everything in it, and will detect when
+> things change and then copy over the new tree, but whether this can
+> allow incremental builds, I'm not sure.
+> 
+> 'devtool modify' is designed specifically for incremental builds.
+> 
+
+Thanks for your guide:)
+
+> Alex
+> .
+> 
+
+
+
+^ permalink raw reply	[flat|nested] 13+ messages in thread
+* Re: [yocto] Yocto with Monorepo - best practice for building apps that have source within the repo?
+  2022-12-14  9:40     ` Alexander Kanavin
+  2022-12-14 11:08       ` David Antliff
+  2022-12-14 13:28       ` [yocto] " Junling Zheng
+@ 2022-12-14 17:06       ` Chuck Wolber
+  2022-12-14 19:19         ` David Antliff
+  2 siblings, 1 reply; 13+ messages in thread
+From: Chuck Wolber @ 2022-12-14 17:06 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: David Antliff, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1700 bytes --]
+
+On Wed, Dec 14, 2022 at 1:40 AM Alexander Kanavin <alex.kanavin@gmail.com>
+wrote:
+
+> On Wed, 14 Dec 2022 at 10:34, David Antliff <d.antliff@unsw.edu.au> wrote:
+> > Good question! I would prefer not to use a monorepo but it has been
+> imposed on me. It predates my involvement and I’m stuck with it,
+> unfortunately. Consider it an unavoidable constraint. There's a lot in the
+> repo, and the yocto project is just one part of it.
+> >
+> > Frankly it would make my life a lot easier if I didn't have to work with
+> a monorepo, but my leaders insist that it makes things "easier"...
+>
+
+What reasons do they give for that assertion?
+
+Let me guess: they heard that facebook is using a monorepo, so that
+> makes it a 'best practice'?
+>
+
+One size definitely does not suit all. Distro builds that coalesce code
+from a lot of different internal dev teams are
+going to have a tough time with the mono-repo approach. Conversely, a team
+that controls all of its application layer
+code is going to have a difficult time with a distributed repo approach.
+
+So... best practice?
+
+Best practice should be to do what makes the most sense for your particular
+situation. I manage an embedded build that
+includes a non-trivial number of in-house developed source trees maintained
+by a single team. All of this code has no life
+outside of embedded builds. Managing that in a distributed repo fashion is
+a terrible idea for more reasons than I have
+time to describe. Collecting the source into relevant meta-layers coalesced
+the work down to a much more manageable
+problem.
+
+..Ch:W..
+
+-- 
+*"Perfection must be reached by degrees; she requires the slow hand of
+time." - Voltaire*
+
+[-- Attachment #2: Type: text/html, Size: 2527 bytes --]
+
+^ permalink raw reply	[flat|nested] 13+ messages in thread
+* Re: [yocto] Yocto with Monorepo - best practice for building apps that have source within the repo?
+  2022-12-14 17:06       ` Chuck Wolber
+@ 2022-12-14 19:19         ` David Antliff
+  2022-12-21  4:30           ` Chuck Wolber
+  0 siblings, 1 reply; 13+ messages in thread
+From: David Antliff @ 2022-12-14 19:19 UTC (permalink / raw)
+  To: Chuck Wolber; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2378 bytes --]
+
+How do you handle that in Yocto though? What mechanisms do you use to refer to your code? Do you just keep it all under the files/ directories?
+
+________________________________
+From: Chuck Wolber <chuckwolber@gmail.com>
+Sent: Thursday, December 15, 2022 06:06
+To: Alexander Kanavin <alex.kanavin@gmail.com>
+Cc: David Antliff <d.antliff@unsw.edu.au>; yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+Subject: Re: [yocto] Yocto with Monorepo - best practice for building apps that have source within the repo?
+
+You don't often get email from chuckwolber@gmail.com. Learn why this is important<https://aka.ms/LearnAboutSenderIdentification>
+On Wed, Dec 14, 2022 at 1:40 AM Alexander Kanavin <alex.kanavin@gmail.com<mailto:alex.kanavin@gmail.com>> wrote:
+On Wed, 14 Dec 2022 at 10:34, David Antliff <d.antliff@unsw.edu.au<mailto:d.antliff@unsw.edu.au>> wrote:
+> Good question! I would prefer not to use a monorepo but it has been imposed on me. It predates my involvement and I’m stuck with it, unfortunately. Consider it an unavoidable constraint. There's a lot in the repo, and the yocto project is just one part of it.
+>
+> Frankly it would make my life a lot easier if I didn't have to work with a monorepo, but my leaders insist that it makes things "easier"...
+
+What reasons do they give for that assertion?
+
+Let me guess: they heard that facebook is using a monorepo, so that
+makes it a 'best practice'?
+
+One size definitely does not suit all. Distro builds that coalesce code from a lot of different internal dev teams are
+going to have a tough time with the mono-repo approach. Conversely, a team that controls all of its application layer
+code is going to have a difficult time with a distributed repo approach.
+
+So... best practice?
+
+Best practice should be to do what makes the most sense for your particular situation. I manage an embedded build that
+includes a non-trivial number of in-house developed source trees maintained by a single team. All of this code has no life
+outside of embedded builds. Managing that in a distributed repo fashion is a terrible idea for more reasons than I have
+time to describe. Collecting the source into relevant meta-layers coalesced the work down to a much more manageable
+problem.
+
+..Ch:W..
+
+--
+"Perfection must be reached by degrees; she requires the slow hand of time." - Voltaire
+
+[-- Attachment #2: Type: text/html, Size: 5108 bytes --]
+
+^ permalink raw reply	[flat|nested] 13+ messages in thread
+* Re: Yocto with Monorepo - best practice for building apps that have source within the repo?
+  2022-12-14 11:08       ` David Antliff
+  2022-12-14 11:33         ` Alexander Kanavin
+@ 2022-12-14 21:49         ` David Antliff
+  1 sibling, 0 replies; 13+ messages in thread
+From: David Antliff @ 2022-12-14 21:49 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 557 bytes --]
+
+Alexander Kanavin wrote:
+> I would symlink the sources directory to the sub-directory of 'files'
+> ('files' is in the same directory as the recipe), then list the
+> symlink in SRC_URI, so bitbake can copy the content into $WORKDIR. But
+> I have no idea if it's going to work. It's not a setup that is tested
+> or used much.
+
+I've given this a try and as far as I can tell, it seems to work, and devtool remains operational.
+
+Between this or using FILESEXTRAPATHS, I think I have a way forward, thank you. Now I just need to decide which to use...
+
+[-- Attachment #2: Type: text/html, Size: 707 bytes --]
+
+^ permalink raw reply	[flat|nested] 13+ messages in thread
+* Re: [yocto] Yocto with Monorepo - best practice for building apps that have source within the repo?
+  2022-12-14 19:19         ` David Antliff
+@ 2022-12-21  4:30           ` Chuck Wolber
+  0 siblings, 0 replies; 13+ messages in thread
+From: Chuck Wolber @ 2022-12-21  4:30 UTC (permalink / raw)
+  To: David Antliff; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1094 bytes --]
+
+On Wed, Dec 14, 2022 at 11:19 AM David Antliff <d.antliff@unsw.edu.au>
+wrote:
+
+> How do you handle that in Yocto though? What mechanisms do you use to
+> refer to your code? Do you just keep it all under the files/ directories?
+>
+
+Sorry for the slow reply. Yes, keeping it under the recipe is the approach
+we use. For example...
+
+yocto
+└── meta-abc
+    └── recipes-xyz
+        └── helloworld
+            ├── files
+            │   ├── LICENSE
+            │   └── src
+            │       ├── Makefile
+            │       └── helloworld.c
+            └── helloworld.bb
+
+Your bitbake recipe would be fairly straightforward. The only difficulty is
+in doing IDE driven development without seeing a sea of red if your project
+is broken up into a lot of dependencies managed by separate recipes. There
+are ways of resolving that as well with a lot of pros and cons depending on
+how your project works.
+
+..Ch:W..
+
+
+-- 
+*"Perfection must be reached by degrees; she requires the slow hand of
+time." - Voltaire*
+
+[-- Attachment #2: Type: text/html, Size: 1804 bytes --]
+
+^ permalink raw reply	[flat|nested] 13+ messages in thread
+end of thread, other threads:[~2022-12-21  4:30 UTC | newest]
+
+Thread overview: 13+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-12-13 21:11 Yocto with Monorepo - best practice for building apps that have source within the repo? David Antliff
+2022-12-14  8:38 ` [yocto] " Alexander Kanavin
+2022-12-14  9:34   ` David Antliff
+2022-12-14  9:40     ` Alexander Kanavin
+2022-12-14 11:08       ` David Antliff
+2022-12-14 11:33         ` Alexander Kanavin
+2022-12-14 21:49         ` David Antliff
+2022-12-14 13:28       ` [yocto] " Junling Zheng
+2022-12-14 13:55         ` Alexander Kanavin
+2022-12-14 16:34           ` Junling Zheng
+2022-12-14 17:06       ` Chuck Wolber
+2022-12-14 19:19         ` David Antliff
+2022-12-21  4:30           ` Chuck Wolber
+

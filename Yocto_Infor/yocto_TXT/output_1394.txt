@@ -1,0 +1,363 @@
+* RE: #yocto #dunfell
+       [not found] <MADEUP.1716561DCDBAA560.13687@lists.yoctoproject.org>
+@ 2022-09-20 15:03 ` Monsees, Steven C (US)
+       [not found] ` <MADEUP.171699DC43F450F8.19441@lists.yoctoproject.org>
+  1 sibling, 0 replies; 5+ messages in thread
+From: Monsees, Steven C (US) @ 2022-09-20 15:03 UTC (permalink / raw)
+  To: Monsees, Steven C (US), yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2914 bytes --]
+
+
+Any hints or ideas on what I might be doing wrong would be appreciated…
+
+From: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org> On Behalf Of Monsees, Steven C (US) via lists.yoctoproject.org
+Sent: Monday, September 19, 2022 2:22 PM
+To: yocto@lists.yoctoproject.org
+Subject: [yocto] #yocto #dunfell
+
+External Email Alert
+
+This email has been sent from an account outside of the BAE Systems network.
+Please treat the email with caution, especially if you are requested to click on a link, decrypt/open an attachment, or enable macros.  For further information on how to spot phishing, access “Cybersecurity OneSpace Page” and report phishing by clicking the button “Report Phishing” on the Outlook toolbar.
+
+
+
+I am seeing an error when I attempt to apply a patch, and could use some clarification or way to resolve…
+
+Am doing something wrong in patch creation ?
+What is meant by :  ”Patch console.patch does not apply (enforce with -f)” ?
+How can I best resolve this issue ?
+
+I edited a file in the recipe’s git repo in order to create the patch for the change:
+
+git diff -u console.c
+
+which I used as my patch:
+
+diff --git a/lib/console.c b/lib/console.c
+index 9c10560..b932a44 100644
+--- a/lib/console.c
++++ b/lib/console.c
+@@ -357,7 +357,7 @@ static struct {
+        {  EFI_SECURITY_VIOLATION,     L"Security Violation"},
+
+        // warnings
+-       {  EFI_WARN_UNKOWN_GLYPH,      L"Warning Unknown Glyph"},
++       {  EFI_WARN_UNKNOWN_GLYPH,     L"Warning Unknown Glyph"},
+        {  EFI_WARN_DELETE_FAILURE,    L"Warning Delete Failure"},
+        {  EFI_WARN_WRITE_FAILURE,     L"Warning Write Failure"},
+        {  EFI_WARN_BUFFER_TOO_SMALL,  L"Warning Buffer Too Small"},
+
+I am getting the following error when the patch is applied:
+
+ERROR: efitools-native-1.7.0+gitAUTOINC+0649468475-r0 do_patch: Applying patch 'console.patch' on target directory '/disk0/scratch/yocto/workspace/poky-dunfell-23.0.19/builds/sbca-default/tmp/work/x86_64-linux/efitools-native/1.7.0+gitAUTOINC+0649468475-r0/git'
+Command Error: 'quilt --quiltrc /disk0/scratch/yocto/workspace/poky-dunfell-23.0.19/builds/sbca-default/tmp/work/x86_64-linux/efitools-native/1.7.0+gitAUTOINC+0649468475-r0/recipe-sysroot-native/etc/quiltrc push' exited with 0  Output:
+Applying patch console.patch
+patching file lib/console.c
+Hunk #1 FAILED at 357.
+1 out of 1 hunk FAILED -- rejects in file lib/console.c
+Patch console.patch does not apply (enforce with -f)
+ERROR: Logfile of failure stored in: /disk0/scratch/yocto/workspace/poky-dunfell-23.0.19/builds/sbca-default/tmp/work/x86_64-linux/efitools-native/1.7.0+gitAUTOINC+0649468475-r0/temp/log.do_patch.7615
+ERROR: Task (/disk0/scratch/yocto/workspace/poky-dunfell-23.0.19/meta-bae/meta-limws/meta-intel/meta-sbca/recipes-bsp/efitools/efitools-native_git.bb:do_patch) failed with exit code '1'
+
+Thanks,
+Steve
+
+[-- Attachment #2: Type: text/html, Size: 9102 bytes --]
+
+^ permalink raw reply related	[flat|nested] 5+ messages in thread
+* Re: [yocto] #yocto #dunfell
+       [not found] ` <MADEUP.171699DC43F450F8.19441@lists.yoctoproject.org>
+@ 2022-09-20 15:38   ` Ross Burton
+  2022-09-20 15:45     ` Monsees, Steven C (US)
+  0 siblings, 1 reply; 5+ messages in thread
+From: Ross Burton @ 2022-09-20 15:38 UTC (permalink / raw)
+  To: steven.monsees, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 3806 bytes --]
+
+Hi,
+
+SBSA is EDK2 based, which is basically incredibly painful to patch.  The source files are windows-style CR/LF so your patch needs to have CR/LF, but if the whole patch has CR/LF then git “helpfully” transforms the patch to just unix-style LF, which doesn’t apply.
+
+The “solution” (workaround) is to convert the patch to LF encoding, and manually add the CR characters to the end of each line in the patch body.
+
+The good news is that EDK2 is moving to LF encoding, so this will be solved at some point.
+
+Ross
+
+
+From: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org> on behalf of Monsees, Steven C (US) via lists.yoctoproject.org <steven.monsees=baesystems.com@lists.yoctoproject.org>
+Date: Tuesday, 20 September 2022 at 16:05
+To: Monsees, Steven C (US) <steven.monsees@baesystems.com>, yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+Subject: Re: [yocto] #yocto #dunfell
+
+Any hints or ideas on what I might be doing wrong would be appreciated…
+
+From: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org> On Behalf Of Monsees, Steven C (US) via lists.yoctoproject.org
+Sent: Monday, September 19, 2022 2:22 PM
+To: yocto@lists.yoctoproject.org
+Subject: [yocto] #yocto #dunfell
+
+External Email Alert
+This email has been sent from an account outside of the BAE Systems network.
+Please treat the email with caution, especially if you are requested to click on a link, decrypt/open an attachment, or enable macros.  For further information on how to spot phishing, access “Cybersecurity OneSpace Page” and report phishing by clicking the button “Report Phishing” on the Outlook toolbar.
+
+
+I am seeing an error when I attempt to apply a patch, and could use some clarification or way to resolve…
+
+Am doing something wrong in patch creation ?
+What is meant by :  ”Patch console.patch does not apply (enforce with -f)” ?
+How can I best resolve this issue ?
+
+I edited a file in the recipe’s git repo in order to create the patch for the change:
+
+git diff -u console.c
+
+which I used as my patch:
+
+diff --git a/lib/console.c b/lib/console.c
+index 9c10560..b932a44 100644
+--- a/lib/console.c
++++ b/lib/console.c
+@@ -357,7 +357,7 @@ static struct {
+        {  EFI_SECURITY_VIOLATION,     L"Security Violation"},
+
+        // warnings
+-       {  EFI_WARN_UNKOWN_GLYPH,      L"Warning Unknown Glyph"},
++       {  EFI_WARN_UNKNOWN_GLYPH,     L"Warning Unknown Glyph"},
+        {  EFI_WARN_DELETE_FAILURE,    L"Warning Delete Failure"},
+        {  EFI_WARN_WRITE_FAILURE,     L"Warning Write Failure"},
+        {  EFI_WARN_BUFFER_TOO_SMALL,  L"Warning Buffer Too Small"},
+
+I am getting the following error when the patch is applied:
+
+ERROR: efitools-native-1.7.0+gitAUTOINC+0649468475-r0 do_patch: Applying patch 'console.patch' on target directory '/disk0/scratch/yocto/workspace/poky-dunfell-23.0.19/builds/sbca-default/tmp/work/x86_64-linux/efitools-native/1.7.0+gitAUTOINC+0649468475-r0/git'
+Command Error: 'quilt --quiltrc /disk0/scratch/yocto/workspace/poky-dunfell-23.0.19/builds/sbca-default/tmp/work/x86_64-linux/efitools-native/1.7.0+gitAUTOINC+0649468475-r0/recipe-sysroot-native/etc/quiltrc push' exited with 0  Output:
+Applying patch console.patch
+patching file lib/console.c
+Hunk #1 FAILED at 357.
+1 out of 1 hunk FAILED -- rejects in file lib/console.c
+Patch console.patch does not apply (enforce with -f)
+ERROR: Logfile of failure stored in: /disk0/scratch/yocto/workspace/poky-dunfell-23.0.19/builds/sbca-default/tmp/work/x86_64-linux/efitools-native/1.7.0+gitAUTOINC+0649468475-r0/temp/log.do_patch.7615
+ERROR: Task (/disk0/scratch/yocto/workspace/poky-dunfell-23.0.19/meta-bae/meta-limws/meta-intel/meta-sbca/recipes-bsp/efitools/efitools-native_git.bb:do_patch) failed with exit code '1'
+
+Thanks,
+Steve
+
+[-- Attachment #2: Type: text/html, Size: 13216 bytes --]
+
+^ permalink raw reply related	[flat|nested] 5+ messages in thread
+* RE: [yocto] #yocto #dunfell
+  2022-09-20 15:38   ` [yocto] " Ross Burton
+@ 2022-09-20 15:45     ` Monsees, Steven C (US)
+  0 siblings, 0 replies; 5+ messages in thread
+From: Monsees, Steven C (US) @ 2022-09-20 15:45 UTC (permalink / raw)
+  To: Ross Burton, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 4836 bytes --]
+
+
+Thanks... will give it a try.
+
+From: Ross Burton <Ross.Burton@arm.com>
+Sent: Tuesday, September 20, 2022 11:38 AM
+To: Monsees, Steven C (US) <steven.monsees@baesystems.com>; yocto@lists.yoctoproject.org
+Subject: Re: [yocto] #yocto #dunfell
+
+External Email Alert
+
+This email has been sent from an account outside of the BAE Systems network.
+Please treat the email with caution, especially if you are requested to click on a link, decrypt/open an attachment, or enable macros.  For further information on how to spot phishing, access "Cybersecurity OneSpace Page" and report phishing by clicking the button "Report Phishing" on the Outlook toolbar.
+
+
+Hi,
+
+SBSA is EDK2 based, which is basically incredibly painful to patch.  The source files are windows-style CR/LF so your patch needs to have CR/LF, but if the whole patch has CR/LF then git "helpfully" transforms the patch to just unix-style LF, which doesn't apply.
+
+The "solution" (workaround) is to convert the patch to LF encoding, and manually add the CR characters to the end of each line in the patch body.
+
+The good news is that EDK2 is moving to LF encoding, so this will be solved at some point.
+
+Ross
+
+
+From: yocto@lists.yoctoproject.org<mailto:yocto@lists.yoctoproject.org> <yocto@lists.yoctoproject.org<mailto:yocto@lists.yoctoproject.org>> on behalf of Monsees, Steven C (US) via lists.yoctoproject.org <steven.monsees=baesystems.com@lists.yoctoproject.org<mailto:steven.monsees=baesystems.com@lists.yoctoproject.org>>
+Date: Tuesday, 20 September 2022 at 16:05
+To: Monsees, Steven C (US) <steven.monsees@baesystems.com<mailto:steven.monsees@baesystems.com>>, yocto@lists.yoctoproject.org<mailto:yocto@lists.yoctoproject.org> <yocto@lists.yoctoproject.org<mailto:yocto@lists.yoctoproject.org>>
+Subject: Re: [yocto] #yocto #dunfell
+
+Any hints or ideas on what I might be doing wrong would be appreciated...
+
+From: yocto@lists.yoctoproject.org<mailto:yocto@lists.yoctoproject.org> <yocto@lists.yoctoproject.org<mailto:yocto@lists.yoctoproject.org>> On Behalf Of Monsees, Steven C (US) via lists.yoctoproject.org
+Sent: Monday, September 19, 2022 2:22 PM
+To: yocto@lists.yoctoproject.org<mailto:yocto@lists.yoctoproject.org>
+Subject: [yocto] #yocto #dunfell
+
+External Email Alert
+
+This email has been sent from an account outside of the BAE Systems network.
+Please treat the email with caution, especially if you are requested to click on a link, decrypt/open an attachment, or enable macros.  For further information on how to spot phishing, access "Cybersecurity OneSpace Page" and report phishing by clicking the button "Report Phishing" on the Outlook toolbar.
+
+
+
+I am seeing an error when I attempt to apply a patch, and could use some clarification or way to resolve...
+
+Am doing something wrong in patch creation ?
+What is meant by :  "Patch console.patch does not apply (enforce with -f)" ?
+How can I best resolve this issue ?
+
+I edited a file in the recipe's git repo in order to create the patch for the change:
+
+git diff -u console.c
+
+which I used as my patch:
+
+diff --git a/lib/console.c b/lib/console.c
+index 9c10560..b932a44 100644
+--- a/lib/console.c
++++ b/lib/console.c
+@@ -357,7 +357,7 @@ static struct {
+        {  EFI_SECURITY_VIOLATION,     L"Security Violation"},
+
+        // warnings
+-       {  EFI_WARN_UNKOWN_GLYPH,      L"Warning Unknown Glyph"},
++       {  EFI_WARN_UNKNOWN_GLYPH,     L"Warning Unknown Glyph"},
+        {  EFI_WARN_DELETE_FAILURE,    L"Warning Delete Failure"},
+        {  EFI_WARN_WRITE_FAILURE,     L"Warning Write Failure"},
+        {  EFI_WARN_BUFFER_TOO_SMALL,  L"Warning Buffer Too Small"},
+
+I am getting the following error when the patch is applied:
+
+ERROR: efitools-native-1.7.0+gitAUTOINC+0649468475-r0 do_patch: Applying patch 'console.patch' on target directory '/disk0/scratch/yocto/workspace/poky-dunfell-23.0.19/builds/sbca-default/tmp/work/x86_64-linux/efitools-native/1.7.0+gitAUTOINC+0649468475-r0/git'
+Command Error: 'quilt --quiltrc /disk0/scratch/yocto/workspace/poky-dunfell-23.0.19/builds/sbca-default/tmp/work/x86_64-linux/efitools-native/1.7.0+gitAUTOINC+0649468475-r0/recipe-sysroot-native/etc/quiltrc push' exited with 0  Output:
+Applying patch console.patch
+patching file lib/console.c
+Hunk #1 FAILED at 357.
+1 out of 1 hunk FAILED -- rejects in file lib/console.c
+Patch console.patch does not apply (enforce with -f)
+ERROR: Logfile of failure stored in: /disk0/scratch/yocto/workspace/poky-dunfell-23.0.19/builds/sbca-default/tmp/work/x86_64-linux/efitools-native/1.7.0+gitAUTOINC+0649468475-r0/temp/log.do_patch.7615
+ERROR: Task (/disk0/scratch/yocto/workspace/poky-dunfell-23.0.19/meta-bae/meta-limws/meta-intel/meta-sbca/recipes-bsp/efitools/efitools-native_git.bb:do_patch) failed with exit code '1'
+
+Thanks,
+Steve
+
+[-- Attachment #2: Type: text/html, Size: 16454 bytes --]
+
+^ permalink raw reply related	[flat|nested] 5+ messages in thread
+* Re: [yocto] #dunfell
+       [not found] <ITuf.1667394064506458738.tJSH@lists.yoctoproject.org>
+@ 2022-11-03 22:38 ` Zoran Stojsavljevic
+  0 siblings, 0 replies; 5+ messages in thread
+From: Zoran Stojsavljevic @ 2022-11-03 22:38 UTC (permalink / raw)
+  To: Frederic Martinsons; +Cc: yocto
+
+>>> - for imageType in ${KERNEL_IMAGETYPES} ; do
+>>> + for imageType in ${KERNEL_IMAGETYPE_FOR_MAKE} ; do
+
+Interesting... What is the difference between variables
+${KERNEL_IMAGETYPES} and ${KERNEL_IMAGETYPE_FOR_MAKE} ?
+
+Zee
+_______
+
+On Thu, Nov 3, 2022 at 5:24 PM Frederic Martinsons
+<frederic.martinsons@gmail.com> wrote:
+>
+> Hello, I'm currently migrating our system from warrior to dunfell and I have an issue on fitImage support for aarch64 architecture. We use KERNEL_IMAGETYPE = "fitImage" and INITRAMFS_IMAGE_BUNDLE = "1" in our configuration and the kernel do_deploy steps failed on not finding the initramfs file:
+>
+> ```
+> | lib/modules/4.19.255-rt113-sigfox/kernel/drivers/usb/serial/usb_wwan.ko
+> | lib/modules/4.19.255-rt113-sigfox/kernel/drivers/usb/serial/option.ko
+> | lib/modules/4.19.255-rt113-sigfox/kernel/drivers/usb/class/
+> | lib/modules/4.19.255-rt113-sigfox/kernel/drivers/usb/class/cdc-wdm.ko
+> | lib/modules/4.19.255-rt113-sigfox/modules.order
+> | lib/modules/4.19.255-rt113-sigfox/modules.builtin
+> | install: cannot stat 'arch/arm64/boot/Image.initramfs': No such file or directory
+> | WARNING: exit code 1 from a shell command.
+> | ERROR: Execution of '/home/fmartinsons/TAPOS_build_for_dunfell/build-tapos/tmp/work/a3700-tapos-linux/linux-sbs/4.19.255+gitAUTOINC+5c7ccbe1aa-r4.17.1.1/temp/run.do_deploy.1460182' failed with exit code 1
+> ```
+>
+> Doing some more research, I found that the problem came from this change https://git.openembedded.org/openembedded-core/commit/?id=526bdd88ccd758204452579333ba188e29270bde , I found a commit introduced in kirkstone that fix my issue (at least the part which revert the previous commit): https://git.openembedded.org/openembedded-core/commit/?id=10a4a132e87e835726bf5da81a60f6f509b90765
+>
+> Can somebody know why the commit was not back-ported in dunfell ?
+>
+> Regards.
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#58476): https://lists.yoctoproject.org/g/yocto/message/58476
+> Mute This Topic: https://lists.yoctoproject.org/mt/94774777/3618681
+> Mute #dunfell:https://lists.yoctoproject.org/g/yocto/mutehashtag/dunfell
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [zoran.stojsavljevic@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* #yocto #dunfell
+@ 2022-09-19 18:22 Monsees, Steven C (US)
+  0 siblings, 0 replies; 5+ messages in thread
+From: Monsees, Steven C (US) @ 2022-09-19 18:22 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2163 bytes --]
+
+
+I am seeing an error when I attempt to apply a patch, and could use some clarification or way to resolve...
+
+Am doing something wrong in patch creation ?
+What is meant by :  "Patch console.patch does not apply (enforce with -f)" ?
+How can I best resolve this issue ?
+
+I edited a file in the recipe's git repo in order to create the patch for the change:
+
+git diff -u console.c
+
+which I used as my patch:
+
+diff --git a/lib/console.c b/lib/console.c
+index 9c10560..b932a44 100644
+--- a/lib/console.c
++++ b/lib/console.c
+@@ -357,7 +357,7 @@ static struct {
+        {  EFI_SECURITY_VIOLATION,     L"Security Violation"},
+        // warnings
+-       {  EFI_WARN_UNKOWN_GLYPH,      L"Warning Unknown Glyph"},
++       {  EFI_WARN_UNKNOWN_GLYPH,     L"Warning Unknown Glyph"},
+        {  EFI_WARN_DELETE_FAILURE,    L"Warning Delete Failure"},
+        {  EFI_WARN_WRITE_FAILURE,     L"Warning Write Failure"},
+        {  EFI_WARN_BUFFER_TOO_SMALL,  L"Warning Buffer Too Small"},
+
+I am getting the following error when the patch is applied:
+
+ERROR: efitools-native-1.7.0+gitAUTOINC+0649468475-r0 do_patch: Applying patch 'console.patch' on target directory '/disk0/scratch/yocto/workspace/poky-dunfell-23.0.19/builds/sbca-default/tmp/work/x86_64-linux/efitools-native/1.7.0+gitAUTOINC+0649468475-r0/git'
+Command Error: 'quilt --quiltrc /disk0/scratch/yocto/workspace/poky-dunfell-23.0.19/builds/sbca-default/tmp/work/x86_64-linux/efitools-native/1.7.0+gitAUTOINC+0649468475-r0/recipe-sysroot-native/etc/quiltrc push' exited with 0  Output:
+Applying patch console.patch
+patching file lib/console.c
+Hunk #1 FAILED at 357.
+1 out of 1 hunk FAILED -- rejects in file lib/console.c
+Patch console.patch does not apply (enforce with -f)
+ERROR: Logfile of failure stored in: /disk0/scratch/yocto/workspace/poky-dunfell-23.0.19/builds/sbca-default/tmp/work/x86_64-linux/efitools-native/1.7.0+gitAUTOINC+0649468475-r0/temp/log.do_patch.7615
+ERROR: Task (/disk0/scratch/yocto/workspace/poky-dunfell-23.0.19/meta-bae/meta-limws/meta-intel/meta-sbca/recipes-bsp/efitools/efitools-native_git.bb:do_patch) failed with exit code '1'
+
+Thanks,
+Steve
+
+[-- Attachment #2: Type: text/html, Size: 6153 bytes --]
+
+^ permalink raw reply related	[flat|nested] 5+ messages in thread
+end of thread, other threads:[~2022-11-03 22:38 UTC | newest]
+
+Thread overview: 5+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+     [not found] <MADEUP.1716561DCDBAA560.13687@lists.yoctoproject.org>
+2022-09-20 15:03 ` #yocto #dunfell Monsees, Steven C (US)
+     [not found] ` <MADEUP.171699DC43F450F8.19441@lists.yoctoproject.org>
+2022-09-20 15:38   ` [yocto] " Ross Burton
+2022-09-20 15:45     ` Monsees, Steven C (US)
+     [not found] <ITuf.1667394064506458738.tJSH@lists.yoctoproject.org>
+2022-11-03 22:38 ` [yocto] #dunfell Zoran Stojsavljevic
+2022-09-19 18:22 #yocto #dunfell Monsees, Steven C (US)
+

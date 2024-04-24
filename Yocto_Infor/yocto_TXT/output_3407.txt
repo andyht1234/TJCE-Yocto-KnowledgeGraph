@@ -1,0 +1,403 @@
+* [meta-zephyr][PATCH] qemuzephyrrunner.py: use existing qemu conf file
+@ 2021-05-18 15:09 Jon Mason
+  2021-05-20  8:03 ` [yocto] " Naveen Saini
+  0 siblings, 1 reply; 2+ messages in thread
+From: Jon Mason @ 2021-05-18 15:09 UTC (permalink / raw)
+  To: yocto
+
+Read the generated QEMU conf file, instead of using hard coded values.
+This allows for machines not conforming to the hard coded values to work
+with testimage.
+
+Signed-off-by: Jon Mason <jon.mason@arm.com>
+---
+ conf/machine/qemu-x86.conf         |  1 +
+ lib/oeqa/utils/qemuzephyrrunner.py | 89 +++++++++++++++++++++++++-----
+ 2 files changed, 77 insertions(+), 13 deletions(-)
+
+diff --git a/conf/machine/qemu-x86.conf b/conf/machine/qemu-x86.conf
+index d85c22215520..ce79b5b1f510 100644
+--- a/conf/machine/qemu-x86.conf
++++ b/conf/machine/qemu-x86.conf
+@@ -9,6 +9,7 @@ ZEPHYR_INHERIT_CLASSES += "zephyr-qemuboot"
+ 
+ # For runqemu
+ QB_SYSTEM_NAME = "qemu-system-i386"
++QB_MACHINE = "-machine type=pc-1.3"
+ QB_OPT_APPEND = "-nographic -no-acpi"
+ QB_CPU_x86 = "-cpu qemu32,+nx,+pae"
+ QB_CPU_KVM_x86 = "-cpu kvm32"
+diff --git a/lib/oeqa/utils/qemuzephyrrunner.py b/lib/oeqa/utils/qemuzephyrrunner.py
+index e8a1bd4544cf..a1ed30be1ca8 100644
+--- a/lib/oeqa/utils/qemuzephyrrunner.py
++++ b/lib/oeqa/utils/qemuzephyrrunner.py
+@@ -14,6 +14,7 @@ import select
+ import bb
+ import tempfile
+ import sys
++import configparser
+ from oeqa.utils.qemurunner import QemuRunner
+ 
+ class QemuZephyrRunner(QemuRunner):
+@@ -42,6 +43,72 @@ class QemuZephyrRunner(QemuRunner):
+         # 5 minutes timeout...
+         self.endtime = time.time() + 60*5
+ 
++        self.qemuboot = False
++        self.d = {'QB_KERNEL_ROOT': '/dev/vda'}
++
++    def get(self, key):
++        if key in self.d:
++            return self.d.get(key)
++        elif os.getenv(key):
++            return os.getenv(key)
++        else:
++            return ''
++
++    def set(self, key, value):
++        self.d[key] = value
++
++    def read_qemuboot(self):
++        if not self.qemuboot:
++            if self.get('DEPLOY_DIR_IMAGE'):
++                deploy_dir_image = self.get('DEPLOY_DIR_IMAGE')
++            else:
++                bb.warning("Can't find qemuboot conf file, DEPLOY_DIR_IMAGE is NULL!")
++                return
++
++            if self.rootfs and not os.path.exists(self.rootfs):
++                # Lazy rootfs
++                machine = self.get('MACHINE')
++                if not machine:
++                    machine = os.path.basename(deploy_dir_image)
++                self.qemuboot = "%s/%s-%s.qemuboot.conf" % (deploy_dir_image,
++                        self.rootfs, machine)
++            else:
++                cmd = 'ls -t %s/*.qemuboot.conf' %  deploy_dir_image
++                try:
++                    qbs = subprocess.check_output(cmd, shell=True).decode('utf-8')
++                except subprocess.CalledProcessError as err:
++                    raise RunQemuError(err)
++                if qbs:
++                    for qb in qbs.split():
++                        # Don't use initramfs when other choices unless fstype is ramfs
++                        if '-initramfs-' in os.path.basename(qb) and self.fstype != 'cpio.gz':
++                                continue
++                        self.qemuboot = qb
++                        break
++                    if not self.qemuboot:
++                        # Use the first one when no choice
++                        self.qemuboot = qbs.split()[0]
++                    self.qbconfload = True
++
++        if not self.qemuboot:
++            # If we haven't found a .qemuboot.conf at this point it probably
++            # doesn't exist, continue without
++            return
++
++        if not os.path.exists(self.qemuboot):
++            raise RunQemuError("Failed to find %s (wrong image name or BSP does not support running under qemu?)." % self.qemuboot)
++
++        cf = configparser.ConfigParser()
++        cf.read(self.qemuboot)
++        for k, v in cf.items('config_bsp'):
++            k_upper = k.upper()
++            if v.startswith("../"):
++                v = os.path.abspath(os.path.dirname(self.qemuboot) + "/" + v)
++            elif v == ".":
++                v = os.path.dirname(self.qemuboot)
++            self.set(k_upper, v)
++
++
+     def create_socket(self):
+         bb.note("waiting at most %s seconds for qemu pid" % self.runqemutime)
+         tries = self.runqemutime
+@@ -66,7 +133,6 @@ class QemuZephyrRunner(QemuRunner):
+ 
+         if not os.path.exists(self.tmpdir):
+             bb.error("Invalid TMPDIR path %s" % self.tmpdir)
+-            #logger.error("Invalid TMPDIR path %s" % self.tmpdir)
+             return False
+         else:
+             os.environ["OE_TMPDIR"] = self.tmpdir
+@@ -82,21 +148,18 @@ class QemuZephyrRunner(QemuRunner):
+             bb.error("Invalid kernel path: %s" % self.kernel)
+             return False
+ 
+-        self.qemuparams = '-nographic -serial unix:%s,server' % (self.socketname)
+-        qemu_binary = ""
+-        if 'arm' in self.machine or 'cortex' in self.machine:
+-            qemu_binary = 'qemu-system-arm'
+-            qemu_machine_args = '-machine lm3s6965evb'
+-        elif 'x86' in self.machine:
+-            qemu_binary = 'qemu-system-i386'
+-            qemu_machine_args = '-machine type=pc-1.3 -no-acpi -nographic -cpu qemu32,+nx,+pae'
+-        elif 'nios2' in self.machine:
+-            qemu_binary = 'qemu-system-nios2'
+-            qemu_machine_args = '-machine altera_10m50_zephyr'
+-        else:
++        self.qemuparams = '-serial unix:%s,server' % (self.socketname)
++
++        self.read_qemuboot()
++        qemu_binary = self.get('QB_SYSTEM_NAME')
++        qemu_machine_args = self.get('QB_MACHINE')
++        if qemu_binary == "" or qemu_machine_args == "":
+             bb.error("Unsupported QEMU: %s" % self.machine)
+             return False
+ 
++        self.qemuparams += " %s " %self.get('QB_OPT_APPEND')
++        self.qemuparams += " %s " %self.get('QB_CPU')
++
+         self.origchldhandler = signal.getsignal(signal.SIGCHLD)
+         signal.signal(signal.SIGCHLD, self.handleSIGCHLD)
+ 
+-- 
+2.20.1
+
+
+^ permalink raw reply related	[flat|nested] 2+ messages in thread
+* Re: [yocto] [meta-zephyr][PATCH] qemuzephyrrunner.py: use existing qemu conf file
+  2021-05-18 15:09 [meta-zephyr][PATCH] qemuzephyrrunner.py: use existing qemu conf file Jon Mason
+@ 2021-05-20  8:03 ` Naveen Saini
+  0 siblings, 0 replies; 2+ messages in thread
+From: Naveen Saini @ 2021-05-20  8:03 UTC (permalink / raw)
+  To: Jon Mason, yocto
+
+Hi Jon,
+
+> -----Original Message-----
+> From: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org> On
+> Behalf Of Jon Mason
+> Sent: Tuesday, May 18, 2021 11:10 PM
+> To: yocto@lists.yoctoproject.org
+> Subject: [yocto] [meta-zephyr][PATCH] qemuzephyrrunner.py: use existing
+> qemu conf file
+> 
+> Read the generated QEMU conf file, instead of using hard coded values.
+> This allows for machines not conforming to the hard coded values to work
+> with testimage.
+> 
+> Signed-off-by: Jon Mason <jon.mason@arm.com>
+> ---
+>  conf/machine/qemu-x86.conf         |  1 +
+>  lib/oeqa/utils/qemuzephyrrunner.py | 89 +++++++++++++++++++++++++--
+> ---
+>  2 files changed, 77 insertions(+), 13 deletions(-)
+> 
+> diff --git a/conf/machine/qemu-x86.conf b/conf/machine/qemu-x86.conf
+> index d85c22215520..ce79b5b1f510 100644
+> --- a/conf/machine/qemu-x86.conf
+> +++ b/conf/machine/qemu-x86.conf
+> @@ -9,6 +9,7 @@ ZEPHYR_INHERIT_CLASSES += "zephyr-qemuboot"
+> 
+>  # For runqemu
+>  QB_SYSTEM_NAME = "qemu-system-i386"
+> +QB_MACHINE = "-machine type=pc-1.3"
+[Naveen] ruqemu failed with qemu-x86 machine
+runqemu - ERROR - Failed to run qemu: qemu-system-i386: -nographic: unsupported machine type
+
+I run in my host :
+$  qemu-helper-native/1.0-r1/recipe-sysroot-native/usr/bin/qemu-system-i386 -machine help
+
+Supported machines are:
+microvm              microvm (i386)
+pc                   Standard PC (i440FX + PIIX, 1996) (alias of pc-i440fx-6.0)
+pc-i440fx-6.0        Standard PC (i440FX + PIIX, 1996) (default)
+pc-i440fx-5.2        Standard PC (i440FX + PIIX, 1996)
+pc-i440fx-5.1        Standard PC (i440FX + PIIX, 1996)
+pc-i440fx-5.0        Standard PC (i440FX + PIIX, 1996)
+pc-i440fx-4.2        Standard PC (i440FX + PIIX, 1996)
+pc-i440fx-4.1        Standard PC (i440FX + PIIX, 1996)
+pc-i440fx-4.0        Standard PC (i440FX + PIIX, 1996)
+pc-i440fx-3.1        Standard PC (i440FX + PIIX, 1996)
+pc-i440fx-3.0        Standard PC (i440FX + PIIX, 1996)
+pc-i440fx-2.9        Standard PC (i440FX + PIIX, 1996)
+pc-i440fx-2.8        Standard PC (i440FX + PIIX, 1996)
+pc-i440fx-2.7        Standard PC (i440FX + PIIX, 1996)
+pc-i440fx-2.6        Standard PC (i440FX + PIIX, 1996)
+pc-i440fx-2.5        Standard PC (i440FX + PIIX, 1996)
+pc-i440fx-2.4        Standard PC (i440FX + PIIX, 1996)
+pc-i440fx-2.3        Standard PC (i440FX + PIIX, 1996)
+pc-i440fx-2.2        Standard PC (i440FX + PIIX, 1996)
+pc-i440fx-2.12       Standard PC (i440FX + PIIX, 1996)
+pc-i440fx-2.11       Standard PC (i440FX + PIIX, 1996)
+pc-i440fx-2.10       Standard PC (i440FX + PIIX, 1996)
+pc-i440fx-2.1        Standard PC (i440FX + PIIX, 1996)
+pc-i440fx-2.0        Standard PC (i440FX + PIIX, 1996)
+pc-i440fx-1.7        Standard PC (i440FX + PIIX, 1996)
+pc-i440fx-1.6        Standard PC (i440FX + PIIX, 1996)
+pc-i440fx-1.5        Standard PC (i440FX + PIIX, 1996)
+pc-i440fx-1.4        Standard PC (i440FX + PIIX, 1996)
+q35                  Standard PC (Q35 + ICH9, 2009) (alias of pc-q35-6.0)
+pc-q35-6.0           Standard PC (Q35 + ICH9, 2009)
+pc-q35-5.2           Standard PC (Q35 + ICH9, 2009)
+pc-q35-5.1           Standard PC (Q35 + ICH9, 2009)
+pc-q35-5.0           Standard PC (Q35 + ICH9, 2009)
+pc-q35-4.2           Standard PC (Q35 + ICH9, 2009)
+pc-q35-4.1           Standard PC (Q35 + ICH9, 2009)
+pc-q35-4.0.1         Standard PC (Q35 + ICH9, 2009)
+pc-q35-4.0           Standard PC (Q35 + ICH9, 2009)
+pc-q35-3.1           Standard PC (Q35 + ICH9, 2009)
+pc-q35-3.0           Standard PC (Q35 + ICH9, 2009)
+pc-q35-2.9           Standard PC (Q35 + ICH9, 2009)
+pc-q35-2.8           Standard PC (Q35 + ICH9, 2009)
+pc-q35-2.7           Standard PC (Q35 + ICH9, 2009)
+pc-q35-2.6           Standard PC (Q35 + ICH9, 2009)
+pc-q35-2.5           Standard PC (Q35 + ICH9, 2009)
+pc-q35-2.4           Standard PC (Q35 + ICH9, 2009)
+pc-q35-2.12          Standard PC (Q35 + ICH9, 2009)
+pc-q35-2.11          Standard PC (Q35 + ICH9, 2009)
+pc-q35-2.10          Standard PC (Q35 + ICH9, 2009)
+isapc                ISA-only PC
+none                 empty machine
+x-remote             Experimental remote machine
+
+  
+
+>  QB_OPT_APPEND = "-nographic -no-acpi"
+>  QB_CPU_x86 = "-cpu qemu32,+nx,+pae"
+>  QB_CPU_KVM_x86 = "-cpu kvm32"
+> diff --git a/lib/oeqa/utils/qemuzephyrrunner.py
+> b/lib/oeqa/utils/qemuzephyrrunner.py
+> index e8a1bd4544cf..a1ed30be1ca8 100644
+> --- a/lib/oeqa/utils/qemuzephyrrunner.py
+> +++ b/lib/oeqa/utils/qemuzephyrrunner.py
+> @@ -14,6 +14,7 @@ import select
+>  import bb
+>  import tempfile
+>  import sys
+> +import configparser
+>  from oeqa.utils.qemurunner import QemuRunner
+> 
+>  class QemuZephyrRunner(QemuRunner):
+> @@ -42,6 +43,72 @@ class QemuZephyrRunner(QemuRunner):
+>          # 5 minutes timeout...
+>          self.endtime = time.time() + 60*5
+> 
+> +        self.qemuboot = False
+> +        self.d = {'QB_KERNEL_ROOT': '/dev/vda'}
+> +
+> +    def get(self, key):
+> +        if key in self.d:
+> +            return self.d.get(key)
+> +        elif os.getenv(key):
+> +            return os.getenv(key)
+> +        else:
+> +            return ''
+> +
+> +    def set(self, key, value):
+> +        self.d[key] = value
+> +
+> +    def read_qemuboot(self):
+> +        if not self.qemuboot:
+> +            if self.get('DEPLOY_DIR_IMAGE'):
+> +                deploy_dir_image = self.get('DEPLOY_DIR_IMAGE')
+> +            else:
+> +                bb.warning("Can't find qemuboot conf file, DEPLOY_DIR_IMAGE is
+> NULL!")
+> +                return
+> +
+> +            if self.rootfs and not os.path.exists(self.rootfs):
+> +                # Lazy rootfs
+> +                machine = self.get('MACHINE')
+> +                if not machine:
+> +                    machine = os.path.basename(deploy_dir_image)
+> +                self.qemuboot = "%s/%s-%s.qemuboot.conf" %
+> (deploy_dir_image,
+> +                        self.rootfs, machine)
+> +            else:
+> +                cmd = 'ls -t %s/*.qemuboot.conf' %  deploy_dir_image
+> +                try:
+> +                    qbs = subprocess.check_output(cmd, shell=True).decode('utf-8')
+> +                except subprocess.CalledProcessError as err:
+> +                    raise RunQemuError(err)
+> +                if qbs:
+> +                    for qb in qbs.split():
+> +                        # Don't use initramfs when other choices unless fstype is ramfs
+> +                        if '-initramfs-' in os.path.basename(qb) and self.fstype !=
+> 'cpio.gz':
+> +                                continue
+> +                        self.qemuboot = qb
+> +                        break
+> +                    if not self.qemuboot:
+> +                        # Use the first one when no choice
+> +                        self.qemuboot = qbs.split()[0]
+> +                    self.qbconfload = True
+> +
+> +        if not self.qemuboot:
+> +            # If we haven't found a .qemuboot.conf at this point it probably
+> +            # doesn't exist, continue without
+> +            return
+> +
+> +        if not os.path.exists(self.qemuboot):
+> +            raise RunQemuError("Failed to find %s (wrong image name or
+> + BSP does not support running under qemu?)." % self.qemuboot)
+> +
+> +        cf = configparser.ConfigParser()
+> +        cf.read(self.qemuboot)
+> +        for k, v in cf.items('config_bsp'):
+> +            k_upper = k.upper()
+> +            if v.startswith("../"):
+> +                v = os.path.abspath(os.path.dirname(self.qemuboot) + "/" + v)
+> +            elif v == ".":
+> +                v = os.path.dirname(self.qemuboot)
+> +            self.set(k_upper, v)
+> +
+> +
+>      def create_socket(self):
+>          bb.note("waiting at most %s seconds for qemu pid" %
+> self.runqemutime)
+>          tries = self.runqemutime
+> @@ -66,7 +133,6 @@ class QemuZephyrRunner(QemuRunner):
+> 
+>          if not os.path.exists(self.tmpdir):
+>              bb.error("Invalid TMPDIR path %s" % self.tmpdir)
+> -            #logger.error("Invalid TMPDIR path %s" % self.tmpdir)
+>              return False
+>          else:
+>              os.environ["OE_TMPDIR"] = self.tmpdir @@ -82,21 +148,18 @@ class
+> QemuZephyrRunner(QemuRunner):
+>              bb.error("Invalid kernel path: %s" % self.kernel)
+>              return False
+> 
+> -        self.qemuparams = '-nographic -serial unix:%s,server' %
+> (self.socketname)
+> -        qemu_binary = ""
+> -        if 'arm' in self.machine or 'cortex' in self.machine:
+> -            qemu_binary = 'qemu-system-arm'
+> -            qemu_machine_args = '-machine lm3s6965evb'
+> -        elif 'x86' in self.machine:
+> -            qemu_binary = 'qemu-system-i386'
+> -            qemu_machine_args = '-machine type=pc-1.3 -no-acpi -nographic -
+> cpu qemu32,+nx,+pae'
+> -        elif 'nios2' in self.machine:
+> -            qemu_binary = 'qemu-system-nios2'
+> -            qemu_machine_args = '-machine altera_10m50_zephyr'
+> -        else:
+> +        self.qemuparams = '-serial unix:%s,server' % (self.socketname)
+> +
+> +        self.read_qemuboot()
+> +        qemu_binary = self.get('QB_SYSTEM_NAME')
+> +        qemu_machine_args = self.get('QB_MACHINE')
+> +        if qemu_binary == "" or qemu_machine_args == "":
+>              bb.error("Unsupported QEMU: %s" % self.machine)
+>              return False
+> 
+> +        self.qemuparams += " %s " %self.get('QB_OPT_APPEND')
+> +        self.qemuparams += " %s " %self.get('QB_CPU')
+> +
+>          self.origchldhandler = signal.getsignal(signal.SIGCHLD)
+>          signal.signal(signal.SIGCHLD, self.handleSIGCHLD)
+> 
+> --
+> 2.20.1
+
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2021-05-20  8:03 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-05-18 15:09 [meta-zephyr][PATCH] qemuzephyrrunner.py: use existing qemu conf file Jon Mason
+2021-05-20  8:03 ` [yocto] " Naveen Saini
+

@@ -1,0 +1,936 @@
+* [layerindex-web][PATCH 00/15] Upgrade to Django 3.2.5 LTS and Celery 5
+@ 2021-07-18 23:07 Tim Orling
+  2021-07-18 23:07 ` [layerindex-web][PATCH 01/15] dockersetup.py: fix EMAIL_USE_SSL/TLS Tim Orling
+                   ` (15 more replies)
+  0 siblings, 16 replies; 17+ messages in thread
+From: Tim Orling @ 2021-07-18 23:07 UTC (permalink / raw)
+  To: yocto; +Cc: mhalstead, Tim Orling
+
+The current code base uses Django 2.2.x which will go out of extended
+support in April 2022, but also holds us back from updating a number of
+dependencies.
+
+Update to the current Django 3.2.5 LTS and also the latest Celery 5.1.2.
+Celery 4 has not had any commits since 2020 and is unlikely to be
+getting much more attention from the developers.
+
+While we are at it, upgrade all of our dependencies to the latest
+versions.
+
+The following changes since commit 2314fb2811bc3753d9dd4459747d8d30369321ad:
+
+  Add SPDX license headers to layerindex-web source files (2021-04-21 08:22:51 +1200)
+
+are available in the Git repository at:
+
+  git://github.com/moto-timo/layerindex-web timo/django-3.2.5
+  https://github.com/moto-timo/layerindex-web/tree/timo/django-3.2.5
+
+Tim Orling (15):
+  dockersetup.py: fix EMAIL_USE_SSL/TLS
+  requirements.txt: fix range check
+  Dockerfile: cleanup, install python3-wheel
+  dockersetup.py: letsencrypt 2048 bit rsa
+  layerindex/*: make all shebangs python3
+  requirements.txt: bump to Django 3.0
+  Updates for Django 3.0
+  requirements.txt: bump to Django 3.1
+  docker-compose: bump mariadb to 10.3
+  requirements.txt: update all to latest
+  about.html: update contributors
+  requirements.txt: bump to Django 3.2 LTS
+  settings: set DEFAULT_AUTO_FIELD
+  docker-compose: fix celery
+  README.devel: update versions
+
+ Dockerfile                                    |  4 +-
+ README.devel                                  |  6 +--
+ docker-compose.yml                            |  4 +-
+ docker/settings.py                            |  6 ++-
+ dockersetup.py                                |  6 +--
+ layerindex/bulkchange.py                      |  2 +-
+ .../0045_layerbranch_classicrecipe.py         | 19 ++++++++
+ layerindex/recipedesc.py                      |  2 +-
+ layerindex/tools/import_classic_wiki.py       |  2 +-
+ layerindex/tools/import_wiki_layers.py        |  2 +-
+ layerindex/tools/site_name.py                 |  2 +-
+ layerindex/tools/update_classic_status.py     |  2 +-
+ layerindex/update_layer.py                    |  2 +-
+ requirements.txt                              | 48 +++++++++----------
+ settings.py                                   |  6 ++-
+ templates/base.html                           |  2 +-
+ templates/layerindex/about.html               |  2 +
+ 17 files changed, 72 insertions(+), 45 deletions(-)
+ create mode 100644 layerindex/migrations/0045_layerbranch_classicrecipe.py
+
+-- 
+2.32.0
+
+
+^ permalink raw reply	[flat|nested] 17+ messages in thread
+* [layerindex-web][PATCH 01/15] dockersetup.py: fix EMAIL_USE_SSL/TLS
+  2021-07-18 23:07 [layerindex-web][PATCH 00/15] Upgrade to Django 3.2.5 LTS and Celery 5 Tim Orling
+@ 2021-07-18 23:07 ` Tim Orling
+  2021-07-18 23:07 ` [layerindex-web][PATCH 02/15] requirements.txt: fix range check Tim Orling
+                   ` (14 subsequent siblings)
+  15 siblings, 0 replies; 17+ messages in thread
+From: Tim Orling @ 2021-07-18 23:07 UTC (permalink / raw)
+  To: yocto; +Cc: mhalstead, Tim Orling
+
+Need to concatenate str(boolean), not bool
+
+Signed-off-by: Tim Orling <timothy.t.orling@intel.com>
+---
+ dockersetup.py | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/dockersetup.py b/dockersetup.py
+index e45a846..04dec91 100755
+--- a/dockersetup.py
++++ b/dockersetup.py
+@@ -353,13 +353,13 @@ def edit_dockercompose(hostname, dbpassword, dbapassword, secretkey, rmqpassword
+         elif '- "EMAIL_USE_SSL' in line:
+             format = line[0:line.find('- "EMAIL_USE_SSL')].replace("#", "")
+             if email_ssl:
+-                newlines.append(format + '- "EMAIL_USE_SSL=' + email_ssl + '"\n')
++                newlines.append(format + '- "EMAIL_USE_SSL=' + str(email_ssl) + '"\n')
+             else:
+                 newlines.append(format + '#- "EMAIL_USE_SSL=<set this here if needed>"\n')
+         elif '- "EMAIL_USE_TLS' in line:
+             format = line[0:line.find('- "EMAIL_USE_TLS')].replace("#", "")
+             if email_tls:
+-                newlines.append(format + '- "EMAIL_USE_TLS=' + email_tls + '"\n')
++                newlines.append(format + '- "EMAIL_USE_TLS=' + str(email_tls) + '"\n')
+             else:
+                 newlines.append(format + '#- "EMAIL_USE_TLS=<set this here if needed>"\n')
+         elif "ports:" in line:
+-- 
+2.32.0
+
+
+^ permalink raw reply related	[flat|nested] 17+ messages in thread
+* [layerindex-web][PATCH 02/15] requirements.txt: fix range check
+  2021-07-18 23:07 [layerindex-web][PATCH 00/15] Upgrade to Django 3.2.5 LTS and Celery 5 Tim Orling
+  2021-07-18 23:07 ` [layerindex-web][PATCH 01/15] dockersetup.py: fix EMAIL_USE_SSL/TLS Tim Orling
+@ 2021-07-18 23:07 ` Tim Orling
+  2021-07-18 23:07 ` [layerindex-web][PATCH 03/15] Dockerfile: cleanup, install python3-wheel Tim Orling
+                   ` (13 subsequent siblings)
+  15 siblings, 0 replies; 17+ messages in thread
+From: Tim Orling @ 2021-07-18 23:07 UTC (permalink / raw)
+  To: yocto; +Cc: mhalstead, Tim Orling
+
+The range check needs a comma between >=2.2 and <2.3,
+otherwise we end up with Django 3.2.5 installed and
+we are not ready for that yet.
+
+Signed-off-by: Tim Orling <timothy.t.orling@intel.com>
+---
+ requirements.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/requirements.txt b/requirements.txt
+index c7399ff..1c2c4a1 100644
+--- a/requirements.txt
++++ b/requirements.txt
+@@ -3,7 +3,7 @@ beautifulsoup4==4.8.1
+ billiard==3.6.1.0
+ celery==4.3.0
+ confusable-homoglyphs==3.2.0
+-Django>=2.2<2.3
++Django>=2.2,<2.3
+ django-appconf==1.0.3
+ django-axes==4.5.4
+ django-bootstrap-pagination==1.7.1
+-- 
+2.32.0
+
+
+^ permalink raw reply related	[flat|nested] 17+ messages in thread
+* [layerindex-web][PATCH 03/15] Dockerfile: cleanup, install python3-wheel
+  2021-07-18 23:07 [layerindex-web][PATCH 00/15] Upgrade to Django 3.2.5 LTS and Celery 5 Tim Orling
+  2021-07-18 23:07 ` [layerindex-web][PATCH 01/15] dockersetup.py: fix EMAIL_USE_SSL/TLS Tim Orling
+  2021-07-18 23:07 ` [layerindex-web][PATCH 02/15] requirements.txt: fix range check Tim Orling
+@ 2021-07-18 23:07 ` Tim Orling
+  2021-07-18 23:07 ` [layerindex-web][PATCH 04/15] dockersetup.py: letsencrypt 2048 bit rsa Tim Orling
+                   ` (12 subsequent siblings)
+  15 siblings, 0 replies; 17+ messages in thread
+From: Tim Orling @ 2021-07-18 23:07 UTC (permalink / raw)
+  To: yocto; +Cc: mhalstead, Tim Orling
+
+Remove duplicate python3-pip, etc. lines
+Need python3-wheel for bdist_wheel command
+
+Signed-off-by: Tim Orling <timothy.t.orling@intel.com>
+---
+ Dockerfile | 4 +---
+ 1 file changed, 1 insertion(+), 3 deletions(-)
+
+diff --git a/Dockerfile b/Dockerfile
+index 8c4c847..f6623fa 100644
+--- a/Dockerfile
++++ b/Dockerfile
+@@ -24,10 +24,8 @@ RUN apt-get update \
+ 	python3-pip \
+ 	python3-mysqldb \
+ 	python3-dev \
+-	python3-pip \
+-	python3-mysqldb \
+-	python3-dev \
+ 	python3-pil \
++        python3-wheel \
+ 	libjpeg-dev \
+ 	libmariadbclient-dev \
+ 	locales \
+-- 
+2.32.0
+
+
+^ permalink raw reply related	[flat|nested] 17+ messages in thread
+* [layerindex-web][PATCH 04/15] dockersetup.py: letsencrypt 2048 bit rsa
+  2021-07-18 23:07 [layerindex-web][PATCH 00/15] Upgrade to Django 3.2.5 LTS and Celery 5 Tim Orling
+                   ` (2 preceding siblings ...)
+  2021-07-18 23:07 ` [layerindex-web][PATCH 03/15] Dockerfile: cleanup, install python3-wheel Tim Orling
+@ 2021-07-18 23:07 ` Tim Orling
+  2021-07-18 23:07 ` [layerindex-web][PATCH 05/15] layerindex/*: make all shebangs python3 Tim Orling
+                   ` (11 subsequent siblings)
+  15 siblings, 0 replies; 17+ messages in thread
+From: Tim Orling @ 2021-07-18 23:07 UTC (permalink / raw)
+  To: yocto; +Cc: mhalstead, Tim Orling
+
+The minimum length for an RSA pem is 2048 for the dummy cert.
+
+Signed-off-by: Tim Orling <timothy.t.orling@intel.com>
+---
+ dockersetup.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/dockersetup.py b/dockersetup.py
+index 04dec91..6a0ab67 100755
+--- a/dockersetup.py
++++ b/dockersetup.py
+@@ -483,7 +483,7 @@ def setup_https(hostname, http_port, https_port, letsencrypt, cert, cert_key, em
+             os.makedirs(local_letsencrypt_cert_dir)
+         keyfile = os.path.join(letsencrypt_cert_subdir, 'privkey.pem')
+         certfile = os.path.join(letsencrypt_cert_subdir, 'fullchain.pem')
+-        return_code = subprocess.call(['openssl', 'req', '-x509', '-nodes', '-newkey', 'rsa:1024', '-days', '1', '-keyout', os.path.join(local_cert_dir, keyfile), '-out', os.path.join(local_cert_dir, certfile), '-subj', '/CN=localhost'], shell=False)
++        return_code = subprocess.call(['openssl', 'req', '-x509', '-nodes', '-newkey', 'rsa:2048', '-days', '1', '-keyout', os.path.join(local_cert_dir, keyfile), '-out', os.path.join(local_cert_dir, certfile), '-subj', '/CN=localhost'], shell=False)
+         if return_code != 0:
+             print("Dummy certificate generation failed")
+             sys.exit(1)
+-- 
+2.32.0
+
+
+^ permalink raw reply related	[flat|nested] 17+ messages in thread
+* [layerindex-web][PATCH 05/15] layerindex/*: make all shebangs python3
+  2021-07-18 23:07 [layerindex-web][PATCH 00/15] Upgrade to Django 3.2.5 LTS and Celery 5 Tim Orling
+                   ` (3 preceding siblings ...)
+  2021-07-18 23:07 ` [layerindex-web][PATCH 04/15] dockersetup.py: letsencrypt 2048 bit rsa Tim Orling
+@ 2021-07-18 23:07 ` Tim Orling
+  2021-07-18 23:07 ` [layerindex-web][PATCH 06/15] requirements.txt: bump to Django 3.0 Tim Orling
+                   ` (10 subsequent siblings)
+  15 siblings, 0 replies; 17+ messages in thread
+From: Tim Orling @ 2021-07-18 23:07 UTC (permalink / raw)
+  To: yocto; +Cc: mhalstead, Tim Orling
+
+Several scripts still had /usr/bin/env python
+
+Signed-off-by: Tim Orling <timothy.t.orling@intel.com>
+---
+ layerindex/bulkchange.py                  | 2 +-
+ layerindex/recipedesc.py                  | 2 +-
+ layerindex/tools/import_classic_wiki.py   | 2 +-
+ layerindex/tools/import_wiki_layers.py    | 2 +-
+ layerindex/tools/site_name.py             | 2 +-
+ layerindex/tools/update_classic_status.py | 2 +-
+ layerindex/update_layer.py                | 2 +-
+ 7 files changed, 7 insertions(+), 7 deletions(-)
+
+diff --git a/layerindex/bulkchange.py b/layerindex/bulkchange.py
+index 6382053..0ec4058 100644
+--- a/layerindex/bulkchange.py
++++ b/layerindex/bulkchange.py
+@@ -1,4 +1,4 @@
+-#!/usr/bin/env python
++#!/usr/bin/env python3
+ 
+ # layerindex-web - bulk change implementation
+ #
+diff --git a/layerindex/recipedesc.py b/layerindex/recipedesc.py
+index be47f6e..ee7f2fe 100644
+--- a/layerindex/recipedesc.py
++++ b/layerindex/recipedesc.py
+@@ -1,4 +1,4 @@
+-#!/usr/bin/env python
++#!/usr/bin/env python3
+ 
+ # Test script
+ #
+diff --git a/layerindex/tools/import_classic_wiki.py b/layerindex/tools/import_classic_wiki.py
+index aa33b7a..bd7ab9a 100755
+--- a/layerindex/tools/import_classic_wiki.py
++++ b/layerindex/tools/import_classic_wiki.py
+@@ -1,4 +1,4 @@
+-#!/usr/bin/env python
++#!/usr/bin/env python3
+ 
+ # Import migration info from OE-Classic recipes wiki page into OE
+ # layer index database
+diff --git a/layerindex/tools/import_wiki_layers.py b/layerindex/tools/import_wiki_layers.py
+index 707d90e..2c82411 100755
+--- a/layerindex/tools/import_wiki_layers.py
++++ b/layerindex/tools/import_wiki_layers.py
+@@ -1,4 +1,4 @@
+-#!/usr/bin/env python
++#!/usr/bin/env python3
+ 
+ # Import layer index wiki page into database
+ #
+diff --git a/layerindex/tools/site_name.py b/layerindex/tools/site_name.py
+index e1cff02..0f2782d 100755
+--- a/layerindex/tools/site_name.py
++++ b/layerindex/tools/site_name.py
+@@ -1,4 +1,4 @@
+-#!/usr/bin/env python
++#!/usr/bin/env python3
+ 
+ # Updates site name in Django database
+ #
+diff --git a/layerindex/tools/update_classic_status.py b/layerindex/tools/update_classic_status.py
+index 0bcf2e7..aa5d2ef 100755
+--- a/layerindex/tools/update_classic_status.py
++++ b/layerindex/tools/update_classic_status.py
+@@ -1,4 +1,4 @@
+-#!/usr/bin/env python
++#!/usr/bin/env python3
+ 
+ # Update cover info for OE-Classic / other distro recipes in OE layer index database
+ #
+diff --git a/layerindex/update_layer.py b/layerindex/update_layer.py
+index 42f99be..f51884d 100644
+--- a/layerindex/update_layer.py
++++ b/layerindex/update_layer.py
+@@ -1,4 +1,4 @@
+-#!/usr/bin/env python
++#!/usr/bin/env python3
+ 
+ # Update layer index database for a single layer
+ #
+-- 
+2.32.0
+
+
+^ permalink raw reply related	[flat|nested] 17+ messages in thread
+* [layerindex-web][PATCH 06/15] requirements.txt: bump to Django 3.0
+  2021-07-18 23:07 [layerindex-web][PATCH 00/15] Upgrade to Django 3.2.5 LTS and Celery 5 Tim Orling
+                   ` (4 preceding siblings ...)
+  2021-07-18 23:07 ` [layerindex-web][PATCH 05/15] layerindex/*: make all shebangs python3 Tim Orling
+@ 2021-07-18 23:07 ` Tim Orling
+  2021-07-18 23:07 ` [layerindex-web][PATCH 07/15] Updates for " Tim Orling
+                   ` (9 subsequent siblings)
+  15 siblings, 0 replies; 17+ messages in thread
+From: Tim Orling @ 2021-07-18 23:07 UTC (permalink / raw)
+  To: yocto; +Cc: mhalstead, Tim Orling
+
+Incremental upgrade towards 3.2 LTS version.
+
+Signed-off-by: Tim Orling <timothy.t.orling@intel.com>
+---
+ requirements.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/requirements.txt b/requirements.txt
+index 1c2c4a1..ac69589 100644
+--- a/requirements.txt
++++ b/requirements.txt
+@@ -3,7 +3,7 @@ beautifulsoup4==4.8.1
+ billiard==3.6.1.0
+ celery==4.3.0
+ confusable-homoglyphs==3.2.0
+-Django>=2.2,<2.3
++Django>=3.0,<3.1
+ django-appconf==1.0.3
+ django-axes==4.5.4
+ django-bootstrap-pagination==1.7.1
+-- 
+2.32.0
+
+
+^ permalink raw reply related	[flat|nested] 17+ messages in thread
+* [layerindex-web][PATCH 07/15] Updates for Django 3.0
+  2021-07-18 23:07 [layerindex-web][PATCH 00/15] Upgrade to Django 3.2.5 LTS and Celery 5 Tim Orling
+                   ` (5 preceding siblings ...)
+  2021-07-18 23:07 ` [layerindex-web][PATCH 06/15] requirements.txt: bump to Django 3.0 Tim Orling
+@ 2021-07-18 23:07 ` Tim Orling
+  2021-07-18 23:07 ` [layerindex-web][PATCH 08/15] requirements.txt: bump to Django 3.1 Tim Orling
+                   ` (8 subsequent siblings)
+  15 siblings, 0 replies; 17+ messages in thread
+From: Tim Orling @ 2021-07-18 23:07 UTC (permalink / raw)
+  To: yocto; +Cc: mhalstead, Tim Orling
+
+* Update requirements.txt versions
+  - Mostly update to latest pre-Django 3.1 versions
+* Fix deprecated axes.backends.AxesModelBackend
+  - settings.py
+  - docker/settings.py
+* Fix template syntax 'staticfiles' -> 'static'
+  - base.html
+* Add migrations for layerbranch classicrecipe
+
+Signed-off-by: Tim Orling <timothy.t.orling@intel.com>
+---
+ docker/settings.py                            |  3 ++-
+ .../0045_layerbranch_classicrecipe.py         | 19 +++++++++++++++
+ requirements.txt                              | 24 +++++++++----------
+ settings.py                                   |  3 ++-
+ templates/base.html                           |  2 +-
+ 5 files changed, 36 insertions(+), 15 deletions(-)
+ create mode 100644 layerindex/migrations/0045_layerbranch_classicrecipe.py
+
+diff --git a/docker/settings.py b/docker/settings.py
+index 7330ab9..894974f 100644
+--- a/docker/settings.py
++++ b/docker/settings.py
+@@ -102,6 +102,7 @@ MIDDLEWARE = (
+     'django.contrib.auth.middleware.AuthenticationMiddleware',
+     'django.contrib.messages.middleware.MessageMiddleware',
+     'django.middleware.clickjacking.XFrameOptionsMiddleware',
++    'axes.middleware.AxesMiddleware',
+     'layerindex.middleware.NonAtomicRevisionMiddleware',
+ )
+ 
+@@ -161,7 +162,7 @@ INSTALLED_APPS = (
+ )
+ 
+ AUTHENTICATION_BACKENDS = [
+-    'axes.backends.AxesModelBackend',
++    'axes.backends.AxesBackend',
+     'django.contrib.auth.backends.ModelBackend',
+ ]
+ 
+diff --git a/layerindex/migrations/0045_layerbranch_classicrecipe.py b/layerindex/migrations/0045_layerbranch_classicrecipe.py
+new file mode 100644
+index 0000000..cb805c9
+--- /dev/null
++++ b/layerindex/migrations/0045_layerbranch_classicrecipe.py
+@@ -0,0 +1,19 @@
++# Generated by Django 3.0.14 on 2021-07-18 00:03
++
++from django.db import migrations, models
++import django.db.models.deletion
++
++
++class Migration(migrations.Migration):
++
++    dependencies = [
++        ('layerindex', '0044_extendedprovides'),
++    ]
++
++    operations = [
++        migrations.AlterField(
++            model_name='classicrecipe',
++            name='cover_layerbranch',
++            field=models.ForeignKey(blank=True, limit_choices_to={'branch__name': 'master'}, null=True, on_delete=django.db.models.deletion.SET_NULL, to='layerindex.LayerBranch', verbose_name='Covering layer'),
++        ),
++    ]
+diff --git a/requirements.txt b/requirements.txt
+index ac69589..895994b 100644
+--- a/requirements.txt
++++ b/requirements.txt
+@@ -1,24 +1,24 @@
+-amqp==2.5.2
+-beautifulsoup4==4.8.1
++amqp==2.6.1
++beautifulsoup4==4.9.3
+ billiard==3.6.1.0
+ celery==4.3.0
+ confusable-homoglyphs==3.2.0
+ Django>=3.0,<3.1
+-django-appconf==1.0.3
+-django-axes==4.5.4
++django-appconf==1.0.4
++django-axes==5.13.1
+ django-bootstrap-pagination==1.7.1
+-django-cors-headers==3.0.2
+-django-ipware==2.1.0
++django-cors-headers==3.2.1
++django-ipware==3.0.2
+ django-ranged-response==0.2.0
+-django-registration==3.0.1
+-django-reversion==2.0.13
+-django-reversion-compare==0.8.6
+-django-simple-captcha==0.5.12
+-djangorestframework==3.9.4
++django-registration==3.1.2
++django-reversion==3.0.9
++django-reversion-compare==0.14.0
++django-simple-captcha==0.5.14
++djangorestframework==3.12.4
+ gitdb2==2.0.6
+ GitPython==2.1.13
+ kombu==4.6.3
+-mysqlclient==1.4.4
++mysqlclient==1.4.6
+ Pillow==6.2.1
+ pytz==2019.3
+ six==1.12.0
+diff --git a/settings.py b/settings.py
+index 1dd6ebc..d03d15c 100644
+--- a/settings.py
++++ b/settings.py
+@@ -102,6 +102,7 @@ MIDDLEWARE = (
+     'django.contrib.auth.middleware.AuthenticationMiddleware',
+     'django.contrib.messages.middleware.MessageMiddleware',
+     'django.middleware.clickjacking.XFrameOptionsMiddleware',
++    'axes.middleware.AxesMiddleware',
+     'layerindex.middleware.NonAtomicRevisionMiddleware',
+ )
+ 
+@@ -161,7 +162,7 @@ INSTALLED_APPS = (
+ )
+ 
+ AUTHENTICATION_BACKENDS = [
+-    'axes.backends.AxesModelBackend',
++    'axes.backends.AxesBackend',
+     'django.contrib.auth.backends.ModelBackend',
+ ]
+ 
+diff --git a/templates/base.html b/templates/base.html
+index a465a68..f00c976 100644
+--- a/templates/base.html
++++ b/templates/base.html
+@@ -9,7 +9,7 @@
+ 
+ 
+ {% load i18n %}
+-{% load staticfiles %}
++{% load static %}
+ <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+ <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+-- 
+2.32.0
+
+
+^ permalink raw reply related	[flat|nested] 17+ messages in thread
+* [layerindex-web][PATCH 08/15] requirements.txt: bump to Django 3.1
+  2021-07-18 23:07 [layerindex-web][PATCH 00/15] Upgrade to Django 3.2.5 LTS and Celery 5 Tim Orling
+                   ` (6 preceding siblings ...)
+  2021-07-18 23:07 ` [layerindex-web][PATCH 07/15] Updates for " Tim Orling
+@ 2021-07-18 23:07 ` Tim Orling
+  2021-07-18 23:07 ` [layerindex-web][PATCH 09/15] docker-compose: bump mariadb to 10.3 Tim Orling
+                   ` (7 subsequent siblings)
+  15 siblings, 0 replies; 17+ messages in thread
+From: Tim Orling @ 2021-07-18 23:07 UTC (permalink / raw)
+  To: yocto; +Cc: mhalstead, Tim Orling
+
+Another incremental upgrade towards 3.2 LTS
+
+Signed-off-by: Tim Orling <timothy.t.orling@intel.com>
+---
+ requirements.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/requirements.txt b/requirements.txt
+index 895994b..865960c 100644
+--- a/requirements.txt
++++ b/requirements.txt
+@@ -3,7 +3,7 @@ beautifulsoup4==4.9.3
+ billiard==3.6.1.0
+ celery==4.3.0
+ confusable-homoglyphs==3.2.0
+-Django>=3.0,<3.1
++Django>=3.1,<3.2
+ django-appconf==1.0.4
+ django-axes==5.13.1
+ django-bootstrap-pagination==1.7.1
+-- 
+2.32.0
+
+
+^ permalink raw reply related	[flat|nested] 17+ messages in thread
+* [layerindex-web][PATCH 09/15] docker-compose: bump mariadb to 10.3
+  2021-07-18 23:07 [layerindex-web][PATCH 00/15] Upgrade to Django 3.2.5 LTS and Celery 5 Tim Orling
+                   ` (7 preceding siblings ...)
+  2021-07-18 23:07 ` [layerindex-web][PATCH 08/15] requirements.txt: bump to Django 3.1 Tim Orling
+@ 2021-07-18 23:07 ` Tim Orling
+  2021-07-18 23:07 ` [layerindex-web][PATCH 10/15] requirements.txt: update all to latest Tim Orling
+                   ` (6 subsequent siblings)
+  15 siblings, 0 replies; 17+ messages in thread
+From: Tim Orling @ 2021-07-18 23:07 UTC (permalink / raw)
+  To: yocto; +Cc: mhalstead, Tim Orling
+
+10.2 was based on Ubuntu bionic 18.04,
+bumping to 10.3 as it is the first release
+on Ubuntu focal 20.04
+
+Signed-off-by: Tim Orling <timothy.t.orling@intel.com>
+---
+ docker-compose.yml | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/docker-compose.yml b/docker-compose.yml
+index 44260b6..3e16e95 100644
+--- a/docker-compose.yml
++++ b/docker-compose.yml
+@@ -1,7 +1,7 @@
+ version: '3'
+ services:
+   layersdb:
+-    image: mariadb:10.2
++    image: mariadb:10.3
+     command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --wait_timeout=28800 --max_allowed_packet=128M
+     environment:
+      - "MYSQL_DATABASE=layersdb"
+-- 
+2.32.0
+
+
+^ permalink raw reply related	[flat|nested] 17+ messages in thread
+* [layerindex-web][PATCH 10/15] requirements.txt: update all to latest
+  2021-07-18 23:07 [layerindex-web][PATCH 00/15] Upgrade to Django 3.2.5 LTS and Celery 5 Tim Orling
+                   ` (8 preceding siblings ...)
+  2021-07-18 23:07 ` [layerindex-web][PATCH 09/15] docker-compose: bump mariadb to 10.3 Tim Orling
+@ 2021-07-18 23:07 ` Tim Orling
+  2021-07-18 23:07 ` [layerindex-web][PATCH 11/15] about.html: update contributors Tim Orling
+                   ` (5 subsequent siblings)
+  15 siblings, 0 replies; 17+ messages in thread
+From: Tim Orling @ 2021-07-18 23:07 UTC (permalink / raw)
+  To: yocto; +Cc: mhalstead, Tim Orling
+
+Since we are on a "modern" version of Python in
+Debian buster container (3.7) and a modern version
+of Django (3.1.x) we should be able to run with
+the latest of all dependencies.
+
+Signed-off-by: Tim Orling <timothy.t.orling@intel.com>
+---
+ requirements.txt | 34 +++++++++++++++++-----------------
+ 1 file changed, 17 insertions(+), 17 deletions(-)
+
+diff --git a/requirements.txt b/requirements.txt
+index 865960c..7704ac0 100644
+--- a/requirements.txt
++++ b/requirements.txt
+@@ -1,27 +1,27 @@
+-amqp==2.6.1
++amqp==5.0.6
+ beautifulsoup4==4.9.3
+-billiard==3.6.1.0
+-celery==4.3.0
++billiard==3.6.4.0
++celery==5.1.2
+ confusable-homoglyphs==3.2.0
+ Django>=3.1,<3.2
+ django-appconf==1.0.4
+-django-axes==5.13.1
++django-axes==5.20.0
+ django-bootstrap-pagination==1.7.1
+-django-cors-headers==3.2.1
++django-cors-headers==3.7.0
+ django-ipware==3.0.2
+ django-ranged-response==0.2.0
+-django-registration==3.1.2
+-django-reversion==3.0.9
++django-registration==3.2
++django-reversion==4.0.0
+ django-reversion-compare==0.14.0
+ django-simple-captcha==0.5.14
+ djangorestframework==3.12.4
+-gitdb2==2.0.6
+-GitPython==2.1.13
+-kombu==4.6.3
+-mysqlclient==1.4.6
+-Pillow==6.2.1
+-pytz==2019.3
+-six==1.12.0
+-smmap2==2.0.5
+-soupsieve==1.9.4
+-vine==1.3.0
++gitdb==4.0.7
++GitPython==3.1.18
++kombu==5.1.0
++mysqlclient==2.0.3
++Pillow==8.3.1
++pytz==2021.1
++six==1.16.0
++smmap==4.0.0
++soupsieve==2.2.1
++vine==5.0.0
+-- 
+2.32.0
+
+
+^ permalink raw reply related	[flat|nested] 17+ messages in thread
+* [layerindex-web][PATCH 11/15] about.html: update contributors
+  2021-07-18 23:07 [layerindex-web][PATCH 00/15] Upgrade to Django 3.2.5 LTS and Celery 5 Tim Orling
+                   ` (9 preceding siblings ...)
+  2021-07-18 23:07 ` [layerindex-web][PATCH 10/15] requirements.txt: update all to latest Tim Orling
+@ 2021-07-18 23:07 ` Tim Orling
+  2021-07-18 23:07 ` [layerindex-web][PATCH 12/15] requirements.txt: bump to Django 3.2 LTS Tim Orling
+                   ` (4 subsequent siblings)
+  15 siblings, 0 replies; 17+ messages in thread
+From: Tim Orling @ 2021-07-18 23:07 UTC (permalink / raw)
+  To: yocto; +Cc: mhalstead, Tim Orling
+
+* Add
+  - Amber Elliot
+  - Tim Orling
+
+Signed-off-by: Tim Orling <timothy.t.orling@intel.com>
+---
+ templates/layerindex/about.html | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/templates/layerindex/about.html b/templates/layerindex/about.html
+index b6b461a..f79bf22 100644
+--- a/templates/layerindex/about.html
++++ b/templates/layerindex/about.html
+@@ -51,6 +51,8 @@
+ <li>Marius Avram</li>
+ <li>Saul Wold</li>
+ <li>Aníbal Limón</li>
++<li>Amber Elliot</li>
++<li>Tim Orling</li>
+ </ul>
+ 
+ <p>The code is Open Source and can be found on <a href="http://git.yoctoproject.org/cgit/cgit.cgi/layerindex-web/">git.yoctoproject.org</a>. Patches welcome!</p>
+-- 
+2.32.0
+
+
+^ permalink raw reply related	[flat|nested] 17+ messages in thread
+* [layerindex-web][PATCH 12/15] requirements.txt: bump to Django 3.2 LTS
+  2021-07-18 23:07 [layerindex-web][PATCH 00/15] Upgrade to Django 3.2.5 LTS and Celery 5 Tim Orling
+                   ` (10 preceding siblings ...)
+  2021-07-18 23:07 ` [layerindex-web][PATCH 11/15] about.html: update contributors Tim Orling
+@ 2021-07-18 23:07 ` Tim Orling
+  2021-07-18 23:07 ` [layerindex-web][PATCH 13/15] settings: set DEFAULT_AUTO_FIELD Tim Orling
+                   ` (3 subsequent siblings)
+  15 siblings, 0 replies; 17+ messages in thread
+From: Tim Orling @ 2021-07-18 23:07 UTC (permalink / raw)
+  To: yocto; +Cc: mhalstead, Tim Orling
+
+Upgrade to the latest Django 3.2.x LTS for
+extended support up until April 2024.
+
+Signed-off-by: Tim Orling <timothy.t.orling@intel.com>
+---
+ requirements.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/requirements.txt b/requirements.txt
+index 7704ac0..41a0b1e 100644
+--- a/requirements.txt
++++ b/requirements.txt
+@@ -3,7 +3,7 @@ beautifulsoup4==4.9.3
+ billiard==3.6.4.0
+ celery==5.1.2
+ confusable-homoglyphs==3.2.0
+-Django>=3.1,<3.2
++Django>=3.2,<3.3
+ django-appconf==1.0.4
+ django-axes==5.20.0
+ django-bootstrap-pagination==1.7.1
+-- 
+2.32.0
+
+
+^ permalink raw reply related	[flat|nested] 17+ messages in thread
+* [layerindex-web][PATCH 13/15] settings: set DEFAULT_AUTO_FIELD
+  2021-07-18 23:07 [layerindex-web][PATCH 00/15] Upgrade to Django 3.2.5 LTS and Celery 5 Tim Orling
+                   ` (11 preceding siblings ...)
+  2021-07-18 23:07 ` [layerindex-web][PATCH 12/15] requirements.txt: bump to Django 3.2 LTS Tim Orling
+@ 2021-07-18 23:07 ` Tim Orling
+  2021-07-18 23:07 ` [layerindex-web][PATCH 14/15] docker-compose: fix celery Tim Orling
+                   ` (2 subsequent siblings)
+  15 siblings, 0 replies; 17+ messages in thread
+From: Tim Orling @ 2021-07-18 23:07 UTC (permalink / raw)
+  To: yocto; +Cc: mhalstead, Tim Orling
+
+New in Django 3.2
+
+To quiet warnings, set DEFAULT_AUTO_FIELD to the
+default value 'django.db.models.AutoField'
+
+NOTE: The default value for newly created Django 3.2
+      projects is django.db.models.BigAutoField, but
+      this causes the need for a migration in 'captcha'.
+
+Signed-off-by: Tim Orling <timothy.t.orling@intel.com>
+---
+ docker/settings.py | 3 +++
+ settings.py        | 3 +++
+ 2 files changed, 6 insertions(+)
+
+diff --git a/docker/settings.py b/docker/settings.py
+index 894974f..a3f007d 100644
+--- a/docker/settings.py
++++ b/docker/settings.py
+@@ -140,6 +140,9 @@ TEMPLATES = [
+     },
+ ]
+ 
++# New in Django 3.2
++DEFAULT_AUTO_FIELD = 'django.db.models.AutoField'
++
+ INSTALLED_APPS = (
+     'django.contrib.auth',
+     'django.contrib.contenttypes',
+diff --git a/settings.py b/settings.py
+index d03d15c..a69eb53 100644
+--- a/settings.py
++++ b/settings.py
+@@ -140,6 +140,9 @@ TEMPLATES = [
+     },
+ ]
+ 
++# New in Django 3.2
++DEFAULT_AUTO_FIELD = 'django.db.models.AutoField'
++
+ INSTALLED_APPS = (
+     'django.contrib.auth',
+     'django.contrib.contenttypes',
+-- 
+2.32.0
+
+
+^ permalink raw reply related	[flat|nested] 17+ messages in thread
+* [layerindex-web][PATCH 14/15] docker-compose: fix celery
+  2021-07-18 23:07 [layerindex-web][PATCH 00/15] Upgrade to Django 3.2.5 LTS and Celery 5 Tim Orling
+                   ` (12 preceding siblings ...)
+  2021-07-18 23:07 ` [layerindex-web][PATCH 13/15] settings: set DEFAULT_AUTO_FIELD Tim Orling
+@ 2021-07-18 23:07 ` Tim Orling
+  2021-07-18 23:07 ` [layerindex-web][PATCH 15/15] README.devel: update versions Tim Orling
+  2021-07-20 18:01 ` [yocto] [layerindex-web][PATCH 00/15] Upgrade to Django 3.2.5 LTS and Celery 5 Richard Purdie
+  15 siblings, 0 replies; 17+ messages in thread
+From: Tim Orling @ 2021-07-18 23:07 UTC (permalink / raw)
+  To: yocto; +Cc: mhalstead, Tim Orling
+
+In celery 5, the --workdir argument must come
+before the 'worker' subcommand.
+
+Without this, celery cannot load the layerindex
+module and this causes the celery container to
+continually restart.
+
+Signed-off-by: Tim Orling <timothy.t.orling@intel.com>
+---
+ docker-compose.yml | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/docker-compose.yml b/docker-compose.yml
+index 3e16e95..2dfff41 100644
+--- a/docker-compose.yml
++++ b/docker-compose.yml
+@@ -80,7 +80,7 @@ services:
+      #- "EMAIL_USE_TLS=<set this here if needed>"
+      #- "DEBUG=1"
+     restart: unless-stopped
+-    command: /usr/local/bin/celery -A layerindex.tasks worker --loglevel=info --workdir=/opt/layerindex
++    command: /usr/local/bin/celery --workdir=/opt/layerindex --app layerindex.tasks worker --loglevel=INFO
+   #layerscertbot:
+   #  image: certbot/certbot
+   #  volumes:
+-- 
+2.32.0
+
+
+^ permalink raw reply related	[flat|nested] 17+ messages in thread
+* [layerindex-web][PATCH 15/15] README.devel: update versions
+  2021-07-18 23:07 [layerindex-web][PATCH 00/15] Upgrade to Django 3.2.5 LTS and Celery 5 Tim Orling
+                   ` (13 preceding siblings ...)
+  2021-07-18 23:07 ` [layerindex-web][PATCH 14/15] docker-compose: fix celery Tim Orling
+@ 2021-07-18 23:07 ` Tim Orling
+  2021-07-20 18:01 ` [yocto] [layerindex-web][PATCH 00/15] Upgrade to Django 3.2.5 LTS and Celery 5 Richard Purdie
+  15 siblings, 0 replies; 17+ messages in thread
+From: Tim Orling @ 2021-07-18 23:07 UTC (permalink / raw)
+  To: yocto; +Cc: mhalstead, Tim Orling
+
+This updated code-base should be compatible with
+Django 3.1 and obviously 3.2 (but not 3.0 or earlier).
+
+Django 3.2 requires Python 3.6+.
+
+With the upgrade to Celery 5, it is safer to recommend
+RabbitMQ 3.8.x, since that is what we are using.
+
+Signed-off-by: Tim Orling <timothy.t.orling@intel.com>
+---
+ README.devel | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/README.devel b/README.devel
+index b535304..cbf54bf 100644
+--- a/README.devel
++++ b/README.devel
+@@ -7,9 +7,9 @@ covered in the main README.
+ 
+ In order to run this application standalone, you will need:
+ 
+-* Python 3.4+
+-* Django 1.11.x (not compatible with 2.0 or newer)
+-* RabbitMQ 3.7.x
++* Python 3.6+
++* Django 3.2.x (not compatible with 3.0 or older)
++* RabbitMQ 3.8.x
+ * For production usage, a web server set up to host Django applications
+   (not needed for local-only testing/development)
+ * A database system supported by Django (SQLite, MariaDB/MySQL, etc.).
+-- 
+2.32.0
+
+
+^ permalink raw reply related	[flat|nested] 17+ messages in thread
+* Re: [yocto] [layerindex-web][PATCH 00/15] Upgrade to Django 3.2.5 LTS and Celery 5
+  2021-07-18 23:07 [layerindex-web][PATCH 00/15] Upgrade to Django 3.2.5 LTS and Celery 5 Tim Orling
+                   ` (14 preceding siblings ...)
+  2021-07-18 23:07 ` [layerindex-web][PATCH 15/15] README.devel: update versions Tim Orling
+@ 2021-07-20 18:01 ` Richard Purdie
+  15 siblings, 0 replies; 17+ messages in thread
+From: Richard Purdie @ 2021-07-20 18:01 UTC (permalink / raw)
+  To: Tim Orling, yocto; +Cc: mhalstead, Tim Orling
+
+On Sun, 2021-07-18 at 16:07 -0700, Tim Orling wrote:
+> The current code base uses Django 2.2.x which will go out of extended
+> support in April 2022, but also holds us back from updating a number of
+> dependencies.
+> 
+> Update to the current Django 3.2.5 LTS and also the latest Celery 5.1.2.
+> Celery 4 has not had any commits since 2020 and is unlikely to be
+> getting much more attention from the developers.
+> 
+> While we are at it, upgrade all of our dependencies to the latest
+> versions.
+
+I don't have the skills to review this in detail but it sounds like a
+good step forward for many different reasons, thanks!
+
+Cheers,
+
+Richard
+
+
+^ permalink raw reply	[flat|nested] 17+ messages in thread
+end of thread, other threads:[~2021-07-20 18:01 UTC | newest]
+
+Thread overview: 17+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-07-18 23:07 [layerindex-web][PATCH 00/15] Upgrade to Django 3.2.5 LTS and Celery 5 Tim Orling
+2021-07-18 23:07 ` [layerindex-web][PATCH 01/15] dockersetup.py: fix EMAIL_USE_SSL/TLS Tim Orling
+2021-07-18 23:07 ` [layerindex-web][PATCH 02/15] requirements.txt: fix range check Tim Orling
+2021-07-18 23:07 ` [layerindex-web][PATCH 03/15] Dockerfile: cleanup, install python3-wheel Tim Orling
+2021-07-18 23:07 ` [layerindex-web][PATCH 04/15] dockersetup.py: letsencrypt 2048 bit rsa Tim Orling
+2021-07-18 23:07 ` [layerindex-web][PATCH 05/15] layerindex/*: make all shebangs python3 Tim Orling
+2021-07-18 23:07 ` [layerindex-web][PATCH 06/15] requirements.txt: bump to Django 3.0 Tim Orling
+2021-07-18 23:07 ` [layerindex-web][PATCH 07/15] Updates for " Tim Orling
+2021-07-18 23:07 ` [layerindex-web][PATCH 08/15] requirements.txt: bump to Django 3.1 Tim Orling
+2021-07-18 23:07 ` [layerindex-web][PATCH 09/15] docker-compose: bump mariadb to 10.3 Tim Orling
+2021-07-18 23:07 ` [layerindex-web][PATCH 10/15] requirements.txt: update all to latest Tim Orling
+2021-07-18 23:07 ` [layerindex-web][PATCH 11/15] about.html: update contributors Tim Orling
+2021-07-18 23:07 ` [layerindex-web][PATCH 12/15] requirements.txt: bump to Django 3.2 LTS Tim Orling
+2021-07-18 23:07 ` [layerindex-web][PATCH 13/15] settings: set DEFAULT_AUTO_FIELD Tim Orling
+2021-07-18 23:07 ` [layerindex-web][PATCH 14/15] docker-compose: fix celery Tim Orling
+2021-07-18 23:07 ` [layerindex-web][PATCH 15/15] README.devel: update versions Tim Orling
+2021-07-20 18:01 ` [yocto] [layerindex-web][PATCH 00/15] Upgrade to Django 3.2.5 LTS and Celery 5 Richard Purdie
+

@@ -1,0 +1,1037 @@
+* LInker Errors: Cannot find crti.o/crtbeginS.o. No such file or directory. #honister #make #yocto
+@ 2022-06-22 20:06 douglas.cooper1
+  2022-06-23  1:18 ` [yocto] " Khem Raj
+  0 siblings, 1 reply; 8+ messages in thread
+From: douglas.cooper1 @ 2022-06-22 20:06 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 379 bytes --]
+
+Hello. Im trying to write a recipe for an autoconf based project. Ive managed to resolve most of the include and linker issues with the exception of the subject error. The files in question exist at <sysroot>/usr/lib64 and <sysroot>/usr/lib64/${TARGET_SYS}/10.3.1 and those paths appear to be on the file search path with sysroot set as expected. Any help would be appreciated.
+
+[-- Attachment #2: Type: text/html, Size: 398 bytes --]
+
+^ permalink raw reply	[flat|nested] 8+ messages in thread
+* Re: [yocto] LInker Errors: Cannot find crti.o/crtbeginS.o. No such file or directory. #honister #make #yocto
+  2022-06-22 20:06 LInker Errors: Cannot find crti.o/crtbeginS.o. No such file or directory. #honister #make #yocto douglas.cooper1
+@ 2022-06-23  1:18 ` Khem Raj
+  2022-06-28 21:23   ` douglas.cooper1
+  0 siblings, 1 reply; 8+ messages in thread
+From: Khem Raj @ 2022-06-23  1:18 UTC (permalink / raw)
+  To: douglas.cooper1; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1267 bytes --]
+
+On Thu, Jun 23, 2022 at 1:36 AM <douglas.cooper1@gmail.com> wrote:
+
+> Hello. Im trying to write a recipe for an autoconf based project. Ive
+> managed to resolve most of the include and linker issues with the exception
+> of the subject error. The files in question exist at <sysroot>/usr/lib64
+> and <sysroot>/usr/lib64/${TARGET_SYS}/10.3.1 and those paths appear to be
+> on the file search path with sysroot set as expected. Any help would be
+> appreciated.
+>
+
+It’s linker cmdline which is interesting here please post it and that will
+help to see further
+
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> You automatically follow any topics you start or reply to.
+> View/Reply Online (#57377):
+> https://lists.yoctoproject.org/g/yocto/message/57377
+> Mute This Topic: https://lists.yoctoproject.org/mt/91929966/1997914
+> Mute #honister:https://lists.yoctoproject.org/g/yocto/mutehashtag/honister
+> Mute #make:https://lists.yoctoproject.org/g/yocto/mutehashtag/make
+> Mute #yocto:https://lists.yoctoproject.org/g/yocto/mutehashtag/yocto
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> raj.khem@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 2465 bytes --]
+
+^ permalink raw reply	[flat|nested] 8+ messages in thread
+* Re: LInker Errors: Cannot find crti.o/crtbeginS.o. No such file or directory. #honister #make #yocto
+  2022-06-23  1:18 ` [yocto] " Khem Raj
+@ 2022-06-28 21:23   ` douglas.cooper1
+  2022-06-29 13:46     ` [yocto] " Khem Raj
+  0 siblings, 1 reply; 8+ messages in thread
+From: douglas.cooper1 @ 2022-06-28 21:23 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 16716 bytes --]
+
+#!/bin/sh
+
+__BITBAKE_LAST_LINE=0
+
+# Emit a useful diagnostic if something fails:
+bb_sh_exit_handler() {
+ret=$?
+if [ "$ret" != 0 ]; then
+echo "WARNING: exit code $ret from a shell command."
+fi
+exit $ret
+}
+
+bb_bash_exit_handler() {
+ret=$?
+{ set +x; } > /dev/null
+trap "" DEBUG
+if [ "$ret" != 0 ]; then
+echo "WARNING: ${BASH_SOURCE[0]}:${__BITBAKE_LAST_LINE} exit $ret from '$1'"
+
+echo "WARNING: Backtrace (BB generated script): "
+for i in $(seq 1 $((${#FUNCNAME[@]} - 1))); do
+if [ "$i" -eq 1 ]; then
+echo -e " #$((i)): ${FUNCNAME[$i]}, ${BASH_SOURCE[$((i-1))]}, line ${__BITBAKE_LAST_LINE}"
+else
+echo -e " #$((i)): ${FUNCNAME[$i]}, ${BASH_SOURCE[$((i-1))]}, line ${BASH_LINENO[$((i-1))]}"
+fi
+done
+fi
+exit $ret
+}
+
+bb_bash_debug_handler() {
+local line=${BASH_LINENO[0]}
+# For some reason the DEBUG trap trips with lineno=1 when scripts exit; ignore it
+if [ "$line" -eq 1 ]; then
+return
+fi
+
+# Track the line number of commands as they execute. This is so we can have access to the failing line number
+# in the EXIT trap. See http://gnu-bash.2382.n7.nabble.com/trap-echo-quot-trap-exit-on-LINENO-quot-EXIT-gt-wrong-linenumber-td3666.html
+if [ "${FUNCNAME[1]}" != "bb_bash_exit_handler" ]; then
+__BITBAKE_LAST_LINE=$line
+fi
+}
+
+case $BASH_VERSION in
+"") trap 'bb_sh_exit_handler' 0
+set -e
+;;
+*)  trap 'bb_bash_exit_handler "$BASH_COMMAND"' 0
+trap '{ bb_bash_debug_handler; } 2>/dev/null' DEBUG
+set -e
+shopt -s extdebug
+;;
+esac
+export AR="aarch64-linaro-linux-gcc-ar"
+export AS="aarch64-linaro-linux-as "
+export BUILD_AR="ar"
+export BUILD_AS="as "
+export BUILD_CC="gcc "
+export BUILD_CCLD="gcc "
+export BUILD_CFLAGS="-isystem/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot-native/usr/include -O2 -pipe"
+export BUILD_CPP="gcc  -E"
+export BUILD_CPPFLAGS="-isystem/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot-native/usr/include"
+export BUILD_CXX="g++ "
+export BUILD_CXXFLAGS="-isystem/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot-native/usr/include -O2 -pipe"
+export BUILD_FC="gfortran "
+export BUILD_LD="ld "
+export BUILD_LDFLAGS="-L/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot-native/usr/lib                         -L/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot-native/lib                         -Wl,--enable-new-dtags                         -Wl,-rpath-link,/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot-native/usr/lib                         -Wl,-rpath-link,/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot-native/lib                         -Wl,-rpath,/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot-native/usr/lib                         -Wl,-rpath,/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot-native/lib                         -Wl,-O1"
+export BUILD_NM="nm"
+export BUILD_RANLIB="ranlib"
+export BUILD_STRIP="strip"
+export CC="aarch64-linaro-linux-gcc  -mcpu=cortex-a53 -march=armv8-a+crc --sysroot=/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot"
+export CCLD="aarch64-linaro-linux-gcc  -mcpu=cortex-a53 -march=armv8-a+crc --sysroot=/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot"
+export CC_FOR_BUILD="gcc "
+export CFLAGS="-D__ARMEL__     -I/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot/usr/include/c++/10.3.1     -I/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot/usr/include/c++/10.3.1/aarch64-linaro-linux     -I/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot/usr/include  -O2 -pipe -g -feliminate-unused-debug-types -fmacro-prefix-map=/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0=/usr/src/debug/opal/3.18-beta9-r0                      -fdebug-prefix-map=/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0=/usr/src/debug/opal/3.18-beta9-r0                      -fdebug-prefix-map=/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot=                      -fdebug-prefix-map=/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot-native= "
+export CFLAGS_FOR_BUILD="-isystem/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot-native/usr/include -O2 -pipe"
+export CONFIG_SITE="/home/vagrant/oe_qcom_honister/build-cdil/conf/../../layers/openembedded-core/meta/site/endian-little /home/vagrant/oe_qcom_honister/build-cdil/conf/../../layers/openembedded-core/meta/site/arm-common /home/vagrant/oe_qcom_honister/build-cdil/conf/../../layers/openembedded-core/meta/site/arm-64 /home/vagrant/oe_qcom_honister/build-cdil/conf/../../layers/openembedded-core/meta/site/common-linux /home/vagrant/oe_qcom_honister/build-cdil/conf/../../layers/openembedded-core/meta/site/common-glibc /home/vagrant/oe_qcom_honister/build-cdil/conf/../../layers/openembedded-core/meta/site/common"
+export CPP="aarch64-linaro-linux-gcc -E --sysroot=/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot  -mcpu=cortex-a53 -march=armv8-a+crc"
+export CPPFLAGS="-D__ARMEL__     -I/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot/usr/include/c++/10.3.1     -I/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot/usr/include/c++/10.3.1/aarch64-linaro-linux     -I/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot/usr/include "
+export CPPFLAGS_FOR_BUILD="-isystem/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot-native/usr/include"
+export CPP_FOR_BUILD="gcc  -E"
+export CXX="aarch64-linaro-linux-g++  -mcpu=cortex-a53 -march=armv8-a+crc --sysroot=/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot"
+export CXXFLAGS="-D__ARMEL__     -I/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot/usr/include/c++/10.3.1     -I/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot/usr/include/c++/10.3.1/aarch64-linaro-linux     -I/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot/usr/include  -O2 -pipe -g -feliminate-unused-debug-types -fmacro-prefix-map=/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0=/usr/src/debug/opal/3.18-beta9-r0                      -fdebug-prefix-map=/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0=/usr/src/debug/opal/3.18-beta9-r0                      -fdebug-prefix-map=/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot=                      -fdebug-prefix-map=/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot-native=  -fvisibility-inlines-hidden"
+export CXXFLAGS_FOR_BUILD="-isystem/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot-native/usr/include -O2 -pipe"
+export CXX_FOR_BUILD="g++ "
+unset DISTRO
+export FC="aarch64-linaro-linux-gfortran  -mcpu=cortex-a53 -march=armv8-a+crc --sysroot=/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot"
+export GIT_CEILING_DIRECTORIES="/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0"
+export GIT_CONFIG_PARAMETERS="'safe.directory=*'"
+export HOME="/home/vagrant"
+export LC_ALL="en_US.UTF-8"
+export LD="aarch64-linaro-linux-ld --sysroot=/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot "
+export LDFLAGS="    -L/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot/lib     -L/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot/usr/lib     -L/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot/usr/lib/aarch64-linaro-linux/10.3.1 "
+export LDFLAGS_FOR_BUILD="-L/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot-native/usr/lib                         -L/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot-native/lib                         -Wl,--enable-new-dtags                         -Wl,-rpath-link,/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot-native/usr/lib                         -Wl,-rpath-link,/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot-native/lib                         -Wl,-rpath,/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot-native/usr/lib                         -Wl,-rpath,/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot-native/lib                         -Wl,-O1"
+export LD_FOR_BUILD="ld "
+export LOGNAME="vagrant"
+unset MACHINE
+export MAKE="make"
+export NM="aarch64-linaro-linux-gcc-nm"
+export OBJCOPY="aarch64-linaro-linux-objcopy"
+export OBJDUMP="aarch64-linaro-linux-objdump"
+export OMP_NUM_THREADS="8"
+export OPALDIR="/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git"
+export PATH="/home/vagrant/oe_qcom_honister/layers/openembedded-core/scripts:/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot-native/usr/bin/aarch64-linaro-linux:/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot/usr/bin/crossscripts:/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot-native/usr/sbin:/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot-native/usr/bin:/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot-native/sbin:/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot-native/bin:/home/vagrant/oe_qcom_honister/bitbake/bin:/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/hosttools"
+export PKG_CONFIG_DIR="/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot/usr/lib/pkgconfig"
+export PKG_CONFIG_DISABLE_UNINSTALLED="yes"
+export PKG_CONFIG_LIBDIR="/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot/usr/lib/pkgconfig"
+export PKG_CONFIG_PATH="/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot/usr/lib/pkgconfig:/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot/usr/share/pkgconfig"
+export PKG_CONFIG_SYSROOT_DIR="/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot"
+export PKG_CONFIG_SYSTEM_INCLUDE_PATH="/usr/include"
+export PKG_CONFIG_SYSTEM_LIBRARY_PATH="/lib:/usr/lib"
+export PSEUDO_DISABLED="1"
+export PSEUDO_UNLOAD="1"
+export PTLIBDIR="/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot/usr/src/ptlib"
+export RANLIB="aarch64-linaro-linux-gcc-ranlib"
+export READELF="aarch64-linaro-linux-readelf"
+unset SHELL
+export STRINGS="aarch64-linaro-linux-strings"
+export STRIP="aarch64-linaro-linux-strip"
+unset TARGET_ARCH
+export TZ="UTC"
+export USER="vagrant"
+export base_bindir="/bin"
+export base_libdir="/lib"
+export base_prefix=""
+export base_sbindir="/sbin"
+export bindir="/usr/bin"
+export datadir="/usr/share"
+export docdir="/usr/share/doc"
+export exec_prefix="/usr"
+export includedir="/usr/include"
+export infodir="/usr/share/info"
+export libdir="/usr/lib"
+export libexecdir="/usr/libexec"
+export localstatedir="/var"
+export lt_cv_sys_lib_dlsearch_path_spec="/usr/lib /lib"
+export mandir="/usr/share/man"
+export nonarch_base_libdir="/lib"
+export nonarch_libdir="/usr/lib"
+export oldincludedir="/usr/include"
+export prefix="/usr"
+export sbindir="/usr/sbin"
+export servicedir="/srv"
+export sharedstatedir="/com"
+export sysconfdir="/etc"
+export systemd_system_unitdir="/lib/systemd/system"
+export systemd_unitdir="/lib/systemd"
+export systemd_user_unitdir="/usr/lib/systemd/user"
+
+# line: 1, file: autogenerated
+do_compile() {
+# make clean
+# export LIBRARY_PATH="/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot/usr/lib:/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot/usr/lib/aarch64-linaro-linux/10.3.1"
+autotools_do_compile
+}
+
+# line: 238, file: /home/vagrant/oe_qcom_honister/build-cdil/conf/../../layers/openembedded-core/meta/classes/autotools.bbclass
+autotools_do_compile() {
+oe_runmake
+}
+
+# line: 64, file: /home/vagrant/oe_qcom_honister/build-cdil/conf/../../layers/openembedded-core/meta/classes/base.bbclass
+oe_runmake() {
+oe_runmake_call "$@" || die "oe_runmake failed"
+}
+
+# line: 55, file: /home/vagrant/oe_qcom_honister/build-cdil/conf/../../layers/openembedded-core/meta/classes/base.bbclass
+die() {
+bbfatal_log "$*"
+}
+
+# line: 59, file: /home/vagrant/oe_qcom_honister/build-cdil/conf/../../layers/openembedded-core/meta/classes/base.bbclass
+oe_runmake_call() {
+bbnote make -j 8  "$@"
+make -j 8  "$@"
+}
+
+# line: 66, file: /home/vagrant/oe_qcom_honister/build-cdil/conf/../../layers/openembedded-core/meta/classes/logging.bbclass
+bbfatal_log() {
+if [ -p /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/temp/fifo.2668267 ] ; then
+printf "%b\0" "bbfatal_log $*" > /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/temp/fifo.2668267
+else
+echo "ERROR: $*"
+fi
+exit 1
+}
+
+# line: 21, file: /home/vagrant/oe_qcom_honister/build-cdil/conf/../../layers/openembedded-core/meta/classes/logging.bbclass
+bbnote() {
+if [ -p /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/temp/fifo.2668267 ] ; then
+printf "%b\0" "bbnote $*" > /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/temp/fifo.2668267
+else
+echo "NOTE: $*"
+fi
+}
+
+cd '/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git'
+do_compile
+
+# cleanup
+ret=$?
+trap '' 0
+exit $ret
+
+[-- Attachment #2: Type: text/html, Size: 21812 bytes --]
+
+^ permalink raw reply	[flat|nested] 8+ messages in thread
+* Re: [yocto] LInker Errors: Cannot find crti.o/crtbeginS.o. No such file or directory. #honister #make #yocto
+  2022-06-28 21:23   ` douglas.cooper1
+@ 2022-06-29 13:46     ` Khem Raj
+  2022-06-29 13:50       ` douglas.cooper1
+  0 siblings, 1 reply; 8+ messages in thread
+From: Khem Raj @ 2022-06-29 13:46 UTC (permalink / raw)
+  To: douglas.cooper1; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 17839 bytes --]
+
+Post log.do_complile perhaps that will have the needed link line
+
+On Tue, Jun 28, 2022 at 5:23 PM <douglas.cooper1@gmail.com> wrote:
+
+> #!/bin/sh
+>
+> __BITBAKE_LAST_LINE=0
+>
+> # Emit a useful diagnostic if something fails:
+> bb_sh_exit_handler() {
+>     ret=$?
+>     if [ "$ret" != 0 ]; then
+>         echo "WARNING: exit code $ret from a shell command."
+>     fi
+>     exit $ret
+> }
+>
+> bb_bash_exit_handler() {
+>     ret=$?
+>     { set +x; } > /dev/null
+>     trap "" DEBUG
+>     if [ "$ret" != 0 ]; then
+>         echo "WARNING: ${BASH_SOURCE[0]}:${__BITBAKE_LAST_LINE} exit $ret
+> from '$1'"
+>
+>         echo "WARNING: Backtrace (BB generated script): "
+>         for i in $(seq 1 $((${#FUNCNAME[@]} - 1))); do
+>             if [ "$i" -eq 1 ]; then
+>                 echo -e " #$((i)): ${FUNCNAME[$i]},
+> ${BASH_SOURCE[$((i-1))]}, line ${__BITBAKE_LAST_LINE}"
+>             else
+>                 echo -e " #$((i)): ${FUNCNAME[$i]},
+> ${BASH_SOURCE[$((i-1))]}, line ${BASH_LINENO[$((i-1))]}"
+>             fi
+>         done
+>     fi
+>     exit $ret
+> }
+>
+> bb_bash_debug_handler() {
+>     local line=${BASH_LINENO[0]}
+>     # For some reason the DEBUG trap trips with lineno=1 when scripts
+> exit; ignore it
+>     if [ "$line" -eq 1 ]; then
+>         return
+>     fi
+>
+>     # Track the line number of commands as they execute. This is so we can
+> have access to the failing line number
+>     # in the EXIT trap. See
+> http://gnu-bash.2382.n7.nabble.com/trap-echo-quot-trap-exit-on-LINENO-quot-EXIT-gt-wrong-linenumber-td3666.html
+>     if [ "${FUNCNAME[1]}" != "bb_bash_exit_handler" ]; then
+>         __BITBAKE_LAST_LINE=$line
+>     fi
+> }
+>
+> case $BASH_VERSION in
+> "") trap 'bb_sh_exit_handler' 0
+>     set -e
+>     ;;
+> *)  trap 'bb_bash_exit_handler "$BASH_COMMAND"' 0
+>     trap '{ bb_bash_debug_handler; } 2>/dev/null' DEBUG
+>     set -e
+>     shopt -s extdebug
+>     ;;
+> esac
+> export AR="aarch64-linaro-linux-gcc-ar"
+> export AS="aarch64-linaro-linux-as "
+> export BUILD_AR="ar"
+> export BUILD_AS="as "
+> export BUILD_CC="gcc "
+> export BUILD_CCLD="gcc "
+> export
+> BUILD_CFLAGS="-isystem/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot-native/usr/include
+> -O2 -pipe"
+> export BUILD_CPP="gcc  -E"
+> export
+> BUILD_CPPFLAGS="-isystem/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot-native/usr/include"
+> export BUILD_CXX="g++ "
+> export
+> BUILD_CXXFLAGS="-isystem/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot-native/usr/include
+> -O2 -pipe"
+> export BUILD_FC="gfortran "
+> export BUILD_LD="ld "
+> export
+> BUILD_LDFLAGS="-L/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot-native/usr/lib
+>
+>  -L/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot-native/lib
+>                        -Wl,--enable-new-dtags
+>  -Wl,-rpath-link,/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot-native/usr/lib
+>
+>  -Wl,-rpath-link,/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot-native/lib
+>
+>  -Wl,-rpath,/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot-native/usr/lib
+>
+>  -Wl,-rpath,/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot-native/lib
+>                        -Wl,-O1"
+> export BUILD_NM="nm"
+> export BUILD_RANLIB="ranlib"
+> export BUILD_STRIP="strip"
+> export CC="aarch64-linaro-linux-gcc  -mcpu=cortex-a53 -march=armv8-a+crc
+> --sysroot=/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot"
+> export CCLD="aarch64-linaro-linux-gcc  -mcpu=cortex-a53 -march=armv8-a+crc
+> --sysroot=/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot"
+> export CC_FOR_BUILD="gcc "
+> export CFLAGS="-D__ARMEL__
+>  -I/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot/usr/include/c++/10.3.1
+>
+>  -I/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot/usr/include/c++/10.3.1/aarch64-linaro-linux
+>
+>  -I/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot/usr/include
+> -O2 -pipe -g -feliminate-unused-debug-types
+> -fmacro-prefix-map=/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0=/usr/src/debug/opal/3.18-beta9-r0
+>
+> -fdebug-prefix-map=/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0=/usr/src/debug/opal/3.18-beta9-r0
+>
+> -fdebug-prefix-map=/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot=
+>
+> -fdebug-prefix-map=/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot-native=
+> "
+> export
+> CFLAGS_FOR_BUILD="-isystem/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot-native/usr/include
+> -O2 -pipe"
+> export
+> CONFIG_SITE="/home/vagrant/oe_qcom_honister/build-cdil/conf/../../layers/openembedded-core/meta/site/endian-little
+> /home/vagrant/oe_qcom_honister/build-cdil/conf/../../layers/openembedded-core/meta/site/arm-common
+> /home/vagrant/oe_qcom_honister/build-cdil/conf/../../layers/openembedded-core/meta/site/arm-64
+> /home/vagrant/oe_qcom_honister/build-cdil/conf/../../layers/openembedded-core/meta/site/common-linux
+> /home/vagrant/oe_qcom_honister/build-cdil/conf/../../layers/openembedded-core/meta/site/common-glibc
+> /home/vagrant/oe_qcom_honister/build-cdil/conf/../../layers/openembedded-core/meta/site/common"
+> export CPP="aarch64-linaro-linux-gcc -E
+> --sysroot=/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot
+> -mcpu=cortex-a53 -march=armv8-a+crc"
+> export CPPFLAGS="-D__ARMEL__
+>  -I/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot/usr/include/c++/10.3.1
+>
+>  -I/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot/usr/include/c++/10.3.1/aarch64-linaro-linux
+>
+>  -I/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot/usr/include
+> "
+> export
+> CPPFLAGS_FOR_BUILD="-isystem/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot-native/usr/include"
+> export CPP_FOR_BUILD="gcc  -E"
+> export CXX="aarch64-linaro-linux-g++  -mcpu=cortex-a53 -march=armv8-a+crc
+> --sysroot=/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot"
+> export CXXFLAGS="-D__ARMEL__
+>  -I/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot/usr/include/c++/10.3.1
+>
+>  -I/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot/usr/include/c++/10.3.1/aarch64-linaro-linux
+>
+>  -I/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot/usr/include
+> -O2 -pipe -g -feliminate-unused-debug-types
+> -fmacro-prefix-map=/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0=/usr/src/debug/opal/3.18-beta9-r0
+>
+> -fdebug-prefix-map=/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0=/usr/src/debug/opal/3.18-beta9-r0
+>
+> -fdebug-prefix-map=/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot=
+>
+> -fdebug-prefix-map=/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot-native=
+> -fvisibility-inlines-hidden"
+> export
+> CXXFLAGS_FOR_BUILD="-isystem/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot-native/usr/include
+> -O2 -pipe"
+> export CXX_FOR_BUILD="g++ "
+> unset DISTRO
+> export FC="aarch64-linaro-linux-gfortran  -mcpu=cortex-a53
+> -march=armv8-a+crc
+> --sysroot=/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot"
+> export
+> GIT_CEILING_DIRECTORIES="/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0"
+> export GIT_CONFIG_PARAMETERS="'safe.directory=*'"
+> export HOME="/home/vagrant"
+> export LC_ALL="en_US.UTF-8"
+> export LD="aarch64-linaro-linux-ld
+> --sysroot=/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot
+> "
+> export LDFLAGS="
+> -L/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot/lib
+>
+>  -L/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot/usr/lib
+>
+>  -L/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot/usr/lib/aarch64-linaro-linux/10.3.1
+> "
+> export
+> LDFLAGS_FOR_BUILD="-L/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot-native/usr/lib
+>
+>  -L/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot-native/lib
+>                        -Wl,--enable-new-dtags
+>  -Wl,-rpath-link,/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot-native/usr/lib
+>
+>  -Wl,-rpath-link,/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot-native/lib
+>
+>  -Wl,-rpath,/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot-native/usr/lib
+>
+>  -Wl,-rpath,/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot-native/lib
+>                        -Wl,-O1"
+> export LD_FOR_BUILD="ld "
+> export LOGNAME="vagrant"
+> unset MACHINE
+> export MAKE="make"
+> export NM="aarch64-linaro-linux-gcc-nm"
+> export OBJCOPY="aarch64-linaro-linux-objcopy"
+> export OBJDUMP="aarch64-linaro-linux-objdump"
+> export OMP_NUM_THREADS="8"
+> export
+> OPALDIR="/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git"
+> export
+> PATH="/home/vagrant/oe_qcom_honister/layers/openembedded-core/scripts:/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot-native/usr/bin/aarch64-linaro-linux:/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot/usr/bin/crossscripts:/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot-native/usr/sbin:/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot-native/usr/bin:/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot-native/sbin:/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot-native/bin:/home/vagrant/oe_qcom_honister/bitbake/bin:/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/hosttools"
+> export
+> PKG_CONFIG_DIR="/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot/usr/lib/pkgconfig"
+> export PKG_CONFIG_DISABLE_UNINSTALLED="yes"
+> export
+> PKG_CONFIG_LIBDIR="/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot/usr/lib/pkgconfig"
+> export
+> PKG_CONFIG_PATH="/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot/usr/lib/pkgconfig:/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot/usr/share/pkgconfig"
+> export
+> PKG_CONFIG_SYSROOT_DIR="/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot"
+> export PKG_CONFIG_SYSTEM_INCLUDE_PATH="/usr/include"
+> export PKG_CONFIG_SYSTEM_LIBRARY_PATH="/lib:/usr/lib"
+> export PSEUDO_DISABLED="1"
+> export PSEUDO_UNLOAD="1"
+> export
+> PTLIBDIR="/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot/usr/src/ptlib"
+> export RANLIB="aarch64-linaro-linux-gcc-ranlib"
+> export READELF="aarch64-linaro-linux-readelf"
+> unset SHELL
+> export STRINGS="aarch64-linaro-linux-strings"
+> export STRIP="aarch64-linaro-linux-strip"
+> unset TARGET_ARCH
+> export TZ="UTC"
+> export USER="vagrant"
+> export base_bindir="/bin"
+> export base_libdir="/lib"
+> export base_prefix=""
+> export base_sbindir="/sbin"
+> export bindir="/usr/bin"
+> export datadir="/usr/share"
+> export docdir="/usr/share/doc"
+> export exec_prefix="/usr"
+> export includedir="/usr/include"
+> export infodir="/usr/share/info"
+> export libdir="/usr/lib"
+> export libexecdir="/usr/libexec"
+> export localstatedir="/var"
+> export lt_cv_sys_lib_dlsearch_path_spec="/usr/lib /lib"
+> export mandir="/usr/share/man"
+> export nonarch_base_libdir="/lib"
+> export nonarch_libdir="/usr/lib"
+> export oldincludedir="/usr/include"
+> export prefix="/usr"
+> export sbindir="/usr/sbin"
+> export servicedir="/srv"
+> export sharedstatedir="/com"
+> export sysconfdir="/etc"
+> export systemd_system_unitdir="/lib/systemd/system"
+> export systemd_unitdir="/lib/systemd"
+> export systemd_user_unitdir="/usr/lib/systemd/user"
+>
+> # line: 1, file: autogenerated
+> do_compile() {
+>     # make clean
+>     # export
+> LIBRARY_PATH="/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot/usr/lib:/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot/usr/lib/aarch64-linaro-linux/10.3.1"
+>     autotools_do_compile
+> }
+>
+> # line: 238, file:
+> /home/vagrant/oe_qcom_honister/build-cdil/conf/../../layers/openembedded-core/meta/classes/autotools.bbclass
+> autotools_do_compile() {
+> oe_runmake
+> }
+>
+> # line: 64, file:
+> /home/vagrant/oe_qcom_honister/build-cdil/conf/../../layers/openembedded-core/meta/classes/base.bbclass
+> oe_runmake() {
+> oe_runmake_call "$@" || die "oe_runmake failed"
+> }
+>
+> # line: 55, file:
+> /home/vagrant/oe_qcom_honister/build-cdil/conf/../../layers/openembedded-core/meta/classes/base.bbclass
+> die() {
+> bbfatal_log "$*"
+> }
+>
+> # line: 59, file:
+> /home/vagrant/oe_qcom_honister/build-cdil/conf/../../layers/openembedded-core/meta/classes/base.bbclass
+> oe_runmake_call() {
+> bbnote make -j 8  "$@"
+> make -j 8  "$@"
+> }
+>
+> # line: 66, file:
+> /home/vagrant/oe_qcom_honister/build-cdil/conf/../../layers/openembedded-core/meta/classes/logging.bbclass
+> bbfatal_log() {
+> if [ -p
+> /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/temp/fifo.2668267
+> ] ; then
+> printf "%b\0" "bbfatal_log $*" >
+> /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/temp/fifo.2668267
+> else
+> echo "ERROR: $*"
+> fi
+> exit 1
+> }
+>
+> # line: 21, file:
+> /home/vagrant/oe_qcom_honister/build-cdil/conf/../../layers/openembedded-core/meta/classes/logging.bbclass
+> bbnote() {
+> if [ -p
+> /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/temp/fifo.2668267
+> ] ; then
+> printf "%b\0" "bbnote $*" >
+> /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/temp/fifo.2668267
+> else
+> echo "NOTE: $*"
+> fi
+> }
+>
+> cd
+> '/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git'
+> do_compile
+>
+> # cleanup
+> ret=$?
+> trap '' 0
+> exit $ret
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> You automatically follow any topics you start or reply to.
+> View/Reply Online (#57412):
+> https://lists.yoctoproject.org/g/yocto/message/57412
+> Unfollow This Topic: https://lists.yoctoproject.org/unft/91929966/1997914
+> Mute #yocto:https://lists.yoctoproject.org/g/yocto/mutehashtag/yocto
+> Mute #make:https://lists.yoctoproject.org/g/yocto/mutehashtag/make
+> Mute #honister:https://lists.yoctoproject.org/g/yocto/mutehashtag/honister
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> raj.khem@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 23414 bytes --]
+
+^ permalink raw reply	[flat|nested] 8+ messages in thread
+* Re: LInker Errors: Cannot find crti.o/crtbeginS.o. No such file or directory. #honister #make #yocto
+  2022-06-29 13:46     ` [yocto] " Khem Raj
+@ 2022-06-29 13:50       ` douglas.cooper1
+  2022-06-29 13:53         ` douglas.cooper1
+  0 siblings, 1 reply; 8+ messages in thread
+From: douglas.cooper1 @ 2022-06-29 13:50 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 13088 bytes --]
+
+DEBUG: Executing python function autotools_aclocals
+DEBUG: SITE files ['endian-little', 'bit-64', 'arm-common', 'arm-64', 'common-linux', 'common-glibc', 'aarch64-linux', 'common']
+DEBUG: Python function autotools_aclocals finished
+DEBUG: Executing shell function do_compile
+NOTE: make -j 8
+make[1]: Entering directory '/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git'
+[DEP] src/h224/h281.cxx
+[DEP] src/t38/t38proto.cxx
+[DEP] src/h224/h224.cxx
+[DEP] src/asn/t38.cxx
+[DEP] src/h224/q922.cxx
+[DEP] src/codec/echocancel.cxx
+[DEP] src/codec/g711a1_plc.cxx
+[DEP] src/codec/opalpluginmgr.cxx
+[DEP] src/codec/opalwavfile.cxx
+[DEP] src/codec/silencedetect.cxx
+[DEP] src/codec/rfc2833.cxx
+[DEP] src/t38/t38mf.cxx
+[DEP] src/codec/opusmf.cxx
+[DEP] src/codec/speexmf.cxx
+[DEP] src/codec/iLBCmf.cxx
+[DEP] src/codec/gsmamrmf.cxx
+[DEP] src/codec/gsm0610mf.cxx
+[DEP] src/codec/g729mf.cxx
+[DEP] src/codec/g728mf.cxx
+[DEP] src/codec/g726mf.cxx
+[DEP] src/codec/g7231mf.cxx
+[DEP] src/codec/g7222mf.cxx
+[DEP] src/codec/g7221mf.cxx
+[DEP] src/codec/g722mf.cxx
+[DEP] src/codec/g711.c
+[DEP] src/codec/g711codec.cxx
+[DEP] src/im/sipim.cxx
+[DEP] src/im/msrp.cxx
+[DEP] src/im/rfc4103.cxx
+[DEP] src/im/im_mf.cxx
+[DEP] src/im/t140.cxx
+[DEP] src/rtp/dtls_srtp_session.cpp
+[DEP] src/rtp/srtp_session.cxx
+[DEP] src/lids/lidpluginmgr.cxx
+[DEP] src/lids/lidep.cxx
+[DEP] src/lids/lid.cxx
+[DEP] src/ep/skinnyep.cxx
+[DEP] src/sip/sippres.cxx
+[DEP] src/sip/handlers.cxx
+[DEP] src/sip/sippdu.cxx
+[DEP] src/sip/sipcon.cxx
+[DEP] src/sip/sipep.cxx
+[DEP] src/t38/sipt38.cxx
+[DEP] src/sdp/ice.cxx
+[DEP] src/sdp/sdp.cxx
+[DEP] src/sdp/sdphttpep.cxx
+[DEP] src/sdp/sdpep.cxx
+[DEP] src/iax2/transmit.cxx
+[DEP] src/iax2/specialprocessor.cxx
+[DEP] src/iax2/sound.cxx
+[DEP] src/iax2/safestrings.cxx
+[DEP] src/iax2/remote.cxx
+[DEP] src/iax2/regprocessor.cxx
+[DEP] src/iax2/receiver.cxx
+[DEP] src/iax2/processor.cxx
+[DEP] src/iax2/ies.cxx
+[DEP] src/iax2/iedata.cxx
+[DEP] src/iax2/iax2medstrm.cxx
+[DEP] src/iax2/iax2ep.cxx
+[DEP] src/iax2/iax2con.cxx
+[DEP] src/iax2/frame.cxx
+[DEP] src/iax2/callprocessor.cxx
+[DEP] src/rtp/h235_session.cxx
+[DEP] src/h323/h235dh.cxx
+[DEP] src/h224/h323h224.cxx
+[DEP] src/t38/h323t38.cxx
+[DEP] src/h323/h235auth1.cxx
+[DEP] src/h460/h460_std24.cxx
+[DEP] src/h460/h460_std23.cxx
+[DEP] src/h460/h460_std19.cxx
+[DEP] src/h460/h460_std18.cxx
+[DEP] src/h460/h46024b.cxx
+[DEP] src/h460/h460tm.cxx
+[DEP] src/h460/h460pres.cxx
+[DEP] src/h460/h460p.cxx
+[DEP] src/h460/h4609.cxx
+[DEP] src/h460/h46019.cxx
+[DEP] src/h460/h46018.cxx
+[DEP] src/h460/h4601.cxx
+[DEP] src/h323/peclient.cxx
+[DEP] src/h323/h323annexg.cxx
+[DEP] src/h323/h501pdu.cxx
+[DEP] src/h323/h235auth.cxx
+[DEP] src/h323/h323trans.cxx
+[DEP] src/h323/h225ras.cxx
+[DEP] src/h323/gkserver.cxx
+[DEP] src/h323/gkclient.cxx
+[DEP] src/h323/transaddr.cxx
+[DEP] src/h323/q931.cxx
+[DEP] src/h323/svcctrl.cxx
+[DEP] src/h323/channels.cxx
+[DEP] src/h323/h323rtp.cxx
+[DEP] src/h323/h323pdu.cxx
+[DEP] src/h323/h323neg.cxx
+[DEP] src/h323/h323caps.cxx
+[DEP] src/h323/h323.cxx
+[DEP] src/h323/h323ep.cxx
+[DEP] src/asn/h501.cxx
+[DEP] src/asn/h248.cxx
+[DEP] src/asn/h245_3.cxx
+[DEP] src/asn/h245_2.cxx
+[DEP] src/asn/h245_1.cxx
+[DEP] src/asn/h235_srtp.cxx
+[DEP] src/asn/h235.cxx
+[DEP] src/asn/h225_2.cxx
+[DEP] src/asn/h225_1.cxx
+[DEP] src/asn/h45011.cxx
+[DEP] src/asn/h45010.cxx
+[DEP] src/asn/h4509.cxx
+[DEP] src/asn/h4508.cxx
+[DEP] src/asn/h4507.cxx
+[DEP] src/asn/h4506.cxx
+[DEP] src/asn/h4505.cxx
+[DEP] src/asn/h4504.cxx
+[DEP] src/asn/h4503.cxx
+[DEP] src/asn/h4502.cxx
+[DEP] src/asn/h4501.cxx
+[DEP] src/asn/gcc.cxx
+[DEP] src/asn/mcs.cxx
+[DEP] src/asn/x880.cxx
+[DEP] src/h323/h450pdu.cxx
+[DEP] src/ep/pcss.cxx
+[DEP] src/ep/opalmixer.cxx
+[DEP] src/opal/recording.cxx
+[DEP] src/opal/console_mgr.cxx
+[DEP] src/opal/pres_ent.cxx
+[DEP] src/opal/opal_c.cxx
+[DEP] src/ep/sockep.cxx
+[DEP] src/ep/localep.cxx
+[DEP] src/rtp/rtpconn.cxx
+[DEP] src/rtp/rtpep.cxx
+[DEP] src/rtp/pcapfile.cxx
+[DEP] src/rtp/metrics.cxx
+[DEP] src/rtp/jitter.cxx
+[DEP] src/rtp/rtp_fec.cxx
+[DEP] src/rtp/rtp_stream.cxx
+[DEP] src/rtp/rtp_session.cxx
+[DEP] src/rtp/rtp.cxx
+[DEP] src/opal/guid.cxx
+[DEP] src/opal/transports.cxx
+[DEP] src/opal/transcoders.cxx
+[DEP] src/opal/patch.cxx
+[DEP] src/opal/mediastrm.cxx
+[DEP] src/opal/mediasession.cxx
+[DEP] src/opal/mediatype.cxx
+[DEP] src/opal/mediafmt.cxx
+[DEP] src/opal/call.cxx
+[DEP] src/opal/connection.cxx
+[DEP] src/opal/endpoint.cxx
+[DEP] src/opal/manager.cxx
+[CXX] src/opal/manager.cxx
+[CXX] src/opal/endpoint.cxx
+[CXX] src/opal/connection.cxx
+[CXX] src/opal/call.cxx
+[CXX] src/opal/mediafmt.cxx
+[CXX] src/opal/mediatype.cxx
+[CXX] src/opal/mediasession.cxx
+[CXX] src/opal/mediastrm.cxx
+[CXX] src/opal/patch.cxx
+[CXX] src/opal/transcoders.cxx
+[CXX] src/opal/transports.cxx
+[CXX] src/opal/guid.cxx
+[CXX] src/rtp/rtp.cxx
+[CXX] src/rtp/rtp_session.cxx
+[CXX] src/rtp/rtp_stream.cxx
+[CXX] src/rtp/rtp_fec.cxx
+[CXX] src/rtp/jitter.cxx
+[CXX] src/rtp/metrics.cxx
+[CXX] src/rtp/pcapfile.cxx
+[CXX] src/rtp/rtpep.cxx
+[CXX] src/rtp/rtpconn.cxx
+[CXX] src/ep/localep.cxx
+[CXX] src/ep/sockep.cxx
+[CXX] src/opal/opal_c.cxx
+[CXX] src/opal/pres_ent.cxx
+[CXX] src/opal/console_mgr.cxx
+[CXX] src/opal/recording.cxx
+[CXX] src/ep/opalmixer.cxx
+[CXX] src/ep/pcss.cxx
+[CXX] src/h323/h450pdu.cxx
+[CXX] src/asn/x880.cxx
+[CXX] src/asn/mcs.cxx
+[CXX] src/asn/gcc.cxx
+[CXX] src/asn/h4501.cxx
+[CXX] src/asn/h4502.cxx
+[CXX] src/asn/h4503.cxx
+[CXX] src/asn/h4504.cxx
+[CXX] src/asn/h4505.cxx
+[CXX] src/asn/h4506.cxx
+[CXX] src/asn/h4507.cxx
+[CXX] src/asn/h4508.cxx
+[CXX] src/asn/h4509.cxx
+[CXX] src/asn/h45010.cxx
+[CXX] src/asn/h45011.cxx
+[CXX] src/asn/h225_1.cxx
+[CXX] src/asn/h225_2.cxx
+[CXX] src/asn/h235.cxx
+[CXX] src/asn/h235_srtp.cxx
+[CXX] src/asn/h245_1.cxx
+[CXX] src/asn/h245_2.cxx
+[CXX] src/asn/h245_3.cxx
+[CXX] src/asn/h248.cxx
+[CXX] src/asn/h501.cxx
+[CXX] src/h323/h323ep.cxx
+[CXX] src/h323/h323.cxx
+[CXX] src/h323/h323caps.cxx
+[CXX] src/h323/h323neg.cxx
+[CXX] src/h323/h323pdu.cxx
+[CXX] src/h323/h323rtp.cxx
+[CXX] src/h323/channels.cxx
+[CXX] src/h323/svcctrl.cxx
+[CXX] src/h323/q931.cxx
+[CXX] src/h323/transaddr.cxx
+[CXX] src/h323/gkclient.cxx
+[CXX] src/h323/gkserver.cxx
+[CXX] src/h323/h225ras.cxx
+[CXX] src/h323/h323trans.cxx
+[CXX] src/h323/h235auth.cxx
+[CXX] src/h323/h501pdu.cxx
+[CXX] src/h323/h323annexg.cxx
+[CXX] src/h323/peclient.cxx
+[CXX] src/h460/h4601.cxx
+[CXX] src/h460/h46018.cxx
+[CXX] src/h460/h46019.cxx
+[CXX] src/h460/h4609.cxx
+[CXX] src/h460/h460p.cxx
+[CXX] src/h460/h460pres.cxx
+[CXX] src/h460/h460tm.cxx
+[CXX] src/h460/h46024b.cxx
+[CXX] src/h460/h460_std18.cxx
+[CXX] src/h460/h460_std19.cxx
+[CXX] src/h460/h460_std23.cxx
+[CXX] src/h460/h460_std24.cxx
+[CXX] src/h323/h235auth1.cxx
+[CXX] src/t38/h323t38.cxx
+[CXX] src/h224/h323h224.cxx
+[CXX] src/h323/h235dh.cxx
+[CXX] src/rtp/h235_session.cxx
+[CXX] src/iax2/callprocessor.cxx
+[CXX] src/iax2/frame.cxx
+[CXX] src/iax2/iax2con.cxx
+[CXX] src/iax2/iax2ep.cxx
+[CXX] src/iax2/iax2medstrm.cxx
+[CXX] src/iax2/iedata.cxx
+[CXX] src/iax2/ies.cxx
+[CXX] src/iax2/processor.cxx
+[CXX] src/iax2/receiver.cxx
+[CXX] src/iax2/regprocessor.cxx
+[CXX] src/iax2/remote.cxx
+[CXX] src/iax2/safestrings.cxx
+[CXX] src/iax2/sound.cxx
+[CXX] src/iax2/specialprocessor.cxx
+[CXX] src/iax2/transmit.cxx
+[CXX] src/sdp/sdpep.cxx
+[CXX] src/sdp/sdphttpep.cxx
+[CXX] src/sdp/sdp.cxx
+[CXX] src/sdp/ice.cxx
+[CXX] src/t38/sipt38.cxx
+[CXX] src/sip/sipep.cxx
+[CXX] src/sip/sipcon.cxx
+[CXX] src/sip/sippdu.cxx
+[CXX] src/sip/handlers.cxx
+[CXX] src/sip/sippres.cxx
+[CXX] src/ep/skinnyep.cxx
+[CXX] src/lids/lid.cxx
+/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/src/ep/skinnyep.cxx: In constructor 'OpalSkinnyEndPoint::SkinnyMsg::SkinnyMsg(uint32_t, PINDEX, PINDEX)':
+/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/src/ep/skinnyep.cxx:106:35: warning: 'void* memset(void*, int, size_t)' clearing an object of type 'PUInt32l' {aka 'struct PIntSameOrder<unsigned int>'} with no trivial copy-assignment; use assignment or value-initialization instead [-Wclass-memaccess]
+In file included from /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot/usr/src/ptlib/include/ptlib.h:44,
+from /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/src/ep/skinnyep.cxx:29:
+/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot/usr/src/ptlib/include/ptlib/object.h:2461:8: note: 'PUInt32l' {aka 'struct PIntSameOrder<unsigned int>'} declared here
+/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/src/ep/skinnyep.cxx: In member function 'void OpalSkinnyEndPoint::SkinnyMsg::Construct(const PBYTEArray&)':
+/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/src/ep/skinnyep.cxx:114:61: warning: 'void* memcpy(void*, const void*, size_t)' writing to an object of type 'PUInt32l' {aka 'struct PIntSameOrder<unsigned int>'} with no trivial copy-assignment; use copy-assignment or copy-initialization instead [-Wclass-memaccess]
+In file included from /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot/usr/src/ptlib/include/ptlib.h:44,
+from /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/src/ep/skinnyep.cxx:29:
+/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot/usr/src/ptlib/include/ptlib/object.h:2461:8: note: 'PUInt32l' {aka 'struct PIntSameOrder<unsigned int>'} declared here
+[CXX] src/lids/lidep.cxx
+[CXX] src/lids/lidpluginmgr.cxx
+/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/src/ep/skinnyep.cxx: In member function 'bool OpalSkinnyEndPoint::PhoneDevice::SendRegisterMsg()':
+/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/src/ep/skinnyep.cxx:424:10: warning: 'char* strncpy(char*, const char*, size_t)' specified bound 12 equals destination size [-Wstringop-truncation]
+[CXX] src/rtp/srtp_session.cxx
+[CXX] src/rtp/dtls_srtp_session.cpp
+[CXX] src/im/t140.cxx
+[CXX] src/im/im_mf.cxx
+[CXX] src/im/rfc4103.cxx
+[CXX] src/im/msrp.cxx
+[CXX] src/im/sipim.cxx
+[CXX] src/codec/g711codec.cxx
+[ CC] src/codec/g711.c
+[CXX] src/codec/g722mf.cxx
+[CXX] src/codec/g7221mf.cxx
+[CXX] src/codec/g7222mf.cxx
+[CXX] src/codec/g7231mf.cxx
+[CXX] src/codec/g726mf.cxx
+[CXX] src/codec/g728mf.cxx
+[CXX] src/codec/g729mf.cxx
+[CXX] src/codec/gsm0610mf.cxx
+[CXX] src/codec/gsmamrmf.cxx
+[CXX] src/codec/iLBCmf.cxx
+[CXX] src/codec/speexmf.cxx
+[CXX] src/codec/opusmf.cxx
+[CXX] src/t38/t38mf.cxx
+[CXX] src/codec/rfc2833.cxx
+[CXX] src/codec/opalwavfile.cxx
+[CXX] src/codec/silencedetect.cxx
+[CXX] src/codec/opalpluginmgr.cxx
+[CXX] src/codec/g711a1_plc.cxx
+[CXX] src/codec/echocancel.cxx
+[CXX] src/h224/q922.cxx
+[CXX] src/h224/h224.cxx
+[CXX] src/h224/h281.cxx
+[CXX] src/t38/t38proto.cxx
+[CXX] src/asn/t38.cxx
+[ AR] lib_linux_aarch64/libopal_s.a
+[ LD] lib_linux_aarch64/libopal.so.3.18-beta9
+/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot-native/usr/bin/aarch64-linaro-linux/../../libexec/aarch64-linaro-linux/gcc/aarch64-linaro-linux/10.3.1/ld: cannot find crti.o: No such file or directory
+/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot-native/usr/bin/aarch64-linaro-linux/../../libexec/aarch64-linaro-linux/gcc/aarch64-linaro-linux/10.3.1/ld: cannot find crtbeginS.o: No such file or directory
+collect2: error: ld returned 1 exit status
+make[2]: *** [/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot/usr/share/ptlib/make/post.mak:311: /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/libopal.so.3.18-beta9] Error 1
+make[1]: Leaving directory '/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git'
+make[1]: *** [/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot/usr/share/ptlib/make/post.mak:115: optshared] Error 2
+make: *** [/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot/usr/src/ptlib/make/autoconf.mak:179: build_top_level] Error 2
+ERROR: oe_runmake failed
+WARNING: exit code 1 from a shell command.
+
+[-- Attachment #2: Type: text/html, Size: 16878 bytes --]
+
+^ permalink raw reply	[flat|nested] 8+ messages in thread
+* Re: LInker Errors: Cannot find crti.o/crtbeginS.o. No such file or directory. #honister #make #yocto
+  2022-06-29 13:50       ` douglas.cooper1
+@ 2022-06-29 13:53         ` douglas.cooper1
+  2022-06-29 14:02           ` douglas.cooper1
+  0 siblings, 1 reply; 8+ messages in thread
+From: douglas.cooper1 @ 2022-06-29 13:53 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 24337 bytes --]
+
+here is the same output using `--trace` with the LD snippet
+
+---
+
+echo [ LD] lib_linux_aarch64/libopal.so.3.18-beta9 ; aarch64-linaro-linux-g++  -mcpu=cortex-a53 -march=armv8-a+crc --sysroot=/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/ptlib/2.18-beta9-r0/recipe-sysroot -o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/libopal.so.3.18-beta9 -shared -Wl,--build-id,-soname,libopal.so.3.18-beta9 -O2 -gdwarf-4 -O2 -rdynamic -Wl,-O1 -Wl,--hash-style=gnu -Wl,--as-needed -fmacro-prefix-map=/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/ptlib/2.18-beta9-r0=/usr/src/debug/ptlib/2.18-beta9-r0 -fdebug-prefix-map=/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/ptlib/2.18-beta9-r0=/usr/src/debug/ptlib/2.18-beta9-r0 -fdebug-prefix-map=/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/ptlib/2.18-beta9-r0/recipe-sysroot= -fdebug-prefix-map=/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/ptlib/2.18-beta9-r0/recipe-sysroot-native= -rdynamic -L/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot/lib -L/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot/usr/lib -L/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot/usr/lib/aarch64-linaro-linux/10.3.1 -O2 -rdynamic -Wl,-O1 -Wl,--hash-style=gnu -Wl,--as-needed -fmacro-prefix-map=/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/ptlib/2.18-beta9-r0=/usr/src/debug/ptlib/2.18-beta9-r0 -fdebug-prefix-map=/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/ptlib/2.18-beta9-r0=/usr/src/debug/ptlib/2.18-beta9-r0 -fdebug-prefix-map=/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/ptlib/2.18-beta9-r0/recipe-sysroot= -fdebug-prefix-map=/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/ptlib/2.18-beta9-r0/recipe-sysroot-native= -rdynamic -L/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot/lib -L/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot/usr/lib -L/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot/usr/lib/aarch64-linaro-linux/10.3.1 -L/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot/lib -L/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot/usr/lib -L/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot/usr/lib/aarch64-linaro-linux/10.3.1 /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/manager.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/endpoint.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/connection.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/call.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/mediafmt.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/mediatype.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/mediasession.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/mediastrm.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/patch.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/transcoders.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/transports.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/guid.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/rtp.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/rtp_session.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/rtp_stream.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/rtp_fec.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/jitter.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/metrics.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/pcapfile.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/rtpep.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/rtpconn.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/localep.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/sockep.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/opal_c.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/pres_ent.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/console_mgr.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/recording.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/opalmixer.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/pcss.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/h450pdu.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/x880.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/mcs.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/gcc.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/h4501.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/h4502.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/h4503.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/h4504.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/h4505.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/h4506.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/h4507.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/h4508.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/h4509.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/h45010.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/h45011.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/h225_1.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/h225_2.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/h235.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/h235_srtp.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/h245_1.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/h245_2.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/h245_3.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/h248.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/h501.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/h323ep.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/h323.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/h323caps.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/h323neg.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/h323pdu.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/h323rtp.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/channels.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/svcctrl.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/q931.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/transaddr.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/gkclient.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/gkserver.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/h225ras.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/h323trans.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/h235auth.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/h501pdu.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/h323annexg.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/peclient.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/h4601.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/h46018.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/h46019.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/h4609.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/h460p.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/h460pres.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/h460tm.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/h46024b.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/h460_std18.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/h460_std19.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/h460_std23.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/h460_std24.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/h235auth1.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/h323t38.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/h323h224.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/h235dh.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/h235_session.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/callprocessor.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/frame.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/iax2con.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/iax2ep.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/iax2medstrm.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/iedata.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/ies.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/processor.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/receiver.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/regprocessor.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/remote.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/safestrings.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/sound.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/specialprocessor.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/transmit.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/sdpep.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/sdphttpep.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/sdp.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/ice.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/sipt38.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/sipep.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/sipcon.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/sippdu.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/handlers.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/sippres.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/skinnyep.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/lid.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/lidep.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/lidpluginmgr.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/srtp_session.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/dtls_srtp_session.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/t140.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/im_mf.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/rfc4103.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/msrp.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/sipim.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/g711codec.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/g711.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/g722mf.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/g7221mf.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/g7222mf.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/g7231mf.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/g726mf.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/g728mf.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/g729mf.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/gsm0610mf.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/gsmamrmf.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/iLBCmf.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/speexmf.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/opusmf.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/t38mf.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/rfc2833.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/opalwavfile.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/silencedetect.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/opalpluginmgr.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/g711a1_plc.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/echocancel.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/q922.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/h224.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/h281.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/t38proto.o /home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/git/lib_linux_aarch64/obj/t38.o -L/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/opal/3.18-beta9-r0/recipe-sysroot/usr/src/ptlib/lib_linux_aarch64 -lpt -ldl -lssl -lcrypto -lresolv -lrt -lspeexdsp -lsrtp2
+
+[-- Attachment #2: Type: text/html, Size: 24357 bytes --]
+
+^ permalink raw reply	[flat|nested] 8+ messages in thread
+* Re: LInker Errors: Cannot find crti.o/crtbeginS.o. No such file or directory. #honister #make #yocto
+  2022-06-29 13:53         ` douglas.cooper1
+@ 2022-06-29 14:02           ` douglas.cooper1
+  2022-06-29 16:27             ` douglas.cooper1
+  0 siblings, 1 reply; 8+ messages in thread
+From: douglas.cooper1 @ 2022-06-29 14:02 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 248 bytes --]
+
+Not sure how i missed this but the `--sysroot` is wrong. somehow its pulling the sysroot for a different package. it should be `--sysroot=/home/vagrant/oe_qcom_honister/build-cdil/tmp-cdil-glibc/work/cortexa53-linaro-linux/ *opal/3.18-beta9-r0* `
+
+[-- Attachment #2: Type: text/html, Size: 261 bytes --]
+
+^ permalink raw reply	[flat|nested] 8+ messages in thread
+* Re: LInker Errors: Cannot find crti.o/crtbeginS.o. No such file or directory. #honister #make #yocto
+  2022-06-29 14:02           ` douglas.cooper1
+@ 2022-06-29 16:27             ` douglas.cooper1
+  0 siblings, 0 replies; 8+ messages in thread
+From: douglas.cooper1 @ 2022-06-29 16:27 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 471 bytes --]
+
+I believe I have solved the issue. the key for me was needing to pass the `--sysroot` flag to TARGET_*FLAGS variables since the sysroot flag being passed to CC/CPP/CXX variables were being replaced during compilation for some reason. Also including `--prefix=${RECIPE_SYSROOT}${prefix}` in the EXTRA_OECONF variable ensured the appropriate include/lib paths were accessible. I think this was a strange project because some of the other autoconf projects "just worked".
+
+[-- Attachment #2: Type: text/html, Size: 475 bytes --]
+
+^ permalink raw reply	[flat|nested] 8+ messages in thread
+end of thread, other threads:[~2022-06-29 16:27 UTC | newest]
+
+Thread overview: 8+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-06-22 20:06 LInker Errors: Cannot find crti.o/crtbeginS.o. No such file or directory. #honister #make #yocto douglas.cooper1
+2022-06-23  1:18 ` [yocto] " Khem Raj
+2022-06-28 21:23   ` douglas.cooper1
+2022-06-29 13:46     ` [yocto] " Khem Raj
+2022-06-29 13:50       ` douglas.cooper1
+2022-06-29 13:53         ` douglas.cooper1
+2022-06-29 14:02           ` douglas.cooper1
+2022-06-29 16:27             ` douglas.cooper1
+

@@ -1,0 +1,218 @@
+* Approach for generating two WIC files at once
+@ 2023-06-07 12:13 Konstantin Kletschke
+  2023-06-07 12:15 ` [yocto] " Alexander Kanavin
+  0 siblings, 1 reply; 5+ messages in thread
+From: Konstantin Kletschke @ 2023-06-07 12:13 UTC (permalink / raw)
+  To: yocto
+
+
+Can the build system be extended to generate two WIC files for on run,
+is that possible?
+
+I need the same rootfs once with a boot partition
+
+part /boot
+part /
+
+and one image only with rootfs
+
+part /
+
+so I can write sdcards with same rootfs for older systems expecting root
+on mmcblk0p1 (BBB debian based) and newer ones expecting it on mmcblk0p2
+(BBB yocto based).
+
+Is that possible, how could one approach such a config?
+
+Kind Regards
+Konstantin
+
+
+-- 
+INSIDE M2M GmbH
+Konstantin Kletschke
+Berenbosteler Straße 76 B
+30823 Garbsen
+
+Telefon: +49 (0) 5137 90950136
+Mobil: +49 (0) 151 15256238
+Fax: +49 (0) 5137 9095010
+
+konstantin.kletschke@inside-m2m.de
+http://www.inside-m2m.de 
+
+Geschäftsführung: Michael Emmert, Derek Uhlig
+HRB: 111204, AG Hannover
+
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] Approach for generating two WIC files at once
+  2023-06-07 12:13 Approach for generating two WIC files at once Konstantin Kletschke
+@ 2023-06-07 12:15 ` Alexander Kanavin
+  2023-06-07 14:56   ` Konstantin Kletschke
+  0 siblings, 1 reply; 5+ messages in thread
+From: Alexander Kanavin @ 2023-06-07 12:15 UTC (permalink / raw)
+  To: Konstantin Kletschke; +Cc: yocto
+
+The easiest is probably to make two image recipes pointing to
+different wic files, but sharing everything else via .inc.
+
+Alex
+
+On Wed, 7 Jun 2023 at 14:13, Konstantin Kletschke
+<konstantin.kletschke@inside-m2m.de> wrote:
+>
+>
+> Can the build system be extended to generate two WIC files for on run,
+> is that possible?
+>
+> I need the same rootfs once with a boot partition
+>
+> part /boot
+> part /
+>
+> and one image only with rootfs
+>
+> part /
+>
+> so I can write sdcards with same rootfs for older systems expecting root
+> on mmcblk0p1 (BBB debian based) and newer ones expecting it on mmcblk0p2
+> (BBB yocto based).
+>
+> Is that possible, how could one approach such a config?
+>
+> Kind Regards
+> Konstantin
+>
+>
+> --
+> INSIDE M2M GmbH
+> Konstantin Kletschke
+> Berenbosteler Straße 76 B
+> 30823 Garbsen
+>
+> Telefon: +49 (0) 5137 90950136
+> Mobil: +49 (0) 151 15256238
+> Fax: +49 (0) 5137 9095010
+>
+> konstantin.kletschke@inside-m2m.de
+> http://www.inside-m2m.de
+>
+> Geschäftsführung: Michael Emmert, Derek Uhlig
+> HRB: 111204, AG Hannover
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#60203): https://lists.yoctoproject.org/g/yocto/message/60203
+> Mute This Topic: https://lists.yoctoproject.org/mt/99383108/1686489
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] Approach for generating two WIC files at once
+  2023-06-07 12:15 ` [yocto] " Alexander Kanavin
+@ 2023-06-07 14:56   ` Konstantin Kletschke
+  2023-06-12  9:35     ` Alexander Kanavin
+  0 siblings, 1 reply; 5+ messages in thread
+From: Konstantin Kletschke @ 2023-06-07 14:56 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: yocto
+
+On Wed, Jun 07, 2023 at 02:15:30PM +0200, Alexander Kanavin wrote:
+> The easiest is probably to make two image recipes pointing to
+> different wic files, but sharing everything else via .inc.
+
+You mean moving my current meta-insidem2m/recipes-core/images/sdcard.bb
+to something like meta-insidem2m/recipes-core/images/sdcard_base.bb,
+creating two new ones like sdcard_d.bb and sdcard_y.bb among the
+sdcard_base.bb, require the sdcard_base.bb from sdcard_d.bb and sdcard_y.bb
+and having the latter files overwrite the variable WKS_FILE with
+different ones?
+
+According to preliminary tests the search path for wks files also
+include meta-insidem2m/recipes-core/images where the sdcard*.bb are
+located and could ne put right there.
+
+This way? I will test, that sounds convenient.
+
+Kind Regards
+Konstantin
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] Approach for generating two WIC files at once
+  2023-06-07 14:56   ` Konstantin Kletschke
+@ 2023-06-12  9:35     ` Alexander Kanavin
+  2023-06-12 15:08       ` Konstantin Kletschke
+  0 siblings, 1 reply; 5+ messages in thread
+From: Alexander Kanavin @ 2023-06-12  9:35 UTC (permalink / raw)
+  To: Konstantin Kletschke; +Cc: yocto
+
+sdcard-base.inc is better, because sdcard-base.bb is a recipe in
+itself, but you don't want to build that (or others to get confused
+about its purpose).
+
+Alex
+
+On Wed, 7 Jun 2023 at 16:56, Konstantin Kletschke
+<konstantin.kletschke@inside-m2m.de> wrote:
+>
+> On Wed, Jun 07, 2023 at 02:15:30PM +0200, Alexander Kanavin wrote:
+> > The easiest is probably to make two image recipes pointing to
+> > different wic files, but sharing everything else via .inc.
+>
+> You mean moving my current meta-insidem2m/recipes-core/images/sdcard.bb
+> to something like meta-insidem2m/recipes-core/images/sdcard_base.bb,
+> creating two new ones like sdcard_d.bb and sdcard_y.bb among the
+> sdcard_base.bb, require the sdcard_base.bb from sdcard_d.bb and sdcard_y.bb
+> and having the latter files overwrite the variable WKS_FILE with
+> different ones?
+>
+> According to preliminary tests the search path for wks files also
+> include meta-insidem2m/recipes-core/images where the sdcard*.bb are
+> located and could ne put right there.
+>
+> This way? I will test, that sounds convenient.
+>
+> Kind Regards
+> Konstantin
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] Approach for generating two WIC files at once
+  2023-06-12  9:35     ` Alexander Kanavin
+@ 2023-06-12 15:08       ` Konstantin Kletschke
+  0 siblings, 0 replies; 5+ messages in thread
+From: Konstantin Kletschke @ 2023-06-12 15:08 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: yocto
+
+Meanwhile I tested my proposed approach and it works well...
+
+On Mon, Jun 12, 2023 at 11:35:59AM +0200, Alexander Kanavin wrote:
+> sdcard-base.inc is better, because sdcard-base.bb is a recipe in
+> itself, but you don't want to build that (or others to get confused
+> about its purpose).
+
+... but this is a nice hint! Thank you very much!
+
+I was bothered colleagues trying to build the base
+"image" indeed :-)
+
+
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+end of thread, other threads:[~2023-06-12 15:08 UTC | newest]
+
+Thread overview: 5+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-06-07 12:13 Approach for generating two WIC files at once Konstantin Kletschke
+2023-06-07 12:15 ` [yocto] " Alexander Kanavin
+2023-06-07 14:56   ` Konstantin Kletschke
+2023-06-12  9:35     ` Alexander Kanavin
+2023-06-12 15:08       ` Konstantin Kletschke
+

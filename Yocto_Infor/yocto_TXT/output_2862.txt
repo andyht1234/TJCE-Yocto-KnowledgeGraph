@@ -1,0 +1,843 @@
+* [ptest-runner][PATCH 1/3] tests/utils.c: fix a memory corruption in find_word
+@ 2021-09-16 12:46 Alexander Kanavin
+  2021-09-16 12:46 ` [ptest-runner][PATCH 2/3] utils.c: handle test timeouts directly with poll() Alexander Kanavin
+  2021-09-16 12:46 ` [ptest-runner][PATCH 3/3] utils.c: add system data collection when a test gets stuck Alexander Kanavin
+  0 siblings, 2 replies; 8+ messages in thread
+From: Alexander Kanavin @ 2021-09-16 12:46 UTC (permalink / raw)
+  To: yocto, anibal.limon; +Cc: Alexander Kanavin
+
+I also took the opportunity to correct a weird API that
+returns a result (or not), depending on some internal condition.
+
+Signed-off-by: Alexander Kanavin <alex@linutronix.de>
+---
+ tests/utils.c | 35 ++++++++++++++++++-----------------
+ 1 file changed, 18 insertions(+), 17 deletions(-)
+
+diff --git a/tests/utils.c b/tests/utils.c
+index 8fffc18..19657ee 100644
+--- a/tests/utils.c
++++ b/tests/utils.c
+@@ -26,6 +26,7 @@
+ #include <stdlib.h>
+ #include <stdio.h>
+ #include <errno.h>
++#include <stdbool.h>
+ 
+ #include <check.h>
+ 
+@@ -61,16 +62,13 @@ static char *ptests_not_found[] = {
+ 
+ static struct ptest_options EmptyOpts;
+ 
+-static inline void
+-find_word(int *found, const char *line, const char *word)
++static inline bool
++find_word(const char *line, const char *word)
+ {
+-
+-	char *pivot = NULL;
+-
+-	pivot = strdup(line);
+-	pivot[strlen(word)] = '\0';
+-	if (strcmp(pivot, word) == 0) { *found = 1; }
+-	free(pivot);
++	if (strncmp(line, word, strlen(word)) == 0)
++                return true;
++        else
++                return false;
+ }
+ 
+ static void test_ptest_expected_failure(struct ptest_list *, const unsigned int, char *,
+@@ -206,18 +204,19 @@ search_for_timeout_and_duration(const int rp, FILE *fp_stdout)
+ 	const char *timeout_str = "TIMEOUT";
+ 	const char *duration_str = "DURATION";
+ 	char line_buf[PRINT_PTEST_BUF_SIZE];
+-	int found_timeout = 0, found_duration = 0;
++	bool found_timeout = false, found_duration = false;
+ 	char *line = NULL;
+ 
+ 	ck_assert(rp != 0);
+ 
+ 	while ((line = fgets(line_buf, PRINT_PTEST_BUF_SIZE, fp_stdout)) != NULL) {
+-		find_word(&found_timeout, line, timeout_str);
+-		find_word(&found_duration, line, duration_str);
++		// once true, stay true
++		found_timeout = found_timeout ? found_timeout : find_word(line, timeout_str);
++		found_duration = found_duration ? found_duration : find_word(line, duration_str);
+ 	}
+ 
+-	ck_assert(found_timeout == 1);
+-	ck_assert(found_duration == 1);
++	ck_assert(found_timeout == true);
++	ck_assert(found_duration == true);
+ }
+ 
+ START_TEST(test_run_timeout_duration_ptest)
+@@ -236,16 +235,18 @@ search_for_fail(const int rp, FILE *fp_stdout)
+ {
+         const char *fail_str = "ERROR: Exit status is 10";
+         char line_buf[PRINT_PTEST_BUF_SIZE];
+-        int found_fail = 0;
++        int found_fail = false;
+         char *line = NULL;
+ 
+         ck_assert(rp != 0);
+ 
+         while ((line = fgets(line_buf, PRINT_PTEST_BUF_SIZE, fp_stdout)) != NULL) {
+-		find_word(&found_fail, line, fail_str);
++		found_fail = find_word(line, fail_str);
++		if (found_fail == true)
++			break;
+         }
+ 
+-        ck_assert(found_fail == 1);
++        ck_assert(found_fail == true);
+ }
+ 
+ START_TEST(test_run_fail_ptest)
+-- 
+2.33.0
+
+
+^ permalink raw reply related	[flat|nested] 8+ messages in thread
+* [ptest-runner][PATCH 2/3] utils.c: handle test timeouts directly with poll()
+  2021-09-16 12:46 [ptest-runner][PATCH 1/3] tests/utils.c: fix a memory corruption in find_word Alexander Kanavin
+@ 2021-09-16 12:46 ` Alexander Kanavin
+  2021-09-16 12:46 ` [ptest-runner][PATCH 3/3] utils.c: add system data collection when a test gets stuck Alexander Kanavin
+  1 sibling, 0 replies; 8+ messages in thread
+From: Alexander Kanavin @ 2021-09-16 12:46 UTC (permalink / raw)
+  To: yocto, anibal.limon; +Cc: Alexander Kanavin
+
+if poll()'s timeout expires that means the test did not
+produce any output, which is exactly what we need to catch.
+
+So there's no need to set up separate timeouts with signals
+and alarms, and this greatly simplifies more sophisticated
+processing of hanging tests (such as collecting overall system data).
+
+Signed-off-by: Alexander Kanavin <alex@linutronix.de>
+---
+ utils.c | 34 ++++++++++------------------------
+ 1 file changed, 10 insertions(+), 24 deletions(-)
+
+diff --git a/utils.c b/utils.c
+index 128ff61..58c3aa1 100644
+--- a/utils.c
++++ b/utils.c
+@@ -51,7 +51,6 @@
+ #include "utils.h"
+ 
+ #define GET_STIME_BUF_SIZE 1024
+-#define WAIT_CHILD_POLL_TIMEOUT_MS 200
+ #define WAIT_CHILD_BUF_MAX_SIZE 1024
+ 
+ #define UNUSED(x) (void)(x)
+@@ -296,7 +295,7 @@ read_child(void *arg)
+ 	pfds[1].events = POLLIN;
+ 
+ 	do {
+-		r = poll(pfds, 2, WAIT_CHILD_POLL_TIMEOUT_MS);
++		r = poll(pfds, 2, _child_reader.timeout*1000);
+ 		if (r > 0) {
+ 			char buf[WAIT_CHILD_BUF_MAX_SIZE];
+ 			ssize_t n;
+@@ -313,10 +312,10 @@ read_child(void *arg)
+ 					fwrite(buf, (size_t)n, 1, _child_reader.fps[1]);
+ 			}
+ 
+-			/* Child output reset alarm */
+-			alarm(0);
+-			alarm(_child_reader.timeout);
+-		}
++		} else if (r == 0) {
++			_child_reader.timeouted = 1;
++			kill(-_child_reader.pid, SIGKILL);
++                }
+ 
+ 		fflush(_child_reader.fps[0]);
+ 		fflush(_child_reader.fps[1]);
+@@ -344,26 +343,11 @@ run_child(char *run_ptest, int fd_stdout, int fd_stderr)
+ 	/* exit(1); not needed? */
+ }
+ 
+-static void
+-timeout_child_handler(int signo)
+-{
+-	UNUSED(signo);
+-	_child_reader.timeouted = 1;
+-	kill(-_child_reader.pid, SIGKILL);
+-}
+-
+ static inline int
+-wait_child(pid_t pid, unsigned int timeout)
++wait_child(pid_t pid)
+ {
+ 	int status = -1;
+ 
+-	_child_reader.timeout = timeout;
+-	_child_reader.timeouted = 0;
+-	_child_reader.pid = pid;
+-
+-	/* setup alarm to timeout based on std{out,err} in the child */
+-	alarm(timeout);
+-
+ 	waitpid(pid, &status, 0);
+ 	if (WIFEXITED(status))
+ 		status = WEXITSTATUS(status);
+@@ -462,6 +446,8 @@ run_ptests(struct ptest_list *head, const struct ptest_options opts,
+ 		_child_reader.fds[1] = pipefd_stderr[0];
+ 		_child_reader.fps[0] = fp;
+ 		_child_reader.fps[1] = fp_stderr;
++		_child_reader.timeout = opts.timeout;
++		_child_reader.timeouted = 0;
+ 		rc = pthread_create(&tid, NULL, read_child, NULL);
+ 		if (rc != 0) {
+ 			fprintf(fp, "ERROR: Failed to create reader thread, %s\n", strerror(errno));
+@@ -469,7 +455,6 @@ run_ptests(struct ptest_list *head, const struct ptest_options opts,
+ 			close(pipefd_stdout[1]);
+ 			break;
+ 		}
+-		signal(SIGALRM, timeout_child_handler);
+ 
+ 		fprintf(fp, "START: %s\n", progname);
+ 		PTEST_LIST_ITERATE_START(head, p)
+@@ -511,6 +496,7 @@ run_ptests(struct ptest_list *head, const struct ptest_options opts,
+ 			} else {
+ 				int status;
+ 
++				_child_reader.pid = child;
+ 				if (setpgid(child, pgid) == -1) {
+ 					fprintf(fp, "ERROR: setpgid() failed, %s\n", strerror(errno));
+ 				}
+@@ -520,7 +506,7 @@ run_ptests(struct ptest_list *head, const struct ptest_options opts,
+ 				fprintf(fp, "BEGIN: %s\n", ptest_dir);
+ 
+ 
+-				status = wait_child(child, opts.timeout);
++				status = wait_child(child);
+ 
+ 				entime = time(NULL);
+ 				duration = entime - sttime;
+-- 
+2.33.0
+
+
+^ permalink raw reply related	[flat|nested] 8+ messages in thread
+* [ptest-runner][PATCH 3/3] utils.c: add system data collection when a test gets stuck.
+  2021-09-16 12:46 [ptest-runner][PATCH 1/3] tests/utils.c: fix a memory corruption in find_word Alexander Kanavin
+  2021-09-16 12:46 ` [ptest-runner][PATCH 2/3] utils.c: handle test timeouts directly with poll() Alexander Kanavin
+@ 2021-09-16 12:46 ` Alexander Kanavin
+  2021-09-16 16:18   ` [yocto] " Richard Purdie
+  2021-09-23 16:33   ` Anibal Limon
+  1 sibling, 2 replies; 8+ messages in thread
+From: Alexander Kanavin @ 2021-09-16 12:46 UTC (permalink / raw)
+  To: yocto, anibal.limon; +Cc: Alexander Kanavin
+
+Currently, ptest-runner simply kills the offending test without further ado,
+which is not at all helpful when trying to figure out why it happens
+(especially if such hangs are intermittent and rare). There's now a script
+that gets executed before killing the test, so ideas on what to have in it
+are welcome.
+
+Signed-off-by: Alexander Kanavin <alex@linutronix.de>
+---
+ Makefile                         |  2 +-
+ ptest-runner-collect-system-data |  5 +++++
+ utils.c                          | 24 ++++++++++++++++++++++++
+ 3 files changed, 30 insertions(+), 1 deletion(-)
+ create mode 100755 ptest-runner-collect-system-data
+
+diff --git a/Makefile b/Makefile
+index a6372de..168cf5a 100644
+--- a/Makefile
++++ b/Makefile
+@@ -43,7 +43,7 @@ $(TEST_EXECUTABLE): $(TEST_OBJECTS)
+ 	$(CC) $(LDFLAGS) $(TEST_OBJECTS) -o $@ $(TEST_LIBSTATIC) $(TEST_LDFLAGS)
+ 
+ check: $(TEST_EXECUTABLE)
+-	./$(TEST_EXECUTABLE) -d $(TEST_DATA)
++	PATH=.:$(PATH) ./$(TEST_EXECUTABLE) -d $(TEST_DATA)
+ 
+ .c.o:
+ 	$(CC) $(CFLAGS) -c $< -o $@
+diff --git a/ptest-runner-collect-system-data b/ptest-runner-collect-system-data
+new file mode 100755
+index 0000000..5bfeaf3
+--- /dev/null
++++ b/ptest-runner-collect-system-data
+@@ -0,0 +1,5 @@
++#!/bin/sh
++# Other ideas on what to do when a ptest gets stuck welcome.
++pstree -a -l
++df
++free
+diff --git a/utils.c b/utils.c
+index 58c3aa1..a67ac11 100644
+--- a/utils.c
++++ b/utils.c
+@@ -281,6 +281,27 @@ close_fds(void)
+    	}
+ }
+ 
++static void
++collect_system_state(FILE* fout)
++{
++	char *cmd = "ptest-runner-collect-system-data";
++
++	char buf[1024];
++	FILE *fp;
++
++	if ((fp = popen(cmd, "r")) == NULL) {
++		fprintf(fout, "Error opening pipe!\n");
++	}
++
++	while (fgets(buf, 1024, fp) != NULL) {
++		fprintf(fout, "%s", buf);
++	}
++
++	if(pclose(fp))  {
++		fprintf(fout, "Command not found or exited with error status\n");
++	}
++}
++
+ static void *
+ read_child(void *arg)
+ {
+@@ -313,6 +334,9 @@ read_child(void *arg)
+ 			}
+ 
+ 		} else if (r == 0) {
++			// no output from the test after a timeout; the test is stuck, so collect
++			// as much data from the system as possible and kill the test
++			collect_system_state(_child_reader.fps[0]);
+ 			_child_reader.timeouted = 1;
+ 			kill(-_child_reader.pid, SIGKILL);
+                 }
+-- 
+2.33.0
+
+
+^ permalink raw reply related	[flat|nested] 8+ messages in thread
+* Re: [yocto] [ptest-runner][PATCH 3/3] utils.c: add system data collection when a test gets stuck.
+  2021-09-16 12:46 ` [ptest-runner][PATCH 3/3] utils.c: add system data collection when a test gets stuck Alexander Kanavin
+@ 2021-09-16 16:18   ` Richard Purdie
+  2021-09-16 16:23     ` Alexander Kanavin
+  2021-09-23 16:33   ` Anibal Limon
+  1 sibling, 1 reply; 8+ messages in thread
+From: Richard Purdie @ 2021-09-16 16:18 UTC (permalink / raw)
+  To: Alexander Kanavin, yocto, anibal.limon; +Cc: Alexander Kanavin
+
+On Thu, 2021-09-16 at 14:46 +0200, Alexander Kanavin wrote:
+> Currently, ptest-runner simply kills the offending test without further ado,
+> which is not at all helpful when trying to figure out why it happens
+> (especially if such hangs are intermittent and rare). There's now a script
+> that gets executed before killing the test, so ideas on what to have in it
+> are welcome.
+> 
+> Signed-off-by: Alexander Kanavin <alex@linutronix.de>
+> ---
+>  Makefile                         |  2 +-
+>  ptest-runner-collect-system-data |  5 +++++
+>  utils.c                          | 24 ++++++++++++++++++++++++
+>  3 files changed, 30 insertions(+), 1 deletion(-)
+>  create mode 100755 ptest-runner-collect-system-data
+> 
+> diff --git a/Makefile b/Makefile
+> index a6372de..168cf5a 100644
+> --- a/Makefile
+> +++ b/Makefile
+> @@ -43,7 +43,7 @@ $(TEST_EXECUTABLE): $(TEST_OBJECTS)
+>  	$(CC) $(LDFLAGS) $(TEST_OBJECTS) -o $@ $(TEST_LIBSTATIC) $(TEST_LDFLAGS)
+>  
+>  check: $(TEST_EXECUTABLE)
+> -	./$(TEST_EXECUTABLE) -d $(TEST_DATA)
+> +	PATH=.:$(PATH) ./$(TEST_EXECUTABLE) -d $(TEST_DATA)
+>  
+>  .c.o:
+>  	$(CC) $(CFLAGS) -c $< -o $@
+> diff --git a/ptest-runner-collect-system-data b/ptest-runner-collect-system-data
+> new file mode 100755
+> index 0000000..5bfeaf3
+> --- /dev/null
+> +++ b/ptest-runner-collect-system-data
+> @@ -0,0 +1,5 @@
+> +#!/bin/sh
+> +# Other ideas on what to do when a ptest gets stuck welcome.
+> +pstree -a -l
+> +df
+> +free
+
+It is great to see this. I'd suggest dmesg in here since we've seen components
+of tests segfault before (e.g. lttng-relayd in lttng-tools).
+
+Cheers,
+
+Richard
+
+
+
+^ permalink raw reply	[flat|nested] 8+ messages in thread
+* Re: [yocto] [ptest-runner][PATCH 3/3] utils.c: add system data collection when a test gets stuck.
+  2021-09-16 16:18   ` [yocto] " Richard Purdie
+@ 2021-09-16 16:23     ` Alexander Kanavin
+  0 siblings, 0 replies; 8+ messages in thread
+From: Alexander Kanavin @ 2021-09-16 16:23 UTC (permalink / raw)
+  To: Richard Purdie; +Cc: Yocto-mailing-list, Anibal Limon
+
+[-- Attachment #1: Type: text/plain, Size: 2315 bytes --]
+
+Cheers, will add now.
+
+Also, dmesg will be collected and archived through a separate channel, and
+regardless of whether something is stuck or not :)
+http://git.yoctoproject.org/cgit/cgit.cgi/poky-contrib/commit/?h=akanavin/package-version-updates&id=71141340d1adcbacbed9109fd2b98b212da132f0
+http://git.yoctoproject.org/cgit/cgit.cgi/yocto-autobuilder-helper/commit/?h=contrib/akanavin/misc-fixes&id=19b88d68cf556cf5f9af50f5f3bacbd8b4180b4f
+
+Alex
+
+On Thu, 16 Sept 2021 at 18:18, Richard Purdie <
+richard.purdie@linuxfoundation.org> wrote:
+
+> On Thu, 2021-09-16 at 14:46 +0200, Alexander Kanavin wrote:
+> > Currently, ptest-runner simply kills the offending test without further
+> ado,
+> > which is not at all helpful when trying to figure out why it happens
+> > (especially if such hangs are intermittent and rare). There's now a
+> script
+> > that gets executed before killing the test, so ideas on what to have in
+> it
+> > are welcome.
+> >
+> > Signed-off-by: Alexander Kanavin <alex@linutronix.de>
+> > ---
+> >  Makefile                         |  2 +-
+> >  ptest-runner-collect-system-data |  5 +++++
+> >  utils.c                          | 24 ++++++++++++++++++++++++
+> >  3 files changed, 30 insertions(+), 1 deletion(-)
+> >  create mode 100755 ptest-runner-collect-system-data
+> >
+> > diff --git a/Makefile b/Makefile
+> > index a6372de..168cf5a 100644
+> > --- a/Makefile
+> > +++ b/Makefile
+> > @@ -43,7 +43,7 @@ $(TEST_EXECUTABLE): $(TEST_OBJECTS)
+> >       $(CC) $(LDFLAGS) $(TEST_OBJECTS) -o $@ $(TEST_LIBSTATIC)
+> $(TEST_LDFLAGS)
+> >
+> >  check: $(TEST_EXECUTABLE)
+> > -     ./$(TEST_EXECUTABLE) -d $(TEST_DATA)
+> > +     PATH=.:$(PATH) ./$(TEST_EXECUTABLE) -d $(TEST_DATA)
+> >
+> >  .c.o:
+> >       $(CC) $(CFLAGS) -c $< -o $@
+> > diff --git a/ptest-runner-collect-system-data
+> b/ptest-runner-collect-system-data
+> > new file mode 100755
+> > index 0000000..5bfeaf3
+> > --- /dev/null
+> > +++ b/ptest-runner-collect-system-data
+> > @@ -0,0 +1,5 @@
+> > +#!/bin/sh
+> > +# Other ideas on what to do when a ptest gets stuck welcome.
+> > +pstree -a -l
+> > +df
+> > +free
+>
+> It is great to see this. I'd suggest dmesg in here since we've seen
+> components
+> of tests segfault before (e.g. lttng-relayd in lttng-tools).
+>
+> Cheers,
+>
+> Richard
+>
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 3350 bytes --]
+
+^ permalink raw reply	[flat|nested] 8+ messages in thread
+* Re: [ptest-runner][PATCH 3/3] utils.c: add system data collection when a test gets stuck.
+  2021-09-16 12:46 ` [ptest-runner][PATCH 3/3] utils.c: add system data collection when a test gets stuck Alexander Kanavin
+  2021-09-16 16:18   ` [yocto] " Richard Purdie
+@ 2021-09-23 16:33   ` Anibal Limon
+  2021-09-23 16:38     ` Alexander Kanavin
+  1 sibling, 1 reply; 8+ messages in thread
+From: Anibal Limon @ 2021-09-23 16:33 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: Yocto-mailing-list, Alexander Kanavin
+
+[-- Attachment #1: Type: text/plain, Size: 3653 bytes --]
+
+Hi Alex,
+
+Do you have a repo/branch for this patch?.
+
+I'm having issues applying...
+
+...
+alimon@blackbox:~/upstream/ptest-runner2$ git am -3
+~/Downloads/\[ptest-runner\]\[PATCH\ 3_3\]\ utils.c_\ add\ system\ data\
+collection\ when\ a\ test\ gets\ stuck..eml
+Applying: utils.c: add system data collection when a test gets stuck.
+error: sha1 information is lacking or useless (utils.c).
+error: could not build fake ancestor
+Patch failed at 0001 utils.c: add system data collection when a test gets
+stuck.
+hint: Use 'git am --show-current-patch=diff' to see the failed patch
+When you have resolved this problem, run "git am --continue".
+If you prefer to skip this patch, run "git am --skip" instead.
+To restore the original branch and stop patching, run "git am --abort".
+...
+
+Regards,
+Anibal
+
+On Thu, 16 Sept 2021 at 07:46, Alexander Kanavin <alex.kanavin@gmail.com>
+wrote:
+
+> Currently, ptest-runner simply kills the offending test without further
+> ado,
+> which is not at all helpful when trying to figure out why it happens
+> (especially if such hangs are intermittent and rare). There's now a script
+> that gets executed before killing the test, so ideas on what to have in it
+> are welcome.
+>
+> Signed-off-by: Alexander Kanavin <alex@linutronix.de>
+> ---
+>  Makefile                         |  2 +-
+>  ptest-runner-collect-system-data |  5 +++++
+>  utils.c                          | 24 ++++++++++++++++++++++++
+>  3 files changed, 30 insertions(+), 1 deletion(-)
+>  create mode 100755 ptest-runner-collect-system-data
+>
+> diff --git a/Makefile b/Makefile
+> index a6372de..168cf5a 100644
+> --- a/Makefile
+> +++ b/Makefile
+> @@ -43,7 +43,7 @@ $(TEST_EXECUTABLE): $(TEST_OBJECTS)
+>         $(CC) $(LDFLAGS) $(TEST_OBJECTS) -o $@ $(TEST_LIBSTATIC)
+> $(TEST_LDFLAGS)
+>
+>  check: $(TEST_EXECUTABLE)
+> -       ./$(TEST_EXECUTABLE) -d $(TEST_DATA)
+> +       PATH=.:$(PATH) ./$(TEST_EXECUTABLE) -d $(TEST_DATA)
+>
+>  .c.o:
+>         $(CC) $(CFLAGS) -c $< -o $@
+> diff --git a/ptest-runner-collect-system-data
+> b/ptest-runner-collect-system-data
+> new file mode 100755
+> index 0000000..5bfeaf3
+> --- /dev/null
+> +++ b/ptest-runner-collect-system-data
+> @@ -0,0 +1,5 @@
+> +#!/bin/sh
+> +# Other ideas on what to do when a ptest gets stuck welcome.
+> +pstree -a -l
+> +df
+> +free
+> diff --git a/utils.c b/utils.c
+> index 58c3aa1..a67ac11 100644
+> --- a/utils.c
+> +++ b/utils.c
+> @@ -281,6 +281,27 @@ close_fds(void)
+>         }
+>  }
+>
+> +static void
+> +collect_system_state(FILE* fout)
+> +{
+> +       char *cmd = "ptest-runner-collect-system-data";
+> +
+> +       char buf[1024];
+> +       FILE *fp;
+> +
+> +       if ((fp = popen(cmd, "r")) == NULL) {
+> +               fprintf(fout, "Error opening pipe!\n");
+> +       }
+> +
+> +       while (fgets(buf, 1024, fp) != NULL) {
+> +               fprintf(fout, "%s", buf);
+> +       }
+> +
+> +       if(pclose(fp))  {
+> +               fprintf(fout, "Command not found or exited with error
+> status\n");
+> +       }
+> +}
+> +
+>  static void *
+>  read_child(void *arg)
+>  {
+> @@ -313,6 +334,9 @@ read_child(void *arg)
+>                         }
+>
+>                 } else if (r == 0) {
+> +                       // no output from the test after a timeout; the
+> test is stuck, so collect
+> +                       // as much data from the system as possible and
+> kill the test
+> +                       collect_system_state(_child_reader.fps[0]);
+>                         _child_reader.timeouted = 1;
+>                         kill(-_child_reader.pid, SIGKILL);
+>                  }
+> --
+> 2.33.0
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 4585 bytes --]
+
+^ permalink raw reply	[flat|nested] 8+ messages in thread
+* Re: [ptest-runner][PATCH 3/3] utils.c: add system data collection when a test gets stuck.
+  2021-09-23 16:33   ` Anibal Limon
+@ 2021-09-23 16:38     ` Alexander Kanavin
+  0 siblings, 0 replies; 8+ messages in thread
+From: Alexander Kanavin @ 2021-09-23 16:38 UTC (permalink / raw)
+  To: Anibal Limon; +Cc: Yocto-mailing-list, Alexander Kanavin
+
+[-- Attachment #1: Type: text/plain, Size: 3980 bytes --]
+
+Not sure what happened here, I published the patches in
+https://github.com/kanavin/ptest-runner2
+
+Alex
+
+On Thu, 23 Sept 2021 at 18:33, Anibal Limon <anibal.limon@linaro.org> wrote:
+
+> Hi Alex,
+>
+> Do you have a repo/branch for this patch?.
+>
+> I'm having issues applying...
+>
+> ...
+> alimon@blackbox:~/upstream/ptest-runner2$ git am -3
+> ~/Downloads/\[ptest-runner\]\[PATCH\ 3_3\]\ utils.c_\ add\ system\ data\
+> collection\ when\ a\ test\ gets\ stuck..eml
+> Applying: utils.c: add system data collection when a test gets stuck.
+> error: sha1 information is lacking or useless (utils.c).
+> error: could not build fake ancestor
+> Patch failed at 0001 utils.c: add system data collection when a test gets
+> stuck.
+> hint: Use 'git am --show-current-patch=diff' to see the failed patch
+> When you have resolved this problem, run "git am --continue".
+> If you prefer to skip this patch, run "git am --skip" instead.
+> To restore the original branch and stop patching, run "git am --abort".
+> ...
+>
+> Regards,
+> Anibal
+>
+> On Thu, 16 Sept 2021 at 07:46, Alexander Kanavin <alex.kanavin@gmail.com>
+> wrote:
+>
+>> Currently, ptest-runner simply kills the offending test without further
+>> ado,
+>> which is not at all helpful when trying to figure out why it happens
+>> (especially if such hangs are intermittent and rare). There's now a script
+>> that gets executed before killing the test, so ideas on what to have in it
+>> are welcome.
+>>
+>> Signed-off-by: Alexander Kanavin <alex@linutronix.de>
+>> ---
+>>  Makefile                         |  2 +-
+>>  ptest-runner-collect-system-data |  5 +++++
+>>  utils.c                          | 24 ++++++++++++++++++++++++
+>>  3 files changed, 30 insertions(+), 1 deletion(-)
+>>  create mode 100755 ptest-runner-collect-system-data
+>>
+>> diff --git a/Makefile b/Makefile
+>> index a6372de..168cf5a 100644
+>> --- a/Makefile
+>> +++ b/Makefile
+>> @@ -43,7 +43,7 @@ $(TEST_EXECUTABLE): $(TEST_OBJECTS)
+>>         $(CC) $(LDFLAGS) $(TEST_OBJECTS) -o $@ $(TEST_LIBSTATIC)
+>> $(TEST_LDFLAGS)
+>>
+>>  check: $(TEST_EXECUTABLE)
+>> -       ./$(TEST_EXECUTABLE) -d $(TEST_DATA)
+>> +       PATH=.:$(PATH) ./$(TEST_EXECUTABLE) -d $(TEST_DATA)
+>>
+>>  .c.o:
+>>         $(CC) $(CFLAGS) -c $< -o $@
+>> diff --git a/ptest-runner-collect-system-data
+>> b/ptest-runner-collect-system-data
+>> new file mode 100755
+>> index 0000000..5bfeaf3
+>> --- /dev/null
+>> +++ b/ptest-runner-collect-system-data
+>> @@ -0,0 +1,5 @@
+>> +#!/bin/sh
+>> +# Other ideas on what to do when a ptest gets stuck welcome.
+>> +pstree -a -l
+>> +df
+>> +free
+>> diff --git a/utils.c b/utils.c
+>> index 58c3aa1..a67ac11 100644
+>> --- a/utils.c
+>> +++ b/utils.c
+>> @@ -281,6 +281,27 @@ close_fds(void)
+>>         }
+>>  }
+>>
+>> +static void
+>> +collect_system_state(FILE* fout)
+>> +{
+>> +       char *cmd = "ptest-runner-collect-system-data";
+>> +
+>> +       char buf[1024];
+>> +       FILE *fp;
+>> +
+>> +       if ((fp = popen(cmd, "r")) == NULL) {
+>> +               fprintf(fout, "Error opening pipe!\n");
+>> +       }
+>> +
+>> +       while (fgets(buf, 1024, fp) != NULL) {
+>> +               fprintf(fout, "%s", buf);
+>> +       }
+>> +
+>> +       if(pclose(fp))  {
+>> +               fprintf(fout, "Command not found or exited with error
+>> status\n");
+>> +       }
+>> +}
+>> +
+>>  static void *
+>>  read_child(void *arg)
+>>  {
+>> @@ -313,6 +334,9 @@ read_child(void *arg)
+>>                         }
+>>
+>>                 } else if (r == 0) {
+>> +                       // no output from the test after a timeout; the
+>> test is stuck, so collect
+>> +                       // as much data from the system as possible and
+>> kill the test
+>> +                       collect_system_state(_child_reader.fps[0]);
+>>                         _child_reader.timeouted = 1;
+>>                         kill(-_child_reader.pid, SIGKILL);
+>>                  }
+>> --
+>> 2.33.0
+>>
+>>
+
+[-- Attachment #2: Type: text/html, Size: 5160 bytes --]
+
+^ permalink raw reply	[flat|nested] 8+ messages in thread
+* [ptest-runner][PATCH 1/3] tests/utils.c: fix a memory corruption in find_word
+@ 2021-09-17 13:40 Alexander Kanavin
+  0 siblings, 0 replies; 8+ messages in thread
+From: Alexander Kanavin @ 2021-09-17 13:40 UTC (permalink / raw)
+  To: yocto; +Cc: Alexander Kanavin
+
+I also took the opportunity to correct a weird API that
+returns a result (or not), depending on some internal condition.
+
+Signed-off-by: Alexander Kanavin <alex@linutronix.de>
+---
+ tests/utils.c | 35 ++++++++++++++++++-----------------
+ 1 file changed, 18 insertions(+), 17 deletions(-)
+
+diff --git a/tests/utils.c b/tests/utils.c
+index 8fffc18..19657ee 100644
+--- a/tests/utils.c
++++ b/tests/utils.c
+@@ -26,6 +26,7 @@
+ #include <stdlib.h>
+ #include <stdio.h>
+ #include <errno.h>
++#include <stdbool.h>
+ 
+ #include <check.h>
+ 
+@@ -61,16 +62,13 @@ static char *ptests_not_found[] = {
+ 
+ static struct ptest_options EmptyOpts;
+ 
+-static inline void
+-find_word(int *found, const char *line, const char *word)
++static inline bool
++find_word(const char *line, const char *word)
+ {
+-
+-	char *pivot = NULL;
+-
+-	pivot = strdup(line);
+-	pivot[strlen(word)] = '\0';
+-	if (strcmp(pivot, word) == 0) { *found = 1; }
+-	free(pivot);
++	if (strncmp(line, word, strlen(word)) == 0)
++                return true;
++        else
++                return false;
+ }
+ 
+ static void test_ptest_expected_failure(struct ptest_list *, const unsigned int, char *,
+@@ -206,18 +204,19 @@ search_for_timeout_and_duration(const int rp, FILE *fp_stdout)
+ 	const char *timeout_str = "TIMEOUT";
+ 	const char *duration_str = "DURATION";
+ 	char line_buf[PRINT_PTEST_BUF_SIZE];
+-	int found_timeout = 0, found_duration = 0;
++	bool found_timeout = false, found_duration = false;
+ 	char *line = NULL;
+ 
+ 	ck_assert(rp != 0);
+ 
+ 	while ((line = fgets(line_buf, PRINT_PTEST_BUF_SIZE, fp_stdout)) != NULL) {
+-		find_word(&found_timeout, line, timeout_str);
+-		find_word(&found_duration, line, duration_str);
++		// once true, stay true
++		found_timeout = found_timeout ? found_timeout : find_word(line, timeout_str);
++		found_duration = found_duration ? found_duration : find_word(line, duration_str);
+ 	}
+ 
+-	ck_assert(found_timeout == 1);
+-	ck_assert(found_duration == 1);
++	ck_assert(found_timeout == true);
++	ck_assert(found_duration == true);
+ }
+ 
+ START_TEST(test_run_timeout_duration_ptest)
+@@ -236,16 +235,18 @@ search_for_fail(const int rp, FILE *fp_stdout)
+ {
+         const char *fail_str = "ERROR: Exit status is 10";
+         char line_buf[PRINT_PTEST_BUF_SIZE];
+-        int found_fail = 0;
++        int found_fail = false;
+         char *line = NULL;
+ 
+         ck_assert(rp != 0);
+ 
+         while ((line = fgets(line_buf, PRINT_PTEST_BUF_SIZE, fp_stdout)) != NULL) {
+-		find_word(&found_fail, line, fail_str);
++		found_fail = find_word(line, fail_str);
++		if (found_fail == true)
++			break;
+         }
+ 
+-        ck_assert(found_fail == 1);
++        ck_assert(found_fail == true);
+ }
+ 
+ START_TEST(test_run_fail_ptest)
+-- 
+2.33.0
+
+
+^ permalink raw reply related	[flat|nested] 8+ messages in thread
+end of thread, other threads:[~2021-09-23 16:38 UTC | newest]
+
+Thread overview: 8+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-09-16 12:46 [ptest-runner][PATCH 1/3] tests/utils.c: fix a memory corruption in find_word Alexander Kanavin
+2021-09-16 12:46 ` [ptest-runner][PATCH 2/3] utils.c: handle test timeouts directly with poll() Alexander Kanavin
+2021-09-16 12:46 ` [ptest-runner][PATCH 3/3] utils.c: add system data collection when a test gets stuck Alexander Kanavin
+2021-09-16 16:18   ` [yocto] " Richard Purdie
+2021-09-16 16:23     ` Alexander Kanavin
+2021-09-23 16:33   ` Anibal Limon
+2021-09-23 16:38     ` Alexander Kanavin
+2021-09-17 13:40 [ptest-runner][PATCH 1/3] tests/utils.c: fix a memory corruption in find_word Alexander Kanavin
+

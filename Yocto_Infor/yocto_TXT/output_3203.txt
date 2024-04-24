@@ -1,0 +1,164 @@
+* Yocto Autobuilder: Latency Monitor and AB-INT - Meeting notes: July 1, 2021
+@ 2021-07-01 14:19 Randy MacLeod
+  0 siblings, 0 replies; only message in thread
+From: Randy MacLeod @ 2021-07-01 14:19 UTC (permalink / raw)
+  To: Sakib Sajal, alexandre.belloni, richard.purdie, Wold, Saul,
+	Trevor Gamblin
+  Cc: Yocto discussion list, Tascioglu, Tony, Michael Halstead
+
+
+YP AB Intermittent failures meeting
+===================================
+July 1, 2021, 9 AM ET
+https://windriver.zoom.us/j/3696693975
+
+Attendees:  Alex, Richard, Saul, Randy
+
+
+Summary:
+========
+
+The autobuilder RCU hang is fixed, build greener.
+ptest failures (some glibc-2.34) are the top problem now.
+
+Add Michael Halstead, see questions below in section 4.
+
+If anyone wants to help, we could use more eyes on the logs,
+particularly the summary logs and understanding iostat #
+when the dd test times out.
+
+
+Plans for the week:
+
+===================
+
+
+   Richard: glibc upgrade, etc.
+
+   Alex: ?
+
+   Sakib: pub/non-release link upgrade, script clean-up.
+
+   Trevor: make job server test. Try it on YP AB!!! What type of build?
+
+   Tony: nothing this week for YP.
+
+   Saul: nothing this week for YP.
+
+   Randy: vacation!
+
+
+Meeting Notes:
+==============
+
+1. The qemu RCU hang has been fixed to not deadlock anymore!
+
+It still  hangs at times but this dramatically reduces the
+AB failures.
+
+
+2. Lots of ptest failures with
+   - tcl
+   - valgrind
+   especially with the upreved glibc-2.34.
+
+3. YP AB INT # bugs reduced: down to ~ 47
+    Richard went through the list and closed ~ 10 bugs.
+   - RCU, LTP bugs closed.
+   - qemu ping bug remains
+       https://bugzilla.yoctoproject.org/show_bug.cgi?id=14029
+
+4. bitbake server timeout.
+
+    "Timeout while waiting for a reply from the bitbake server (60s)"
+
+    Randy mentioned that the bitbake server timeouts seen in the
+    Wind River build cluster have gone away after upgrading to
+    a newer version of docker.
+
+    Old: Docker Version: Docker version 18.09.4, build d14af54266
+    New: Docker Version: Docker version 20.10.7, build f0df350
+
+
+    Clearly the YP ABs aren't running in docker but what
+    about firmware and kernel tunings.
+
+    Michael,
+
+    Is the BIOS/firmware kept up to date on most nodes?
+
+    It seems that we are running stock kernels which makes sense but
+    given that we don't have concerns about privacy since system access
+    is controlled and the nodes are being used to test open
+    source software, we might consider optimizing for performance
+    rather than security.
+
+    Alex pointed at: https://make-linux-fast-again.com/
+    Which just lists a set of kernel boot options:
+       noibrs noibpb nopti nospectre_v2 nospectre_v1  \
+       l1tf=off nospec_store_bypass_disable no_stf_barrier \
+       mds=off tsx=on tsx_async_abort=off mitigations=off
+
+    Can we enable some or all of these on a node to see what the
+    performance difference is?
+
+
+5. io stalls
+
+    Richard said that it would make sense to write an ftrace utility
+    / script to monitor io latency and we could install it with sudo
+    Ch^W mentioned ftrace on IRC.
+    Sakib and Randy will work on that but not for a week or two.
+
+6. Switch the pub/non-release links from full log to summary.
+    The host data links on:
+      https://autobuilder.yocto.io/pub/non-release/
+    should include links to the summary data. I think we have room to
+    include both links like this:
+    0 1 2 3  (Full: 0 1 2 3 )
+
+7. Qemu machine protocol debugging commands
+
+    Saul's patch is in.
+
+
+8. System load: make, ninja jobs
+
+    Trevor has been busy with other work but has been playing with
+    kea and make -l:  load average calculation
+       https://github.com/mirror/make/blob/master/src/job.c#L1947
+
+
+    We're confirmed that this actually works on a build server and
+    for all versions of make in the cluster.
+
+    Randy may write to Paul Smith about the general problem we
+    are having.
+
+
+9.  iostat
+
+     The iostat output is in some of the AB logs:
+        https://autobuilder.yocto.io/pub/non-release/
+     for example:
+
+https://autobuilder.yocto.io/pub/non-release/20210623-17/testresults/meta-oe/2021-06-23--21-51/host_stats_0_top.txt
+
+     search for "start: iostat"
+     it looks like the io sub-systems are 100% utilized but
+     we need more time, data and the summary script to be able to easily
+     make a general statement about AB INT issues and IO load and
+     to be able to identify what is typically generating the IO load.
+
+
+
+
+../Randy
+
+^ permalink raw reply	[flat|nested] only message in thread
+only message in thread, other threads:[~2021-07-01 14:20 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-07-01 14:19 Yocto Autobuilder: Latency Monitor and AB-INT - Meeting notes: July 1, 2021 Randy MacLeod
+

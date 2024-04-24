@@ -1,0 +1,61 @@
+* systemd-timesyncd: set specific default mtime value for /var/lib/systemd/timesync/clock
+@ 2022-12-05 20:26 Dennis Lambe
+  0 siblings, 0 replies; only message in thread
+From: Dennis Lambe @ 2022-12-05 20:26 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1902 bytes --]
+
+ systemd-timesyncd uses /var/lib/systemd/timesync/clock to maintain a
+monotonic system time across reboots even in the presence of RTC failures.
+If this file doesn't exist, "at the minimum, it will be set to the systemd
+build date".
+
+I dug through systemd's build process, and found that it will get that
+build date from either the timestamp of the NEWS file or, if it's set, the
+environment variable SOURCE_DATE_EPOCH. So, great, that means this is
+already accessible through Yocto's reproducible build infrastructure. But
+the catch is, that variable is listed in BB_BASEHASH_IGNORE_VARS, meaning
+that just setting SOURCE_DATE_EPOCH from a bbappend or
+SOURCE_DATE_EPOCH:pn-systemd from a conf file doesn't actually cause the
+recipe to be re-run when I change the SOURCE_DATE_EPOCH. It also means that
+other developers with their own sstate might continue creating builds for
+themselves indefinitely that don't take my SOURCE_DATE_EPOCH into account,
+until such time as they happen to run a -c clean or systemd's recipe gets
+upgraded for another reason.
+
+I don't think I want to remove SOURCE_DATE_EPOCH from the
+BB_BASEHASH_IGNORE_VARS globally, but removing it from
+BB_BASEHASH_IGNORE_VARS with a systemd_%.bbappend appears to have no effect
+(even though `bitbake -e systemd` shows that my :remove is being processed
+correctly).
+
+A hack that I've thought of is setting PR .= ".${SOURCE_DATE_EPOCH}" but I
+can't help thinking there must be a better way.
+
+Anybody have any advice on how to get Yocto to do what I want it to?
+-- 
+
+Dennis Lambe (He/Him)
+
+Lead Firmware Engineer
+
+sparkcharge.io <http://www.sparkcharge.io>
+
+Download Currently <http://onelink.to/hjugtj> Today!
+
+<https://www.facebook.com/SparkChargeCorp>
+<https://www.instagram.com/sparkcharge.io/>
+<https://twitter.com/sparkcharge>
+<https://www.linkedin.com/company/sparkcharge>
+<https://www.youtube.com/channel/UCmEAwtNrCs2nFwXax5x7t3g>
+
+[-- Attachment #2: Type: text/html, Size: 8200 bytes --]
+
+^ permalink raw reply	[flat|nested] only message in thread
+only message in thread, other threads:[~2022-12-05 20:27 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-12-05 20:26 systemd-timesyncd: set specific default mtime value for /var/lib/systemd/timesync/clock Dennis Lambe
+

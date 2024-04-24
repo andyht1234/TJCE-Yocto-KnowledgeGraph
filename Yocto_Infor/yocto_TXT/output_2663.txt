@@ -1,0 +1,283 @@
+* [meta-cgl][PATCH 1/2] crmsh: fix deprecation on collections.MutableSet
+@ 2021-10-26  7:45 Yi Zhao
+  2021-10-26  7:45 ` [meta-cgl][PATCH 2/2] crmsh: add UPSTREAM_CHECK_GITTAGREGEX Yi Zhao
+  2021-10-26 17:17 ` [meta-cgl][PATCH 1/2] crmsh: fix deprecation on collections.MutableSet Jeremy Puhlman
+  0 siblings, 2 replies; 3+ messages in thread
+From: Yi Zhao @ 2021-10-26  7:45 UTC (permalink / raw)
+  To: yocto, jpuhlman
+
+Python 3.10 removes the deprecated aliases to collections abstract base
+clases [1]. Using 'collections.abc.MutableSet' instead of
+'collections.MutableSet'
+
+[1]: https://bugs.python.org/issue37324
+
+Fixes:
+$ crm
+Traceback (most recent call last):
+  File "/usr/bin/crm", line 29, in <module>
+    from crmsh import main
+  File "/usr/lib64/python3.10/site-packages/crmsh/main.py", line 18, in <module>
+    from . import ui_root
+  File "/usr/lib64/python3.10/site-packages/crmsh/ui_root.py", line 23, in <module>
+    from . import ui_cib
+  File "/usr/lib64/python3.10/site-packages/crmsh/ui_cib.py", line 16, in <module>
+    from .cibconfig import cib_factory
+  File "/usr/lib64/python3.10/site-packages/crmsh/cibconfig.py", line 23, in <module>
+    from . import orderedset
+  File "/usr/lib64/python3.10/site-packages/crmsh/orderedset.py", line 29, in <module>
+    class OrderedSet(collections.MutableSet):
+AttributeError: module 'collections' has no attribute 'MutableSet'
+
+Signed-off-by: Yi Zhao <yi.zhao@windriver.com>
+---
+ ...x-deprecation-on-collections.Mutable.patch | 52 +++++++++++++++++++
+ .../recipes-cgl/crmsh/crmsh_4.3.1.bb          |  1 +
+ 2 files changed, 53 insertions(+)
+ create mode 100644 meta-cgl-common/recipes-cgl/crmsh/crmsh/0001-orderedset.py-fix-deprecation-on-collections.Mutable.patch
+
+diff --git a/meta-cgl-common/recipes-cgl/crmsh/crmsh/0001-orderedset.py-fix-deprecation-on-collections.Mutable.patch b/meta-cgl-common/recipes-cgl/crmsh/crmsh/0001-orderedset.py-fix-deprecation-on-collections.Mutable.patch
+new file mode 100644
+index 0000000..62db8e8
+--- /dev/null
++++ b/meta-cgl-common/recipes-cgl/crmsh/crmsh/0001-orderedset.py-fix-deprecation-on-collections.Mutable.patch
+@@ -0,0 +1,52 @@
++From c1356d64086d2e3f9d113f346a14e6dff1c2acb0 Mon Sep 17 00:00:00 2001
++From: Yi Zhao <yi.zhao@windriver.com>
++Date: Tue, 26 Oct 2021 14:01:09 +0800
++Subject: [PATCH] orderedset.py: fix deprecation on collections.MutableSet
++
++Python 3.10 removes the deprecated aliases to collections abstract
++base clases [1]. Using 'collections.abc.MutableSet' instead of
++'collections.MutableSet'
++
++[1]: https://bugs.python.org/issue37324
++
++Fixes:
++$ crm
++Traceback (most recent call last):
++  File "/usr/bin/crm", line 29, in <module>
++    from crmsh import main
++  File "/usr/lib64/python3.10/site-packages/crmsh/main.py", line 18, in <module>
++    from . import ui_root
++  File "/usr/lib64/python3.10/site-packages/crmsh/ui_root.py", line 23, in <module>
++    from . import ui_cib
++  File "/usr/lib64/python3.10/site-packages/crmsh/ui_cib.py", line 16, in <module>
++    from .cibconfig import cib_factory
++  File "/usr/lib64/python3.10/site-packages/crmsh/cibconfig.py", line 23, in <module>
++    from . import orderedset
++  File "/usr/lib64/python3.10/site-packages/crmsh/orderedset.py", line 29, in <module>
++    class OrderedSet(collections.MutableSet):
++AttributeError: module 'collections' has no attribute 'MutableSet'
++
++Upstream-Status: Submitted
++[https://github.com/ClusterLabs/crmsh/pull/882]
++
++Signed-off-by: Yi Zhao <yi.zhao@windriver.com>
++---
++ crmsh/orderedset.py | 2 +-
++ 1 file changed, 1 insertion(+), 1 deletion(-)
++
++diff --git a/crmsh/orderedset.py b/crmsh/orderedset.py
++index 21ec480c..27233289 100644
++--- a/crmsh/orderedset.py
+++++ b/crmsh/orderedset.py
++@@ -26,7 +26,7 @@ import collections
++ KEY, PREV, NEXT = list(range(3))
++ 
++ 
++-class OrderedSet(collections.MutableSet):
+++class OrderedSet(collections.abc.MutableSet):
++ 
++     def __init__(self, iterable=None):
++         self.end = end = []
++-- 
++2.25.1
++
+diff --git a/meta-cgl-common/recipes-cgl/crmsh/crmsh_4.3.1.bb b/meta-cgl-common/recipes-cgl/crmsh/crmsh_4.3.1.bb
+index 75e720b..0b6ecd3 100644
+--- a/meta-cgl-common/recipes-cgl/crmsh/crmsh_4.3.1.bb
++++ b/meta-cgl-common/recipes-cgl/crmsh/crmsh_4.3.1.bb
+@@ -15,6 +15,7 @@ RDEPENDS:${PN} = "pacemaker python3-lxml python3-parallax gawk bash python3-doct
+ S = "${WORKDIR}/git"
+ SRC_URI = "git://github.com/ClusterLabs/${BPN}.git \
+            file://tweaks_for_build.patch \
++           file://0001-orderedset.py-fix-deprecation-on-collections.Mutable.patch \
+           "
+ 
+ SRCREV = "00ec69054edecd068deda54c6184c0385d90ebd2"
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 3+ messages in thread
+* [meta-cgl][PATCH 2/2] crmsh: add UPSTREAM_CHECK_GITTAGREGEX
+  2021-10-26  7:45 [meta-cgl][PATCH 1/2] crmsh: fix deprecation on collections.MutableSet Yi Zhao
+@ 2021-10-26  7:45 ` Yi Zhao
+  2021-10-26 17:17 ` [meta-cgl][PATCH 1/2] crmsh: fix deprecation on collections.MutableSet Jeremy Puhlman
+  1 sibling, 0 replies; 3+ messages in thread
+From: Yi Zhao @ 2021-10-26  7:45 UTC (permalink / raw)
+  To: yocto, jpuhlman
+
+Add UPSTREAM_CHECK_GITTAGREGEX to check the correct latest version.
+
+Before the patch:
+$ devtool latest-version crmsh
+INFO: Current version: 4.3.1
+INFO: Latest version: 12
+INFO: Latest version's commit: 3308c27651a3657a019d7dc313435060f68454c5
+
+After the patch:
+$ devtool latest-version crmsh
+INFO: Current version: 4.3.1
+INFO: Latest version: 4.3.1
+INFO: Latest version's commit: 00ec69054edecd068deda54c6184c0385d90ebd2
+
+Signed-off-by: Yi Zhao <yi.zhao@windriver.com>
+---
+ meta-cgl-common/recipes-cgl/crmsh/crmsh_4.3.1.bb | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/meta-cgl-common/recipes-cgl/crmsh/crmsh_4.3.1.bb b/meta-cgl-common/recipes-cgl/crmsh/crmsh_4.3.1.bb
+index 0b6ecd3..531a053 100644
+--- a/meta-cgl-common/recipes-cgl/crmsh/crmsh_4.3.1.bb
++++ b/meta-cgl-common/recipes-cgl/crmsh/crmsh_4.3.1.bb
+@@ -20,6 +20,8 @@ SRC_URI = "git://github.com/ClusterLabs/${BPN}.git \
+ 
+ SRCREV = "00ec69054edecd068deda54c6184c0385d90ebd2"
+ 
++UPSTREAM_CHECK_GITTAGREGEX = "(?P<pver>(\d+(\.\d+)+))$"
++
+ inherit autotools-brokensep setuptools3
+ 
+ export HOST_SYS
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 3+ messages in thread
+* Re: [meta-cgl][PATCH 1/2] crmsh: fix deprecation on collections.MutableSet
+  2021-10-26  7:45 [meta-cgl][PATCH 1/2] crmsh: fix deprecation on collections.MutableSet Yi Zhao
+  2021-10-26  7:45 ` [meta-cgl][PATCH 2/2] crmsh: add UPSTREAM_CHECK_GITTAGREGEX Yi Zhao
+@ 2021-10-26 17:17 ` Jeremy Puhlman
+  1 sibling, 0 replies; 3+ messages in thread
+From: Jeremy Puhlman @ 2021-10-26 17:17 UTC (permalink / raw)
+  To: Yi Zhao, yocto
+
+Series merged. Thanks.
+
+On 10/26/2021 12:45 AM, Yi Zhao wrote:
+> Python 3.10 removes the deprecated aliases to collections abstract base
+> clases [1]. Using 'collections.abc.MutableSet' instead of
+> 'collections.MutableSet'
+>
+> [1]: https://bugs.python.org/issue37324
+>
+> Fixes:
+> $ crm
+> Traceback (most recent call last):
+>    File "/usr/bin/crm", line 29, in <module>
+>      from crmsh import main
+>    File "/usr/lib64/python3.10/site-packages/crmsh/main.py", line 18, in <module>
+>      from . import ui_root
+>    File "/usr/lib64/python3.10/site-packages/crmsh/ui_root.py", line 23, in <module>
+>      from . import ui_cib
+>    File "/usr/lib64/python3.10/site-packages/crmsh/ui_cib.py", line 16, in <module>
+>      from .cibconfig import cib_factory
+>    File "/usr/lib64/python3.10/site-packages/crmsh/cibconfig.py", line 23, in <module>
+>      from . import orderedset
+>    File "/usr/lib64/python3.10/site-packages/crmsh/orderedset.py", line 29, in <module>
+>      class OrderedSet(collections.MutableSet):
+> AttributeError: module 'collections' has no attribute 'MutableSet'
+>
+> Signed-off-by: Yi Zhao <yi.zhao@windriver.com>
+> ---
+>   ...x-deprecation-on-collections.Mutable.patch | 52 +++++++++++++++++++
+>   .../recipes-cgl/crmsh/crmsh_4.3.1.bb          |  1 +
+>   2 files changed, 53 insertions(+)
+>   create mode 100644 meta-cgl-common/recipes-cgl/crmsh/crmsh/0001-orderedset.py-fix-deprecation-on-collections.Mutable.patch
+>
+> diff --git a/meta-cgl-common/recipes-cgl/crmsh/crmsh/0001-orderedset.py-fix-deprecation-on-collections.Mutable.patch b/meta-cgl-common/recipes-cgl/crmsh/crmsh/0001-orderedset.py-fix-deprecation-on-collections.Mutable.patch
+> new file mode 100644
+> index 0000000..62db8e8
+> --- /dev/null
+> +++ b/meta-cgl-common/recipes-cgl/crmsh/crmsh/0001-orderedset.py-fix-deprecation-on-collections.Mutable.patch
+> @@ -0,0 +1,52 @@
+> +From c1356d64086d2e3f9d113f346a14e6dff1c2acb0 Mon Sep 17 00:00:00 2001
+> +From: Yi Zhao <yi.zhao@windriver.com>
+> +Date: Tue, 26 Oct 2021 14:01:09 +0800
+> +Subject: [PATCH] orderedset.py: fix deprecation on collections.MutableSet
+> +
+> +Python 3.10 removes the deprecated aliases to collections abstract
+> +base clases [1]. Using 'collections.abc.MutableSet' instead of
+> +'collections.MutableSet'
+> +
+> +[1]: https://bugs.python.org/issue37324
+> +
+> +Fixes:
+> +$ crm
+> +Traceback (most recent call last):
+> +  File "/usr/bin/crm", line 29, in <module>
+> +    from crmsh import main
+> +  File "/usr/lib64/python3.10/site-packages/crmsh/main.py", line 18, in <module>
+> +    from . import ui_root
+> +  File "/usr/lib64/python3.10/site-packages/crmsh/ui_root.py", line 23, in <module>
+> +    from . import ui_cib
+> +  File "/usr/lib64/python3.10/site-packages/crmsh/ui_cib.py", line 16, in <module>
+> +    from .cibconfig import cib_factory
+> +  File "/usr/lib64/python3.10/site-packages/crmsh/cibconfig.py", line 23, in <module>
+> +    from . import orderedset
+> +  File "/usr/lib64/python3.10/site-packages/crmsh/orderedset.py", line 29, in <module>
+> +    class OrderedSet(collections.MutableSet):
+> +AttributeError: module 'collections' has no attribute 'MutableSet'
+> +
+> +Upstream-Status: Submitted
+> +[https://github.com/ClusterLabs/crmsh/pull/882]
+> +
+> +Signed-off-by: Yi Zhao <yi.zhao@windriver.com>
+> +---
+> + crmsh/orderedset.py | 2 +-
+> + 1 file changed, 1 insertion(+), 1 deletion(-)
+> +
+> +diff --git a/crmsh/orderedset.py b/crmsh/orderedset.py
+> +index 21ec480c..27233289 100644
+> +--- a/crmsh/orderedset.py
+> ++++ b/crmsh/orderedset.py
+> +@@ -26,7 +26,7 @@ import collections
+> + KEY, PREV, NEXT = list(range(3))
+> +
+> +
+> +-class OrderedSet(collections.MutableSet):
+> ++class OrderedSet(collections.abc.MutableSet):
+> +
+> +     def __init__(self, iterable=None):
+> +         self.end = end = []
+> +--
+> +2.25.1
+> +
+> diff --git a/meta-cgl-common/recipes-cgl/crmsh/crmsh_4.3.1.bb b/meta-cgl-common/recipes-cgl/crmsh/crmsh_4.3.1.bb
+> index 75e720b..0b6ecd3 100644
+> --- a/meta-cgl-common/recipes-cgl/crmsh/crmsh_4.3.1.bb
+> +++ b/meta-cgl-common/recipes-cgl/crmsh/crmsh_4.3.1.bb
+> @@ -15,6 +15,7 @@ RDEPENDS:${PN} = "pacemaker python3-lxml python3-parallax gawk bash python3-doct
+>   S = "${WORKDIR}/git"
+>   SRC_URI = "git://github.com/ClusterLabs/${BPN}.git \
+>              file://tweaks_for_build.patch \
+> +           file://0001-orderedset.py-fix-deprecation-on-collections.Mutable.patch \
+>             "
+>   
+>   SRCREV = "00ec69054edecd068deda54c6184c0385d90ebd2"
+
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2021-10-26 17:17 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-10-26  7:45 [meta-cgl][PATCH 1/2] crmsh: fix deprecation on collections.MutableSet Yi Zhao
+2021-10-26  7:45 ` [meta-cgl][PATCH 2/2] crmsh: add UPSTREAM_CHECK_GITTAGREGEX Yi Zhao
+2021-10-26 17:17 ` [meta-cgl][PATCH 1/2] crmsh: fix deprecation on collections.MutableSet Jeremy Puhlman
+

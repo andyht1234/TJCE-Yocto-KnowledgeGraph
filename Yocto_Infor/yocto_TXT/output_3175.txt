@@ -1,0 +1,183 @@
+* Question regarding custom device tree update
+@ 2021-06-30 13:46 Sohil Shah
+  2021-07-07 16:59 ` [yocto] " Rob Calhoun
+  0 siblings, 1 reply; 3+ messages in thread
+From: Sohil Shah @ 2021-06-30 13:46 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1168 bytes --]
+
+Hello,
+
+I am kinda a noob at this so please bear with me.
+
+I am using the sama5d27-wlsom1-ek board for my demo and I am trying to make
+changes to the device tree.
+
+So far I have compiled core-image-minimal and find my dtb files are
+generated in
+/tmp/work/sama5d27_wlsom1_ek_sd-poky-linux-gnueabi/linux-at91/5.4+gitAUTOINC+3dba8c9991-r0/build/arch/arm/boot/dts
+folder.
+
+Also I find many different dts files in
+build/tmp/work-shared/sama5d27-wlsom1-ek-sd/kernel-source/arch/arm/boot/dts
+
+But where does my machine get device tree files if they are generated
+inside the build folder and if so where do I place my custom files so that
+they get called during bitbake.
+
+I want to build the image using my custom dts file where I enable certain
+peripherals and disable the ones not required. (A test to update dtb's in
+future).
+
+I tried different methods found here
+https://stackoverflow.com/questions/38917745/quick-rebuild-of-device-tree-only-with-yocto-bitbake
+
+But, I seem to run into some errors when I try to build the image.
+
+Please help and let me know if I missed any required information from my
+side.
+
+Thank you and Regards,
+Sohil
+
+[-- Attachment #2: Type: text/html, Size: 1620 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] Question regarding custom device tree update
+  2021-06-30 13:46 Question regarding custom device tree update Sohil Shah
+@ 2021-07-07 16:59 ` Rob Calhoun
+  2021-07-08 13:22   ` Sohil Shah
+  0 siblings, 1 reply; 3+ messages in thread
+From: Rob Calhoun @ 2021-07-07 16:59 UTC (permalink / raw)
+  To: Sohil Shah, yocto
+
+> From: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org> on behalf of Sohil Shah <sohils@acevin.com>
+> Sent: Wednesday, June 30, 2021 09:46
+> To: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+> Subject: [yocto] Question regarding custom device tree update 
+>
+> (...)
+> I want to build the image using my custom dts file where I enable certain peripherals and disable the ones not required. (A test to update dtb's in future).
+>
+> I tried different methods found here
+> https://stackoverflow.com/questions/38917745/quick-rebuild-of-device-tree-only-with-yocto-bitbake
+>
+> But, I seem to run into some errors when I try to build the image.
+>
+> Please help and let me know if I missed any required information from my side.
+>
+>Thank you and Regards,
+> Sohil
+
+Hi Sohil,
+
+First make a custom layer for you modifications and add it to bblayers.conf. Then modify your machine definition of KERNEL_DEVICETREE (in meta-yourlayer/conf/machine/machinname.conf) to specify multiple device trees, e.g.
+
+KERNEL_DEVICETREE = "at91-sama5d27_wlsom1_ek.dtb at91-sama5d27_wlsom1_ek_custom.dtb"
+
+Note this should specify the "dtb" (compiled device tree name), not the "dts" (source.)
+
+Next, make a .bbappend for your linux recipe that will provide the .dts source, something like:
+
+FILESEXTRAPATHS_prepend := "${THISDIR}/${PN}:"
+
+SRC_URI += " \
+ file://at91-sama5d27_wlsom1_ek_custom.dts;subdir=git/arch/arm/boot/dts \
+"
+
+Make a subdirectory with package name (e.g. linux-yocto) and put your dts in there. The "subdir" directive tells bitbake to drop the dts into the appropriate directory for the linux build process to find it. The device tree(s) will be built along with linux and put in the image's /boot directory. You can select which device tree you want to boot with via u-boot, or by manipulating the symbolic links in the /boot directory.
+
+Best wishes,
+
+Rob Calhoun
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] Question regarding custom device tree update
+  2021-07-07 16:59 ` [yocto] " Rob Calhoun
+@ 2021-07-08 13:22   ` Sohil Shah
+  0 siblings, 0 replies; 3+ messages in thread
+From: Sohil Shah @ 2021-07-08 13:22 UTC (permalink / raw)
+  To: Robert Calhoun; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2250 bytes --]
+
+Hi Robert,
+
+Thank you for your reply.
+This works and I got my dtb generated in my build directory!
+
+Best wishes,
+Sohil
+
+
+On Wed, Jul 7, 2021 at 10:29 PM Robert Calhoun <rcalhoun@shotspotter.com>
+wrote:
+
+> > From: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org> on
+> behalf of Sohil Shah <sohils@acevin.com>
+> > Sent: Wednesday, June 30, 2021 09:46
+> > To: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+> > Subject: [yocto] Question regarding custom device tree update
+> >
+> > (...)
+> > I want to build the image using my custom dts file where I enable
+> certain peripherals and disable the ones not required. (A test to update
+> dtb's in future).
+> >
+> > I tried different methods found here
+> >
+> https://stackoverflow.com/questions/38917745/quick-rebuild-of-device-tree-only-with-yocto-bitbake
+> >
+> > But, I seem to run into some errors when I try to build the image.
+> >
+> > Please help and let me know if I missed any required information from my
+> side.
+> >
+> >Thank you and Regards,
+> > Sohil
+>
+> Hi Sohil,
+>
+> First make a custom layer for you modifications and add it to
+> bblayers.conf. Then modify your machine definition of KERNEL_DEVICETREE (in
+> meta-yourlayer/conf/machine/machinname.conf) to specify multiple device
+> trees, e.g.
+>
+> KERNEL_DEVICETREE = "at91-sama5d27_wlsom1_ek.dtb
+> at91-sama5d27_wlsom1_ek_custom.dtb"
+>
+> Note this should specify the "dtb" (compiled device tree name), not the
+> "dts" (source.)
+>
+> Next, make a .bbappend for your linux recipe that will provide the .dts
+> source, something like:
+>
+> FILESEXTRAPATHS_prepend := "${THISDIR}/${PN}:"
+>
+> SRC_URI += " \
+>  file://at91-sama5d27_wlsom1_ek_custom.dts;subdir=git/arch/arm/boot/dts \
+> "
+>
+> Make a subdirectory with package name (e.g. linux-yocto) and put your dts
+> in there. The "subdir" directive tells bitbake to drop the dts into the
+> appropriate directory for the linux build process to find it. The device
+> tree(s) will be built along with linux and put in the image's /boot
+> directory. You can select which device tree you want to boot with via
+> u-boot, or by manipulating the symbolic links in the /boot directory.
+>
+> Best wishes,
+>
+> Rob Calhoun
+
+[-- Attachment #2: Type: text/html, Size: 3256 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2021-07-08 13:22 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-06-30 13:46 Question regarding custom device tree update Sohil Shah
+2021-07-07 16:59 ` [yocto] " Rob Calhoun
+2021-07-08 13:22   ` Sohil Shah
+

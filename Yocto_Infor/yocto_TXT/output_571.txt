@@ -1,0 +1,181 @@
+* opencv pseudo abort
+@ 2023-05-26 11:38 Belisko Marek
+  2023-05-26 13:41 ` [yocto] " Matt Madison
+  0 siblings, 1 reply; 2+ messages in thread
+From: Belisko Marek @ 2023-05-26 11:38 UTC (permalink / raw)
+  To: Yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1956 bytes --]
+
+Hi,
+
+I'm using kirkstone and from time to time I'm getting pseudo abort on
+opencv.
+
+There are some topics already reported:
+
+https://lists.yoctoproject.org/g/yocto/topic/opencv_build_generates_pseudo/82884027?p=
+
+https://community.nxp.com/t5/i-MX-Processors/yocto-failed-to-build-Machine-Learning-for-linux-5-10-9/td-p/1388423
+
+but with no solution. I'm hitting following:
+
+| DEBUG: Python function extend_recipe_sysroot finished
+| DEBUG: Executing shell function do_install
+| NOTE:
+DESTDIR=/home/builder/build/tmp/work/corei7-64-poky-linux/opencv/4.5.5-r0/image
+VERBOSE=1 cmake --build
+/home/builder/build/tmp/work/corei7-64-poky-linux/opencv/4.5.5-r0/build
+--target install --
+| abort()ing pseudo client by server request. See
+https://wiki.yoctoproject.org/wiki/Pseudo_Abort for more details on this.
+| Check logfile:
+/home/builder/build/tmp/work/corei7-64-poky-linux/opencv/4.5.5-r0/pseudo//pseudo.log
+| Subprocess aborted
+| CMake Error: Generator: execution of make failed. Make command was: ninja
+-v -j 32 install &&
+| WARNING: exit code 1 from a shell command.
+ERROR: Task
+(/home/builder/build/../oe/meta-oe/recipes-support/opencv/opencv_4.5.5.bb:do_install)
+failed with exit code '1'
+Pseudo log:
+path mismatch [3 links]: ino 94381104 db
+'/home/builder/build/tmp/work/corei7-64-poky-linux/opencv/4.5.5-r0/package/usr/src/debug/opencv/4.5.5-r0/contrib/modules/intensity_transform/src/bimef.cpp'
+req
+'/home/builder/build/tmp/work/corei7-64-poky-linux/opencv/4.5.5-r0/contrib/modules/intensity_transform/src/bimef.cpp'.
+Setup complete, sending SIGUSR1 to pid 1215.
+
+Is there at least any workaround available please (except of deleting
+build.tmp ;))
+
+Thanks and BR,
+
+marek
+
+-- 
+as simple and primitive as possible
+-------------------------------------------------
+Marek Belisko - OPEN-NANDRA
+Freelance Developer
+
+Ruska Nova Ves 219 | Presov, 08005 Slovak Republic
+Tel: +421 915 052 184
+skype: marekwhite
+twitter: #opennandra
+web: http://open-nandra.com
+
+[-- Attachment #2: Type: text/html, Size: 2750 bytes --]
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+* Re: [yocto] opencv pseudo abort
+  2023-05-26 11:38 opencv pseudo abort Belisko Marek
+@ 2023-05-26 13:41 ` Matt Madison
+  0 siblings, 0 replies; 2+ messages in thread
+From: Matt Madison @ 2023-05-26 13:41 UTC (permalink / raw)
+  To: Marek Belisko; +Cc: Yocto
+
+[-- Attachment #1: Type: text/plain, Size: 3138 bytes --]
+
+On Fri, May 26, 2023 at 4:38 AM Marek Belisko <marek.belisko@gmail.com>
+wrote:
+
+> Hi,
+>
+> I'm using kirkstone and from time to time I'm getting pseudo abort on
+> opencv.
+>
+> There are some topics already reported:
+>
+>
+> https://lists.yoctoproject.org/g/yocto/topic/opencv_build_generates_pseudo/82884027?p=
+>
+>
+> https://community.nxp.com/t5/i-MX-Processors/yocto-failed-to-build-Machine-Learning-for-linux-5-10-9/td-p/1388423
+>
+> but with no solution. I'm hitting following:
+>
+> | DEBUG: Python function extend_recipe_sysroot finished
+> | DEBUG: Executing shell function do_install
+> | NOTE:
+> DESTDIR=/home/builder/build/tmp/work/corei7-64-poky-linux/opencv/4.5.5-r0/image
+> VERBOSE=1 cmake --build
+> /home/builder/build/tmp/work/corei7-64-poky-linux/opencv/4.5.5-r0/build
+> --target install --
+> | abort()ing pseudo client by server request. See
+> https://wiki.yoctoproject.org/wiki/Pseudo_Abort for more details on this.
+> | Check logfile:
+> /home/builder/build/tmp/work/corei7-64-poky-linux/opencv/4.5.5-r0/pseudo//pseudo.log
+> | Subprocess aborted
+> | CMake Error: Generator: execution of make failed. Make command was:
+> ninja -v -j 32 install &&
+> | WARNING: exit code 1 from a shell command.
+> ERROR: Task
+> (/home/builder/build/../oe/meta-oe/recipes-support/opencv/opencv_4.5.5.bb:do_install)
+> failed with exit code '1'
+> Pseudo log:
+> path mismatch [3 links]: ino 94381104 db
+> '/home/builder/build/tmp/work/corei7-64-poky-linux/opencv/4.5.5-r0/package/usr/src/debug/opencv/4.5.5-r0/contrib/modules/intensity_transform/src/bimef.cpp'
+> req
+> '/home/builder/build/tmp/work/corei7-64-poky-linux/opencv/4.5.5-r0/contrib/modules/intensity_transform/src/bimef.cpp'.
+> Setup complete, sending SIGUSR1 to pid 1215.
+>
+> Is there at least any workaround available please (except of deleting
+> build.tmp ;))
+>
+
+
+I've worked around this by adding this in a bbappend:
+
+PSEUDO_IGNORE_PATHS:append = ",${WORKDIR}/contrib"
+
+but have never got round to sending a patch upstream to get it fixed in the
+recipe.  I think it should also have been fixed as a side-effect of
+
+https://git.openembedded.org/meta-openembedded/commit/?id=6b7cf95e75cbfc08cf1f6eddc7ce3f6a0a39edcf
+
+which moved the add-on sources under ${S}, which is already covered by
+PSEUDO_IGNORE_PATHS.  That might be a better change to backport.
+
+-Matt
+
+
+
+>
+> Thanks and BR,
+>
+> marek
+>
+> --
+> as simple and primitive as possible
+> -------------------------------------------------
+> Marek Belisko - OPEN-NANDRA
+> Freelance Developer
+>
+> Ruska Nova Ves 219 | Presov, 08005 Slovak Republic
+> Tel: +421 915 052 184
+> skype: marekwhite
+> twitter: #opennandra
+> web: http://open-nandra.com
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#60127):
+> https://lists.yoctoproject.org/g/yocto/message/60127
+> Mute This Topic: https://lists.yoctoproject.org/mt/99147968/3618418
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub
+> [matt@madison.systems]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 4923 bytes --]
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2023-05-26 13:41 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-05-26 11:38 opencv pseudo abort Belisko Marek
+2023-05-26 13:41 ` [yocto] " Matt Madison
+

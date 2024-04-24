@@ -1,0 +1,59 @@
+* A build error on v5.15/standard/nxp-sdk-5.15/nxp-soc branch
+@ 2023-06-08  8:53 Maohui Lei (Fujitsu)
+  0 siblings, 0 replies; only message in thread
+From: Maohui Lei (Fujitsu) @ 2023-06-08  8:53 UTC (permalink / raw)
+  To: yocto
+
+Hi, all
+
+By poky(c6763d27efd11e2bc2a62147890ad1067c4af2ec)、I built linux-qoriq-5.15, but failed. I wonder if there is anybody can give me some suggestion here.
+
+The source code config of linux-qoriq_5.15.bb is as the following:
+-----------------------------------------------------------------------------------
+$ cat meta-ubinux/recipes-ubinux/linux/linux-qoriq_5.15.bb
+......
+KBRANCH:ubinux-armv8  ?= "v5.15/standard/nxp-sdk-5.15/nxp-soc"
+KBRANCH:ubinux-armv8be  ?= "v5.15/standard/nxp-sdk-5.15/nxp-soc"
+SRCREV = "f7a712001db6ec6f4579435b2ab27761eecdb072"
+SRC_URI = "git://git.yoctoproject.org/linux-yocto.git;branch=${KBRANCH}; \
+......
+-----------------------------------------------------------------------------------
+The build error is as the following:
+------------------------------------------------------------------------------------
+kernel-source/drivers/mxc/gpu-viv/hal/os/linux/kernel/gc_hal_kernel_os.c:5835:1: error: conflicting types for '_QuerySignal' due to enum/integer mismatch; have 'gceSTATUS(struct _gckOS *, void *)' {aka 'enum _gceSTATUS(struct _gckOS *, void *)'} [-Werror=enum-int-mismatch]
+|  5835 | _QuerySignal(
+|       | ^~~~~~~~~~~~
+| In file included from kernel-source/drivers/mxc/gpu-viv/hal/os/linux/kernel/gc_hal_kernel_os.c:56:
+| kernel-source/drivers/mxc/gpu-viv/hal/os/linux/kernel/gc_hal_kernel_linux.h:322:1: note: previous declaration of '_QuerySignal' with type 'gctBOOL(struct _gckOS *, void *)' {aka 'int(struct _gckOS *, void *)'}
+|   322 | _QuerySignal(
+|       | ^~~~~~~~~~~~
+-----------------------------------------------------------------------------------
+
+Although, with the following patch, this build error is disappear, but I'm not sure it is correct. 
+-----------------------------------------------------------------------------------
+diff --git a/drivers/mxc/gpu-viv/hal/os/linux/kernel/gc_hal_kernel_linux.h b/drivers/mxc/gpu-viv/hal/os/linux/kernel/gc_hal_kernel_linux.h
+index a436edb11d9a..43beb7a06f73 100644
+--- a/drivers/mxc/gpu-viv/hal/os/linux/kernel/gc_hal_kernel_linux.h
++++ b/drivers/mxc/gpu-viv/hal/os/linux/kernel/gc_hal_kernel_linux.h
+@@ -318,7 +318,7 @@ _ConvertLogical2Physical(
+     OUT gctPHYS_ADDR_T * Physical
+     );
+
+-gctBOOL
++gceSTATUS
+ _QuerySignal(
+     IN gckOS Os,
+     IN gctSIGNAL Signal
+-----------------------------------------------------------------------------------
+
+
+Best regards.
+Lei
+
+^ permalink raw reply related	[flat|nested] only message in thread
+only message in thread, other threads:[~2023-06-08  8:53 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-06-08  8:53 A build error on v5.15/standard/nxp-sdk-5.15/nxp-soc branch Maohui Lei (Fujitsu)
+

@@ -1,0 +1,212 @@
+* [yocto] ERROR: could not relocate installing toolchain SDK
+@ 2020-01-28  8:25 Marco Cavallini
+  2020-01-28 16:57 ` Denys Dmytriyenko
+  0 siblings, 1 reply; 3+ messages in thread
+From: Marco Cavallini @ 2020-01-28  8:25 UTC (permalink / raw)
+  To: Yocto Project Discussion
+
+Hello,
+I found a bug when installing a toolchain sdk and the installation
+path contains a dash.
+Using the default directory or a path without a dash it works.
+
+Yocto 3.0 'zeus'
+
+$ ./fslc-x11-glibc-x86_64-meta-toolchain-cortexa9t2hf-neon-koan-toolchain-3.0.sh
+FSLC X11 SDK installer version 3.0
+==================================
+Enter target directory for SDK (default: /opt/fslc-x11/3.0): /opt/poky/test-3.0
+You are about to install the SDK to "/opt/poky/test-3.0". Proceed [Y/n]?
+Extracting SDK...............................................................................................................done
+Setting it up...ERROR: could not relocate
+/opt/poky/test-3.0/sysroots/x86_64-fslcsdk-linux/usr/bin/llvm-mc,
+interp size = 73 and 76 is needed.
+ERROR: could not relocate
+/opt/poky/test-3.0/sysroots/x86_64-fslcsdk-linux/usr/bin/llvm-mca,
+interp size = 73 and 76 is needed.
+ERROR: could not relocate
+/opt/poky/test-3.0/sysroots/x86_64-fslcsdk-linux/usr/bin/clang-9,
+interp size = 73 and 76 is needed.
+ERROR: could not relocate
+/opt/poky/test-3.0/sysroots/x86_64-fslcsdk-linux/usr/bin/llvm-mt,
+interp size = 73 and 76 is needed.
+...etc...
+
+Distinti Saluti / Best Regards
+--
+Marco Cavallini | KOAN sas | Bergamo - Italia
+embedded software engineering
+https://KoanSoftware.com
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] ERROR: could not relocate installing toolchain SDK
+  2020-01-28  8:25 [yocto] ERROR: could not relocate installing toolchain SDK Marco Cavallini
+@ 2020-01-28 16:57 ` Denys Dmytriyenko
+       [not found]   ` <25813.1643957559728018781@lists.yoctoproject.org>
+  0 siblings, 1 reply; 3+ messages in thread
+From: Denys Dmytriyenko @ 2020-01-28 16:57 UTC (permalink / raw)
+  To: Marco Cavallini; +Cc: Yocto Project Discussion
+
+On Tue, Jan 28, 2020 at 09:25:18AM +0100, Marco Cavallini wrote:
+> Hello,
+> I found a bug when installing a toolchain sdk and the installation
+> path contains a dash.
+> Using the default directory or a path without a dash it works.
+
+It's not dash, it's the new path is longer than what was reserved in ELF 
+headers:
+> interp size = 73 and 76 is needed.
+
+I thought there was some attempt to use chrpath or patchelf or something 
+to be able to expand the ELF headers with longer paths...
+
+Not sure what the currect status is - I've been using my own workaround 
+for many years that extends the "default" toolchain location to the max 
+path length and then at the end changes the install script back to the 
+original default. That way all ELF headers have "interp" field pre-allocated 
+to the max and the resulting SDK/toolchain can be relocated w/o issues.
+
+-- 
+Denys
+
+
+> Yocto 3.0 'zeus'
+> 
+> $ ./fslc-x11-glibc-x86_64-meta-toolchain-cortexa9t2hf-neon-koan-toolchain-3.0.sh
+> FSLC X11 SDK installer version 3.0
+> ==================================
+> Enter target directory for SDK (default: /opt/fslc-x11/3.0): /opt/poky/test-3.0
+> You are about to install the SDK to "/opt/poky/test-3.0". Proceed [Y/n]?
+> Extracting SDK...............................................................................................................done
+> Setting it up...ERROR: could not relocate
+> /opt/poky/test-3.0/sysroots/x86_64-fslcsdk-linux/usr/bin/llvm-mc,
+> interp size = 73 and 76 is needed.
+> ERROR: could not relocate
+> /opt/poky/test-3.0/sysroots/x86_64-fslcsdk-linux/usr/bin/llvm-mca,
+> interp size = 73 and 76 is needed.
+> ERROR: could not relocate
+> /opt/poky/test-3.0/sysroots/x86_64-fslcsdk-linux/usr/bin/clang-9,
+> interp size = 73 and 76 is needed.
+> ERROR: could not relocate
+> /opt/poky/test-3.0/sysroots/x86_64-fslcsdk-linux/usr/bin/llvm-mt,
+> interp size = 73 and 76 is needed.
+> ...etc...
+> 
+> Distinti Saluti / Best Regards
+> --
+> Marco Cavallini | KOAN sas | Bergamo - Italia
+> embedded software engineering
+> https://KoanSoftware.com
+
+> 
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] ERROR: could not relocate installing toolchain SDK
+       [not found]   ` <25813.1643957559728018781@lists.yoctoproject.org>
+@ 2022-02-07 19:19     ` Randy MacLeod
+  0 siblings, 0 replies; 3+ messages in thread
+From: Randy MacLeod @ 2022-02-07 19:19 UTC (permalink / raw)
+  To: Sundeep KOKKONDA, yocto, denis
+
+[-- Attachment #1: Type: text/plain, Size: 3053 bytes --]
+
+
+Add Denis since he may have missed Sundeep's email.
+
+On 2022-02-04 01:52, Sundeep KOKKONDA wrote:
+> Hello,
+>
+> I am also facing the same issue with path size. Can you share the 
+> workaround what you are using for this issue?
+>
+> In the /scripts/relocate_sdk.py 
+> <https://urldefense.com/v3/__http://relocate_sdk.py__;!!AjveYdw8EvQ!JDWhGSHwH-D2E97f5wJ31g8y5hNRRKDdDRtOaybzIuFpIkRbteVvxi21IQA639Cv5fr3Aw$>/ 
+> the file name comparison is like below:
+>
+>     if (len(new_dl_path) >= p_filesz):
+>                     print("ERROR: could not relocate %s, interp size =
+>     %i and %i is needed." \
+>                         % (elf_file_name, p_memsz, len(new_dl_path) + 1))
+>                     break
+>                 dl_path = new_dl_path + b("\0") * (p_filesz -
+>     len(new_dl_path))
+>
+> And, to fix the issue I made changes like below.
+>
+>     if (len(new_dl_path) >= 4096):
+>     print("ERROR: could not relocate %s, interp size = %i and %i is
+>     needed." \
+>                         % (elf_file_name, p_memsz, len(new_dl_path) + 1))
+>                     break
+>                 dl_path = new_dl_path + b("\0") * (4096 -
+>     len(new_dl_path))
+>
+> and commented below code.
+>
+>     #if old_size != os.path.getsize(e):
+>             #print("New file size for %s is different. Looks like a
+>     relocation error!", e)
+>             #sys.exit(-1)
+>
+> Do you have any clue regarding,
+> - Why the installation path is depending of elf headers i.e., Why 
+> installation error when the /len(new_dl_path)/ is greater than /p_filesz/?
+> - Changing this comparison (len(new_dl_path) >= 4096) will impact the 
+> installed SDK?
+
+The 4096 comes from PATH_MAX:
+
+|linux/limits.h|.
+|#define PATH_MAX 4096 /* # chars in a path name including nul */|
+
+|but that does seem a tad on the long side. I'd prefer a more reasonable
+limit that we have actually tested, say PATH_MAX/4 (??) and a comment in the
+commit log documenting the choice.|
+
+|Finally, we do have a test that extracts the sdk in:|
+
+|   meta/lib/oeqa/sdk/testsdk.py|
+
+|Can you review that code and use a long but fixed length path by
+default so that we catch regressions? The path is set in:
+         sdk_dir = d.expand("${WORKDIR}/testimage-sdk/")
+since len(${WORKDIR} may vary, I'd like to see code that corrects
+for that and results in a fix length of PATH_MAX/4 assuming that
+things work with such a long path.
+|
+
+|Denis? Does that make sense and what is your work-around?
+|
+
+|../Randy
+|
+
+||
+
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#56083):https://lists.yoctoproject.org/g/yocto/message/56083
+> Mute This Topic:https://lists.yoctoproject.org/mt/70213997/3616765
+> Group Owner:yocto+owner@lists.yoctoproject.org
+> Unsubscribe:https://lists.yoctoproject.org/g/yocto/unsub  [randy.macleod@windriver.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+-- 
+# Randy MacLeod
+# Wind River Linux
+
+[-- Attachment #2: Type: text/html, Size: 5706 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2022-02-07 19:19 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2020-01-28  8:25 [yocto] ERROR: could not relocate installing toolchain SDK Marco Cavallini
+2020-01-28 16:57 ` Denys Dmytriyenko
+     [not found]   ` <25813.1643957559728018781@lists.yoctoproject.org>
+2022-02-07 19:19     ` Randy MacLeod
+

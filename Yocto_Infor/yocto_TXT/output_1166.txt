@@ -1,0 +1,300 @@
+* Add user to group that's created in other recipe
+@ 2022-11-30 14:55 Sven
+  2022-11-30 23:04 ` [yocto] " Richard Purdie
+  0 siblings, 1 reply; 6+ messages in thread
+From: Sven @ 2022-11-30 14:55 UTC (permalink / raw)
+  To: yocto
+
+Hi,
+
+I have intermittent problems with a recipe that creates a user that is member of groups that are created by a different recipe. This is the recipe that creates the groups:
+
+# recipe-a.bb
+inherit useradd
+USERADD_PACKAGES = "${PN}"
+GROUPADD_PARAM:${PN} = "--system gpio;--system i2c"
+
+This is the recipe that creates the user:
+
+# recipe-b.bb
+inherit useradd
+USERADD_PACKAGES = "${PN}"
+GROUPADD_PARAM:${PN} = "--system mygroup"
+GROUPS = "dialout,mygroup,gpio,i2c"
+USERADD_PARAM:${PN} = "--system --no-create-home --shell /bin/false --no-user-group --groups ${GROUPS} myuser"
+DEPENDS = "recipe-a"
+
+I guess it's also worth pointing out, that I use useradd-static:
+USERADDEXTENSION = "useradd-staticids"
+USERADD_ERROR_DYNAMIC = "error"
+USERADD_UID_TABLES = "files/passwd"
+USERADD_GID_TABLES = "files/group"
+
+Every now and then I get and error in recipe_b's do_package_setscene task where useradd complains that one of the groups provided by recipe_a does not exist. This appears to be a race condition since most of the times, this works OK. I was under the impression that specifying DEPENDS="recipe-a" in recipe_b.bb would be enough to declare this dependency. What am I doing wrong?
+
+Best regards,
+Sven
+
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] Add user to group that's created in other recipe
+  2022-11-30 14:55 Add user to group that's created in other recipe Sven
+@ 2022-11-30 23:04 ` Richard Purdie
+  2022-12-01  0:16   ` Tim Orling
+  2022-12-01  7:50   ` Martin Jansa
+  0 siblings, 2 replies; 6+ messages in thread
+From: Richard Purdie @ 2022-11-30 23:04 UTC (permalink / raw)
+  To: sven, yocto
+
+On Wed, 2022-11-30 at 06:55 -0800, Sven via lists.yoctoproject.org
+wrote:
+> I have intermittent problems with a recipe that creates a user that
+> is member of groups that are created by a different recipe. This is
+> the recipe that creates the groups:
+> 
+> # recipe-a.bb
+> inherit useradd
+> USERADD_PACKAGES = "${PN}"
+> GROUPADD_PARAM:${PN} = "--system gpio;--system i2c"
+> 
+> This is the recipe that creates the user:
+> 
+> # recipe-b.bb
+> inherit useradd
+> USERADD_PACKAGES = "${PN}"
+> GROUPADD_PARAM:${PN} = "--system mygroup"
+> GROUPS = "dialout,mygroup,gpio,i2c"
+> USERADD_PARAM:${PN} = "--system --no-create-home --shell /bin/false -
+> -no-user-group --groups ${GROUPS} myuser"
+> DEPENDS = "recipe-a"
+> 
+> I guess it's also worth pointing out, that I use useradd-static:
+> USERADDEXTENSION = "useradd-staticids"
+> USERADD_ERROR_DYNAMIC = "error"
+> USERADD_UID_TABLES = "files/passwd"
+> USERADD_GID_TABLES = "files/group"
+> 
+> Every now and then I get and error in recipe_b's do_package_setscene
+> task where useradd complains that one of the groups provided by
+> recipe_a does not exist. This appears to be a race condition since
+> most of the times, this works OK. I was under the impression that
+> specifying DEPENDS="recipe-a" in recipe_b.bb would be enough to
+> declare this dependency. What am I doing wrong?
+
+Just to confirm, this is with master?
+
+I think there are some open bugs for useradd issues like this. It is
+supposed to work but sounds like there are races. If there isn't a bug
+open for it, there probably should be.
+
+Sadly we don't have many people interested in working on issues like
+this so I can't say when it might get fixed, we do our best!
+
+Cheers,
+
+Richard
+
+
+
+
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] Add user to group that's created in other recipe
+  2022-11-30 23:04 ` [yocto] " Richard Purdie
+@ 2022-12-01  0:16   ` Tim Orling
+  2022-12-01  7:50   ` Martin Jansa
+  1 sibling, 0 replies; 6+ messages in thread
+From: Tim Orling @ 2022-12-01  0:16 UTC (permalink / raw)
+  To: Richard Purdie; +Cc: sven, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2435 bytes --]
+
+One way I have gotten around this is by using an .inc file to create the
+users/groups and then the recipes that need the user/group require/include
+that .inc file.
+
+On Wed, Nov 30, 2022 at 3:05 PM Richard Purdie <
+richard.purdie@linuxfoundation.org> wrote:
+
+> On Wed, 2022-11-30 at 06:55 -0800, Sven via lists.yoctoproject.org
+> wrote:
+> > I have intermittent problems with a recipe that creates a user that
+> > is member of groups that are created by a different recipe. This is
+> > the recipe that creates the groups:
+> >
+> > # recipe-a.bb
+> > inherit useradd
+> > USERADD_PACKAGES = "${PN}"
+> > GROUPADD_PARAM:${PN} = "--system gpio;--system i2c"
+> >
+> > This is the recipe that creates the user:
+> >
+> > # recipe-b.bb
+> > inherit useradd
+> > USERADD_PACKAGES = "${PN}"
+> > GROUPADD_PARAM:${PN} = "--system mygroup"
+> > GROUPS = "dialout,mygroup,gpio,i2c"
+> > USERADD_PARAM:${PN} = "--system --no-create-home --shell /bin/false -
+> > -no-user-group --groups ${GROUPS} myuser"
+> > DEPENDS = "recipe-a"
+> >
+> > I guess it's also worth pointing out, that I use useradd-static:
+> > USERADDEXTENSION = "useradd-staticids"
+> > USERADD_ERROR_DYNAMIC = "error"
+> > USERADD_UID_TABLES = "files/passwd"
+> > USERADD_GID_TABLES = "files/group"
+> >
+> > Every now and then I get and error in recipe_b's do_package_setscene
+> > task where useradd complains that one of the groups provided by
+> > recipe_a does not exist. This appears to be a race condition since
+> > most of the times, this works OK. I was under the impression that
+> > specifying DEPENDS="recipe-a" in recipe_b.bb would be enough to
+> > declare this dependency. What am I doing wrong?
+>
+> Just to confirm, this is with master?
+>
+> I think there are some open bugs for useradd issues like this. It is
+> supposed to work but sounds like there are races. If there isn't a bug
+> open for it, there probably should be.
+>
+> Sadly we don't have many people interested in working on issues like
+> this so I can't say when it might get fixed, we do our best!
+>
+> Cheers,
+>
+> Richard
+>
+>
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#58687):
+> https://lists.yoctoproject.org/g/yocto/message/58687
+> Mute This Topic: https://lists.yoctoproject.org/mt/95359282/924729
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> ticotimo@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 3854 bytes --]
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] Add user to group that's created in other recipe
+  2022-11-30 23:04 ` [yocto] " Richard Purdie
+  2022-12-01  0:16   ` Tim Orling
+@ 2022-12-01  7:50   ` Martin Jansa
+  2022-12-01 10:14     ` Alexander Kanavin
+  1 sibling, 1 reply; 6+ messages in thread
+From: Martin Jansa @ 2022-12-01  7:50 UTC (permalink / raw)
+  To: Richard Purdie; +Cc: sven, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1791 bytes --]
+
+On Thu, Dec 1, 2022 at 12:05 AM Richard Purdie <
+richard.purdie@linuxfoundation.org> wrote:
+
+> On Wed, 2022-11-30 at 06:55 -0800, Sven via lists.yoctoproject.org
+> wrote:
+> > I have intermittent problems with a recipe that creates a user that
+> > is member of groups that are created by a different recipe. This is
+> > the recipe that creates the groups:
+> >
+> > # recipe-a.bb
+> > inherit useradd
+> > USERADD_PACKAGES = "${PN}"
+> > GROUPADD_PARAM:${PN} = "--system gpio;--system i2c"
+> >
+> > This is the recipe that creates the user:
+> >
+> > # recipe-b.bb
+> > inherit useradd
+> > USERADD_PACKAGES = "${PN}"
+> > GROUPADD_PARAM:${PN} = "--system mygroup"
+> > GROUPS = "dialout,mygroup,gpio,i2c"
+> > USERADD_PARAM:${PN} = "--system --no-create-home --shell /bin/false -
+> > -no-user-group --groups ${GROUPS} myuser"
+> > DEPENDS = "recipe-a"
+> >
+> > I guess it's also worth pointing out, that I use useradd-static:
+> > USERADDEXTENSION = "useradd-staticids"
+> > USERADD_ERROR_DYNAMIC = "error"
+> > USERADD_UID_TABLES = "files/passwd"
+> > USERADD_GID_TABLES = "files/group"
+> >
+> > Every now and then I get and error in recipe_b's do_package_setscene
+> > task where useradd complains that one of the groups provided by
+> > recipe_a does not exist. This appears to be a race condition since
+> > most of the times, this works OK. I was under the impression that
+> > specifying DEPENDS="recipe-a" in recipe_b.bb would be enough to
+> > declare this dependency. What am I doing wrong?
+>
+> Just to confirm, this is with master?
+>
+> I think there are some open bugs for useradd issues like this. It is
+> supposed to work but sounds like there are races. If there isn't a bug
+> open for it, there probably should be.
+>
+
+https://bugzilla.yoctoproject.org/show_bug.cgi?id=13904 is one of the bugs
+I think.
+
+[-- Attachment #2: Type: text/html, Size: 2833 bytes --]
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] Add user to group that's created in other recipe
+  2022-12-01  7:50   ` Martin Jansa
+@ 2022-12-01 10:14     ` Alexander Kanavin
+  2022-12-01 13:37       ` Sven
+  0 siblings, 1 reply; 6+ messages in thread
+From: Alexander Kanavin @ 2022-12-01 10:14 UTC (permalink / raw)
+  To: Martin Jansa; +Cc: Richard Purdie, sven, yocto
+
+On Thu, 1 Dec 2022 at 08:51, Martin Jansa <Martin.Jansa@gmail.com> wrote:
+>
+>> I think there are some open bugs for useradd issues like this. It is
+>> supposed to work but sounds like there are races. If there isn't a bug
+>> open for it, there probably should be.
+>
+>
+> https://bugzilla.yoctoproject.org/show_bug.cgi?id=13904 is one of the bugs I think.
+
+This is another:
+https://bugzilla.yoctoproject.org/show_bug.cgi?id=13419
+
+Workarounds are not difficult, but the issue occurring for the first
+time must be very disorienting.
+
+Alex
+
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: Add user to group that's created in other recipe
+  2022-12-01 10:14     ` Alexander Kanavin
+@ 2022-12-01 13:37       ` Sven
+  0 siblings, 0 replies; 6+ messages in thread
+From: Sven @ 2022-12-01 13:37 UTC (permalink / raw)
+  To: yocto
+
+Hi all,
+
+Thanks for the pointers. I'm actually on kirkstone-4.0. I'll try the work-arounds.
+
+Best regards,
+Sven
+
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+end of thread, other threads:[~2022-12-01 13:37 UTC | newest]
+
+Thread overview: 6+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-11-30 14:55 Add user to group that's created in other recipe Sven
+2022-11-30 23:04 ` [yocto] " Richard Purdie
+2022-12-01  0:16   ` Tim Orling
+2022-12-01  7:50   ` Martin Jansa
+2022-12-01 10:14     ` Alexander Kanavin
+2022-12-01 13:37       ` Sven
+

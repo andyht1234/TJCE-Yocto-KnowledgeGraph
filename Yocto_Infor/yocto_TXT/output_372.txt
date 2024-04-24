@@ -1,0 +1,117 @@
+* [meta-security][PATCH] scap-security-guide: enable ptest
+@ 2023-07-14 12:20 Armin Kuster
+  0 siblings, 0 replies; only message in thread
+From: Armin Kuster @ 2023-07-14 12:20 UTC (permalink / raw)
+  To: yocto
+
+This add the basic framework to allow the test suite to run. It takes a very long time
+so it my not be practical to run in some cases (days in my case).
+
+The ptest log format has not been verified.
+
+Signed-off-by: Armin Kuster <akuster808@gmail.com>
+---
+ .../scap-security-guide/files/run-ptest       |  7 +++
+ .../scap-security-guide_0.1.67.bb             | 47 ++++++++++++++++++-
+ 2 files changed, 53 insertions(+), 1 deletion(-)
+ create mode 100644 recipes-compliance/scap-security-guide/files/run-ptest
+
+diff --git a/recipes-compliance/scap-security-guide/files/run-ptest b/recipes-compliance/scap-security-guide/files/run-ptest
+new file mode 100644
+index 0000000..e8d270f
+--- /dev/null
++++ b/recipes-compliance/scap-security-guide/files/run-ptest
+@@ -0,0 +1,7 @@
++#!/bin/sh
++
++export PYTHONPATH="/usr/lib/scap-security-guide/ptest/git:$PYTHONPATH"
++
++cd git/build
++
++ctest --output-on-failure -E unique-stigids
+diff --git a/recipes-compliance/scap-security-guide/scap-security-guide_0.1.67.bb b/recipes-compliance/scap-security-guide/scap-security-guide_0.1.67.bb
+index 6e62f22..988e48b 100644
+--- a/recipes-compliance/scap-security-guide/scap-security-guide_0.1.67.bb
++++ b/recipes-compliance/scap-security-guide/scap-security-guide_0.1.67.bb
+@@ -9,6 +9,7 @@ LICENSE = "BSD-3-Clause"
+ SRCREV = "3a1012bc9ec2b01b3b71c6feefd3cff0f52bd64d"
+ SRC_URI = "git://github.com/ComplianceAsCode/content.git;branch=master;protocol=https \
+            file://run_eval.sh \
++           file://run-ptest \
+            file://0001-scap-security-guide-add-openembedded-distro-support.patch \
+            file://0002-scap-security-guide-Add-Poky-support.patch \
+            "
+@@ -19,7 +20,7 @@ DEPENDS = "openscap-native python3-pyyaml-native python3-jinja2-native libxml2-n
+ S = "${WORKDIR}/git"
+ B = "${S}/build"
+ 
+-inherit cmake pkgconfig python3native python3targetconfig
++inherit cmake pkgconfig python3native python3targetconfig ptest
+ 
+ OECMAKE_GENERATOR = "Unix Makefiles"
+ 
+@@ -37,8 +38,52 @@ do_install:append() {
+     install  ${WORKDIR}/run_eval.sh ${D}${datadir}/openscap/.
+ }
+ 
++do_compile_ptest() {
++    cd ${S}/build
++    cmake ../
++    make 
++}
++
++do_install_ptest() {
++
++    # remove host & work dir from tests
++    for x in $(find ${S}/build -type f) ;
++    do
++       sed -e 's#${HOSTTOOLS_DIR}/##g' \
++           -e 's#${RECIPE_SYSROOT_NATIVE}##g' \
++           -e 's#${WORKDIR}#${PTEST_PATH}#g' \
++           -e 's#/.*/xmllint#/usr/bin/xmllint#g' \
++           -e 's#/.*/oscap#/usr/bin/oscap#g' \
++           -e 's#/python3-native##g' \
++           -i ${x}
++    done
++
++    for x in $(find ${S}/build-scripts -type f) ;
++    do
++       sed -i -e '1s|^#!.*|#!/usr/bin/env python3|' ${x}
++    done
++
++    for x in $(find ${S}/tests -type f) ;
++    do
++       sed -i -e '1s|^#!.*|#!/usr/bin/env python3|' ${x}
++    done
++
++    for x in $(find ${S}/utils -type f) ;
++    do
++       sed -i -e '1s|^#!.*|#!/usr/bin/env python3|' ${x}
++    done
++
++    PDIRS="apple_os build controls products shared components applications linux_os ocp-resources tests utils ssg build-scripts"
++    t=${D}/${PTEST_PATH}/git
++    for d in ${PDIRS}; do
++        install -d ${t}/$d
++        cp -fr ${S}/$d/* ${t}/$d/.
++    done
++}
++
+ FILES:${PN} += "${datadir}/xml ${datadir}/openscap"
+ 
+ RDEPENDS:${PN} = "openscap"
++RDEPENDS:${PN}-ptest = "cmake grep sed bash git python3 python3-modules python3-mypy python3-pyyaml python3-yamlpath python3-xmldiff python3-json2html python3-pandas python3-openpyxl python3-pytest libxml2-utils libxslt-bin"
+ 
+ COMPATIBLE_HOST:libc-musl = "null"
+-- 
+2.34.1
+
+
+
+^ permalink raw reply related	[flat|nested] only message in thread
+only message in thread, other threads:[~2023-07-14 12:21 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-07-14 12:20 [meta-security][PATCH] scap-security-guide: enable ptest Armin Kuster
+

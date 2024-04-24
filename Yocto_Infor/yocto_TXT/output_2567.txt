@@ -1,0 +1,119 @@
+* Useradd recipe not generating /etc/passwd entries #dunfell
+@ 2021-11-22  8:15 taylor.winning
+  2021-11-22  9:19 ` taylor.winning
+  0 siblings, 1 reply; 2+ messages in thread
+From: taylor.winning @ 2021-11-22  8:15 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2479 bytes --]
+
+Hi,
+
+I’m attempting to create a few service users for our software products. Initially I had inherited useradd in each recipe that required the user, then had a corresponding user added from within the image recipe. I know this is not ideal, however I have been unable to solve some issues I’m having so I’m hoping someone can help.
+
+I'm on Dunfell branch.
+
+I now have a recipe that creates two users, that all other recipes DEPENDS on. Here is the contents of that recipe (adh-user-add.bb):
+
+FILESEXTRAPATHS_prepend := "${THISDIR}:"
+
+SUMMARY = "Add adh and adhX user for other recipes"
+
+LICENSE="CLOSED"
+
+PV = "${ADH_ADH_SVN_REVISION}"
+
+require require/revisions.inc
+
+PACKAGE_ARCH = "${MACHINE_ARCH}"
+
+inherit useradd
+
+USERADD_PACKAGES = "${PN}"
+
+USERADD_PARAM_${PN} = "--system --uid 420 -g adh adh; --system --uid 421 -g adhX adhX "
+
+GROUPADD_PARAM_${PN} = "-g 420 adh; -g 421 adhX "
+
+Each recipe that needs these users simply DEPENDS on it from within its own recipe. I understand that is the preferred way of doing this?
+
+However, inside my image (development-image.bb) once its built, my /etc/passwd file does not contain these users at all. I have tried the following things:
+
+* IMAGE_INSTALL_append += “ adh-user-add”
+* DEPENDS += “ adh-user-add”
+* RDEPENDS += “ adh-user-add”
+
+Each time I get a passwd file inside of adh-user-add/recipe-sysroots and development-image/recipe-sysroots that contains both users, however the passwd file on the device is missing those users entirely.
+
+My image recipe looks like this:
+
+SUMMARY = "Development image"
+
+inherit core-image extrausers
+
+require require/revisions.inc
+
+PV = "${CUBE_IMAGE_VERSION}"
+
+PR = "${CUBE_IMAGE_REVISION}"
+
+IMAGE_FSTYPES_append += "wic wic.xz"
+
+WKS_FILE = "sgc30cube.wks"
+
+IMAGE_INSTALL = "packagegroup-core-boot ${CORE_IMAGE_EXTRA_INSTALL} "
+
+IMAGE_INSTALL_append = " \
+
+*** packages removed ***
+
+"
+
+IMAGE_FEATURES_append = " ssh-server-dropbear"
+
+MACHINE_FEATURES_remove = "kernel26 nc screen ext2 alsa gpu touchscreen qemu-usermode"
+
+DEPENDS += "adh-user-add"
+
+IMAGE_FEATURES_append = " debug-tweaks"
+
+I feel like I'm going crazy trying to figure this out. I wish I could figure out how the final passwd file is generated. I've looked in some logs that I've seen suggested online, but have been unable to ascertain if there are any errors occurring.
+
+Any help would be greatly appreciated,
+
+Thanks,
+
+Taylor W
+
+[-- Attachment #2: Type: text/html, Size: 44187 bytes --]
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+* Re: Useradd recipe not generating /etc/passwd entries #dunfell
+  2021-11-22  8:15 Useradd recipe not generating /etc/passwd entries #dunfell taylor.winning
+@ 2021-11-22  9:19 ` taylor.winning
+  0 siblings, 0 replies; 2+ messages in thread
+From: taylor.winning @ 2021-11-22  9:19 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 698 bytes --]
+
+Okay, I seem to have achieved this by adding:
+
+ALLOW_EMPTY_${PN}="1"
+
+To the adh-user-add recipe that everything is depending on (including the image recipe).
+
+I'm a bit confused as to why that was such a hassle to achieve something I would have thought was a simple adding of a few users. Definitely would've appreciated a warning that the build system was attempting to add an empty package or something like that. I wouldn't think I'm on the fringe's of Yocto development here, but perhaps my use case is resulting in an 'empty package' being created via my image recipe that most other use-cases aren't triggering?
+
+I would be very glad to hear any input despite having this resolved.
+
+[-- Attachment #2: Type: text/html, Size: 37352 bytes --]
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2021-11-22  9:19 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-11-22  8:15 Useradd recipe not generating /etc/passwd entries #dunfell taylor.winning
+2021-11-22  9:19 ` taylor.winning
+

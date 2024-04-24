@@ -1,0 +1,227 @@
+* [meta-mingw][kirkstone][PATCH] toolchain-scripts-mingw32.bbclass: Remove trailing slash in SDKROOT
+@ 2022-10-24  6:02 Muhammad Hamza
+  2022-10-28 12:00 ` Hamza, Muhammad
+  0 siblings, 1 reply; 4+ messages in thread
+From: Muhammad Hamza @ 2022-10-24  6:02 UTC (permalink / raw)
+  To: yocto; +Cc: jpewhacker, Muhammad Hamza
+
+Modify toolchain-scripts-mingw32.bbclass to add a check in
+environment-setup script which removes trailing slash in
+path of SDKROOT.
+This is needed to avoid multiple adjacent slashes in paths
+which are produced by appending to SDKROOT.
+In reference to https://learn.microsoft.com/en-us/windows/win32/fileio/naming-a-file?redirectedfrom=MSDN
+naming convention used for paths and disk drives in windows
+should use a single backslash. Even though in some cases windows
+ignores double slashes in paths and it might work but it isn't
+documented as a right naming convention and does fail in some
+cases eg. dir command cannot interpret double slashes and fails.
+
+For example if my SDK is located in D: drive, the environment
+setup scripts sets "SDKROOT=D:\" and hence SDKTARGETSYSROOT
+gets set as "SDKTARGETSYSROOT=D:\\sysroots\armv8a-oe-linux"
+The introduced check removes additional slash in SDKROOT to
+set it as "SDKROOT=D:" so all other variables using SDKROOT
+get set without additional slash.
+
+Signed-off-by: Muhammad Hamza <muhammad_hamza@mentor.com>
+---
+ classes/toolchain-scripts-mingw32.bbclass | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/classes/toolchain-scripts-mingw32.bbclass b/classes/toolchain-scripts-mingw32.bbclass
+index d96cb40..8cb426a 100644
+--- a/classes/toolchain-scripts-mingw32.bbclass
++++ b/classes/toolchain-scripts-mingw32.bbclass
+@@ -12,6 +12,7 @@ toolchain_create_sdk_env_script:sdkmingw32 () {
+ 	touch $script
+ 	# Be sure to use the 'short' path, so we can have deeper directories.
+ 	echo 'set SDKROOT=%~sdp0%' >> $script
++	echo 'IF %SDKROOT:~-1%==\ set SDKROOT=%SDKROOT:~0,-1%' >> $script
+ 
+ 	# Convert to mingw32 subpaths
+ 	sysroot='%SDKROOT%'${sysroot##${SDKPATH}}
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 4+ messages in thread
+* RE: [meta-mingw][kirkstone][PATCH] toolchain-scripts-mingw32.bbclass: Remove trailing slash in SDKROOT
+  2022-10-24  6:02 [meta-mingw][kirkstone][PATCH] toolchain-scripts-mingw32.bbclass: Remove trailing slash in SDKROOT Muhammad Hamza
+@ 2022-10-28 12:00 ` Hamza, Muhammad
+  2022-10-28 12:44   ` Joshua Watt
+  0 siblings, 1 reply; 4+ messages in thread
+From: Hamza, Muhammad @ 2022-10-28 12:00 UTC (permalink / raw)
+  To: yocto; +Cc: jpewhacker
+
+Hi,
+Any update on this?
+
+-----Original Message-----
+From: Hamza, Muhammad <Muhammad_Hamza@mentor.com> 
+Sent: Monday, October 24, 2022 11:03 AM
+To: yocto@lists.yoctoproject.org
+Cc: jpewhacker@gmail.com; Hamza, Muhammad <Muhammad_Hamza@mentor.com>
+Subject: [meta-mingw][kirkstone][PATCH] toolchain-scripts-mingw32.bbclass: Remove trailing slash in SDKROOT
+
+Modify toolchain-scripts-mingw32.bbclass to add a check in environment-setup script which removes trailing slash in path of SDKROOT.
+This is needed to avoid multiple adjacent slashes in paths which are produced by appending to SDKROOT.
+In reference to https://learn.microsoft.com/en-us/windows/win32/fileio/naming-a-file?redirectedfrom=MSDN
+naming convention used for paths and disk drives in windows should use a single backslash. Even though in some cases windows ignores double slashes in paths and it might work but it isn't documented as a right naming convention and does fail in some cases eg. dir command cannot interpret double slashes and fails.
+
+For example if my SDK is located in D: drive, the environment setup scripts sets "SDKROOT=D:\" and hence SDKTARGETSYSROOT gets set as "SDKTARGETSYSROOT=D:\\sysroots\armv8a-oe-linux"
+The introduced check removes additional slash in SDKROOT to set it as "SDKROOT=D:" so all other variables using SDKROOT get set without additional slash.
+
+Signed-off-by: Muhammad Hamza <muhammad_hamza@mentor.com>
+---
+ classes/toolchain-scripts-mingw32.bbclass | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/classes/toolchain-scripts-mingw32.bbclass b/classes/toolchain-scripts-mingw32.bbclass
+index d96cb40..8cb426a 100644
+--- a/classes/toolchain-scripts-mingw32.bbclass
++++ b/classes/toolchain-scripts-mingw32.bbclass
+@@ -12,6 +12,7 @@ toolchain_create_sdk_env_script:sdkmingw32 () {
+ 	touch $script
+ 	# Be sure to use the 'short' path, so we can have deeper directories.
+ 	echo 'set SDKROOT=%~sdp0%' >> $script
++	echo 'IF %SDKROOT:~-1%==\ set SDKROOT=%SDKROOT:~0,-1%' >> $script
+ 
+ 	# Convert to mingw32 subpaths
+ 	sysroot='%SDKROOT%'${sysroot##${SDKPATH}}
+--
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 4+ messages in thread
+* Re: [meta-mingw][kirkstone][PATCH] toolchain-scripts-mingw32.bbclass: Remove trailing slash in SDKROOT
+  2022-10-28 12:00 ` Hamza, Muhammad
+@ 2022-10-28 12:44   ` Joshua Watt
+  2022-10-28 12:49     ` Hamza, Muhammad
+  0 siblings, 1 reply; 4+ messages in thread
+From: Joshua Watt @ 2022-10-28 12:44 UTC (permalink / raw)
+  To: Hamza, Muhammad; +Cc: yocto
+
+Ya, I queued it in master-next. Let me run it through the AB then we
+can merge it
+
+On Fri, Oct 28, 2022 at 7:00 AM Hamza, Muhammad
+<Muhammad_Hamza@mentor.com> wrote:
+>
+> Hi,
+> Any update on this?
+>
+> -----Original Message-----
+> From: Hamza, Muhammad <Muhammad_Hamza@mentor.com>
+> Sent: Monday, October 24, 2022 11:03 AM
+> To: yocto@lists.yoctoproject.org
+> Cc: jpewhacker@gmail.com; Hamza, Muhammad <Muhammad_Hamza@mentor.com>
+> Subject: [meta-mingw][kirkstone][PATCH] toolchain-scripts-mingw32.bbclass: Remove trailing slash in SDKROOT
+>
+> Modify toolchain-scripts-mingw32.bbclass to add a check in environment-setup script which removes trailing slash in path of SDKROOT.
+> This is needed to avoid multiple adjacent slashes in paths which are produced by appending to SDKROOT.
+> In reference to https://learn.microsoft.com/en-us/windows/win32/fileio/naming-a-file?redirectedfrom=MSDN
+> naming convention used for paths and disk drives in windows should use a single backslash. Even though in some cases windows ignores double slashes in paths and it might work but it isn't documented as a right naming convention and does fail in some cases eg. dir command cannot interpret double slashes and fails.
+>
+> For example if my SDK is located in D: drive, the environment setup scripts sets "SDKROOT=D:\" and hence SDKTARGETSYSROOT gets set as "SDKTARGETSYSROOT=D:\\sysroots\armv8a-oe-linux"
+> The introduced check removes additional slash in SDKROOT to set it as "SDKROOT=D:" so all other variables using SDKROOT get set without additional slash.
+>
+> Signed-off-by: Muhammad Hamza <muhammad_hamza@mentor.com>
+> ---
+>  classes/toolchain-scripts-mingw32.bbclass | 1 +
+>  1 file changed, 1 insertion(+)
+>
+> diff --git a/classes/toolchain-scripts-mingw32.bbclass b/classes/toolchain-scripts-mingw32.bbclass
+> index d96cb40..8cb426a 100644
+> --- a/classes/toolchain-scripts-mingw32.bbclass
+> +++ b/classes/toolchain-scripts-mingw32.bbclass
+> @@ -12,6 +12,7 @@ toolchain_create_sdk_env_script:sdkmingw32 () {
+>         touch $script
+>         # Be sure to use the 'short' path, so we can have deeper directories.
+>         echo 'set SDKROOT=%~sdp0%' >> $script
+> +       echo 'IF %SDKROOT:~-1%==\ set SDKROOT=%SDKROOT:~0,-1%' >> $script
+>
+>         # Convert to mingw32 subpaths
+>         sysroot='%SDKROOT%'${sysroot##${SDKPATH}}
+> --
+> 2.25.1
+>
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* RE: [meta-mingw][kirkstone][PATCH] toolchain-scripts-mingw32.bbclass: Remove trailing slash in SDKROOT
+  2022-10-28 12:44   ` Joshua Watt
+@ 2022-10-28 12:49     ` Hamza, Muhammad
+  0 siblings, 0 replies; 4+ messages in thread
+From: Hamza, Muhammad @ 2022-10-28 12:49 UTC (permalink / raw)
+  To: Joshua Watt; +Cc: yocto
+
+All right, thanks.
+
+-----Original Message-----
+From: Joshua Watt <jpewhacker@gmail.com> 
+Sent: Friday, October 28, 2022 5:45 PM
+To: Hamza, Muhammad <Muhammad_Hamza@mentor.com>
+Cc: yocto@lists.yoctoproject.org
+Subject: Re: [meta-mingw][kirkstone][PATCH] toolchain-scripts-mingw32.bbclass: Remove trailing slash in SDKROOT
+
+Ya, I queued it in master-next. Let me run it through the AB then we can merge it
+
+On Fri, Oct 28, 2022 at 7:00 AM Hamza, Muhammad <Muhammad_Hamza@mentor.com> wrote:
+>
+> Hi,
+> Any update on this?
+>
+> -----Original Message-----
+> From: Hamza, Muhammad <Muhammad_Hamza@mentor.com>
+> Sent: Monday, October 24, 2022 11:03 AM
+> To: yocto@lists.yoctoproject.org
+> Cc: jpewhacker@gmail.com; Hamza, Muhammad <Muhammad_Hamza@mentor.com>
+> Subject: [meta-mingw][kirkstone][PATCH] 
+> toolchain-scripts-mingw32.bbclass: Remove trailing slash in SDKROOT
+>
+> Modify toolchain-scripts-mingw32.bbclass to add a check in environment-setup script which removes trailing slash in path of SDKROOT.
+> This is needed to avoid multiple adjacent slashes in paths which are produced by appending to SDKROOT.
+> In reference to 
+> https://learn.microsoft.com/en-us/windows/win32/fileio/naming-a-file?r
+> edirectedfrom=MSDN naming convention used for paths and disk drives in 
+> windows should use a single backslash. Even though in some cases windows ignores double slashes in paths and it might work but it isn't documented as a right naming convention and does fail in some cases eg. dir command cannot interpret double slashes and fails.
+>
+> For example if my SDK is located in D: drive, the environment setup scripts sets "SDKROOT=D:\" and hence SDKTARGETSYSROOT gets set as "SDKTARGETSYSROOT=D:\\sysroots\armv8a-oe-linux"
+> The introduced check removes additional slash in SDKROOT to set it as "SDKROOT=D:" so all other variables using SDKROOT get set without additional slash.
+>
+> Signed-off-by: Muhammad Hamza <muhammad_hamza@mentor.com>
+> ---
+>  classes/toolchain-scripts-mingw32.bbclass | 1 +
+>  1 file changed, 1 insertion(+)
+>
+> diff --git a/classes/toolchain-scripts-mingw32.bbclass 
+> b/classes/toolchain-scripts-mingw32.bbclass
+> index d96cb40..8cb426a 100644
+> --- a/classes/toolchain-scripts-mingw32.bbclass
+> +++ b/classes/toolchain-scripts-mingw32.bbclass
+> @@ -12,6 +12,7 @@ toolchain_create_sdk_env_script:sdkmingw32 () {
+>         touch $script
+>         # Be sure to use the 'short' path, so we can have deeper directories.
+>         echo 'set SDKROOT=%~sdp0%' >> $script
+> +       echo 'IF %SDKROOT:~-1%==\ set SDKROOT=%SDKROOT:~0,-1%' >> 
+> + $script
+>
+>         # Convert to mingw32 subpaths
+>         sysroot='%SDKROOT%'${sysroot##${SDKPATH}}
+> --
+> 2.25.1
+>
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+end of thread, other threads:[~2022-10-28 12:50 UTC | newest]
+
+Thread overview: 4+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-10-24  6:02 [meta-mingw][kirkstone][PATCH] toolchain-scripts-mingw32.bbclass: Remove trailing slash in SDKROOT Muhammad Hamza
+2022-10-28 12:00 ` Hamza, Muhammad
+2022-10-28 12:44   ` Joshua Watt
+2022-10-28 12:49     ` Hamza, Muhammad
+

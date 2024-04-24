@@ -1,0 +1,144 @@
+* [yocto-autobuilder-helper][PATCH v2 0/2] expose regression reports on web page
+@ 2023-03-24 10:24 alexis.lothore
+  2023-03-24 10:24 ` [yocto-autobuilder-helper][PATCH v2 1/2] scripts/generate-testresult-index.py: fix typo in template var name alexis.lothore
+  2023-03-24 10:24 ` [yocto-autobuilder-helper][PATCH v2 2/2] scripts/generate-testresult-index.py: expose regression reports on web page alexis.lothore
+  0 siblings, 2 replies; 3+ messages in thread
+From: alexis.lothore @ 2023-03-24 10:24 UTC (permalink / raw)
+  To: yocto; +Cc: alexandre.belloni, thomas.petazzoni
+
+From: Alexis Lothoré <alexis.lothore@bootlin.com>
+
+Regression reports are currently stored alongside test reports and other
+artifacts on the autobuilder artifacts web page. This small update propose to
+add a link to the regression report (when available) on main non-release page
+([1]) instead of having to manually navigate the directories to find it
+
+Changes since v1:
+- put regression report link in results report column instead of dedicated column
+
+[1] https://autobuilder.yocto.io/pub/non-release/
+
+Alexis Lothoré (2):
+  scripts/generate-testresult-index.py: fix typo in template var name
+  scripts/generate-testresult-index.py: expose regression reports on web
+    page
+
+ scripts/generate-testresult-index.py | 12 +++++++++---
+ 1 file changed, 9 insertions(+), 3 deletions(-)
+
+-- 
+2.40.0
+
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* [yocto-autobuilder-helper][PATCH v2 1/2]  scripts/generate-testresult-index.py: fix typo in template var name
+  2023-03-24 10:24 [yocto-autobuilder-helper][PATCH v2 0/2] expose regression reports on web page alexis.lothore
+@ 2023-03-24 10:24 ` alexis.lothore
+  2023-03-24 10:24 ` [yocto-autobuilder-helper][PATCH v2 2/2] scripts/generate-testresult-index.py: expose regression reports on web page alexis.lothore
+  1 sibling, 0 replies; 3+ messages in thread
+From: alexis.lothore @ 2023-03-24 10:24 UTC (permalink / raw)
+  To: yocto; +Cc: alexandre.belloni, thomas.petazzoni
+
+From: Alexis Lothoré <alexis.lothore@bootlin.com>
+
+Signed-off-by: Alexis Lothoré <alexis.lothore@bootlin.com>
+---
+ scripts/generate-testresult-index.py | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/scripts/generate-testresult-index.py b/scripts/generate-testresult-index.py
+index 1fc9f41..09d2edb 100755
+--- a/scripts/generate-testresult-index.py
++++ b/scripts/generate-testresult-index.py
+@@ -12,7 +12,7 @@ import json
+ import subprocess
+ from jinja2 import Template
+ 
+-index_templpate = """
++index_template = """
+ <!DOCTYPE html>
+ <html>
+ <head>
+@@ -181,6 +181,6 @@ for build in sorted(os.listdir(path), key=keygen, reverse=True):
+                     with open(f + "/resulttool-done.log", "a+") as tf:
+                         tf.write("\n")
+ 
+-t = Template(index_templpate)
++t = Template(index_template)
+ with open(os.path.join(path, "index.html"), 'w') as f:
+     f.write(t.render(entries = entries))
+-- 
+2.40.0
+
+
+
+^ permalink raw reply related	[flat|nested] 3+ messages in thread
+* [yocto-autobuilder-helper][PATCH v2 2/2]  scripts/generate-testresult-index.py: expose regression reports on web page
+  2023-03-24 10:24 [yocto-autobuilder-helper][PATCH v2 0/2] expose regression reports on web page alexis.lothore
+  2023-03-24 10:24 ` [yocto-autobuilder-helper][PATCH v2 1/2] scripts/generate-testresult-index.py: fix typo in template var name alexis.lothore
+@ 2023-03-24 10:24 ` alexis.lothore
+  1 sibling, 0 replies; 3+ messages in thread
+From: alexis.lothore @ 2023-03-24 10:24 UTC (permalink / raw)
+  To: yocto; +Cc: alexandre.belloni, thomas.petazzoni
+
+From: Alexis Lothoré <alexis.lothore@bootlin.com>
+
+When available, expose tesresult-regressions-report.txt on non-release web page,
+as it is done for many other artifacts currently
+
+Signed-off-by: Alexis Lothoré <alexis.lothore@bootlin.com>
+---
+ scripts/generate-testresult-index.py | 11 +++++++++--
+ 1 file changed, 9 insertions(+), 2 deletions(-)
+
+diff --git a/scripts/generate-testresult-index.py b/scripts/generate-testresult-index.py
+index 09d2edb..29a6900 100755
+--- a/scripts/generate-testresult-index.py
++++ b/scripts/generate-testresult-index.py
+@@ -42,7 +42,10 @@ index_template = """
+    <td><a href="{{entry[1]}}">{{entry[0]}}</a></td>
+    <td>{% if entry[2] %} {{entry[2]}}{% endif %}</td>
+    <td>{% if entry[4] %} {{entry[4]}}{% endif %}</td>
+-   <td> {% if entry[3] %}<a href="{{entry[3]}}">Report</a>{% endif %} </td>
++   <td>
++     {% if entry[3] %}<a href="{{entry[3]}}">Report</a>{% endif -%}
++     {% if entry[9] %}<br><a href="{{entry[9]}}">Regressions</a>{% endif %}
++   </td>
+    <td>
+    {% for perfrep in entry[6] %}
+      <a href="{{perfrep[0]}}">{{perfrep[1]}}</a>
+@@ -129,6 +132,10 @@ for build in sorted(os.listdir(path), key=keygen, reverse=True):
+     if os.path.exists(buildpath + "/testresult-report.txt"):
+         testreport = reldir + "testresults/testresult-report.txt"
+ 
++    regressionreport = ""
++    if os.path.exists(buildpath + "/testresult-regressions-report.txt"):
++        regressionreport = reldir + "testresults/testresult-regressions-report.txt"
++
+     ptestlogs = []
+     ptestseen = []
+     for p in glob.glob(buildpath + "/*-ptest/*.log"):
+@@ -165,7 +172,7 @@ for build in sorted(os.listdir(path), key=keygen, reverse=True):
+ 
+     branch = get_build_branch(buildpath)
+ 
+-    entries.append((build, reldir, btype, testreport, branch, buildhistory, perfreports, ptestlogs, hd))
++    entries.append((build, reldir, btype, testreport, branch, buildhistory, perfreports, ptestlogs, hd, regressionreport))
+ 
+     # Also ensure we have saved out log data for ptest runs to aid debugging
+     if "ptest" in btype or btype in ["full", "quick"]:
+-- 
+2.40.0
+
+
+
+^ permalink raw reply related	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2023-03-24 10:24 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-03-24 10:24 [yocto-autobuilder-helper][PATCH v2 0/2] expose regression reports on web page alexis.lothore
+2023-03-24 10:24 ` [yocto-autobuilder-helper][PATCH v2 1/2] scripts/generate-testresult-index.py: fix typo in template var name alexis.lothore
+2023-03-24 10:24 ` [yocto-autobuilder-helper][PATCH v2 2/2] scripts/generate-testresult-index.py: expose regression reports on web page alexis.lothore
+

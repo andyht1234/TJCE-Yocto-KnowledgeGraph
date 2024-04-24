@@ -1,0 +1,575 @@
+* meta-swupdate integration with the custom Yocto image  #dunfell
+@ 2022-09-25 17:38 Mahendra Sondagar
+  2022-09-25 17:42 ` [yocto] " Chetan
+  2022-09-26  8:14 ` Quentin Schulz
+  0 siblings, 2 replies; 6+ messages in thread
+From: Mahendra Sondagar @ 2022-09-25 17:38 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2717 bytes --]
+
+Hey.. There
+Hope all are doing well
+
+I'm dealing with the swupdate with the my custom Yocto image created for STM32MP1 dk1 board
+The intend is, to update the rootfs remotely
+
+I have successfully integrated meta-swupdate layer with the custom Yocto image by adding the layers in to bblayer.conf file
+The both layers meta-swupdate & meta-custom are parallel to each-others
+
+To change the flags and setting with the swupdate, i have created the r *ecipes-myswupdate* file inside the meta-custom layers
+The content of the recipes-myswupdate are as follows
+.
+└── swupdate
+├── stm32mp1
+│   ├── 09-swupdate-args
+│   ├── defconfig
+│   ├── sw-description
+│   └── swupdate.cfg
+└── swupdate_%.bbappend
+
+The content of the *swupdate_%.bbappend* are as follows
+
+--------------------------------------------------------------------------------------
+
+DESCRIPTION = "Example recipe generating SWU image"
+SECTION = ""
+
+LICENSE = ""
+
+# Add all local files to be added to the SWU
+# sw-description must always be in the list.
+# You can extend with scripts or wahtever you need
+SRC_URI += " \
+file://sw-description \
+file://09-swupdate-args \
+file://swupdate.cfg \
+"
+
+# images to build before building swupdate image
+IMAGE_DEPENDS = "core-image-full-cmdline virtual/kernel"
+
+# images and files that will be included in the .swu image
+SWUPDATE_IMAGES = "core-image-full-cmdline uImage"
+
+# a deployable image can have multiple format, choose one
+SWUPDATE_IMAGES_FSTYPES[core-image-full-cmdline] = ".ubifs"
+SWUPDATE_IMAGES_FSTYPES[uImage] = ".bin"
+
+inherit swupdate
+
+--------------------------------------------------------------------------------------------------------
+I'm building the image by adding the machine name to update the image by following command
+*MACHINE=stm32mp1 bitbake swupdate-image
+
+* However, image unable!
+As bitbake unable find the sw-description file
+here, is the error log
+*Bitbake Fetcher Error: FetchError('Unable to fetch URL from any source.', 'file://sw-description')
+
+* I'm new with the swupdate
+I have a following concerns
+
+a) is it right approach to add the separate recipes for the swupdate in to the meta-custom layers, which I'm doing now  ?
+
+b) do i need to deal with the only recipes-support, which is the part of the meta-swupdate layer , instead of creating separate recipes in to meta-custom?
+
+c) can any one help me with the right integration steps for the swupdate with yocto ?
+
+for the instance, I'm following official guide from here ( https://sbabic.github.io/swupdate/building-with-yocto.html )
+
+All suggestions & comments welcome
+
+Regards
+Mahendra Sondagar
+
+[-- Attachment #2: Type: text/html, Size: 3376 bytes --]
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] meta-swupdate integration with the custom Yocto image #dunfell
+  2022-09-25 17:38 meta-swupdate integration with the custom Yocto image #dunfell Mahendra Sondagar
+@ 2022-09-25 17:42 ` Chetan
+  2022-09-25 18:01   ` Mahendra Sondagar
+  2022-09-26  8:14 ` Quentin Schulz
+  1 sibling, 1 reply; 6+ messages in thread
+From: Chetan @ 2022-09-25 17:42 UTC (permalink / raw)
+  To: Mahendra Sondagar; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 3784 bytes --]
+
+Hi Mahendra
+
+I think the below folder structure will work.
+.
+└── swupdate
+    ├── files
+    │ ├── 09-swupdate-args
+    │ ├── defconfig
+    │ ├── sw-description
+    │ └── swupdate.cfg
+    └── swupdate_%.bbappend
+
+
+
+
+On Sun, 25 Sept, 2022, 11:08 pm Mahendra Sondagar, <
+mahendrasondagar08@gmail.com> wrote:
+
+> Hey.. There
+> Hope all are doing well
+>
+> I'm dealing with the swupdate with the my custom Yocto image created for
+> STM32MP1 dk1 board
+> The intend is, to update the rootfs remotely
+>
+> I have successfully integrated meta-swupdate layer with the custom Yocto
+> image by adding the layers in to bblayer.conf file
+> The both layers meta-swupdate & meta-custom are parallel to each-others
+>
+> To change the flags and setting with the swupdate, i have created the r
+> *ecipes-myswupdate* file inside the meta-custom layers
+> The content of the recipes-myswupdate are as follows
+> .
+> └── swupdate
+>     ├── stm32mp1
+>     │   ├── 09-swupdate-args
+>     │   ├── defconfig
+>     │   ├── sw-description
+>     │   └── swupdate.cfg
+>     └── swupdate_%.bbappend
+>
+>
+> The content of the *swupdate_%.bbappend* are as follows
+>
+>
+> --------------------------------------------------------------------------------------
+>
+> DESCRIPTION = "Example recipe generating SWU image"
+> SECTION = ""
+>
+> LICENSE = ""
+>
+> # Add all local files to be added to the SWU
+> # sw-description must always be in the list.
+> # You can extend with scripts or wahtever you need
+> SRC_URI += " \
+>     file://sw-description \
+>     file://09-swupdate-args \
+>     file://swupdate.cfg \
+>     "
+>
+> # images to build before building swupdate image
+> IMAGE_DEPENDS = "core-image-full-cmdline virtual/kernel"
+>
+> # images and files that will be included in the .swu image
+> SWUPDATE_IMAGES = "core-image-full-cmdline uImage"
+>
+> # a deployable image can have multiple format, choose one
+> SWUPDATE_IMAGES_FSTYPES[core-image-full-cmdline] = ".ubifs"
+> SWUPDATE_IMAGES_FSTYPES[uImage] = ".bin"
+>
+> inherit swupdate
+>
+>
+>
+> --------------------------------------------------------------------------------------------------------
+> I'm building the image by adding the machine name to update the image by
+> following command
+>
+>
+> *MACHINE=stm32mp1 bitbake swupdate-image*However, image unable!
+> As bitbake unable find the sw-description file
+> here, is the error log
+>
+>
+>
+> *Bitbake Fetcher Error: FetchError('Unable to fetch URL from any source.',
+> 'file://sw-description')*I'm new with the swupdate
+> I have a following concerns
+>
+> a) is it right approach to add the separate recipes for the swupdate in to
+> the meta-custom layers, which I'm doing now  ?
+>
+> b) do i need to deal with the only recipes-support, which is the part of
+> the meta-swupdate layer , instead of creating separate recipes in to
+> meta-custom?
+>
+> c) can any one help me with the right integration steps for the swupdate
+> with yocto ?
+>
+>
+> for the instance, I'm following official guide from here
+> <https://sbabic.github.io/swupdate/building-with-yocto.html>
+>
+> All suggestions & comments welcome
+>
+> Regards
+> Mahendra Sondagar
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#58152):
+> https://lists.yoctoproject.org/g/yocto/message/58152
+> Mute This Topic: https://lists.yoctoproject.org/mt/93911152/4077624
+> Mute #dunfell:https://lists.yoctoproject.org/g/yocto/mutehashtag/dunfell
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> chetan.byalihal@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 5242 bytes --]
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: meta-swupdate integration with the custom Yocto image #dunfell
+  2022-09-25 17:42 ` [yocto] " Chetan
+@ 2022-09-25 18:01   ` Mahendra Sondagar
+  2022-09-25 21:03     ` [yocto] " Adrian Freihofer
+  0 siblings, 1 reply; 6+ messages in thread
+From: Mahendra Sondagar @ 2022-09-25 18:01 UTC (permalink / raw)
+  To: yocto
+
+
+[-- Attachment #1.1: Type: text/plain, Size: 607 bytes --]
+
+Thanks, Chetan for swift reply :)
+
+However, swupdate unable to fetch the files mentioned in .bbappend file!
+
+The error logs are attahced here
+
+As i said in my post, I have created recipes-myswupdate in to the meta-custom file, which is parallel to meta-swupdate
+All the above files distributions are inside this recipes-myswupdate file
+I guess, that's the issue
+
+From the error logs, you can see, it's tries to find the file in to the default *meta-swupdate/recipes-support* files rather than *meta-custom/recipes-myswupdate* !
+
+Anyone else ?
+
+Regards
+Mahendra
+
+Thanks,
+Mahendra Sondagar
+
+[-- Attachment #1.2: Type: text/html, Size: 725 bytes --]
+
+[-- Attachment #2: error.txt --]
+[-- Type: text/plain, Size: 4395 bytes --]
+
+WARNING: swupdate-2022.05-r0 do_fetch: Failed to fetch URL file://sw-description, attempting MIRRORS if available
+ERROR: swupdate-2022.05-r0 do_fetch: Fetcher failure: Unable to find file file://sw-description anywhere. The paths that were searched were:
+    /home/mahendra/STM32MPU_workspace/Digikey_YoctoSeries/Digikey_Yocto/meta-swupdate/recipes-support/swupdate/swupdate-2022.05/poky
+    /home/mahendra/STM32MPU_workspace/Digikey_YoctoSeries/Digikey_Yocto/meta-swupdate/recipes-support/swupdate/swupdate/poky
+    /home/mahendra/STM32MPU_workspace/Digikey_YoctoSeries/Digikey_Yocto/meta-swupdate/recipes-support/swupdate/files/poky
+    /home/mahendra/STM32MPU_workspace/Digikey_YoctoSeries/Digikey_Yocto/meta-swupdate/recipes-support/swupdate/swupdate-2022.05/stm32mp15common
+    /home/mahendra/STM32MPU_workspace/Digikey_YoctoSeries/Digikey_Yocto/meta-swupdate/recipes-support/swupdate/swupdate/stm32mp15common
+    /home/mahendra/STM32MPU_workspace/Digikey_YoctoSeries/Digikey_Yocto/meta-swupdate/recipes-support/swupdate/files/stm32mp15common
+    /home/mahendra/STM32MPU_workspace/Digikey_YoctoSeries/Digikey_Yocto/meta-swupdate/recipes-support/swupdate/swupdate-2022.05/stm32mp1common
+    /home/mahendra/STM32MPU_workspace/Digikey_YoctoSeries/Digikey_Yocto/meta-swupdate/recipes-support/swupdate/swupdate/stm32mp1common
+    /home/mahendra/STM32MPU_workspace/Digikey_YoctoSeries/Digikey_Yocto/meta-swupdate/recipes-support/swupdate/files/stm32mp1common
+    /home/mahendra/STM32MPU_workspace/Digikey_YoctoSeries/Digikey_Yocto/meta-swupdate/recipes-support/swupdate/swupdate-2022.05/stm32mpcommon
+    /home/mahendra/STM32MPU_workspace/Digikey_YoctoSeries/Digikey_Yocto/meta-swupdate/recipes-support/swupdate/swupdate/stm32mpcommon
+    /home/mahendra/STM32MPU_workspace/Digikey_YoctoSeries/Digikey_Yocto/meta-swupdate/recipes-support/swupdate/files/stm32mpcommon
+    /home/mahendra/STM32MPU_workspace/Digikey_YoctoSeries/Digikey_Yocto/meta-swupdate/recipes-support/swupdate/swupdate-2022.05/stcommon
+    /home/mahendra/STM32MPU_workspace/Digikey_YoctoSeries/Digikey_Yocto/meta-swupdate/recipes-support/swupdate/swupdate/stcommon
+    /home/mahendra/STM32MPU_workspace/Digikey_YoctoSeries/Digikey_Yocto/meta-swupdate/recipes-support/swupdate/files/stcommon
+    /home/mahendra/STM32MPU_workspace/Digikey_YoctoSeries/Digikey_Yocto/meta-swupdate/recipes-support/swupdate/swupdate-2022.05/stm32mp1
+    /home/mahendra/STM32MPU_workspace/Digikey_YoctoSeries/Digikey_Yocto/meta-swupdate/recipes-support/swupdate/swupdate/stm32mp1
+    /home/mahendra/STM32MPU_workspace/Digikey_YoctoSeries/Digikey_Yocto/meta-swupdate/recipes-support/swupdate/files/stm32mp1
+    /home/mahendra/STM32MPU_workspace/Digikey_YoctoSeries/Digikey_Yocto/meta-swupdate/recipes-support/swupdate/swupdate-2022.05/armv7ve
+    /home/mahendra/STM32MPU_workspace/Digikey_YoctoSeries/Digikey_Yocto/meta-swupdate/recipes-support/swupdate/swupdate/armv7ve
+    /home/mahendra/STM32MPU_workspace/Digikey_YoctoSeries/Digikey_Yocto/meta-swupdate/recipes-support/swupdate/files/armv7ve
+    /home/mahendra/STM32MPU_workspace/Digikey_YoctoSeries/Digikey_Yocto/meta-swupdate/recipes-support/swupdate/swupdate-2022.05/arm
+    /home/mahendra/STM32MPU_workspace/Digikey_YoctoSeries/Digikey_Yocto/meta-swupdate/recipes-support/swupdate/swupdate/arm
+    /home/mahendra/STM32MPU_workspace/Digikey_YoctoSeries/Digikey_Yocto/meta-swupdate/recipes-support/swupdate/files/arm
+    /home/mahendra/STM32MPU_workspace/Digikey_YoctoSeries/Digikey_Yocto/meta-swupdate/recipes-support/swupdate/swupdate-2022.05/
+    /home/mahendra/STM32MPU_workspace/Digikey_YoctoSeries/Digikey_Yocto/meta-swupdate/recipes-support/swupdate/swupdate/
+    /home/mahendra/STM32MPU_workspace/Digikey_YoctoSeries/Digikey_Yocto/meta-swupdate/recipes-support/swupdate/files/
+    /home/mahendra/STM32MPU_workspace/Digikey_YoctoSeries/Digikey_Yocto/poky/build-mp1/downloads
+ERROR: swupdate-2022.05-r0 do_fetch: Bitbake Fetcher Error: FetchError('Unable to fetch URL from any source.', 'file://sw-description')
+ERROR: Logfile of failure stored in: /home/mahendra/STM32MPU_workspace/Digikey_YoctoSeries/Digikey_Yocto/poky/build-mp1/tmp/work/stm32mp1-poky-linux-gnueabi/swupdate/2022.05-r0/temp/log.do_fetch.218113
+ERROR: Task (/home/mahendra/STM32MPU_workspace/Digikey_YoctoSeries/Digikey_Yocto/meta-swupdate/recipes-support/swupdate/swupdate_2022.05.bb:do_fetch) failed with exit code '1'
+
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] meta-swupdate integration with the custom Yocto image #dunfell
+  2022-09-25 18:01   ` Mahendra Sondagar
+@ 2022-09-25 21:03     ` Adrian Freihofer
+  0 siblings, 0 replies; 6+ messages in thread
+From: Adrian Freihofer @ 2022-09-25 21:03 UTC (permalink / raw)
+  To: Mahendra Sondagar; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1362 bytes --]
+
+Hi,
+
+I guess the sw-description file must be added to the Image recipe not to
+swupdate.bb.
+
+Note: There is a specific mailing list for swupdate.
+
+Regards,
+Adrian
+
+Mahendra Sondagar <mahendrasondagar08@gmail.com> schrieb am So., 25. Sept.
+2022, 20:01:
+
+> Thanks, Chetan for swift reply :)
+>
+> However, swupdate unable to fetch the files mentioned in .bbappend file!
+>
+> The error logs are attahced here
+>
+> As i said in my post, I have created recipes-myswupdate in to the
+> meta-custom file, which is parallel to meta-swupdate
+> All the above files distributions are inside this recipes-myswupdate file
+> I guess, that's the issue
+>
+> From the error logs, you can see, it's tries to find the file in to the
+> default *meta-swupdate/recipes-support* files rather than
+> *meta-custom/recipes-myswupdate*!
+>
+> Anyone else ?
+>
+> Regards
+> Mahendra
+>
+>
+> Thanks,
+> Mahendra Sondagar
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#58154):
+> https://lists.yoctoproject.org/g/yocto/message/58154
+> Mute This Topic: https://lists.yoctoproject.org/mt/93911152/4454582
+> Mute #dunfell:https://lists.yoctoproject.org/g/yocto/mutehashtag/dunfell
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> adrian.freihofer@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 2530 bytes --]
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] meta-swupdate integration with the custom Yocto image #dunfell
+  2022-09-25 17:38 meta-swupdate integration with the custom Yocto image #dunfell Mahendra Sondagar
+  2022-09-25 17:42 ` [yocto] " Chetan
+@ 2022-09-26  8:14 ` Quentin Schulz
+  2022-09-26 17:38   ` Mahendra Sondagar
+  1 sibling, 1 reply; 6+ messages in thread
+From: Quentin Schulz @ 2022-09-26  8:14 UTC (permalink / raw)
+  To: Mahendra Sondagar, yocto
+
+Hi Mahendra Sondagar,
+
+On 9/25/22 19:38, Mahendra Sondagar wrote:
+> Hey.. There
+> Hope all are doing well
+> 
+> I'm dealing with the swupdate with the my custom Yocto image created for STM32MP1 dk1 board
+> The intend is, to update the rootfs remotely
+> 
+> I have successfully integrated meta-swupdate layer with the custom Yocto image by adding the layers in to bblayer.conf file
+> The both layers meta-swupdate & meta-custom are parallel to each-others
+> 
+> To change the flags and setting with the swupdate, i have created the r *ecipes-myswupdate* file inside the meta-custom layers
+> The content of the recipes-myswupdate are as follows
+> .
+> └── swupdate
+> ├── stm32mp1
+> │   ├── 09-swupdate-args
+> │   ├── defconfig
+> │   ├── sw-description
+> │   └── swupdate.cfg
+> └── swupdate_%.bbappend
+> 
+
+Considering you're using SRC_URI unconditionally, I suggest you use:
+.
+├── swupdate
+│   ├── 09-swupdate-args
+│   ├── defconfig
+│   ├── sw-description
+│   └── swupdate.cfg
+└── swupdate_%.bbappend
+
+> The content of the *swupdate_%.bbappend* are as follows
+> 
+> --------------------------------------------------------------------------------------
+> 
+> DESCRIPTION = "Example recipe generating SWU image"
+> SECTION = ""
+> 
+> LICENSE = ""
+> 
+> # Add all local files to be added to the SWU
+> # sw-description must always be in the list.
+> # You can extend with scripts or wahtever you need
+> SRC_URI += " \
+> file://sw-description \
+> file://09-swupdate-args \
+> file://swupdate.cfg \
+> "
+> 
+> # images to build before building swupdate image
+> IMAGE_DEPENDS = "core-image-full-cmdline virtual/kernel"
+> 
+> # images and files that will be included in the .swu image
+> SWUPDATE_IMAGES = "core-image-full-cmdline uImage"
+> 
+> # a deployable image can have multiple format, choose one
+> SWUPDATE_IMAGES_FSTYPES[core-image-full-cmdline] = ".ubifs"
+> SWUPDATE_IMAGES_FSTYPES[uImage] = ".bin"
+> 
+> inherit swupdate
+> 
+
+I'm pretty sure you're not appending to the correct recipe, swupdate 
+recipe is the SWUpdate recipe for building the SWUpdate update mechanism 
+SW, it's not for building an image that is making use of SWUpdate mechanism.
+
+I think you want to append to swupdate-image recipe or create your own 
+inheriting swupdate-image?
+
+Or probably both actually, one for adding your configuration files to 
+the SWUpdate SW and the 
+IMAGE_DEPENDS/SWUPDATE_IMAGES/SWUIPDATE_IMAGE_FSTYPES to the image recipe.
+
+In any case, you're missing:
+FILESEXTRAPATHS:prepend := "${THISDIR}/${PN}:"
+in your bbappend for adding files. c.f. 
+https://docs.yoctoproject.org/ref-manual/variables.html#term-FILESEXTRAPATHS
+
+Cheers,
+Quentin
+
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] meta-swupdate integration with the custom Yocto image #dunfell
+  2022-09-26  8:14 ` Quentin Schulz
+@ 2022-09-26 17:38   ` Mahendra Sondagar
+  0 siblings, 0 replies; 6+ messages in thread
+From: Mahendra Sondagar @ 2022-09-26 17:38 UTC (permalink / raw)
+  To: Quentin Schulz; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 3127 bytes --]
+
+Hi... Quentin
+Thanks for the reply...
+
+let me try this
+
+Regards
+Mahendra
+
+On Mon, Sep 26, 2022 at 1:44 PM Quentin Schulz <
+quentin.schulz@theobroma-systems.com> wrote:
+
+> Hi Mahendra Sondagar,
+>
+> On 9/25/22 19:38, Mahendra Sondagar wrote:
+> > Hey.. There
+> > Hope all are doing well
+> >
+> > I'm dealing with the swupdate with the my custom Yocto image created for
+> STM32MP1 dk1 board
+> > The intend is, to update the rootfs remotely
+> >
+> > I have successfully integrated meta-swupdate layer with the custom Yocto
+> image by adding the layers in to bblayer.conf file
+> > The both layers meta-swupdate & meta-custom are parallel to each-others
+> >
+> > To change the flags and setting with the swupdate, i have created the r
+> *ecipes-myswupdate* file inside the meta-custom layers
+> > The content of the recipes-myswupdate are as follows
+> > .
+> > └── swupdate
+> > ├── stm32mp1
+> > │   ├── 09-swupdate-args
+> > │   ├── defconfig
+> > │   ├── sw-description
+> > │   └── swupdate.cfg
+> > └── swupdate_%.bbappend
+> >
+>
+> Considering you're using SRC_URI unconditionally, I suggest you use:
+> .
+> ├── swupdate
+> │   ├── 09-swupdate-args
+> │   ├── defconfig
+> │   ├── sw-description
+> │   └── swupdate.cfg
+> └── swupdate_%.bbappend
+>
+> > The content of the *swupdate_%.bbappend* are as follows
+> >
+> >
+> --------------------------------------------------------------------------------------
+> >
+> > DESCRIPTION = "Example recipe generating SWU image"
+> > SECTION = ""
+> >
+> > LICENSE = ""
+> >
+> > # Add all local files to be added to the SWU
+> > # sw-description must always be in the list.
+> > # You can extend with scripts or wahtever you need
+> > SRC_URI += " \
+> > file://sw-description \
+> > file://09-swupdate-args \
+> > file://swupdate.cfg \
+> > "
+> >
+> > # images to build before building swupdate image
+> > IMAGE_DEPENDS = "core-image-full-cmdline virtual/kernel"
+> >
+> > # images and files that will be included in the .swu image
+> > SWUPDATE_IMAGES = "core-image-full-cmdline uImage"
+> >
+> > # a deployable image can have multiple format, choose one
+> > SWUPDATE_IMAGES_FSTYPES[core-image-full-cmdline] = ".ubifs"
+> > SWUPDATE_IMAGES_FSTYPES[uImage] = ".bin"
+> >
+> > inherit swupdate
+> >
+>
+> I'm pretty sure you're not appending to the correct recipe, swupdate
+> recipe is the SWUpdate recipe for building the SWUpdate update mechanism
+> SW, it's not for building an image that is making use of SWUpdate
+> mechanism.
+>
+> I think you want to append to swupdate-image recipe or create your own
+> inheriting swupdate-image?
+>
+> Or probably both actually, one for adding your configuration files to
+> the SWUpdate SW and the
+> IMAGE_DEPENDS/SWUPDATE_IMAGES/SWUIPDATE_IMAGE_FSTYPES to the image recipe.
+>
+> In any case, you're missing:
+> FILESEXTRAPATHS:prepend := "${THISDIR}/${PN}:"
+> in your bbappend for adding files. c.f.
+>
+> https://docs.yoctoproject.org/ref-manual/variables.html#term-FILESEXTRAPATHS
+>
+> Cheers,
+> Quentin
+>
+
+[-- Attachment #2: Type: text/html, Size: 4064 bytes --]
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+end of thread, other threads:[~2022-09-26 17:38 UTC | newest]
+
+Thread overview: 6+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-09-25 17:38 meta-swupdate integration with the custom Yocto image #dunfell Mahendra Sondagar
+2022-09-25 17:42 ` [yocto] " Chetan
+2022-09-25 18:01   ` Mahendra Sondagar
+2022-09-25 21:03     ` [yocto] " Adrian Freihofer
+2022-09-26  8:14 ` Quentin Schulz
+2022-09-26 17:38   ` Mahendra Sondagar
+

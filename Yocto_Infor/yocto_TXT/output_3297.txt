@@ -1,0 +1,178 @@
+* Re: [yocto] Extensible SDK of core-image-minimal fails to install
+       [not found] <1686F53371AAAEA1.32444@lists.yoctoproject.org>
+@ 2021-06-11 20:30 ` Hendrik
+  2021-06-12  7:47   ` Richard Purdie
+  0 siblings, 1 reply; 3+ messages in thread
+From: Hendrik @ 2021-06-11 20:30 UTC (permalink / raw)
+  To: yocto
+
+I was able to reproduce the error even with plain poky (without kas):
+
+```bash
+git clone -b dunfell https://git.yoctoproject.org/git/poky
+cd poky
+source oe-init-build-env
+bitbake -c populate_sdk_ext core-image-minimal
+```
+
+After successful build, copy the `build/tmp/deploy/sdk/poky....sh` to
+another machine (with different OS) and run it there.
+
+I tried several different installation machines and they fail
+consistently to install the extensible SDK if they run a different OS
+than the build machine (e.g. Debian 10 vs. Ubuntu 18.04 vs. 20.04). See
+the exakt error and complete log output in my previous message.
+
+What is happening here? Did I use the extensible SDK wrongly? Is it
+expected to be incompatible?
+
+Thanks in advance!
+
+Hendrik
+
+On 09.06.21 17:58, Hendrik wrote:
+> Hello World,
+>
+> I'm trying to install an extensible SDK of `core-image-minimal` on a
+> system different from the build system (build system is Debian 10,
+> install system is e.g. Ubuntu 20.04). When doing this, the following
+> error occurs:
+>
+> ```
+> ERROR: Task
+> (virtual:native:/home/test/poky_sdk/layers/poky/meta/recipes-devtools
+> /pseudo/pseudo_git.bb:do_fetch) failed with exit code 'setscene whitelist'
+> ```
+>
+> The full log file `preparing_build_system.log` is available at:
+> https://pastebin.com/m9KmshY0
+>
+> It seems `recipes-devtools/pseudo/pseudo_git.bb` does depend on the
+> build environment and therefore yields different hashes which results in
+> broken sstate-cache. Does someone know what exactly went wrong and how
+> to fix it?
+>
+> Steps to reproduce:
+>
+> Use the following `kas-project.yml`:
+>
+> ```yml
+> header:
+>   version: 10
+> machine: qemux86-64
+> distro: poky
+> local_conf_header:
+>   standard: |
+>     CONF_VERSION = "1"
+>     PACKAGE_CLASSES = "package_rpm"
+> repos:
+>   poky:
+>     url: "https://git.yoctoproject.org/git/poky"
+>     refspec: dunfell
+>     layers:
+>       meta:
+>       meta-poky:
+>       meta-yocto-bsp:
+> ```
+>
+> Then, run a kas container (https://github.com/siemens/kas, e.g. use
+> `kas-container` script): `./kas-container shell kas-project.yml` This
+> will start a Debian 10 container with kas installed.
+>
+> Build the extensible SDK with `bitbake -c populate_sdk_ext
+> core-image-minimal`.
+>
+> After finishing, install the extensible SDK on a different machine (for
+> testing purposes e.g. in a Docker container for example `ubuntu:20.04`).
+> It will result in the error mentioned above.
+>
+> How do I fix that?
+>
+> Thanks in advance!
+>
+> Hendrik
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] Extensible SDK of core-image-minimal fails to install
+  2021-06-11 20:30 ` [yocto] Extensible SDK of core-image-minimal fails to install Hendrik
+@ 2021-06-12  7:47   ` Richard Purdie
+  2021-06-12  8:47     ` Robert Berger
+  0 siblings, 1 reply; 3+ messages in thread
+From: Richard Purdie @ 2021-06-12  7:47 UTC (permalink / raw)
+  To: Hendrik, yocto
+
+On Fri, 2021-06-11 at 22:30 +0200, Hendrik wrote:
+> I was able to reproduce the error even with plain poky (without kas):
+> 
+> ```bash
+> git clone -b dunfell https://git.yoctoproject.org/git/poky
+> cd poky
+> source oe-init-build-env
+> bitbake -c populate_sdk_ext core-image-minimal
+> ```
+> 
+> After successful build, copy the `build/tmp/deploy/sdk/poky....sh` to
+> another machine (with different OS) and run it there.
+> 
+> I tried several different installation machines and they fail
+> consistently to install the extensible SDK if they run a different OS
+> than the build machine (e.g. Debian 10 vs. Ubuntu 18.04 vs. 20.04). See
+> the exakt error and complete log output in my previous message.
+> 
+> What is happening here? Did I use the extensible SDK wrongly? Is it
+> expected to be incompatible?
+
+I think it may be this bug:
+
+https://bugzilla.yoctoproject.org/show_bug.cgi?id=14428
+
+We don't have a fix as yet, it looks difficult to solve :(
+
+Cheers,
+
+Richard
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] Extensible SDK of core-image-minimal fails to install
+  2021-06-12  7:47   ` Richard Purdie
+@ 2021-06-12  8:47     ` Robert Berger
+  0 siblings, 0 replies; 3+ messages in thread
+From: Robert Berger @ 2021-06-12  8:47 UTC (permalink / raw)
+  To: Richard Purdie, Hendrik, yocto
+
+Hi,
+
+On 12/06/2021 10:47, Richard Purdie wrote:
+> 
+> I think it may be this bug:
+> 
+> https://bugzilla.yoctoproject.org/show_bug.cgi?id=14428
+> 
+> We don't have a fix as yet, it looks difficult to solve :(
+> 
+> Cheers,
+> 
+> Richard
+
+Not a fix, but a workaround, if you are willing to use containers is to 
+create a build container and a similar sdk container.
+
+I added more information to the bug above.
+
+Regards,
+
+Robert
+
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2021-06-12  8:47 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+     [not found] <1686F53371AAAEA1.32444@lists.yoctoproject.org>
+2021-06-11 20:30 ` [yocto] Extensible SDK of core-image-minimal fails to install Hendrik
+2021-06-12  7:47   ` Richard Purdie
+2021-06-12  8:47     ` Robert Berger
+

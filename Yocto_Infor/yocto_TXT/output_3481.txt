@@ -1,0 +1,242 @@
+* SSH_AUTH_SOCK unavailable when pulling modules #golang
+@ 2021-05-03 18:25 Sven
+  2021-05-04  8:25 ` [yocto] " Quentin Schulz
+  2021-05-05 19:55 ` Richard Purdie
+  0 siblings, 2 replies; 7+ messages in thread
+From: Sven @ 2021-05-03 18:25 UTC (permalink / raw)
+  To: yocto
+
+Hi,
+
+I have put together a recipe inheriting from go-mod. This project depends on out-of-repo modules that sit in private repos. As long as the SSH key required to pull the requirements is present as a file (under $HOME/.ssh), everything works fine. However, as soon as the SSH credentials are only available via agent and $SSH_AUTH_SOCK, the do_compile step fails. I have traced this down to the fact that the $SSH_AUTH_SOCK environment variable is not available to do_compile which is when the requirements are pulled. This is the sort of error message I get:
+
+ERROR: mypackage-git-r0 do_compile: Execution of '[...]/mypackage/git-r0/temp/run.do_compile.20076' failed with exit code 1:
+# cd .; git ls-remote https://bitbucket.org/myorg/some-requirement
+Permission denied (publickey).
+fatal: Could not read from remote repository.
+
+Note, that the do_fetch step succeeds in pulling the actual repo. I tried fixing the problem by wrapping the do_compile function and providing $SSH_AUTH_SOCK from the original environment:
+
+def origenv(d, var):
+    return d.getVar("BB_ORIGENV", False).getVar(var, False)
+
+do_compile() {
+    if [ -n "${@origenv(d, 'SSH_AUTH_SOCK') or ''}" ]; then
+        export SSH_AUTH_SOCK="${@origenv(d, 'SSH_AUTH_SOCK')}"
+    fi
+    go_do_compile
+}
+
+This allows the do_compile step (and all subsequent steps) to finish successfully. However, that way, I get a bunch of errors like this (cleansstate does not help):
+
+ERROR: When reparsing [...]/mypackage_git.bb:do_compile, the basehash value changed from eb51e4ec321c723587cec03bb9b33b94ee43e0b0939eb43b52824e3d5cfebec2 to 2bb034f43856917d6454a56b32946b1c68cf7f286b20fd7a7eaf1bfd2a92d34f. The metadata is not deterministic and this needs to be fixed.
+ERROR: The following commands may help:
+ERROR: $ bitbake mypackage -cdo_compile -Snone
+ERROR: Then:
+ERROR: $ bitbake mypackage -cdo_compile -Sprintdiff
+
+Neither command helps to fix this. What can I do? I'm on poky yocto-3.1.5-18-gbb7747497a.
+
+Best regards,
+Sven
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] SSH_AUTH_SOCK unavailable when pulling modules #golang
+  2021-05-03 18:25 SSH_AUTH_SOCK unavailable when pulling modules #golang Sven
+@ 2021-05-04  8:25 ` Quentin Schulz
+  2021-05-05 13:37   ` Sven
+  2021-05-05 19:55 ` Richard Purdie
+  1 sibling, 1 reply; 7+ messages in thread
+From: Quentin Schulz @ 2021-05-04  8:25 UTC (permalink / raw)
+  To: sven; +Cc: yocto
+
+On Mon, May 03, 2021 at 11:25:09AM -0700, Sven via lists.yoctoproject.org wrote:
+> Hi,
+> 
+> I have put together a recipe inheriting from go-mod. This project depends on out-of-repo modules that sit in private repos. As long as the SSH key required to pull the requirements is present as a file (under $HOME/.ssh), everything works fine. However, as soon as the SSH credentials are only available via agent and $SSH_AUTH_SOCK, the do_compile step fails. I have traced this down to the fact that the $SSH_AUTH_SOCK environment variable is not available to do_compile which is when the requirements are pulled. This is the sort of error message I get:
+> 
+
+On Ubuntu, when the password for my SSH key is in the gnome keyring, I
+run:
+eval $(/usr/bin/gnome-keyring-daemon --start --components=pkcs11,secrets,ssh); export SSH_AUTH_SOCK
+in the terminal that will run bitbake.
+
+No idea if it's the proper way to make it work, but for the few times I
+need to fetch new revisions of private repos, it's been good enough to
+me.
+
+Hope this helps,
+Cheers,
+Quentin
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: SSH_AUTH_SOCK unavailable when pulling modules #golang
+  2021-05-04  8:25 ` [yocto] " Quentin Schulz
+@ 2021-05-05 13:37   ` Sven
+  2021-05-05 13:40     ` [yocto] " Quentin Schulz
+  0 siblings, 1 reply; 7+ messages in thread
+From: Sven @ 2021-05-05 13:37 UTC (permalink / raw)
+  To: yocto
+
+Hi Quentin,
+
+Thanks for your reply. Did you have success with this technique when compiling a go-mod recipe where some of the go dependencies sit in private repos? The standard git fetcher works for me with private repos, that is not the problem.
+
+Best regards,
+Sven
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] SSH_AUTH_SOCK unavailable when pulling modules #golang
+  2021-05-05 13:37   ` Sven
+@ 2021-05-05 13:40     ` Quentin Schulz
+  0 siblings, 0 replies; 7+ messages in thread
+From: Quentin Schulz @ 2021-05-05 13:40 UTC (permalink / raw)
+  To: sven; +Cc: yocto
+
+Hi Sven,
+
+On Wed, May 05, 2021 at 06:37:41AM -0700, Sven via lists.yoctoproject.org wrote:
+> Hi Quentin,
+> 
+> Thanks for your reply. Did you have success with this technique when compiling a go-mod recipe where some of the go dependencies sit in private repos? The standard git fetcher works for me with private repos, that is not the problem.
+> 
+
+No, I do not use any custom go-based recipe.
+
+BR,
+Quentin
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] SSH_AUTH_SOCK unavailable when pulling modules #golang
+  2021-05-03 18:25 SSH_AUTH_SOCK unavailable when pulling modules #golang Sven
+  2021-05-04  8:25 ` [yocto] " Quentin Schulz
+@ 2021-05-05 19:55 ` Richard Purdie
+  2021-05-06  5:37   ` Sven
+  1 sibling, 1 reply; 7+ messages in thread
+From: Richard Purdie @ 2021-05-05 19:55 UTC (permalink / raw)
+  To: sven, yocto
+
+On Mon, 2021-05-03 at 11:25 -0700, Sven via lists.yoctoproject.org wrote:
+Hi,
+
+I have put together a recipe inheriting from go-mod. This project depends on 
+> out-of-repo modules that sit in private repos. As long as the SSH key required 
+> to pull the requirements is present as a file (under $HOME/.ssh), everything 
+> works fine. However, as soon as the SSH credentials are only available via 
+> agent and $SSH_AUTH_SOCK, the do_compile step fails. I have traced this down 
+> to the fact that the $SSH_AUTH_SOCK environment variable is not available to
+> do_compile which is when the requirements are pulled. This is the sort of error 
+> message I get:
+
+ERROR: mypackage-git-r0 do_compile: Execution of '[...]/mypackage/git-r0/temp/run.do_compile.20076' 
+> failed with exit code 1:
+# cd .; git ls-remote https://bitbucket.org/myorg/some-requirement
+Permission denied (publickey).
+fatal: Could not read from remote repository.
+
+Note, that the do_fetch step succeeds in pulling the actual repo. I tried fixing 
+> the problem by wrapping the do_compile function and providing $SSH_AUTH_SOCK from
+> the original environment:
+
+def origenv(d, var):
+    return d.getVar("BB_ORIGENV", False).getVar(var, False)
+
+do_compile() {
+    if [ -n "${@origenv(d, 'SSH_AUTH_SOCK') or ''}" ]; then
+        export SSH_AUTH_SOCK="${@origenv(d, 'SSH_AUTH_SOCK')}"
+    fi
+    go_do_compile
+}
+
+This allows the do_compile step (and all subsequent steps) to finish successfully. 
+> However, that way, I get a bunch of errors like this (cleansstate does not help):
+
+ERROR: When reparsing [...]/mypackage_git.bb:do_compile, the basehash value 
+> changed from eb51e4ec321c723587cec03bb9b33b94ee43e0b0939eb43b52824e3d5cfebec2 
+> to 2bb034f43856917d6454a56b32946b1c68cf7f286b20fd7a7eaf1bfd2a92d34f. The metadata 
+> is not deterministic and this needs to be fixed.
+ERROR: The following commands may help:
+ERROR: $ bitbake mypackage -cdo_compile -Snone
+ERROR: Then:
+ERROR: $ bitbake mypackage -cdo_compile -Sprintdiff
+
+Neither command helps to fix this. What can I do? I'm on poky yocto-3.1.5-18-gbb7747497a.
+
+You can probably 'fix' that with:
+
+do_compile[vardepsexclude] += "SSH_AUTH_SOCK"
+
+however you really shouldn't be accessing the network in a compile task.
+That is a wider go issue :(.
+
+Cheers,
+
+Richard
+
+
+
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: SSH_AUTH_SOCK unavailable when pulling modules #golang
+  2021-05-05 19:55 ` Richard Purdie
+@ 2021-05-06  5:37   ` Sven
+  2021-05-06  5:50     ` Sven
+  0 siblings, 1 reply; 7+ messages in thread
+From: Sven @ 2021-05-06  5:37 UTC (permalink / raw)
+  To: yocto
+
+Hi Richard,
+
+Unfortunately, that doesn't make the error messages go away. I agree that it's not great that go-mod fetches during do_compile but that's the way it currently is.
+
+For completeness sake, here is the complete minimal example that _does_ compile. However, error messages à la
+
+ERROR: When reparsing [...]/golang-test/golang-test.bb:do_compile, the basehash value changed from be5e3ca0e52fd3e3a0315fb32a2845f097bb6925940a8141b6f4d99fa2423e20 to fc952756231a898ae7d3fd611607066b349042f5313b8363d11eef18ed317ed2. The metadata is not deterministic and this needs to be fixed.
+ERROR: The following commands may help:
+ERROR: $ bitbake golang-test -cdo_compile -Snone
+ERROR: Then:
+ERROR: $ bitbake golang-test -cdo_compile -Sprintdiff
+
+are spewed out. Here's the recipe:
+
+LICENSE = "CLOSED"
+GO_IMPORT = "bitbucket.org/sven_schwermer/golang-a"
+SRC_URI = "git://git@${GO_IMPORT};protocol=ssh;branch=master"
+SRCREV = "f7d820d09a5b2332737a8105b3efd9c1e8e51d32"
+inherit go-mod
+do_compile() {
+    export SSH_AUTH_SOCK="${@d.getVar('BB_ORIGENV', False).getVar('SSH_AUTH_SOCK', False)}"
+    go_do_compile
+}
+
+bitbucket.org/sven_schwermer/golang-a pulls in a secondary dependency (bitbucket.org/sven_schwermer/golang-b) which is not publicly available. This is golang-a's go.mod:
+
+module bitbucket.org/sven_schwermer/golang-a
+go 1.16
+require bitbucket.org/sven_schwermer/golang-b v0.0.0-20210505180831-90ba3cd6391e
+
+I have tested this also on latest poky@master (5a0679cb75) with identical results.
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: SSH_AUTH_SOCK unavailable when pulling modules #golang
+  2021-05-06  5:37   ` Sven
+@ 2021-05-06  5:50     ` Sven
+  0 siblings, 0 replies; 7+ messages in thread
+From: Sven @ 2021-05-06  5:50 UTC (permalink / raw)
+  To: yocto
+
+Adding BB_ORIGENV to do_compile[vardepsexclude] solved the issue. Thanks for your help!
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+end of thread, other threads:[~2021-05-06  5:50 UTC | newest]
+
+Thread overview: 7+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-05-03 18:25 SSH_AUTH_SOCK unavailable when pulling modules #golang Sven
+2021-05-04  8:25 ` [yocto] " Quentin Schulz
+2021-05-05 13:37   ` Sven
+2021-05-05 13:40     ` [yocto] " Quentin Schulz
+2021-05-05 19:55 ` Richard Purdie
+2021-05-06  5:37   ` Sven
+2021-05-06  5:50     ` Sven
+

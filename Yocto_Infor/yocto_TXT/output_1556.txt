@@ -1,0 +1,402 @@
+* Conf for a single recipe only
+@ 2022-08-02 13:15 Sebastian Rühl
+  2022-08-02 14:01 ` [yocto] " Alexander Kanavin
+  0 siblings, 1 reply; 4+ messages in thread
+From: Sebastian Rühl @ 2022-08-02 13:15 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 702 bytes --]
+
+Is there a way to set the GOVERSION for a single recipe only?
+
+At the moment I set the Golang version to 1.18 using the recipes from master (on a local dunfell branch) and set the go version in the layer conf:
+GOVERSION = "1.18%"
+PREFERRED_VERSION_go-binary-native = "1.18%"
+PREFERRED_VERSION_go-cross-canadian = "1.18%"
+PREFERRED_VERSION_go-cross = "1.18%"
+PREFERRED_VERSION_go-crosssdk = "1.18%"
+PREFERRED_VERSION_go-native = "1.18%"
+PREFERRED_VERSION_go-runtime = "1.18%"
+PREFERRED_VERSION_go = "1.18%"
+
+however this messes with mender as it seems there is a bug in the golang compiler...
+So I want to use those settings only for my application recipe.
+Any ideas how to achieve that?
+
+[-- Attachment #2: Type: text/html, Size: 3034 bytes --]
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] Conf for a single recipe only
+  2022-08-02 13:15 Conf for a single recipe only Sebastian Rühl
+@ 2022-08-02 14:01 ` Alexander Kanavin
+  2022-08-02 14:33   ` AW: " Sebastian Rühl
+  0 siblings, 1 reply; 4+ messages in thread
+From: Alexander Kanavin @ 2022-08-02 14:01 UTC (permalink / raw)
+  To: sebastian; +Cc: yocto
+
+There's no way to build two versions of the same component, if the
+versions share the recipe name. You have to fix the application, or
+try to rename one set of the go recipes so it is separate from the
+other set, to something like 'go-old'.
+
+Alex
+
+On Tue, 2 Aug 2022 at 15:15, Sebastian Rühl via lists.yoctoproject.org
+<sebastian=mapped.com@lists.yoctoproject.org> wrote:
+>
+> Is there a way to set the GOVERSION for a single recipe only?
+>
+>
+>
+> At the moment I set the Golang version to 1.18 using the recipes from master (on a local dunfell branch) and set the go version in the layer conf:
+> GOVERSION = "1.18%"
+>
+> PREFERRED_VERSION_go-binary-native = "1.18%"
+>
+> PREFERRED_VERSION_go-cross-canadian = "1.18%"
+>
+> PREFERRED_VERSION_go-cross = "1.18%"
+>
+> PREFERRED_VERSION_go-crosssdk = "1.18%"
+>
+> PREFERRED_VERSION_go-native = "1.18%"
+>
+> PREFERRED_VERSION_go-runtime = "1.18%"
+>
+> PREFERRED_VERSION_go = "1.18%"
+>
+> however this messes with mender as it seems there is a bug in the golang compiler…
+>
+> So I want to use those settings only for my application recipe.
+>
+> Any ideas how to achieve that?
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#57727): https://lists.yoctoproject.org/g/yocto/message/57727
+> Mute This Topic: https://lists.yoctoproject.org/mt/92769708/1686489
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* AW: [yocto] Conf for a single recipe only
+  2022-08-02 14:01 ` [yocto] " Alexander Kanavin
+@ 2022-08-02 14:33   ` Sebastian Rühl
+  2022-08-02 15:36     ` Alexander Kanavin
+  0 siblings, 1 reply; 4+ messages in thread
+From: Sebastian Rühl @ 2022-08-02 14:33 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: yocto
+
+Thanks, that seems like a good hint.
+
+Regarding the fixing: As I said it seems as this is a bug in golang itself. Correct me if I'm wrong but here is the output from building mender-artifact-native/3.8.0:
+
+NOTE: recipe mender-artifact-native-3.8.0-r0: task do_compile: Started
+ERROR: mender-artifact-native-3.8.0-r0 do_compile: oe_runmake failed
+ERROR: mender-artifact-native-3.8.0-r0 do_compile: Execution of '/builddir/randomfirmware/build/tmp/work/x86_64-linux/mender-artifact-native/3.8.0-r0/temp/run.do_compile.1285' failed with exit code 1
+ERROR: Logfile of failure stored in: /builddir/randomfirmware/build/tmp/work/x86_64-linux/mender-artifact-native/3.8.0-r0/temp/log.do_compile.1285
+ERROR: Task (virtual:native:/builddir/randomfirmware/sources/meta-mender/meta-mender-core/recipes-mender/mender-artifact/mender-artifact_3.8.0.bb:do_compile) failed with exit code '1'
+Log data follows:
+| DEBUG: Executing shell function do_compile
+| GO111MODULE=""
+| GOARCH="amd64"
+| GOBIN=""
+| GOCACHE="/builddir/randomfirmware/build/tmp/work/x86_64-linux/mender-artifact-native/3.8.0-r0/build/.cache"
+| GOENV="/github/home/.config/go/env"
+| GOEXE=""
+| GOEXPERIMENT=""
+| GOFLAGS=""
+| GOHOSTARCH="amd64"
+| GOHOSTOS="linux"
+| GOINSECURE=""
+| GOMODCACHE="/builddir/randomfirmware/build/tmp/work/x86_64-linux/mender-artifact-native/3.8.0-r0/build/pkg/mod"
+| GONOPROXY=""
+| GONOSUMDB=""
+| GOOS="linux"
+| GOPATH="/builddir/randomfirmware/build/tmp/work/x86_64-linux/mender-artifact-native/3.8.0-r0/build:/builddir/randomfirmware/build/tmp/work/x86_64-linux/mender-artifact-native/3.8.0-r0/recipe-sysroot-native/usr/lib/x86_64-linux/go"
+| GOPRIVATE=""
+| GOPROXY="https://proxy.golang.org,direct"
+| GOROOT="/builddir/randomfirmware/build/tmp/work/x86_64-linux/mender-artifact-native/3.8.0-r0/recipe-sysroot-native/usr/lib/go"
+| GOSUMDB="sum.golang.org"
+| GOTMPDIR="/builddir/randomfirmware/build/tmp/work/x86_64-linux/mender-artifact-native/3.8.0-r0/go-tmp"
+| GOTOOLDIR="/builddir/randomfirmware/build/tmp/work/x86_64-linux/mender-artifact-native/3.8.0-r0/recipe-sysroot-native/usr/lib/go/pkg/tool/linux_amd64"
+| GOVCS=""
+| GOVERSION="go1.18.4"
+| GCCGO="gccgo"
+| GOAMD64="v1"
+| AR="ar"
+| CC="gcc "
+| CXX="g++ "
+| CGO_ENABLED="1"
+| GOMOD="/dev/null"
+| GOWORK=""
+| CGO_CFLAGS="-isystem/builddir/randomfirmware/build/tmp/work/x86_64-linux/mender-artifact-native/3.8.0-r0/recipe-sysroot-native/usr/include -O2 -pipe"
+| CGO_CPPFLAGS="-isystem/builddir/randomfirmware/build/tmp/work/x86_64-linux/mender-artifact-native/3.8.0-r0/recipe-sysroot-native/usr/include"
+| CGO_CXXFLAGS="-isystem/builddir/randomfirmware/build/tmp/work/x86_64-linux/mender-artifact-native/3.8.0-r0/recipe-sysroot-native/usr/include -O2 -pipe"
+| CGO_FFLAGS="-g -O2"
+| CGO_LDFLAGS="-L/builddir/randomfirmware/build/tmp/work/x86_64-linux/mender-artifact-native/3.8.0-r0/recipe-sysroot-native/usr/lib -L/builddir/randomfirmware/build/tmp/work/x86_64-linux/mender-artifact-native/3.8.0-r0/recipe-sysroot-native/lib -Wl,--enable-new-dtags -Wl,-rpath-link,/builddir/randomfirmware/build/tmp/work/x86_64-linux/mender-artifact-native/3.8.0-r0/recipe-sysroot-native/usr/lib -Wl,-rpath-link,/builddir/randomfirmware/build/tmp/work/x86_64-linux/mender-artifact-native/3.8.0-r0/recipe-sysroot-native/lib -Wl,-rpath,/builddir/randomfirmware/build/tmp/work/x86_64-linux/mender-artifact-native/3.8.0-r0/recipe-sysroot-native/usr/lib -Wl,-rpath,/builddir/randomfirmware/build/tmp/work/x86_64-linux/mender-artifact-native/3.8.0-r0/recipe-sysroot-native/lib -Wl,-O1 -Wl,--allow-shlib-undefined -Wl,--dynamic-linker=/builddir/randomfirmware/build/tmp/sysroots-uninative/x86_64-linux/lib/ld-linux-x86-64.so.2"
+| PKG_CONFIG="pkg-config"
+| GOGCCFLAGS="-fPIC -m64 -pthread -fmessage-length=0 -fdebug-prefix-map=/builddir/randomfirmware/build/tmp/work/x86_64-linux/mender-artifact-native/3.8.0-r0/go-tmp/go-build2701839308=/tmp/go-build -gno-record-gcc-switches"
+| NOTE: make -j 10 GOPATH=/builddir/randomfirmware/build/tmp/work/x86_64-linux/mender-artifact-native/3.8.0-r0/build:/builddir/randomfirmware/build/tmp/work/x86_64-linux/mender-artifact-native/3.8.0-r0/recipe-sysroot-native/usr/lib/x86_64-linux/go -C /builddir/randomfirmware/build/tmp/work/x86_64-linux/mender-artifact-native/3.8.0-r0/build/src/github.com/mendersoftware/mender-artifact V=1 install
+| make: Entering directory '/builddir/randomfirmware/build/tmp/work/x86_64-linux/mender-artifact-native/3.8.0-r0/git/src/github.com/mendersoftware/mender-artifact'
+| google.golang.org/protobuf/internal/pragma
+| google.golang.org/grpc/internal/buffer
+| google.golang.org/grpc/encoding
+| google.golang.org/grpc/internal/grpcsync
+| github.com/ryanuber/go-glob
+| github.com/hashicorp/hcl/hcl/strconv
+| golang.org/x/text/transform
+| github.com/klauspost/compress/flate
+| github.com/klauspost/cpuid/v2
+| github.com/pkg/errors
+| panic: runtime error: index out of range [0] with length 0
+| 
+| goroutine 2978 [running]:
+| cmd/go/internal/work.(*Builder).buildActionID(0xc000aeb900, 0xc000a17540)
+| 	/usr/lib/go/src/cmd/go/internal/work/exec.go:281 +0x23cf
+| cmd/go/internal/work.(*Builder).build(0xc000aeb900, {0xc000034200?, 0x0?}, 0xc000a17540)
+| 	/usr/lib/go/src/cmd/go/internal/work/exec.go:476 +0x199
+| cmd/go/internal/work.(*Builder).Do.func2({0xadefb8, 0xc000034200}, 0xc000a17540)
+| 	/usr/lib/go/src/cmd/go/internal/work/exec.go:139 +0x5ec
+| cmd/go/internal/work.(*Builder).Do.func3()
+| 	/usr/lib/go/src/cmd/go/internal/work/exec.go:201 +0xb9
+| created by cmd/go/internal/work.(*Builder).Do
+| 	/usr/lib/go/src/cmd/go/internal/work/exec.go:187 +0x3da
+| Makefile:72: recipe for target 'install' failed
+| make: *** [install] Error 2
+| make: Leaving directory '/builddir/randomfirmware/build/tmp/work/x86_64-linux/mender-artifact-native/3.8.0-r0/git/src/github.com/mendersoftware/mender-artifact'
+| ERROR: oe_runmake failed
+| WARNING: /builddir/randomfirmware/build/tmp/work/x86_64-linux/mender-artifact-native/3.8.0-r0/temp/run.do_compile.1285:1 exit 1 from 'exit 1'
+| ERROR: Execution of '/builddir/randomfirmware/build/tmp/work/x86_64-linux/mender-artifact-native/3.8.0-r0/temp/run.do_compile.1285' failed with exit code 1
+NOTE: recipe mender-artifact-native-3.8.0-r0: task do_compile: Failed
+
+If you look closely it fails during compile with a index out of range in the middle of exec.go
+
+Sebastian
+
+-----Ursprüngliche Nachricht-----
+Von: Alexander Kanavin <alex.kanavin@gmail.com> 
+Gesendet: Dienstag, 2. August 2022 16:02
+An: Sebastian Rühl <sebastian@mapped.com>
+Cc: yocto@lists.yoctoproject.org
+Betreff: Re: [yocto] Conf for a single recipe only
+
+There's no way to build two versions of the same component, if the versions share the recipe name. You have to fix the application, or try to rename one set of the go recipes so it is separate from the other set, to something like 'go-old'.
+
+Alex
+
+On Tue, 2 Aug 2022 at 15:15, Sebastian Rühl via lists.yoctoproject.org <sebastian=mapped.com@lists.yoctoproject.org> wrote:
+>
+> Is there a way to set the GOVERSION for a single recipe only?
+>
+>
+>
+> At the moment I set the Golang version to 1.18 using the recipes from master (on a local dunfell branch) and set the go version in the layer conf:
+> GOVERSION = "1.18%"
+>
+> PREFERRED_VERSION_go-binary-native = "1.18%"
+>
+> PREFERRED_VERSION_go-cross-canadian = "1.18%"
+>
+> PREFERRED_VERSION_go-cross = "1.18%"
+>
+> PREFERRED_VERSION_go-crosssdk = "1.18%"
+>
+> PREFERRED_VERSION_go-native = "1.18%"
+>
+> PREFERRED_VERSION_go-runtime = "1.18%"
+>
+> PREFERRED_VERSION_go = "1.18%"
+>
+> however this messes with mender as it seems there is a bug in the 
+> golang compiler…
+>
+> So I want to use those settings only for my application recipe.
+>
+> Any ideas how to achieve that?
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#57727): 
+> https://lists.yoctoproject.org/g/yocto/message/57727
+> Mute This Topic: https://lists.yoctoproject.org/mt/92769708/1686489
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub 
+> [alex.kanavin@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] Conf for a single recipe only
+  2022-08-02 14:33   ` AW: " Sebastian Rühl
+@ 2022-08-02 15:36     ` Alexander Kanavin
+  0 siblings, 0 replies; 4+ messages in thread
+From: Alexander Kanavin @ 2022-08-02 15:36 UTC (permalink / raw)
+  To: Sebastian Rühl; +Cc: yocto
+
+If you took go recipes from master, then try building mender from
+master as well, by setting up a master build. If that works fine, then
+you need to figure out how to backport mender as a whole, or just the
+needed fix. Or make your application compatible with an older go. It's
+not easy.
+
+Alex
+
+On Tue, 2 Aug 2022 at 16:33, Sebastian Rühl <sebastian@mapped.com> wrote:
+>
+> Thanks, that seems like a good hint.
+>
+> Regarding the fixing: As I said it seems as this is a bug in golang itself. Correct me if I'm wrong but here is the output from building mender-artifact-native/3.8.0:
+>
+> NOTE: recipe mender-artifact-native-3.8.0-r0: task do_compile: Started
+> ERROR: mender-artifact-native-3.8.0-r0 do_compile: oe_runmake failed
+> ERROR: mender-artifact-native-3.8.0-r0 do_compile: Execution of '/builddir/randomfirmware/build/tmp/work/x86_64-linux/mender-artifact-native/3.8.0-r0/temp/run.do_compile.1285' failed with exit code 1
+> ERROR: Logfile of failure stored in: /builddir/randomfirmware/build/tmp/work/x86_64-linux/mender-artifact-native/3.8.0-r0/temp/log.do_compile.1285
+> ERROR: Task (virtual:native:/builddir/randomfirmware/sources/meta-mender/meta-mender-core/recipes-mender/mender-artifact/mender-artifact_3.8.0.bb:do_compile) failed with exit code '1'
+> Log data follows:
+> | DEBUG: Executing shell function do_compile
+> | GO111MODULE=""
+> | GOARCH="amd64"
+> | GOBIN=""
+> | GOCACHE="/builddir/randomfirmware/build/tmp/work/x86_64-linux/mender-artifact-native/3.8.0-r0/build/.cache"
+> | GOENV="/github/home/.config/go/env"
+> | GOEXE=""
+> | GOEXPERIMENT=""
+> | GOFLAGS=""
+> | GOHOSTARCH="amd64"
+> | GOHOSTOS="linux"
+> | GOINSECURE=""
+> | GOMODCACHE="/builddir/randomfirmware/build/tmp/work/x86_64-linux/mender-artifact-native/3.8.0-r0/build/pkg/mod"
+> | GONOPROXY=""
+> | GONOSUMDB=""
+> | GOOS="linux"
+> | GOPATH="/builddir/randomfirmware/build/tmp/work/x86_64-linux/mender-artifact-native/3.8.0-r0/build:/builddir/randomfirmware/build/tmp/work/x86_64-linux/mender-artifact-native/3.8.0-r0/recipe-sysroot-native/usr/lib/x86_64-linux/go"
+> | GOPRIVATE=""
+> | GOPROXY="https://proxy.golang.org,direct"
+> | GOROOT="/builddir/randomfirmware/build/tmp/work/x86_64-linux/mender-artifact-native/3.8.0-r0/recipe-sysroot-native/usr/lib/go"
+> | GOSUMDB="sum.golang.org"
+> | GOTMPDIR="/builddir/randomfirmware/build/tmp/work/x86_64-linux/mender-artifact-native/3.8.0-r0/go-tmp"
+> | GOTOOLDIR="/builddir/randomfirmware/build/tmp/work/x86_64-linux/mender-artifact-native/3.8.0-r0/recipe-sysroot-native/usr/lib/go/pkg/tool/linux_amd64"
+> | GOVCS=""
+> | GOVERSION="go1.18.4"
+> | GCCGO="gccgo"
+> | GOAMD64="v1"
+> | AR="ar"
+> | CC="gcc "
+> | CXX="g++ "
+> | CGO_ENABLED="1"
+> | GOMOD="/dev/null"
+> | GOWORK=""
+> | CGO_CFLAGS="-isystem/builddir/randomfirmware/build/tmp/work/x86_64-linux/mender-artifact-native/3.8.0-r0/recipe-sysroot-native/usr/include -O2 -pipe"
+> | CGO_CPPFLAGS="-isystem/builddir/randomfirmware/build/tmp/work/x86_64-linux/mender-artifact-native/3.8.0-r0/recipe-sysroot-native/usr/include"
+> | CGO_CXXFLAGS="-isystem/builddir/randomfirmware/build/tmp/work/x86_64-linux/mender-artifact-native/3.8.0-r0/recipe-sysroot-native/usr/include -O2 -pipe"
+> | CGO_FFLAGS="-g -O2"
+> | CGO_LDFLAGS="-L/builddir/randomfirmware/build/tmp/work/x86_64-linux/mender-artifact-native/3.8.0-r0/recipe-sysroot-native/usr/lib -L/builddir/randomfirmware/build/tmp/work/x86_64-linux/mender-artifact-native/3.8.0-r0/recipe-sysroot-native/lib -Wl,--enable-new-dtags -Wl,-rpath-link,/builddir/randomfirmware/build/tmp/work/x86_64-linux/mender-artifact-native/3.8.0-r0/recipe-sysroot-native/usr/lib -Wl,-rpath-link,/builddir/randomfirmware/build/tmp/work/x86_64-linux/mender-artifact-native/3.8.0-r0/recipe-sysroot-native/lib -Wl,-rpath,/builddir/randomfirmware/build/tmp/work/x86_64-linux/mender-artifact-native/3.8.0-r0/recipe-sysroot-native/usr/lib -Wl,-rpath,/builddir/randomfirmware/build/tmp/work/x86_64-linux/mender-artifact-native/3.8.0-r0/recipe-sysroot-native/lib -Wl,-O1 -Wl,--allow-shlib-undefined -Wl,--dynamic-linker=/builddir/randomfirmware/build/tmp/sysroots-uninative/x86_64-linux/lib/ld-linux-x86-64.so.2"
+> | PKG_CONFIG="pkg-config"
+> | GOGCCFLAGS="-fPIC -m64 -pthread -fmessage-length=0 -fdebug-prefix-map=/builddir/randomfirmware/build/tmp/work/x86_64-linux/mender-artifact-native/3.8.0-r0/go-tmp/go-build2701839308=/tmp/go-build -gno-record-gcc-switches"
+> | NOTE: make -j 10 GOPATH=/builddir/randomfirmware/build/tmp/work/x86_64-linux/mender-artifact-native/3.8.0-r0/build:/builddir/randomfirmware/build/tmp/work/x86_64-linux/mender-artifact-native/3.8.0-r0/recipe-sysroot-native/usr/lib/x86_64-linux/go -C /builddir/randomfirmware/build/tmp/work/x86_64-linux/mender-artifact-native/3.8.0-r0/build/src/github.com/mendersoftware/mender-artifact V=1 install
+> | make: Entering directory '/builddir/randomfirmware/build/tmp/work/x86_64-linux/mender-artifact-native/3.8.0-r0/git/src/github.com/mendersoftware/mender-artifact'
+> | google.golang.org/protobuf/internal/pragma
+> | google.golang.org/grpc/internal/buffer
+> | google.golang.org/grpc/encoding
+> | google.golang.org/grpc/internal/grpcsync
+> | github.com/ryanuber/go-glob
+> | github.com/hashicorp/hcl/hcl/strconv
+> | golang.org/x/text/transform
+> | github.com/klauspost/compress/flate
+> | github.com/klauspost/cpuid/v2
+> | github.com/pkg/errors
+> | panic: runtime error: index out of range [0] with length 0
+> |
+> | goroutine 2978 [running]:
+> | cmd/go/internal/work.(*Builder).buildActionID(0xc000aeb900, 0xc000a17540)
+> |       /usr/lib/go/src/cmd/go/internal/work/exec.go:281 +0x23cf
+> | cmd/go/internal/work.(*Builder).build(0xc000aeb900, {0xc000034200?, 0x0?}, 0xc000a17540)
+> |       /usr/lib/go/src/cmd/go/internal/work/exec.go:476 +0x199
+> | cmd/go/internal/work.(*Builder).Do.func2({0xadefb8, 0xc000034200}, 0xc000a17540)
+> |       /usr/lib/go/src/cmd/go/internal/work/exec.go:139 +0x5ec
+> | cmd/go/internal/work.(*Builder).Do.func3()
+> |       /usr/lib/go/src/cmd/go/internal/work/exec.go:201 +0xb9
+> | created by cmd/go/internal/work.(*Builder).Do
+> |       /usr/lib/go/src/cmd/go/internal/work/exec.go:187 +0x3da
+> | Makefile:72: recipe for target 'install' failed
+> | make: *** [install] Error 2
+> | make: Leaving directory '/builddir/randomfirmware/build/tmp/work/x86_64-linux/mender-artifact-native/3.8.0-r0/git/src/github.com/mendersoftware/mender-artifact'
+> | ERROR: oe_runmake failed
+> | WARNING: /builddir/randomfirmware/build/tmp/work/x86_64-linux/mender-artifact-native/3.8.0-r0/temp/run.do_compile.1285:1 exit 1 from 'exit 1'
+> | ERROR: Execution of '/builddir/randomfirmware/build/tmp/work/x86_64-linux/mender-artifact-native/3.8.0-r0/temp/run.do_compile.1285' failed with exit code 1
+> NOTE: recipe mender-artifact-native-3.8.0-r0: task do_compile: Failed
+>
+> If you look closely it fails during compile with a index out of range in the middle of exec.go
+>
+> Sebastian
+>
+> -----Ursprüngliche Nachricht-----
+> Von: Alexander Kanavin <alex.kanavin@gmail.com>
+> Gesendet: Dienstag, 2. August 2022 16:02
+> An: Sebastian Rühl <sebastian@mapped.com>
+> Cc: yocto@lists.yoctoproject.org
+> Betreff: Re: [yocto] Conf for a single recipe only
+>
+> There's no way to build two versions of the same component, if the versions share the recipe name. You have to fix the application, or try to rename one set of the go recipes so it is separate from the other set, to something like 'go-old'.
+>
+> Alex
+>
+> On Tue, 2 Aug 2022 at 15:15, Sebastian Rühl via lists.yoctoproject.org <sebastian=mapped.com@lists.yoctoproject.org> wrote:
+> >
+> > Is there a way to set the GOVERSION for a single recipe only?
+> >
+> >
+> >
+> > At the moment I set the Golang version to 1.18 using the recipes from master (on a local dunfell branch) and set the go version in the layer conf:
+> > GOVERSION = "1.18%"
+> >
+> > PREFERRED_VERSION_go-binary-native = "1.18%"
+> >
+> > PREFERRED_VERSION_go-cross-canadian = "1.18%"
+> >
+> > PREFERRED_VERSION_go-cross = "1.18%"
+> >
+> > PREFERRED_VERSION_go-crosssdk = "1.18%"
+> >
+> > PREFERRED_VERSION_go-native = "1.18%"
+> >
+> > PREFERRED_VERSION_go-runtime = "1.18%"
+> >
+> > PREFERRED_VERSION_go = "1.18%"
+> >
+> > however this messes with mender as it seems there is a bug in the
+> > golang compiler…
+> >
+> > So I want to use those settings only for my application recipe.
+> >
+> > Any ideas how to achieve that?
+> >
+> >
+> > -=-=-=-=-=-=-=-=-=-=-=-
+> > Links: You receive all messages sent to this group.
+> > View/Reply Online (#57727):
+> > https://lists.yoctoproject.org/g/yocto/message/57727
+> > Mute This Topic: https://lists.yoctoproject.org/mt/92769708/1686489
+> > Group Owner: yocto+owner@lists.yoctoproject.org
+> > Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub
+> > [alex.kanavin@gmail.com]
+> > -=-=-=-=-=-=-=-=-=-=-=-
+> >
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+end of thread, other threads:[~2022-08-02 15:36 UTC | newest]
+
+Thread overview: 4+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-08-02 13:15 Conf for a single recipe only Sebastian Rühl
+2022-08-02 14:01 ` [yocto] " Alexander Kanavin
+2022-08-02 14:33   ` AW: " Sebastian Rühl
+2022-08-02 15:36     ` Alexander Kanavin
+

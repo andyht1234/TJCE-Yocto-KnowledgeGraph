@@ -1,0 +1,142 @@
+* Recipe for include-what-you-use and rpath problem #sdk
+@ 2021-06-03  9:16 mous16
+  2021-06-25 14:00 ` Francesco Cusolito
+  0 siblings, 1 reply; 3+ messages in thread
+From: mous16 @ 2021-06-03  9:16 UTC (permalink / raw)
+  To: yocto
+
+
+[-- Attachment #1.1: Type: text/plain, Size: 2856 bytes --]
+
+Good morning everybody,
+
+I would like to include IWYU ( https://include-what-you-use.org/ ) in my SDK, but I couldn't find a recipe, so I'm trying to write my own.
+With the help of devtool , I came to something like this:
+
+LICENSE = "NCSA"
+LIC_FILES_CHKSUM = "file://LICENSE.TXT;md5=59d01ad98720f3c50d6a8a0ef3108c88 \
+                   file://iwyu-check-license-header.py;md5=cdc4ab52c0b26e216cbf434649d30403"
+
+SRC_URI = "git://github.com/include-what-you-use/include-what-you-use.git;protocol=https;branch=clang_10"
+
+PV = "0.14+git${SRCPV}"
+SRCREV = "0.14"
+
+S = "${WORKDIR}/git"
+
+DEPENDS = "clang"
+
+inherit cmake python3native
+
+BBCLASSEXTEND_append = " \
+       nativesdk \
+       "
+
+The application seems to compile fine, but in do_package step it fails with this error message:
+
+ERROR: nativesdk-include-what-you-use-0.14+git999-r0 do_package: chrpath command failed with exit code 7:
+/build/archimede/tmp/work/x86_64-nativesdk-pokysdk-linux/nativesdk-include-what-you-use/0.14+git999-r0/package/opt/Delcon/sdk/delconos-archimede-raspberrypi3-64/sysroots/x86_64-pokysdk-linux/usr/bin/include-what-you-use: RPATH=$ORIGIN/../lib:/build/archimede/tmp/work/x86_64-nativesdk-pokysdk-linux/nativesdk-include-what-you-use/0.14+git999-r0/recipe-sysroot/opt/Delcon/sdk/delconos-archimede-raspberrypi3-64/sysroots/x86_64-pokysdk-linux/usr/lib
+
+new rpath '$ORIGIN/../lib:$ORIGIN/../../../../../../../../build/archimede/tmp/work/x86_64-nativesdk-pokysdk-linux/nativesdk-include-what-you-use/0.14+git999-r0/recipe-sysroot/opt/Delcon/sdk/delconos-archimede-raspberrypi3-64/sysroots/x86_64-pokysdk-linux/usr/lib' too large; maximum length 220
+
+ERROR: Logfile of failure stored in: /build/archimede/tmp/work/x86_64-nativesdk-pokysdk-linux/nativesdk-include-what-you-use/0.14+git999-r0/temp/log.do_package.1595
+ERROR: Task (virtual:nativesdk:/build/archimede/workspace/recipes/include-what-you-use/include-what-you-use_git.bb:do_package) failed with exit code '1'
+NOTE: Tasks Summary: Attempted 1033 tasks of which 1024 didn't need to be rerun and 1 failed.
+
+You can see full bitbake logs attached.
+It seems to me that the error happens in perform_packagecopy function, in invocation of rpath_replace.
+
+The problem seems to be similar to the one reported on u-boot-mkimage in topic 61277548 ( https://lists.yoctoproject.org/g/meta-freescale/topic/61277548 ) , 4 years ago.
+I tried to apply something similar to u-boot-mkimage recipe commit 5d3df78367be0afbfe001b4fa776a98a82e6ce54 ( http://cgit.openembedded.org/openembedded-core/commit/?id=5d3df78367be0afbfe001b4fa776a98a82e6ce54 ) proposed as solution in above topic, but with no success: I came to the conclusion that cmake class is already doing the correct job here, as shown by log files attached.
+
+How can I resolve this RPATH problem?
+
+Thanks in advance,
+Francesco
+
+[-- Attachment #1.2: Type: text/html, Size: 3301 bytes --]
+
+[-- Attachment #2: bitbake_logs.zip --]
+[-- Type: application/zip, Size: 56226 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: Recipe for include-what-you-use and rpath problem #sdk
+  2021-06-03  9:16 Recipe for include-what-you-use and rpath problem #sdk mous16
+@ 2021-06-25 14:00 ` Francesco Cusolito
+  2021-06-25 16:16   ` [yocto] " Khem Raj
+  0 siblings, 1 reply; 3+ messages in thread
+From: Francesco Cusolito @ 2021-06-25 14:00 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 647 bytes --]
+
+I was able to make it work correctly enabling CMAKE_SKIP_RPATH.
+Here the working full recipe:
+
+LICENSE = "NCSA"
+LIC_FILES_CHKSUM = "file://LICENSE.TXT;md5=59d01ad98720f3c50d6a8a0ef3108c88 \
+                   file://iwyu-check-license-header.py;md5=cdc4ab52c0b26e216cbf434649d30403"
+
+SRC_URI = "git://github.com/include-what-you-use/include-what-you-use.git;protocol=https;branch=clang_10"
+
+PV = "0.14+git${SRCPV}"
+SRCREV = "0.14"
+
+S = "${WORKDIR}/git"
+
+DEPENDS = "clang"
+
+inherit cmake python3native
+
+EXTRA_OECMAKE_append_class-nativesdk = " \
+	-DCMAKE_SKIP_RPATH:BOOL=ON \
+	"
+
+BBCLASSEXTEND_append = " \
+	nativesdk \
+	"
+
+[-- Attachment #2: Type: text/html, Size: 696 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] Recipe for include-what-you-use and rpath problem #sdk
+  2021-06-25 14:00 ` Francesco Cusolito
+@ 2021-06-25 16:16   ` Khem Raj
+  0 siblings, 0 replies; 3+ messages in thread
+From: Khem Raj @ 2021-06-25 16:16 UTC (permalink / raw)
+  To: Francesco Cusolito, yocto
+
+
+
+On 6/25/21 7:00 AM, Francesco Cusolito wrote:
+> I was able to make it work correctly enabling |CMAKE_SKIP_RPATH|.
+> Here the working full recipe:
+
+this is fine, if you are interested submit it as a patch to include in 
+metadata in meta-python
+
+> 
+> |LICENSE = "NCSA" LIC_FILES_CHKSUM = 
+> "file://LICENSE.TXT;md5=59d01ad98720f3c50d6a8a0ef3108c88 \ 
+> file://iwyu-check-license-header.py;md5=cdc4ab52c0b26e216cbf434649d30403" SRC_URI 
+> = 
+> "git://github.com/include-what-you-use/include-what-you-use.git;protocol=https;branch=clang_10" 
+> PV = "0.14+git${SRCPV}" SRCREV = "0.14" S = "${WORKDIR}/git" DEPENDS = 
+> "clang" inherit cmake python3native EXTRA_OECMAKE_append_class-nativesdk 
+> = " \ -DCMAKE_SKIP_RPATH:BOOL=ON \ " BBCLASSEXTEND_append = " \ 
+> nativesdk \ " |
+> 
+> 
+> 
+> 
+> 
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2021-06-25 16:16 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-06-03  9:16 Recipe for include-what-you-use and rpath problem #sdk mous16
+2021-06-25 14:00 ` Francesco Cusolito
+2021-06-25 16:16   ` [yocto] " Khem Raj
+

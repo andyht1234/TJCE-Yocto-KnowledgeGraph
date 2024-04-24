@@ -1,0 +1,178 @@
+* AW: wget - The certificate has not yet been activated (does also happen in qemuarm "virt" machine)
+       [not found] <16D03C33527B22CF.12815@lists.yoctoproject.org>
+@ 2022-02-03 17:13 ` Matthias Klein
+  2022-02-03 19:25   ` [yocto] " Khem Raj
+  2022-08-18  6:15   ` AW: " Tomasz Moń
+  0 siblings, 2 replies; 5+ messages in thread
+From: Matthias Klein @ 2022-02-03 17:13 UTC (permalink / raw)
+  To: yocto
+
+Hello together,
+
+I can "fix" the bug by switching from gnutls to openssl:
+
+PACKAGECONFIG:remove = "gnutls"
+PACKAGECONFIG:append = " openssl"
+
+Can anyone explain this?
+What exactly does the change to openssl mean?
+
+Many greetings,
+Matthias
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] wget - The certificate has not yet been activated (does also happen in qemuarm "virt" machine)
+  2022-02-03 17:13 ` AW: wget - The certificate has not yet been activated (does also happen in qemuarm "virt" machine) Matthias Klein
+@ 2022-02-03 19:25   ` Khem Raj
+  2022-02-04  7:20     ` AW: " Matthias Klein
+  2022-08-18  6:15   ` AW: " Tomasz Moń
+  1 sibling, 1 reply; 5+ messages in thread
+From: Khem Raj @ 2022-02-03 19:25 UTC (permalink / raw)
+  To: Matthias Klein; +Cc: yocto
+
+On Thu, Feb 3, 2022 at 9:14 AM Matthias Klein
+<matthias.klein@optimeas.de> wrote:
+>
+> Hello together,
+>
+> I can "fix" the bug by switching from gnutls to openssl:
+>
+> PACKAGECONFIG:remove = "gnutls"
+> PACKAGECONFIG:append = " openssl"
+>
+> Can anyone explain this?
+> What exactly does the change to openssl mean?
+
+this means you are choosing openSSL to provide TLS protocol
+implementation instead of gnuTLS
+
+>
+> Many greetings,
+> Matthias
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> You automatically follow any topics you start or reply to.
+> View/Reply Online (#56061): https://lists.yoctoproject.org/g/yocto/message/56061
+> Mute This Topic: https://lists.yoctoproject.org/mt/88879516/1997914
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [raj.khem@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* AW: [yocto] wget - The certificate has not yet been activated (does also happen in qemuarm "virt" machine)
+  2022-02-03 19:25   ` [yocto] " Khem Raj
+@ 2022-02-04  7:20     ` Matthias Klein
+  2022-02-04 16:32       ` Khem Raj
+  0 siblings, 1 reply; 5+ messages in thread
+From: Matthias Klein @ 2022-02-04  7:20 UTC (permalink / raw)
+  To: raj.khem; +Cc: yocto
+
+Hello Khem,
+
+> this means you are choosing openSSL to provide TLS protocol implementation instead of gnuTLS
+
+Please excuse that my question was so unspecific.
+Does it make a functional difference from which library the TLS support comes from?
+
+Best regards,
+Matthias
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] wget - The certificate has not yet been activated (does also happen in qemuarm "virt" machine)
+  2022-02-04  7:20     ` AW: " Matthias Klein
+@ 2022-02-04 16:32       ` Khem Raj
+  0 siblings, 0 replies; 5+ messages in thread
+From: Khem Raj @ 2022-02-04 16:32 UTC (permalink / raw)
+  To: Matthias Klein; +Cc: yocto
+
+On Thu, Feb 3, 2022 at 11:20 PM Matthias Klein
+<matthias.klein@optimeas.de> wrote:
+>
+> Hello Khem,
+>
+> > this means you are choosing openSSL to provide TLS protocol implementation instead of gnuTLS
+>
+> Please excuse that my question was so unspecific.
+> Does it make a functional difference from which library the TLS support comes from?
+
+ideally it should not. It really should be that app is using right
+port to talk to the one you choose.
+>
+> Best regards,
+> Matthias
+>
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: AW: wget - The certificate has not yet been activated (does also happen in qemuarm "virt" machine)
+  2022-02-03 17:13 ` AW: wget - The certificate has not yet been activated (does also happen in qemuarm "virt" machine) Matthias Klein
+  2022-02-03 19:25   ` [yocto] " Khem Raj
+@ 2022-08-18  6:15   ` Tomasz Moń
+  1 sibling, 0 replies; 5+ messages in thread
+From: Tomasz Moń @ 2022-08-18  6:15 UTC (permalink / raw)
+  To: Matthias Klein, yocto; +Cc: k.drobinski
+
+On Thu, 2022-02-03 at 17:13 +0000, Matthias Klein wrote:
+> I can "fix" the bug by switching from gnutls to openssl:
+> 
+> PACKAGECONFIG:remove = "gnutls"
+> PACKAGECONFIG:append = " openssl"
+> 
+> Can anyone explain this?
+
+The issue is that gnutls configure script detects 32-bit time_t while
+wget detects 64-bit time_t.
+
+Function ssl_check_certificate() in wget/src/gnutls.c contains:
+  time_t now = time (NULL);
+  ...
+  if (now < gnutls_x509_crt_get_activation_time (cert))
+  ...
+
+gnutls_x509_crt_get_activation_time() returns time_t. In wget context
+it means that two 64-bit time_t are being compared.
+
+On imx6, when a function returns 32-bit value, the result is stored in
+r0. When a function returns 64-bit value, the low 32-bits are stored in
+r0 while the high 32-bits are stored in r1.
+
+The problem is that gnutls_x509_crt_get_activation_time() compiled in
+gnutls recipe, has 32-bit time_t and thus sets only r0. The likelihood
+that r1 will have value that will make code consider the certificate as
+active (before 2038 the only such value is 0) is low. As r1 is not 0,
+the supposed activation time is way past 2038 and thus "The certificate
+has not yet been activated" error is printed.
+
+The solution is to fix gnutls recipe to detect time_t as 64-bit.
+
+> What exactly does the change to openssl mean?
+
+The gnutls_x509_crt_get_activation_time() is no longer used at all.
+Instead, SSL_get_verify_result() is used (ssl_check_certificate() in
+wget/src/openssl.c). The SSL_get_verify_result() does the check within
+OpenSSL library itself, so even if wget and OpenSSL does not agree on
+time_t size, it doesn't matter (wget and OpenSSL have to agree on long
+size, because SSL_get_verify_result() returns long).
+
+Best Regards,
+Tomasz Moń
+
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+end of thread, other threads:[~2022-08-18  6:15 UTC | newest]
+
+Thread overview: 5+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+     [not found] <16D03C33527B22CF.12815@lists.yoctoproject.org>
+2022-02-03 17:13 ` AW: wget - The certificate has not yet been activated (does also happen in qemuarm "virt" machine) Matthias Klein
+2022-02-03 19:25   ` [yocto] " Khem Raj
+2022-02-04  7:20     ` AW: " Matthias Klein
+2022-02-04 16:32       ` Khem Raj
+2022-08-18  6:15   ` AW: " Tomasz Moń
+

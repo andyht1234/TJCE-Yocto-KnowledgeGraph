@@ -1,0 +1,248 @@
+* wic crash when building image with multiple partitions
+@ 2021-11-16  6:18 Belisko Marek
+  2021-11-22 18:09 ` Belisko Marek
+  0 siblings, 1 reply; 2+ messages in thread
+From: Belisko Marek @ 2021-11-16  6:18 UTC (permalink / raw)
+  To: Yocto
+
+Hello,
+
+I'm on dunfell release and building mender image with following wks file:
+| + echo '### Contents of wks file ###'
+| ### Contents of wks file ###
+| + cat /home/marek/projects/kas-test/build/tmp/work/raspberrypi4-poky-linux-gnueabi/core-image-minimal/1.0-r0/mender-sdimg.wks
+| part --source rawcopy
+--sourceparams="file=/home/marek/projects/kas-test/build/tmp/work/raspberrypi4-poky-linux-gnueabi/core-image-minimal/1.0-r0/uboot.env"
+--ondisk "mmcblk0" --align 8192 --no-table
+| part --source rootfs --rootfs-dir
+/home/marek/projects/kas-test/build/tmp/work/raspberrypi4-poky-linux-gnueabi/core-image-minimal/1.0-r0/bootfs.image_sdimg
+--ondisk "mmcblk0" --fstype=vfat --label boot --align 8192
+--fixed-size 16 --active
+| part --source rawcopy
+--sourceparams="file=/home/marek/projects/kas-test/build/tmp/work/raspberrypi4-poky-linux-gnueabi/core-image-minimal/1.0-r0/deploy-core-image-minimal-image-complete/core-image-minimal-raspberrypi4.ext4"
+--ondisk "mmcblk0" --align 8192 --fixed-size 172032k
+| part --source rawcopy
+--sourceparams="file=/home/marek/projects/kas-test/build/tmp/work/raspberrypi4-poky-linux-gnueabi/core-image-minimal/1.0-r0/deploy-core-image-minimal-image-complete/core-image-minimal-raspberrypi4.ext4"
+--ondisk "mmcblk0" --align 8192 --fixed-size 172032k
+| part swap --ondisk "mmcblk0" --fstype=swap --label swap --align 8192
+--size 512
+| part --source rawcopy
+--sourceparams="file=/home/marek/projects/kas-test/build/tmp/work/raspberrypi4-poky-linux-gnueabi/core-image-minimal/1.0-r0/deploy-core-image-minimal-image-complete/core-image-minimal-raspberrypi4.dataimg"
+--ondisk "mmcblk0" --align 8192 --fixed-size 128
+|
+| bootloader --ptable msdos
+| + echo '### End of contents of wks file ###'
+| ### End of contents of wks file ###
+
+Without a swap partition image is built fine without any issue. When
+swap partition is added to wks file I'm getting following error:
+
+| INFO: Creating image(s)...
+|
+| Traceback (most recent call last):
+|   File "/home/marek/projects/kas-test/poky/scripts/wic", line 542, in <module>
+|     sys.exit(main(sys.argv[1:]))
+|   File "/home/marek/projects/kas-test/poky/scripts/wic", line 537, in main
+|     return hlp.invoke_subcommand(args, parser, hlp.wic_help_usage,
+subcommands)
+|   File "/home/marek/projects/kas-test/poky/scripts/lib/wic/help.py",
+line 83, in invoke_subcommand
+|     subcmd[0](args, usage)
+|   File "/home/marek/projects/kas-test/poky/scripts/wic", line 219,
+in wic_create_subcommand
+|     engine.wic_create(wks_file, rootfs_dir, bootimg_dir, kernel_dir,
+|   File "/home/marek/projects/kas-test/poky/scripts/lib/wic/engine.py",
+line 190, in wic_create
+|     plugin.do_create()
+|   File "/home/marek/projects/kas-test/poky/scripts/lib/wic/plugins/imager/direct.py",
+line 96, in do_create
+|     self.create()
+|   File "/home/marek/projects/kas-test/poky/scripts/lib/wic/plugins/imager/direct.py",
+line 180, in create
+|     self._image.prepare(self)
+|   File "/home/marek/projects/kas-test/poky/scripts/lib/wic/plugins/imager/direct.py",
+line 354, in prepare
+|     part.prepare(imager, imager.workdir, imager.oe_builddir,
+|   File "/home/marek/projects/kas-test/poky/scripts/lib/wic/partition.py",
+line 182, in prepare
+|     plugin.do_prepare_partition(self, srcparams_dict, creator,
+|   File "/home/marek/projects/kas-test/poky/scripts/lib/wic/plugins/source/rootfs.py",
+line 112, in do_prepare_partition
+|     copyhardlinktree(orig_dir, new_rootfs)
+|   File "/home/marek/projects/kas-test/poky/meta/lib/oe/path.py",
+line 121, in copyhardlinktree
+|     subprocess.check_output(cmd, shell=True, stderr=subprocess.STDOUT)
+|   File "/home/marek/projects/kas-test/build/tmp/work/raspberrypi4-poky-linux-gnueabi/core-image-minimal/1.0-r0/recipe-sysroot-native/usr/lib/python3.8/subprocess.py",
+line 411, in check_output
+|     return run(*popenargs, stdout=PIPE, timeout=timeout, check=True,
+|   File "/home/marek/projects/kas-test/build/tmp/work/raspberrypi4-poky-linux-gnueabi/core-image-minimal/1.0-r0/recipe-sysroot-native/usr/lib/python3.8/subprocess.py",
+line 512, in run
+|     raise CalledProcessError(retcode, process.args,
+| subprocess.CalledProcessError: Command 'cd
+/home/marek/projects/kas-test/build/tmp/work/raspberrypi4-poky-linux-gnueabi/core-image-minimal/1.0-r0/bootfs.image_sdimg;
+find . -type d -print | tar --xattrs --xattrs-include='*' -cf - -S -C
+/home/marek/projects/kas-test/build/tmp/work/raspberrypi4-poky-linux-gnueabi/core-image-minimal/1.0-r0/bootfs.image_sdimg
+-p --no-recursion --files-from - | tar --xattrs --xattrs-include='*'
+-xhf - -C /home/marek/projects/kas-test/build/tmp/work/raspberrypi4-poky-linux-gnueabi/core-image-minimal/1.0-r0/deploy-core-image-minimal-image-complete/core-image-minimal-raspberrypi4-20211115212420-sdimg/tmp.wic.1oe9hwjw/rootfs2'
+returned non-zero exit status 2.
+
+I tried to debug it but didn't find anything obvious. I'm sure this
+was working fine in previous releases. Any ideas?
+
+Thanks and BR,
+
+marek
+
+-- 
+as simple and primitive as possible
+-------------------------------------------------
+Marek Belisko - OPEN-NANDRA
+Freelance Developer
+
+Ruska Nova Ves 219 | Presov, 08005 Slovak Republic
+Tel: +421 915 052 184
+skype: marekwhite
+twitter: #opennandra
+web: http://open-nandra.com
+
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+* Re: wic crash when building image with multiple partitions
+  2021-11-16  6:18 wic crash when building image with multiple partitions Belisko Marek
+@ 2021-11-22 18:09 ` Belisko Marek
+  0 siblings, 0 replies; 2+ messages in thread
+From: Belisko Marek @ 2021-11-22 18:09 UTC (permalink / raw)
+  To: Yocto
+
+Actually I found a fix after some debugging. I'm not wic expert but
+below patch fix issue for wks content above:
+
+diff --git a/scripts/lib/wic/plugins/imager/direct.py
+b/scripts/lib/wic/plugins/imager/direct.py
+index 7e1c1c0..d37ecee 100644
+--- a/scripts/lib/wic/plugins/imager/direct.py
++++ b/scripts/lib/wic/plugins/imager/direct.py
+@@ -115,7 +115,7 @@ class DirectPlugin(ImagerPlugin):
+         updated = False
+         for part in self.parts:
+             if not part.realnum or not part.mountpoint \
+-               or part.mountpoint == "/":
++               or part.mountpoint == "/" or part.mountpoint == "swap":
+                 continue
+             if part.use_uuid:
+
+Does it make any sense or is it just hack?
+
+On Tue, Nov 16, 2021 at 7:18 AM Belisko Marek <marek.belisko@gmail.com> wrote:
+>
+> Hello,
+>
+> I'm on dunfell release and building mender image with following wks file:
+> | + echo '### Contents of wks file ###'
+> | ### Contents of wks file ###
+> | + cat /home/marek/projects/kas-test/build/tmp/work/raspberrypi4-poky-linux-gnueabi/core-image-minimal/1.0-r0/mender-sdimg.wks
+> | part --source rawcopy
+> --sourceparams="file=/home/marek/projects/kas-test/build/tmp/work/raspberrypi4-poky-linux-gnueabi/core-image-minimal/1.0-r0/uboot.env"
+> --ondisk "mmcblk0" --align 8192 --no-table
+> | part --source rootfs --rootfs-dir
+> /home/marek/projects/kas-test/build/tmp/work/raspberrypi4-poky-linux-gnueabi/core-image-minimal/1.0-r0/bootfs.image_sdimg
+> --ondisk "mmcblk0" --fstype=vfat --label boot --align 8192
+> --fixed-size 16 --active
+> | part --source rawcopy
+> --sourceparams="file=/home/marek/projects/kas-test/build/tmp/work/raspberrypi4-poky-linux-gnueabi/core-image-minimal/1.0-r0/deploy-core-image-minimal-image-complete/core-image-minimal-raspberrypi4.ext4"
+> --ondisk "mmcblk0" --align 8192 --fixed-size 172032k
+> | part --source rawcopy
+> --sourceparams="file=/home/marek/projects/kas-test/build/tmp/work/raspberrypi4-poky-linux-gnueabi/core-image-minimal/1.0-r0/deploy-core-image-minimal-image-complete/core-image-minimal-raspberrypi4.ext4"
+> --ondisk "mmcblk0" --align 8192 --fixed-size 172032k
+> | part swap --ondisk "mmcblk0" --fstype=swap --label swap --align 8192
+> --size 512
+> | part --source rawcopy
+> --sourceparams="file=/home/marek/projects/kas-test/build/tmp/work/raspberrypi4-poky-linux-gnueabi/core-image-minimal/1.0-r0/deploy-core-image-minimal-image-complete/core-image-minimal-raspberrypi4.dataimg"
+> --ondisk "mmcblk0" --align 8192 --fixed-size 128
+> |
+> | bootloader --ptable msdos
+> | + echo '### End of contents of wks file ###'
+> | ### End of contents of wks file ###
+>
+> Without a swap partition image is built fine without any issue. When
+> swap partition is added to wks file I'm getting following error:
+>
+> | INFO: Creating image(s)...
+> |
+> | Traceback (most recent call last):
+> |   File "/home/marek/projects/kas-test/poky/scripts/wic", line 542, in <module>
+> |     sys.exit(main(sys.argv[1:]))
+> |   File "/home/marek/projects/kas-test/poky/scripts/wic", line 537, in main
+> |     return hlp.invoke_subcommand(args, parser, hlp.wic_help_usage,
+> subcommands)
+> |   File "/home/marek/projects/kas-test/poky/scripts/lib/wic/help.py",
+> line 83, in invoke_subcommand
+> |     subcmd[0](args, usage)
+> |   File "/home/marek/projects/kas-test/poky/scripts/wic", line 219,
+> in wic_create_subcommand
+> |     engine.wic_create(wks_file, rootfs_dir, bootimg_dir, kernel_dir,
+> |   File "/home/marek/projects/kas-test/poky/scripts/lib/wic/engine.py",
+> line 190, in wic_create
+> |     plugin.do_create()
+> |   File "/home/marek/projects/kas-test/poky/scripts/lib/wic/plugins/imager/direct.py",
+> line 96, in do_create
+> |     self.create()
+> |   File "/home/marek/projects/kas-test/poky/scripts/lib/wic/plugins/imager/direct.py",
+> line 180, in create
+> |     self._image.prepare(self)
+> |   File "/home/marek/projects/kas-test/poky/scripts/lib/wic/plugins/imager/direct.py",
+> line 354, in prepare
+> |     part.prepare(imager, imager.workdir, imager.oe_builddir,
+> |   File "/home/marek/projects/kas-test/poky/scripts/lib/wic/partition.py",
+> line 182, in prepare
+> |     plugin.do_prepare_partition(self, srcparams_dict, creator,
+> |   File "/home/marek/projects/kas-test/poky/scripts/lib/wic/plugins/source/rootfs.py",
+> line 112, in do_prepare_partition
+> |     copyhardlinktree(orig_dir, new_rootfs)
+> |   File "/home/marek/projects/kas-test/poky/meta/lib/oe/path.py",
+> line 121, in copyhardlinktree
+> |     subprocess.check_output(cmd, shell=True, stderr=subprocess.STDOUT)
+> |   File "/home/marek/projects/kas-test/build/tmp/work/raspberrypi4-poky-linux-gnueabi/core-image-minimal/1.0-r0/recipe-sysroot-native/usr/lib/python3.8/subprocess.py",
+> line 411, in check_output
+> |     return run(*popenargs, stdout=PIPE, timeout=timeout, check=True,
+> |   File "/home/marek/projects/kas-test/build/tmp/work/raspberrypi4-poky-linux-gnueabi/core-image-minimal/1.0-r0/recipe-sysroot-native/usr/lib/python3.8/subprocess.py",
+> line 512, in run
+> |     raise CalledProcessError(retcode, process.args,
+> | subprocess.CalledProcessError: Command 'cd
+> /home/marek/projects/kas-test/build/tmp/work/raspberrypi4-poky-linux-gnueabi/core-image-minimal/1.0-r0/bootfs.image_sdimg;
+> find . -type d -print | tar --xattrs --xattrs-include='*' -cf - -S -C
+> /home/marek/projects/kas-test/build/tmp/work/raspberrypi4-poky-linux-gnueabi/core-image-minimal/1.0-r0/bootfs.image_sdimg
+> -p --no-recursion --files-from - | tar --xattrs --xattrs-include='*'
+> -xhf - -C /home/marek/projects/kas-test/build/tmp/work/raspberrypi4-poky-linux-gnueabi/core-image-minimal/1.0-r0/deploy-core-image-minimal-image-complete/core-image-minimal-raspberrypi4-20211115212420-sdimg/tmp.wic.1oe9hwjw/rootfs2'
+> returned non-zero exit status 2.
+>
+> I tried to debug it but didn't find anything obvious. I'm sure this
+> was working fine in previous releases. Any ideas?
+>
+> Thanks and BR,
+>
+> marek
+>
+> --
+> as simple and primitive as possible
+> -------------------------------------------------
+> Marek Belisko - OPEN-NANDRA
+> Freelance Developer
+>
+> Ruska Nova Ves 219 | Presov, 08005 Slovak Republic
+> Tel: +421 915 052 184
+> skype: marekwhite
+> twitter: #opennandra
+> web: http://open-nandra.com
+
+marek
+
+
+^ permalink raw reply related	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2021-11-22 18:09 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-11-16  6:18 wic crash when building image with multiple partitions Belisko Marek
+2021-11-22 18:09 ` Belisko Marek
+

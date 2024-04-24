@@ -1,0 +1,483 @@
+* Remove packagegroup from image recipes
+@ 2023-10-18  8:38 Ivan Stojanovic
+  2023-10-18  8:41 ` [yocto] " Alexander Kanavin
+  0 siblings, 1 reply; 10+ messages in thread
+From: Ivan Stojanovic @ 2023-10-18  8:38 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 567 bytes --]
+
+Hi,
+
+I am trying to remove a package group (pacakgegroup-core-rauc) from a custom image but it fails with error:
+"package packagegroup-base requires packagegroup-base-rauc, but none of the providers can be installed".
+
+We use Rauc for our "standard" image, but I want to remove it from the "recovery" image. "rauc" is in DISTRO_FEATURES which is fine for all images except for "recovery" image.
+
+The only way I managed to remove it is using post-process command, but I am wondering if there is a more elegant way to remove it?
+
+Any ideas?
+
+Regards,
+Ivan
+
+[-- Attachment #2: Type: text/html, Size: 615 bytes --]
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+* Re: [yocto] Remove packagegroup from image recipes
+  2023-10-18  8:38 Remove packagegroup from image recipes Ivan Stojanovic
+@ 2023-10-18  8:41 ` Alexander Kanavin
+  2023-10-18  9:00   ` Ivan Stojanovic
+  0 siblings, 1 reply; 10+ messages in thread
+From: Alexander Kanavin @ 2023-10-18  8:41 UTC (permalink / raw)
+  To: Ivan Stojanovic; +Cc: yocto
+
+I suppose you need to make an image recipe where the unneeded
+packagegroup is not listed? Can you show the existing recipes?
+
+Alex
+
+On Wed, 18 Oct 2023 at 10:38, Ivan Stojanovic <ivastojanovic@gmail.com> wrote:
+>
+> Hi,
+>
+> I am trying to remove a package group (pacakgegroup-core-rauc) from a custom image but it fails with error:
+> "package packagegroup-base requires packagegroup-base-rauc, but none of the providers can be installed".
+>
+> We use Rauc for our "standard" image, but I want to remove it from the "recovery" image. "rauc" is in DISTRO_FEATURES which is fine for all images except for "recovery" image.
+>
+> The only way I managed to remove it is using post-process command, but I am wondering if there is a more elegant way to remove it?
+>
+> Any ideas?
+>
+> Regards,
+> Ivan
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#61388): https://lists.yoctoproject.org/g/yocto/message/61388
+> Mute This Topic: https://lists.yoctoproject.org/mt/102035396/1686489
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+* Re: Remove packagegroup from image recipes
+  2023-10-18  8:41 ` [yocto] " Alexander Kanavin
+@ 2023-10-18  9:00   ` Ivan Stojanovic
+  2023-10-18  9:08     ` [yocto] " Alexander Kanavin
+  0 siblings, 1 reply; 10+ messages in thread
+From: Ivan Stojanovic @ 2023-10-18  9:00 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1291 bytes --]
+
+We have 2 images, adios-image-standard and adios-image-recovery.
+In adios-image-standard, I want to have rauc.
+In adios-image-recovery due to lack of space, I want to remove it. It is a part of it since it is in DISTRO_FEATURES.
+
+In meta-rauc layer, they add rauc to pacakgegroup-base: https://github.com/rauc/meta-rauc/blob/kirkstone/recipes-core/packagegroups/packagegroup-base.bbappend via https://github.com/rauc/meta-rauc/blob/kirkstone/recipes-core/packagegroups/packagegroup-base_rauc.inc. ( https://github.com/rauc/meta-rauc/blob/kirkstone/recipes-core/packagegroups/packagegroup-base_rauc.inc )
+
+I tried removing it with PACKAGE_EXCLUDE:
+PACKAGE_EXCLUDE = "\
+packagegroup-base-rauc \
+"
+as well as
+PACKAGE_EXCLUDE = "\
+rauc \
+rauc-mark-good \
+rauc-service \
+"
+I also tried with:
+RDEPENDS:packagegroup-base:remove "packagegroup-base-rauc"
+
+But in both cases I get that error.
+I do not have any idea how I could remove it from DISTRO_FEATURES for that image. I think that is not possible.
+
+If I remove it "manually" using ROOTFS_POSTPROCESS_COMMAND, I have to take care of all dependencies as well and it would be still be visible in .manifest file that it is there although it is not.
+
+That is why I am looking for a more elegant way to achive it.
+
+Thanks!
+
+[-- Attachment #2: Type: text/html, Size: 1802 bytes --]
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+* Re: [yocto] Remove packagegroup from image recipes
+  2023-10-18  9:00   ` Ivan Stojanovic
+@ 2023-10-18  9:08     ` Alexander Kanavin
+  2023-10-18  9:57       ` Enrico Jörns
+  0 siblings, 1 reply; 10+ messages in thread
+From: Alexander Kanavin @ 2023-10-18  9:08 UTC (permalink / raw)
+  To: Ivan Stojanovic; +Cc: yocto
+
+Ugh, that's a really ugly hack in meta-rauc. They shouldn't force
+themselves into all images that way. You should file a ticket.
+
+I would suggest either dropping rauc from DISTRO_FEATURES globally
+(that may have unwanted side effects though and you should check what
+else that affects), or using BBMASK as shown in reference manual to
+blacklist the offending bbappend, e.g. something like:
+
+         BBMASK += "/meta-ti/recipes-misc/ meta-ti/recipes-ti/packagegroup/"
+
+
+Alex
+
+On Wed, 18 Oct 2023 at 11:00, Ivan Stojanovic <ivastojanovic@gmail.com> wrote:
+>
+> We have 2 images, adios-image-standard and adios-image-recovery.
+> In adios-image-standard, I want to have rauc.
+> In adios-image-recovery due to lack of space, I want to remove it. It is a part of it since it is in DISTRO_FEATURES.
+>
+> In meta-rauc layer, they add rauc to pacakgegroup-base: https://github.com/rauc/meta-rauc/blob/kirkstone/recipes-core/packagegroups/packagegroup-base.bbappend via https://github.com/rauc/meta-rauc/blob/kirkstone/recipes-core/packagegroups/packagegroup-base_rauc.inc.
+>
+> I tried removing it with PACKAGE_EXCLUDE:
+> PACKAGE_EXCLUDE = "\
+>   packagegroup-base-rauc \
+> "
+> as well as
+> PACKAGE_EXCLUDE = "\
+>   rauc \
+>   rauc-mark-good \
+>   rauc-service \
+> "
+> I also tried with:
+> RDEPENDS:packagegroup-base:remove "packagegroup-base-rauc"
+>
+> But in both cases I get that error.
+> I do not have any idea how I could remove it from DISTRO_FEATURES for that image. I think that is not possible.
+>
+> If I remove it "manually" using ROOTFS_POSTPROCESS_COMMAND, I have to take care of all dependencies as well and it would be still be visible in .manifest file that it is there although it is not.
+>
+> That is why I am looking for a more elegant way to achive it.
+>
+> Thanks!
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#61390): https://lists.yoctoproject.org/g/yocto/message/61390
+> Mute This Topic: https://lists.yoctoproject.org/mt/102035396/1686489
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+* Re: [yocto] Remove packagegroup from image recipes
+  2023-10-18  9:08     ` [yocto] " Alexander Kanavin
+@ 2023-10-18  9:57       ` Enrico Jörns
+  2023-10-18 10:09         ` Alexander Kanavin
+  0 siblings, 1 reply; 10+ messages in thread
+From: Enrico Jörns @ 2023-10-18  9:57 UTC (permalink / raw)
+  To: Ivan Stojanovic, Alexander Kanavin; +Cc: yocto
+
+Hi,
+
+Am Mittwoch, dem 18.10.2023 um 11:08 +0200 schrieb Alexander Kanavin:
+> Ugh, that's a really ugly hack in meta-rauc. They shouldn't force
+> themselves into all images that way. You should file a ticket.
+
+it's not really that it's 'forced' into all image. The .bbappend just says:
+
+> require ${@bb.utils.contains('DISTRO_FEATURES', 'rauc', '${BPN}_rauc.inc', '', d)}
+
+The assumption was that if you have 'rauc' in you DISTRO_FEATURES, you want to install it.
+And this was just the best way I saw to automatically end up in base images for this case while
+ensuring that we do not modify the base packagegroup unconditionally.
+
+A step back: I would expect that a recovery image is exactly where you would want RAUC to be
+available to recover you rootfs by installing a valid bundle, or?
+
+Anyway, feel free to file an issue or a discussion at
+
+https://github.com/rauc/meta-rauc 🙂
+
+Regards, Enrico
+
+> I would suggest either dropping rauc from DISTRO_FEATURES globally
+> (that may have unwanted side effects though and you should check what
+> else that affects), or using BBMASK as shown in reference manual to
+> blacklist the offending bbappend, e.g. something like:
+> 
+>          BBMASK += "/meta-ti/recipes-misc/ meta-ti/recipes-ti/packagegroup/"
+> 
+> 
+> Alex
+> 
+> On Wed, 18 Oct 2023 at 11:00, Ivan Stojanovic <ivastojanovic@gmail.com> wrote:
+> > 
+> > We have 2 images, adios-image-standard and adios-image-recovery.
+> > In adios-image-standard, I want to have rauc.
+> > In adios-image-recovery due to lack of space, I want to remove it. It is a part of it since it
+> > is in DISTRO_FEATURES.
+> > 
+> > In meta-rauc layer, they add rauc to pacakgegroup-base:
+> > https://github.com/rauc/meta-rauc/blob/kirkstone/recipes-core/packagegroups/packagegroup-base.bbappend
+> >  via
+> > https://github.com/rauc/meta-rauc/blob/kirkstone/recipes-core/packagegroups/packagegroup-base_rauc.inc
+> > .
+> > 
+> > I tried removing it with PACKAGE_EXCLUDE:
+> > PACKAGE_EXCLUDE = "\
+> >   packagegroup-base-rauc \
+> > "
+> > as well as
+> > PACKAGE_EXCLUDE = "\
+> >   rauc \
+> >   rauc-mark-good \
+> >   rauc-service \
+> > "
+> > I also tried with:
+> > RDEPENDS:packagegroup-base:remove "packagegroup-base-rauc"
+> > 
+> > But in both cases I get that error.
+> > I do not have any idea how I could remove it from DISTRO_FEATURES for that image. I think that
+> > is not possible.
+> > 
+> > If I remove it "manually" using ROOTFS_POSTPROCESS_COMMAND, I have to take care of all
+> > dependencies as well and it would be still be visible in .manifest file that it is there
+> > although it is not.
+> > 
+> > That is why I am looking for a more elegant way to achive it.
+> > 
+> > Thanks!
+> > 
+> > 
+> > 
+> 
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#61391): https://lists.yoctoproject.org/g/yocto/message/61391
+> Mute This Topic: https://lists.yoctoproject.org/mt/102035396/3616721
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [ejo@pengutronix.de]
+> -=-=-=-=-=-=-=-=-=-=-=-
+> 
+
+-- 
+Pengutronix e.K.                           | Enrico Jörns                |
+Embedded Linux Consulting & Support        | https://www.pengutronix.de/ |
+Steuerwalder Str. 21                       | Phone: +49-5121-206917-180  |
+31137 Hildesheim, Germany                  | Fax:   +49-5121-206917-9    |
+
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+* Re: [yocto] Remove packagegroup from image recipes
+  2023-10-18  9:57       ` Enrico Jörns
+@ 2023-10-18 10:09         ` Alexander Kanavin
+  2023-10-18 10:24           ` Enrico Jörns
+  0 siblings, 1 reply; 10+ messages in thread
+From: Alexander Kanavin @ 2023-10-18 10:09 UTC (permalink / raw)
+  To: Enrico Jörns; +Cc: Ivan Stojanovic, yocto
+
+On Wed, 18 Oct 2023 at 11:57, Enrico Jörns <ejo@pengutronix.de> wrote:
+> it's not really that it's 'forced' into all image. The .bbappend just says:
+>
+> > require ${@bb.utils.contains('DISTRO_FEATURES', 'rauc', '${BPN}_rauc.inc', '', d)}
+> The assumption was that if you have 'rauc' in you DISTRO_FEATURES, you want to install it.
+> And this was just the best way I saw to automatically end up in base images for this case while
+> ensuring that we do not modify the base packagegroup unconditionally.
+
+You should provide a packagegroup-rauc recipe, a sample rauc-image
+recipe (or set of recipes) that uses that packagegroup, and leave it
+at that. Users of meta-rauc will figure out the rest, particularly
+when and how they want to install rauc. You've just seen a specific
+case where it is *not* wanted in some images.
+
+Forcing your way into base packagegroups from oe-core via bbappends is
+really not the right way to go about things.
+
+Alex
+
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+* Re: [yocto] Remove packagegroup from image recipes
+  2023-10-18 10:09         ` Alexander Kanavin
+@ 2023-10-18 10:24           ` Enrico Jörns
+  2023-10-18 10:37             ` Alexander Kanavin
+       [not found]             ` <178F2D5AFBF324AF.14388@lists.yoctoproject.org>
+  0 siblings, 2 replies; 10+ messages in thread
+From: Enrico Jörns @ 2023-10-18 10:24 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: Ivan Stojanovic, yocto, ejo
+
+Hi Alex,
+
+Am Mittwoch, dem 18.10.2023 um 12:09 +0200 schrieb Alexander Kanavin:
+> On Wed, 18 Oct 2023 at 11:57, Enrico Jörns <ejo@pengutronix.de> wrote:
+> > it's not really that it's 'forced' into all image. The .bbappend just says:
+> > 
+> > > require ${@bb.utils.contains('DISTRO_FEATURES', 'rauc', '${BPN}_rauc.inc', '', d)}
+> > The assumption was that if you have 'rauc' in you DISTRO_FEATURES, you want to install it.
+> > And this was just the best way I saw to automatically end up in base images for this case while
+> > ensuring that we do not modify the base packagegroup unconditionally.
+> 
+> You should provide a packagegroup-rauc recipe, a sample rauc-image
+> recipe (or set of recipes) that uses that packagegroup, and leave it
+> at that. Users of meta-rauc will figure out the rest, particularly
+> when and how they want to install rauc. You've just seen a specific
+> case where it is *not* wanted in some images.
+> 
+> Forcing your way into base packagegroups from oe-core via bbappends is
+> really not the right way to go about things.
+
+In how is this different to the default packagegroup handling in oe-core where package 'force
+themself' into images based on specific DISTRO_FEATURE or MACHINE_FEATURE settings?
+
+Thus this is a mechanism that is explicitly designed to be used by oe-core exclusively?
+
+
+Regards, Enrico
+
+> Alex
+> 
+
+-- 
+Pengutronix e.K.                           | Enrico Jörns                |
+Embedded Linux Consulting & Support        | https://www.pengutronix.de/ |
+Steuerwalder Str. 21                       | Phone: +49-5121-206917-180  |
+31137 Hildesheim, Germany                  | Fax:   +49-5121-206917-9    |
+
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+* Re: [yocto] Remove packagegroup from image recipes
+  2023-10-18 10:24           ` Enrico Jörns
+@ 2023-10-18 10:37             ` Alexander Kanavin
+       [not found]             ` <178F2D5AFBF324AF.14388@lists.yoctoproject.org>
+  1 sibling, 0 replies; 10+ messages in thread
+From: Alexander Kanavin @ 2023-10-18 10:37 UTC (permalink / raw)
+  To: Enrico Jörns; +Cc: Ivan Stojanovic, yocto
+
+On Wed, 18 Oct 2023 at 12:24, Enrico Jörns <ejo@pengutronix.de> wrote:
+> In how is this different to the default packagegroup handling in oe-core where package 'force
+> themself' into images based on specific DISTRO_FEATURE or MACHINE_FEATURE settings?
+>
+> Thus this is a mechanism that is explicitly designed to be used by oe-core exclusively?
+
+I see that as something of a historical mis-feature. I would take
+those things out of the packagegroup recipe and into a class used by
+images if I had a bit of time (core-image.bbclass most likely).
+
+That's what you could do as well, define a class that pulls in rauc
+for those images that inherit it.
+
+Alex
+
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+* Re: [yocto] Remove packagegroup from image recipes
+       [not found]             ` <178F2D5AFBF324AF.14388@lists.yoctoproject.org>
+@ 2023-10-18 10:50               ` Alexander Kanavin
+  2023-10-18 12:01                 ` Enrico Jörns
+  0 siblings, 1 reply; 10+ messages in thread
+From: Alexander Kanavin @ 2023-10-18 10:50 UTC (permalink / raw)
+  To: Enrico Jörns; +Cc: Ivan Stojanovic, yocto
+
+On Wed, 18 Oct 2023 at 12:37, Alexander Kanavin via
+lists.yoctoproject.org <alex.kanavin=gmail.com@lists.yoctoproject.org>
+wrote:
+>
+> On Wed, 18 Oct 2023 at 12:24, Enrico Jörns <ejo@pengutronix.de> wrote:
+> > In how is this different to the default packagegroup handling in oe-core where package 'force
+> > themself' into images based on specific DISTRO_FEATURE or MACHINE_FEATURE settings?
+> >
+> > Thus this is a mechanism that is explicitly designed to be used by oe-core exclusively?
+>
+> I see that as something of a historical mis-feature. I would take
+> those things out of the packagegroup recipe and into a class used by
+> images if I had a bit of time (core-image.bbclass most likely).
+>
+> That's what you could do as well, define a class that pulls in rauc
+> for those images that inherit it.
+
+You can see how core-image-weston.bb does it:
+
+IMAGE_FEATURES += "splash package-management ssh-server-dropbear
+hwcodecs weston"
+
+and then in core-image class:
+
+FEATURE_PACKAGES_weston = "packagegroup-core-weston"
+... etc
+
+Alex
+
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+* Re: [yocto] Remove packagegroup from image recipes
+  2023-10-18 10:50               ` Alexander Kanavin
+@ 2023-10-18 12:01                 ` Enrico Jörns
+  0 siblings, 0 replies; 10+ messages in thread
+From: Enrico Jörns @ 2023-10-18 12:01 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: Ivan Stojanovic, yocto, ejo
+
+Am Mittwoch, dem 18.10.2023 um 12:50 +0200 schrieb Alexander Kanavin:
+> On Wed, 18 Oct 2023 at 12:37, Alexander Kanavin via
+> lists.yoctoproject.org <alex.kanavin=gmail.com@lists.yoctoproject.org>
+> wrote:
+> > 
+> > On Wed, 18 Oct 2023 at 12:24, Enrico Jörns <ejo@pengutronix.de> wrote:
+> > > In how is this different to the default packagegroup handling in oe-core where package 'force
+> > > themself' into images based on specific DISTRO_FEATURE or MACHINE_FEATURE settings?
+> > > 
+> > > Thus this is a mechanism that is explicitly designed to be used by oe-core exclusively?
+> > 
+> > I see that as something of a historical mis-feature. I would take
+> > those things out of the packagegroup recipe and into a class used by
+> > images if I had a bit of time (core-image.bbclass most likely).
+> > 
+> > That's what you could do as well, define a class that pulls in rauc
+> > for those images that inherit it.
+> 
+> You can see how core-image-weston.bb does it:
+> 
+> IMAGE_FEATURES += "splash package-management ssh-server-dropbear
+> hwcodecs weston"
+> 
+> and then in core-image class:
+> 
+> FEATURE_PACKAGES_weston = "packagegroup-core-weston"
+> ... etc
+
+Oh yes, I came across this feature a few weeks ago for the first time.
+
+Before I had never noticed that the FEATURE_PACKAGES mechanism exists.
+
+Maybe this could be an alternative to 'hacking' rauc into the base packagegroup.
+Thanks for the hint.
+
+My original intention was to reduce the number of manual variable switches required for building a
+rauc-compatible image. But maybe this sort of 'over-optimized'.
+
+
+Enrico
+
+> Alex
+> 
+
+-- 
+Pengutronix e.K.                           | Enrico Jörns                |
+Embedded Linux Consulting & Support        | https://www.pengutronix.de/ |
+Steuerwalder Str. 21                       | Phone: +49-5121-206917-180  |
+31137 Hildesheim, Germany                  | Fax:   +49-5121-206917-9    |
+
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+end of thread, other threads:[~2023-10-18 12:01 UTC | newest]
+
+Thread overview: 10+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-10-18  8:38 Remove packagegroup from image recipes Ivan Stojanovic
+2023-10-18  8:41 ` [yocto] " Alexander Kanavin
+2023-10-18  9:00   ` Ivan Stojanovic
+2023-10-18  9:08     ` [yocto] " Alexander Kanavin
+2023-10-18  9:57       ` Enrico Jörns
+2023-10-18 10:09         ` Alexander Kanavin
+2023-10-18 10:24           ` Enrico Jörns
+2023-10-18 10:37             ` Alexander Kanavin
+     [not found]             ` <178F2D5AFBF324AF.14388@lists.yoctoproject.org>
+2023-10-18 10:50               ` Alexander Kanavin
+2023-10-18 12:01                 ` Enrico Jörns
+

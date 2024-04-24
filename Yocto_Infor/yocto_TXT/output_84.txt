@@ -1,0 +1,430 @@
+* [yocto-autobuilder-helper][PATCH 0/3] Make sure to pick tested rev as reference for regression report
+@ 2023-10-04  9:25 Alexis Lothoré
+  2023-10-04  9:25 ` [yocto-autobuilder-helper][PATCH 1/3] scripts/send_qa_email: re-clarify base and target revisions Alexis Lothoré
+                   ` (2 more replies)
+  0 siblings, 3 replies; 4+ messages in thread
+From: Alexis Lothoré @ 2023-10-04  9:25 UTC (permalink / raw)
+  To: yocto; +Cc: Thomas Petazzoni, Alexandre Belloni
+
+Some failures have been observed on jobs targeting master-next, with the
+following logs as an example:
+
+Exception: No reference found for commit
+3edb9acca18171894771c36c19b0c2e905852ce5 in /tmp/sendqaemail.dkwg__g9
+
+See [1] for more logs, which is trying to compare master-next results to
+master results. While master-next results necessarily exist (because they
+have been generated in the very same build presenting the error), it may
+not be true for master: current HEAD of master may not have been the object
+of a build generating test results.
+
+To fix that, this series propose to stop blindly searching for test results
+corresponding to current HEAD on master: instead it reads HEAD on master
+branch of test results respository, and extract corresponding Poky revision
+from it, so we are sure that selected revision in Poky is the most recent
+AND have corresponding tests results
+The actual fix is in last commits: the first commit aims to re-clarify the
+naming used for revisions used to comparision, and the second commit is a
+small refactoring
+
+[1] https://autobuilder.yoctoproject.org/typhoon/#/builders/83/builds/5973/steps/31/logs/stdio
+
+Alexis Lothoré (3):
+  scripts/send_qa_email: re-clarify base and target revisions
+  scripts/send-qa-email: define tests results repository url only once
+  scripts/send_qa_email: guess latest tested revision when dealing with
+    branch
+
+ scripts/send_qa_email.py      | 61 ++++++++++++++++++++++-------------
+ scripts/test_send_qa_email.py | 31 ++++++++++--------
+ scripts/utils.py              |  6 ++--
+ 3 files changed, 58 insertions(+), 40 deletions(-)
+
+-- 
+2.42.0
+
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* [yocto-autobuilder-helper][PATCH 1/3] scripts/send_qa_email: re-clarify base and target revisions
+  2023-10-04  9:25 [yocto-autobuilder-helper][PATCH 0/3] Make sure to pick tested rev as reference for regression report Alexis Lothoré
+@ 2023-10-04  9:25 ` Alexis Lothoré
+  2023-10-04  9:25 ` [yocto-autobuilder-helper][PATCH 2/3] scripts/send-qa-email: define tests results repository url only once Alexis Lothoré
+  2023-10-04  9:25 ` [yocto-autobuilder-helper][PATCH 3/3] scripts/send_qa_email: guess latest tested revision when dealing with branch Alexis Lothoré
+  2 siblings, 0 replies; 4+ messages in thread
+From: Alexis Lothoré @ 2023-10-04  9:25 UTC (permalink / raw)
+  To: yocto; +Cc: Thomas Petazzoni, Alexandre Belloni
+
+From: Alexis Lothoré <alexis.lothore@bootlin.com>
+
+There are some inversions in words used to describe elements of comparison
+for regression reporting: the main function of send_qa_email starts using
+"base" to talk about the target revision and "compare" to talk about the
+reference against which it is compared. Then later in the script, the
+"base" is used as "base of comparison"/reference revision, while the
+"target" branch/revision appears. This becomes quite confusing when we need
+to update the script
+
+Re-align wording to avoid confusion:
+- always use "target" to talk about current branch/revision of interest
+  (the newest)
+- always use "base" to talk about the reference branch/revision  (the
+  oldest), against which we want to compare the target revision
+
+Signed-off-by: Alexis Lothoré <alexis.lothore@bootlin.com>
+---
+This commit does not change any behavior in the script, it is only about
+renaming variables
+---
+ scripts/send_qa_email.py      | 44 ++++++++++++++++++-----------------
+ scripts/test_send_qa_email.py | 26 ++++++++++-----------
+ scripts/utils.py              |  6 ++---
+ 3 files changed, 39 insertions(+), 37 deletions(-)
+
+diff --git a/scripts/send_qa_email.py b/scripts/send_qa_email.py
+index 54b701f409bf..f9a982ae9143 100755
+--- a/scripts/send_qa_email.py
++++ b/scripts/send_qa_email.py
+@@ -52,20 +52,22 @@ def get_previous_tag(targetrepodir, version):
+     defaultbaseversion, _, _ = utils.get_version_from_string(subprocess.check_output(["git", "describe", "--abbrev=0"], cwd=targetrepodir).decode('utf-8').strip())
+     return utils.get_tag_from_version(defaultbaseversion, None)
+ 
+-def get_regression_base_and_target(basebranch, comparebranch, release, targetrepodir):
+-    if not basebranch:
+-        # Basebranch/comparebranch is an arbitrary configuration (not defined in config.json): do not run regression reporting
++def get_regression_base_and_target(targetbranch, basebranch, release, targetrepodir):
++    if not targetbranch:
++        # Targetbranch/basebranch is an arbitrary configuration (not defined in config.json): do not run regression reporting
+         return None, None
+ 
+     if is_release_version(release):
+-        # We are on a release: ignore comparebranch (which is very likely None), regression reporting must be done against previous tag
+-        return get_previous_tag(targetrepodir, release), basebranch
+-    elif comparebranch:
+-        # Basebranch/comparebranch is defined in config.json: regression reporting must be done against branches as defined in config.json
+-        return comparebranch, basebranch
++        # We are on a release: ignore basebranch (which is very likely None),
++        # regression reporting must be done against previous tag
++        return get_previous_tag(targetrepodir, release), targetbranch
++    elif basebranch:
++        # Targetbranch/basebranch is defined in config.json: regression
++        # reporting must be done against branches as defined in config.json
++        return basebranch, targetbranch
+ 
+     #Default case: return previous tag as base
+-    return get_previous_tag(targetrepodir, release), basebranch
++    return get_previous_tag(targetrepodir, release), targetbranch
+ 
+ def generate_regression_report(querytool, targetrepodir, base, target, resultdir, outputdir, log):
+     log.info(f"Comparing {target} to {base}")
+@@ -130,7 +132,7 @@ def send_qa_email():
+         branch = repos['poky']['branch']
+         repo = repos['poky']['url']
+ 
+-        basebranch, comparebranch = utils.getcomparisonbranch(ourconfig, repo, branch)
++        targetbranch, basebranch = utils.getcomparisonbranch(ourconfig, repo, branch)
+         report = subprocess.check_output([resulttool, "report", args.results_dir])
+         with open(args.results_dir + "/testresult-report.txt", "wb") as f:
+             f.write(report)
+@@ -139,10 +141,10 @@ def send_qa_email():
+         try:
+             utils.printheader("Importing test results repo data")
+             cloneopts = []
+-            if comparebranch:
+-                cloneopts = ["--branch", comparebranch]
+-            elif basebranch:
++            if basebranch:
+                 cloneopts = ["--branch", basebranch]
++            elif targetbranch:
++                cloneopts = ["--branch", targetbranch]
+             try:
+                 subprocess.check_call(["git", "clone", "git@push.yoctoproject.org:yocto-testresults", tempdir, "--depth", "1"] + cloneopts)
+             except subprocess.CalledProcessError:
+@@ -151,30 +153,30 @@ def send_qa_email():
+ 
+             # If the base comparision branch isn't present regression comparision won't work
+             # at least until we can tell the tool to ignore internal branch information
+-            if basebranch:
++            if targetbranch:
+                 try:
+-                    subprocess.check_call(["git", "rev-parse", "--verify", basebranch], cwd=tempdir)
++                    subprocess.check_call(["git", "rev-parse", "--verify", targetbranch], cwd=tempdir)
+                 except subprocess.CalledProcessError:
+                     # Doesn't exist so base it off master
+                     # some older hosts don't have git branch old new
+                     subprocess.check_call(["git", "checkout", "master"], cwd=tempdir)
+-                    subprocess.check_call(["git", "branch", basebranch], cwd=tempdir)
+-                    subprocess.check_call(["git", "checkout", basebranch], cwd=tempdir)
++                    subprocess.check_call(["git", "branch", targetbranch], cwd=tempdir)
++                    subprocess.check_call(["git", "checkout", targetbranch], cwd=tempdir)
+ 
+             utils.printheader("Storing results")
+ 
+             subprocess.check_call([resulttool, "store", args.results_dir, tempdir])
+-            if comparebranch:
++            if basebranch:
+                 subprocess.check_call(["git", "push", "--all", "--force"], cwd=tempdir)
+                 subprocess.check_call(["git", "push", "--tags", "--force"], cwd=tempdir)
+-            elif basebranch:
++            elif targetbranch:
+                 subprocess.check_call(["git", "push", "--all"], cwd=tempdir)
+                 subprocess.check_call(["git", "push", "--tags"], cwd=tempdir)
+-            elif is_release_version(args.release) and not comparebranch and not basebranch:
++            elif is_release_version(args.release) and not basebranch and not targetbranch:
+                 log.warning("Test results not published on release version. Faulty AB configuration ?")
+ 
+             utils.printheader("Processing regression report")
+-            regression_base, regression_target = get_regression_base_and_target(basebranch, comparebranch, args.release, targetrepodir)
++            regression_base, regression_target = get_regression_base_and_target(targetbranch, basebranch, args.release, targetrepodir)
+             if regression_base and regression_target:
+                 generate_regression_report(querytool, targetrepodir, regression_base, regression_target, tempdir, args.results_dir, log)
+ 
+diff --git a/scripts/test_send_qa_email.py b/scripts/test_send_qa_email.py
+index 974112a371f2..74d60d55655d 100755
+--- a/scripts/test_send_qa_email.py
++++ b/scripts/test_send_qa_email.py
+@@ -38,18 +38,18 @@ class TestVersion(unittest.TestCase):
+     # This data represent real data returned by utils.getcomparisonbranch
+     # and the release argument passed to send-qa-email script
+     regression_inputs = [
+-        {"name": "Arbitrary branch", "input": {"basebranch": None,
+-                                               "comparebranch": None, "release": None}, "expected": (None, None)},
+-        {"name": "Master release", "input": {"basebranch": "master",
+-                                             "comparebranch": None, "release": "yocto-4.2_M3.rc1"}, "expected": ("4.2_M2", "master")},
+-        {"name": "Older release", "input": {"basebranch": "kirkstone",
+-                                            "comparebranch": None, "release": "yocto-4.0.8.rc2"}, "expected": ("yocto-4.0.7", "kirkstone")},
+-        {"name": "Master Next", "input": {"basebranch": "master-next",
+-                                          "comparebranch": "master", "release": None}, "expected": ("master", "master-next")},
+-        {"name": "Fork Master Next", "input": {"basebranch": "ross/mut",
+-                                               "comparebranch": "master", "release": None}, "expected": ("master", "ross/mut")},
+-        {"name": "Nightly a-quick", "input": {"basebranch": "master",
+-                                               "comparebranch": None, "release": "20230322-2"}, "expected": ("LAST_TAG", "master")},
++        {"name": "Arbitrary branch", "input": {"targetbranch": None,
++                                               "basebranch": None, "release": None}, "expected": (None, None)},
++        {"name": "Master release", "input": {"targetbranch": "master",
++                                             "basebranch": None, "release": "yocto-4.2_M3.rc1"}, "expected": ("4.2_M2", "master")},
++        {"name": "Older release", "input": {"targetbranch": "kirkstone",
++                                            "basebranch": None, "release": "yocto-4.0.8.rc2"}, "expected": ("yocto-4.0.7", "kirkstone")},
++        {"name": "Master Next", "input": {"targetbranch": "master-next",
++                                          "basebranch": "master", "release": None}, "expected": ("master", "master-next")},
++        {"name": "Fork Master Next", "input": {"targetbranch": "ross/mut",
++                                               "basebranch": "master", "release": None}, "expected": ("master", "ross/mut")},
++        {"name": "Nightly a-quick", "input": {"targetbranch": "master",
++                                               "basebranch": None, "release": "20230322-2"}, "expected": ("LAST_TAG", "master")},
+     ]
+ 
+     def test_versions(self):
+@@ -68,7 +68,7 @@ class TestVersion(unittest.TestCase):
+         for data in self.regression_inputs:
+             with self.subTest(data['name']):
+                 base, target = send_qa_email.get_regression_base_and_target(
+-                    data['input']['basebranch'], data['input']['comparebranch'], data['input']['release'], os.environ.get("POKY_PATH"))
++                    data['input']['targetbranch'], data['input']['basebranch'], data['input']['release'], os.environ.get("POKY_PATH"))
+                 expected_base, expected_target = data["expected"]
+                 # The comparison base can not be set statically in tests when it is supposed to be the previous tag,
+                 # since the result will depend on current tags
+diff --git a/scripts/utils.py b/scripts/utils.py
+index 36b3e81bfc94..03c879921b1d 100644
+--- a/scripts/utils.py
++++ b/scripts/utils.py
+@@ -398,9 +398,9 @@ def getcomparisonbranch(ourconfig, reponame, branchname):
+     if (reponame + ":" + branchname) in getconfig("BUILD_HISTORY_FORKPUSH", ourconfig):
+         base = getconfig("BUILD_HISTORY_FORKPUSH", ourconfig)[reponame + ":" + branchname]
+         if base:
+-            comparerepo, comparebranch = base.split(":")
+-            print("Comparing to %s\n" % (comparebranch))
+-            return branchname, comparebranch
++            baserepo, basebranch = base.split(":")
++            print("Comparing to %s\n" % (basebranch))
++            return branchname, basebranch
+     if is_a_main_branch(reponame, branchname):
+         return branchname, None
+     return None, None
+-- 
+2.42.0
+
+
+
+^ permalink raw reply related	[flat|nested] 4+ messages in thread
+* [yocto-autobuilder-helper][PATCH 2/3] scripts/send-qa-email: define tests results repository url only once
+  2023-10-04  9:25 [yocto-autobuilder-helper][PATCH 0/3] Make sure to pick tested rev as reference for regression report Alexis Lothoré
+  2023-10-04  9:25 ` [yocto-autobuilder-helper][PATCH 1/3] scripts/send_qa_email: re-clarify base and target revisions Alexis Lothoré
+@ 2023-10-04  9:25 ` Alexis Lothoré
+  2023-10-04  9:25 ` [yocto-autobuilder-helper][PATCH 3/3] scripts/send_qa_email: guess latest tested revision when dealing with branch Alexis Lothoré
+  2 siblings, 0 replies; 4+ messages in thread
+From: Alexis Lothoré @ 2023-10-04  9:25 UTC (permalink / raw)
+  To: yocto; +Cc: Thomas Petazzoni, Alexandre Belloni
+
+From: Alexis Lothoré <alexis.lothore@bootlin.com>
+
+Test results repository url is used at least twice, so define a constant
+holding the url instead of hardcoding it multiple times
+
+Signed-off-by: Alexis Lothoré <alexis.lothore@bootlin.com>
+---
+ scripts/send_qa_email.py | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/scripts/send_qa_email.py b/scripts/send_qa_email.py
+index f9a982ae9143..ac8b4716f07b 100755
+--- a/scripts/send_qa_email.py
++++ b/scripts/send_qa_email.py
+@@ -15,6 +15,7 @@ import logging
+ 
+ import utils
+ 
++TEST_RESULTS_REPOSITORY_URL="git@push.yoctoproject.org:yocto-testresults"
+ exitcode = 0
+ 
+ def is_release_version(version):
+@@ -146,10 +147,10 @@ def send_qa_email():
+             elif targetbranch:
+                 cloneopts = ["--branch", targetbranch]
+             try:
+-                subprocess.check_call(["git", "clone", "git@push.yoctoproject.org:yocto-testresults", tempdir, "--depth", "1"] + cloneopts)
++                subprocess.check_call(["git", "clone", TEST_RESULTS_REPOSITORY_URL, tempdir, "--depth", "1"] + cloneopts)
+             except subprocess.CalledProcessError:
+                 log.info("No comparision branch found, falling back to master")
+-                subprocess.check_call(["git", "clone", "git@push.yoctoproject.org:yocto-testresults", tempdir, "--depth", "1"])
++                subprocess.check_call(["git", "clone", TEST_RESULTS_REPOSITORY_URL, tempdir, "--depth", "1"])
+ 
+             # If the base comparision branch isn't present regression comparision won't work
+             # at least until we can tell the tool to ignore internal branch information
+-- 
+2.42.0
+
+
+
+^ permalink raw reply related	[flat|nested] 4+ messages in thread
+* [yocto-autobuilder-helper][PATCH 3/3] scripts/send_qa_email: guess latest tested revision when dealing with branch
+  2023-10-04  9:25 [yocto-autobuilder-helper][PATCH 0/3] Make sure to pick tested rev as reference for regression report Alexis Lothoré
+  2023-10-04  9:25 ` [yocto-autobuilder-helper][PATCH 1/3] scripts/send_qa_email: re-clarify base and target revisions Alexis Lothoré
+  2023-10-04  9:25 ` [yocto-autobuilder-helper][PATCH 2/3] scripts/send-qa-email: define tests results repository url only once Alexis Lothoré
+@ 2023-10-04  9:25 ` Alexis Lothoré
+  2 siblings, 0 replies; 4+ messages in thread
+From: Alexis Lothoré @ 2023-10-04  9:25 UTC (permalink / raw)
+  To: yocto; +Cc: Thomas Petazzoni, Alexandre Belloni
+
+From: Alexis Lothoré <alexis.lothore@bootlin.com>
+
+It has been observed that some regression reports generation may failed
+when the comparision base is a branch (e.g master) because we can not find
+any test results associated to the branch HEAD. This is especially true for
+branches which often change, because not all revisions on those branch are
+subject to CI tests.
+
+To fix that, whenever we are not dealing with a release, parse the latest
+tested revision in test results repository on target branch in order to
+guess the corresponding revision in poky repository, so we are sure that
+revisions passed to yocto_testresults_query are indeed tested and
+regression report can be generated
+
+Signed-off-by: Alexis Lothoré <alexis.lothore@bootlin.com>
+---
+ scripts/send_qa_email.py      | 22 +++++++++++++++++-----
+ scripts/test_send_qa_email.py | 11 +++++++----
+ 2 files changed, 24 insertions(+), 9 deletions(-)
+
+diff --git a/scripts/send_qa_email.py b/scripts/send_qa_email.py
+index ac8b4716f07b..14446a274e90 100755
+--- a/scripts/send_qa_email.py
++++ b/scripts/send_qa_email.py
+@@ -53,7 +53,17 @@ def get_previous_tag(targetrepodir, version):
+     defaultbaseversion, _, _ = utils.get_version_from_string(subprocess.check_output(["git", "describe", "--abbrev=0"], cwd=targetrepodir).decode('utf-8').strip())
+     return utils.get_tag_from_version(defaultbaseversion, None)
+ 
+-def get_regression_base_and_target(targetbranch, basebranch, release, targetrepodir):
++def get_last_tested_rev_on_branch(branch, log):
++    # Fetch latest test results revision on corresponding branch in test
++    # results repository
++    tags_list = subprocess.check_output(["git", "ls-remote", "--refs", "-t", TEST_RESULTS_REPOSITORY_URL, "refs/tags/" + branch + "/*"]).decode('utf-8').strip()
++    latest_test_tag=tags_list.splitlines()[-1].split()[1]
++    # From test results tag, extract Poky revision
++    tested_revision = re.match('refs\/tags\/.*\/\d+-g([a-f0-9]+)\/\d', latest_test_tag).group(1)
++    log.info(f"Last tested revision on branch {branch} is {tested_revision}")
++    return tested_revision
++
++def get_regression_base_and_target(targetbranch, basebranch, release, targetrepodir, log):
+     if not targetbranch:
+         # Targetbranch/basebranch is an arbitrary configuration (not defined in config.json): do not run regression reporting
+         return None, None
+@@ -63,9 +73,11 @@ def get_regression_base_and_target(targetbranch, basebranch, release, targetrepo
+         # regression reporting must be done against previous tag
+         return get_previous_tag(targetrepodir, release), targetbranch
+     elif basebranch:
+-        # Targetbranch/basebranch is defined in config.json: regression
+-        # reporting must be done against branches as defined in config.json
+-        return basebranch, targetbranch
++        # Basebranch/targetbranch are defined in config.json: regression
++        # reporting must be done between latest test result available on base branch
++        # and latest result on targetbranch
++        latest_tested_rev_on_basebranch = get_last_tested_rev_on_branch(basebranch, log)
++        return latest_tested_rev_on_basebranch, targetbranch
+ 
+     #Default case: return previous tag as base
+     return get_previous_tag(targetrepodir, release), targetbranch
+@@ -177,7 +189,7 @@ def send_qa_email():
+                 log.warning("Test results not published on release version. Faulty AB configuration ?")
+ 
+             utils.printheader("Processing regression report")
+-            regression_base, regression_target = get_regression_base_and_target(targetbranch, basebranch, args.release, targetrepodir)
++            regression_base, regression_target = get_regression_base_and_target(targetbranch, basebranch, args.release, targetrepodir, log)
+             if regression_base and regression_target:
+                 generate_regression_report(querytool, targetrepodir, regression_base, regression_target, tempdir, args.results_dir, log)
+ 
+diff --git a/scripts/test_send_qa_email.py b/scripts/test_send_qa_email.py
+index 74d60d55655d..5509b3c2510e 100755
+--- a/scripts/test_send_qa_email.py
++++ b/scripts/test_send_qa_email.py
+@@ -11,7 +11,10 @@ import os
+ import sys
+ import unittest
+ import send_qa_email
++import logging
+ 
++logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
++log = logging.getLogger('send-qa-email')
+ 
+ class TestVersion(unittest.TestCase):
+     test_data_get_version = [
+@@ -45,9 +48,9 @@ class TestVersion(unittest.TestCase):
+         {"name": "Older release", "input": {"targetbranch": "kirkstone",
+                                             "basebranch": None, "release": "yocto-4.0.8.rc2"}, "expected": ("yocto-4.0.7", "kirkstone")},
+         {"name": "Master Next", "input": {"targetbranch": "master-next",
+-                                          "basebranch": "master", "release": None}, "expected": ("master", "master-next")},
++                                          "basebranch": "master", "release": None}, "expected": ("LAST_TESTED_REV", "master-next")},
+         {"name": "Fork Master Next", "input": {"targetbranch": "ross/mut",
+-                                               "basebranch": "master", "release": None}, "expected": ("master", "ross/mut")},
++                                               "basebranch": "master", "release": None}, "expected": ("LAST_TESTED_REV", "ross/mut")},
+         {"name": "Nightly a-quick", "input": {"targetbranch": "master",
+                                                "basebranch": None, "release": "20230322-2"}, "expected": ("LAST_TAG", "master")},
+     ]
+@@ -68,11 +71,11 @@ class TestVersion(unittest.TestCase):
+         for data in self.regression_inputs:
+             with self.subTest(data['name']):
+                 base, target = send_qa_email.get_regression_base_and_target(
+-                    data['input']['targetbranch'], data['input']['basebranch'], data['input']['release'], os.environ.get("POKY_PATH"))
++                    data['input']['targetbranch'], data['input']['basebranch'], data['input']['release'], os.environ.get("POKY_PATH"), log)
+                 expected_base, expected_target = data["expected"]
+                 # The comparison base can not be set statically in tests when it is supposed to be the previous tag,
+                 # since the result will depend on current tags
+-                if expected_base == "LAST_TAG":
++                if expected_base == "LAST_TAG" or expected_base == "LAST_TESTED_REV":
+                     self.assertIsNotNone(base)
+                 else:
+                     self.assertEqual(base, expected_base)
+-- 
+2.42.0
+
+
+
+^ permalink raw reply related	[flat|nested] 4+ messages in thread
+end of thread, other threads:[~2023-10-04  9:24 UTC | newest]
+
+Thread overview: 4+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-10-04  9:25 [yocto-autobuilder-helper][PATCH 0/3] Make sure to pick tested rev as reference for regression report Alexis Lothoré
+2023-10-04  9:25 ` [yocto-autobuilder-helper][PATCH 1/3] scripts/send_qa_email: re-clarify base and target revisions Alexis Lothoré
+2023-10-04  9:25 ` [yocto-autobuilder-helper][PATCH 2/3] scripts/send-qa-email: define tests results repository url only once Alexis Lothoré
+2023-10-04  9:25 ` [yocto-autobuilder-helper][PATCH 3/3] scripts/send_qa_email: guess latest tested revision when dealing with branch Alexis Lothoré
+

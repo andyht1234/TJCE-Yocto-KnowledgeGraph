@@ -1,0 +1,1803 @@
+* error when try to use sudo command in recipe
+@ 2023-02-03 22:08 SIMON BABY
+  2023-02-04 11:09 ` [yocto] " Richard Purdie
+  0 siblings, 1 reply; 26+ messages in thread
+From: SIMON BABY @ 2023-02-03 22:08 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 287 bytes --]
+
+Hello team,
+I am getting the below error whe try to execute command in bitbake recipe having sudo. eg: sudo kill
+
+sudo: /usr/bin/sudo must be owned by uid 0 and have the setuid bit set
+
+Can some please help how to fix it. The same errot did not see when i execute outside bitbake.
+
+[-- Attachment #2: Type: text/html, Size: 390 bytes --]
+
+^ permalink raw reply	[flat|nested] 26+ messages in thread
+* Re: [yocto] error when try to use sudo command in recipe
+  2023-02-03 22:08 error when try to use sudo command in recipe SIMON BABY
+@ 2023-02-04 11:09 ` Richard Purdie
+  2023-02-05  4:15   ` SIMON BABY
+  0 siblings, 1 reply; 26+ messages in thread
+From: Richard Purdie @ 2023-02-04 11:09 UTC (permalink / raw)
+  To: SIMON BABY, yocto
+
+On Fri, 2023-02-03 at 14:08 -0800, SIMON BABY wrote:
+> Hello team,
+> I am getting the below error whe try to execute command in bitbake
+> recipe having sudo. eg: sudo kill
+> 
+> sudo: /usr/bin/sudo must be owned by uid 0 and have the setuid bit
+> set
+> 
+> Can some please help how to fix it. The same errot did not see when i
+> execute outside bitbake.
+
+You didn't say which task this was in, I'm going to guess it is one
+being run under pseudo, our fakeroot emulator.
+
+The fakeroot emulation doesn't work well with "real" sudo commands.
+
+Cheers,
+
+Richard
+
+
+^ permalink raw reply	[flat|nested] 26+ messages in thread
+* Re: error when try to use sudo command in recipe
+  2023-02-04 11:09 ` [yocto] " Richard Purdie
+@ 2023-02-05  4:15   ` SIMON BABY
+  2023-02-05  7:38     ` [yocto] " Alexander Kanavin
+  2023-02-05  9:54     ` Richard Purdie
+  0 siblings, 2 replies; 26+ messages in thread
+From: SIMON BABY @ 2023-02-05  4:15 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 508 bytes --]
+
+Hi Richard,
+Thank you for the reply.
+I was trying to add the layer https://github.com/savoirfairelinux/meta-embedded-containers in my yocto build. Below recipe uses sudo commands.
+
+https://github.com/savoirfairelinux/meta-embedded-containers/blob/b131baa90291c159d3a725b8d66786c85964556c/recipes-support/container-image/container-image.bb
+
+while building it fails at sudo command and getting the error below.
+
+sudo: /usr/bin/sudo must be owned by uid 0 and have the setuid bit set
+
+Regards
+Simon
+
+[-- Attachment #2: Type: text/html, Size: 971 bytes --]
+
+^ permalink raw reply	[flat|nested] 26+ messages in thread
+* Re: [yocto] error when try to use sudo command in recipe
+  2023-02-05  4:15   ` SIMON BABY
+@ 2023-02-05  7:38     ` Alexander Kanavin
+  2023-02-05 16:23       ` SIMON BABY
+  2023-02-05  9:54     ` Richard Purdie
+  1 sibling, 1 reply; 26+ messages in thread
+From: Alexander Kanavin @ 2023-02-05  7:38 UTC (permalink / raw)
+  To: SIMON BABY; +Cc: yocto
+
+On Sun, 5 Feb 2023 at 05:15, SIMON BABY <simonkbaby@gmail.com> wrote:
+> Thank you for the reply.
+>  I was trying to add the layer https://github.com/savoirfairelinux/meta-embedded-containers in my yocto build. Below recipe uses sudo commands.
+>
+> https://github.com/savoirfairelinux/meta-embedded-containers/blob/b131baa90291c159d3a725b8d66786c85964556c/recipes-support/container-image/container-image.bb
+>
+> while building it fails at sudo command and getting the error below.
+>
+> sudo: /usr/bin/sudo must be owned by uid 0 and have the setuid bit set
+
+That layer is not maintained and you should not be using it. If you
+want to use containers, meta-virtualization is the supported way.
+
+Alex
+
+
+^ permalink raw reply	[flat|nested] 26+ messages in thread
+* Re: [yocto] error when try to use sudo command in recipe
+  2023-02-05  4:15   ` SIMON BABY
+  2023-02-05  7:38     ` [yocto] " Alexander Kanavin
+@ 2023-02-05  9:54     ` Richard Purdie
+  2023-02-05 16:44       ` SIMON BABY
+  1 sibling, 1 reply; 26+ messages in thread
+From: Richard Purdie @ 2023-02-05  9:54 UTC (permalink / raw)
+  To: SIMON BABY, yocto
+
+On Sat, 2023-02-04 at 20:15 -0800, SIMON BABY wrote:
+> Hi Richard,
+> Thank you for the reply.
+>  I was trying to add the
+> layer https://github.com/savoirfairelinux/meta-embedded-containers in
+> my yocto build. Below recipe uses sudo commands. 
+> 
+> https://github.com/savoirfairelinux/meta-embedded-containers/blob/b131baa90291c159d3a725b8d66786c85964556c/recipes-support/container-image/container-image.bb
+> 
+> while building it fails at sudo command and getting the error below.
+> 
+> sudo: /usr/bin/sudo must be owned by uid 0 and have the setuid bit
+> set
+
+I don't see anything in there which runs that task under
+fakeroot/pseudo. Are you building this within some kind of container
+and/or under something like kas? The error suggests that sudo has been
+restricted somehow but I don't think it is bitbake doing it.
+
+I'd point out that do_pull_image task has at least three problems I
+spotted at a quick glance:
+
+a) It will kill *any* dockerd process on the system so it can't run in
+parallel with any other build
+
+b) The "sleep 5" tells you it is likely to suffer races
+
+c) Using sudo within recipes is considered a bad practise and will
+require setup of the right privlegdes to work properly
+
+Cheers,
+
+Richard
+
+
+
+
+
+
+^ permalink raw reply	[flat|nested] 26+ messages in thread
+* Re: error when try to use sudo command in recipe
+  2023-02-05  7:38     ` [yocto] " Alexander Kanavin
+@ 2023-02-05 16:23       ` SIMON BABY
+  2023-02-05 16:43         ` [yocto] " Alexander Kanavin
+  0 siblings, 1 reply; 26+ messages in thread
+From: SIMON BABY @ 2023-02-05 16:23 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 268 bytes --]
+
+On Sat, Feb 4, 2023 at 11:38 PM, Alexander Kanavin wrote:
+
+> 
+> Hi Alex,
+
+Thank yo for your response. Can I know how to use meta-virtualization for building and loading container imaged into the target. Ccan you please provide a sample recipe?
+
+Regards
+Simon
+
+[-- Attachment #2: Type: text/html, Size: 307 bytes --]
+
+^ permalink raw reply	[flat|nested] 26+ messages in thread
+* Re: [yocto] error when try to use sudo command in recipe
+  2023-02-05 16:23       ` SIMON BABY
+@ 2023-02-05 16:43         ` Alexander Kanavin
+  0 siblings, 0 replies; 26+ messages in thread
+From: Alexander Kanavin @ 2023-02-05 16:43 UTC (permalink / raw)
+  To: SIMON BABY; +Cc: yocto
+
+On Sun, 5 Feb 2023 at 17:23, SIMON BABY <simonkbaby@gmail.com> wrote:
+>
+> Thank yo for your response. Can I know how to use meta-virtualization for building and loading container imaged into the target. Ccan you please provide a sample recipe?
+
+There are sample recipes in that layer, e.g. in recipes-demo/images. I
+suggest you clone it and study that and available image classes.
+
+Alex
+
+
+^ permalink raw reply	[flat|nested] 26+ messages in thread
+* Re: error when try to use sudo command in recipe
+  2023-02-05  9:54     ` Richard Purdie
+@ 2023-02-05 16:44       ` SIMON BABY
+  2023-02-05 17:08         ` [yocto] " Richard Purdie
+  0 siblings, 1 reply; 26+ messages in thread
+From: SIMON BABY @ 2023-02-05 16:44 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 657 bytes --]
+
+On Sun, Feb 5, 2023 at 01:54 AM, Richard Purdie wrote:
+
+> 
+> something
+
+Hello Richard,
+I am building this layer for adding container images into the root file system and load on the target as part of the image download. The sudo command when i run outsidethe yocto build directory
+seems to be good. when I trued using bitbake it fails always. I see the user and group ids are different when i printed inside the bitbake recipe.
+
+-rwsr-xr-x 1 *nobody nogroup* 166056 Jan 16 13:06 /usr/bin/sudo
+
+it should like below:
+tdydev@eadlng-build-machine:~$ ls -ll /usr/bin/sudo
+-rwsr-xr-x 1 root root 166056 Jan 16 05:06 /usr/bin/sudo
+
+Regards
+Simon
+
+[-- Attachment #2: Type: text/html, Size: 814 bytes --]
+
+^ permalink raw reply	[flat|nested] 26+ messages in thread
+* Re: [yocto] error when try to use sudo command in recipe
+  2023-02-05 16:44       ` SIMON BABY
+@ 2023-02-05 17:08         ` Richard Purdie
+  2023-02-06  0:00           ` SIMON BABY
+  0 siblings, 1 reply; 26+ messages in thread
+From: Richard Purdie @ 2023-02-05 17:08 UTC (permalink / raw)
+  To: SIMON BABY, yocto
+
+On Sun, 2023-02-05 at 08:44 -0800, SIMON BABY wrote:
+> On Sun, Feb 5, 2023 at 01:54 AM, Richard Purdie wrote:
+> > something
+> Hello Richard,
+> I am building this layer for adding container images into the root
+> file system and load on the target as part of the image download. The
+> sudo command when i run outsidethe yocto build directory 
+> seems to be good. when I trued using bitbake it fails always. I see
+> the user and group ids are different when i printed inside the
+> bitbake recipe.
+> 
+>  -rwsr-xr-x 1 nobody nogroup 166056 Jan 16 13:06 /usr/bin/sudo
+> 
+> it should like below:
+> tdydev@eadlng-build-machine:~$ ls -ll /usr/bin/sudo
+> -rwsr-xr-x 1 root root 166056 Jan 16 05:06 /usr/bin/sudo
+> 
+
+Are you running bitbake directly? How did you dump those sudo
+permissions from inside bitbake?
+
+Cheers,
+
+Richard
+
+
+^ permalink raw reply	[flat|nested] 26+ messages in thread
+* Re: error when try to use sudo command in recipe
+  2023-02-05 17:08         ` [yocto] " Richard Purdie
+@ 2023-02-06  0:00           ` SIMON BABY
+  2023-02-06  0:13             ` [yocto] " Richard Purdie
+  2023-02-09 18:45             ` SIMON BABY
+  0 siblings, 2 replies; 26+ messages in thread
+From: SIMON BABY @ 2023-02-06  0:00 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 133 bytes --]
+
+Hi Richard,
+
+I added extra code in the recipe to print the sudo permissions to compare with actual permissions.
+
+Regards
+Simon
+
+[-- Attachment #2: Type: text/html, Size: 159 bytes --]
+
+^ permalink raw reply	[flat|nested] 26+ messages in thread
+* Re: [yocto] error when try to use sudo command in recipe
+  2023-02-06  0:00           ` SIMON BABY
+@ 2023-02-06  0:13             ` Richard Purdie
+  2023-02-06  0:31               ` SIMON BABY
+  2023-04-03  7:24               ` adrian.dudau
+  2023-02-09 18:45             ` SIMON BABY
+  1 sibling, 2 replies; 26+ messages in thread
+From: Richard Purdie @ 2023-02-06  0:13 UTC (permalink / raw)
+  To: SIMON BABY, yocto
+
+On Sun, 2023-02-05 at 16:00 -0800, SIMON BABY wrote:
+> Hi Richard,
+> 
+> I added extra code in the recipe to print the sudo permissions to
+> compare with actual permissions.
+
+I'll ask for the third time.
+
+Are you running bitbake directly?
+
+I'd like to understand the environment bitbake is being run in.
+Something is breaking the ownership/permissions and I guess it is some
+kind of container.
+
+
+Cheers,
+
+Richard
+
+
+^ permalink raw reply	[flat|nested] 26+ messages in thread
+* Re: error when try to use sudo command in recipe
+  2023-02-06  0:13             ` [yocto] " Richard Purdie
+@ 2023-02-06  0:31               ` SIMON BABY
+  2023-02-06  1:05                 ` SIMON BABY
+  2023-04-03  7:24               ` adrian.dudau
+  1 sibling, 1 reply; 26+ messages in thread
+From: SIMON BABY @ 2023-02-06  0:31 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 140 bytes --]
+
+oh okay. Yes am running the command "bitbake embedded-contianer-image".  Probably I could try from the parent directory to run ./build.sh
+
+[-- Attachment #2: Type: text/html, Size: 144 bytes --]
+
+^ permalink raw reply	[flat|nested] 26+ messages in thread
+* Re: error when try to use sudo command in recipe
+  2023-02-06  0:31               ` SIMON BABY
+@ 2023-02-06  1:05                 ` SIMON BABY
+  2023-02-06  4:08                   ` SIMON BABY
+  0 siblings, 1 reply; 26+ messages in thread
+From: SIMON BABY @ 2023-02-06  1:05 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2208 bytes --]
+
+Hi Richard,
+
+My bblayers.conf and local.conf is below
+
+LCONF_VERSION = "7"
+
+BBPATH = "${TOPDIR}"
+BSPDIR := "${@os.path.abspath(os.path.dirname(d.getVar('FILE', True)) + '/../..')}"
+
+BBFILES ?= ""
+BBLAYERS = " \
+${BSPDIR}/sources/poky/meta \
+${BSPDIR}/sources/poky/meta-poky \
+\
+${BSPDIR}/sources/meta-openembedded/meta-oe \
+${BSPDIR}/sources/meta-openembedded/meta-multimedia \
+${BSPDIR}/sources/meta-openembedded/meta-python \
+\
+${BSPDIR}/sources/meta-freescale \
+${BSPDIR}/sources/meta-freescale-3rdparty \
+${BSPDIR}/sources/meta-freescale-distro \
+"
+
+# i.MX Yocto Project Release layers
+BBLAYERS += "${BSPDIR}/sources/meta-imx/meta-bsp"
+BBLAYERS += "${BSPDIR}/sources/meta-imx/meta-sdk"
+BBLAYERS += "${BSPDIR}/sources/meta-imx/meta-ml"
+BBLAYERS += "${BSPDIR}/sources/meta-imx/meta-v2x"
+BBLAYERS += "${BSPDIR}/sources/meta-nxp-demo-experience"
+
+BBLAYERS += "${BSPDIR}/sources/meta-browser/meta-chromium"
+BBLAYERS += "${BSPDIR}/sources/meta-clang"
+BBLAYERS += "${BSPDIR}/sources/meta-openembedded/meta-gnome"
+BBLAYERS += "${BSPDIR}/sources/meta-openembedded/meta-networking"
+BBLAYERS += "${BSPDIR}/sources/meta-openembedded/meta-filesystems"
+BBLAYERS += "${BSPDIR}/sources/meta-qt6"
+BBLAYERS += "${BSPDIR}/sources/meta-virtualization"
+BBLAYERS += "${BSPDIR}/sources/meta-teledyne-wapng"
+BBLAYERS += "${BSPDIR}/sources/meta-security/meta-tpm"
+BBLAYERS += "${BSPDIR}/sources/meta-embedded-containers"
+
+MACHINE ??= 'imx8mpevk'
+DISTRO ?= 'fsl-imx-wayland'
+PACKAGE_CLASSES ?= 'package_rpm'
+EXTRA_IMAGE_FEATURES ?= "debug-tweaks"
+USER_CLASSES ?= "buildstats"
+PATCHRESOLVE = "noop"
+BB_DISKMON_DIRS ??= "\
+STOPTASKS,${TMPDIR},1G,100K \
+STOPTASKS,${DL_DIR},1G,100K \
+STOPTASKS,${SSTATE_DIR},1G,100K \
+STOPTASKS,/tmp,100M,100K \
+HALT,${TMPDIR},100M,1K \
+HALT,${DL_DIR},100M,1K \
+HALT,${SSTATE_DIR},100M,1K \
+HALT,/tmp,10M,1K"
+PACKAGECONFIG:append:pn-qemu-system-native = " sdl"
+CONF_VERSION = "2"
+
+DL_DIR ?= "${BSPDIR}/downloads/"
+ACCEPT_FSL_EULA = "1"
+
+# Switch to Debian packaging and include package-management in the image
+PACKAGE_CLASSES = "package_deb"
+EXTRA_IMAGE_FEATURES += "package-management"
+DISTRO_FEATURES:append = " tpm virtualization"
+
+[-- Attachment #2: Type: text/html, Size: 3196 bytes --]
+
+^ permalink raw reply	[flat|nested] 26+ messages in thread
+* Re: error when try to use sudo command in recipe
+  2023-02-06  1:05                 ` SIMON BABY
+@ 2023-02-06  4:08                   ` SIMON BABY
+  0 siblings, 0 replies; 26+ messages in thread
+From: SIMON BABY @ 2023-02-06  4:08 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 78 bytes --]
+
+Hello Richard,
+Same error occured from /build.sh as well.
+
+Regards
+Simon
+
+[-- Attachment #2: Type: text/html, Size: 94 bytes --]
+
+^ permalink raw reply	[flat|nested] 26+ messages in thread
+* Re: [yocto] error when try to use sudo command in recipe
+  2023-02-06  0:00           ` SIMON BABY
+  2023-02-06  0:13             ` [yocto] " Richard Purdie
+@ 2023-02-09 18:45             ` SIMON BABY
+  2023-02-09 18:54               ` Alexander Kanavin
+  2023-02-10  7:46               ` adrian.freihofer
+  1 sibling, 2 replies; 26+ messages in thread
+From: SIMON BABY @ 2023-02-09 18:45 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2424 bytes --]
+
+Hello,
+
+
+
+I was testing the meta-virtualization/recipes-demo/images/ app-container. I
+was able to build the container. But I am not sure where is the image
+created  and how do we run the image using docker commands. I also see the
+.yaml files.
+
+On the target I can see /usr/bin/flask-app. Below is the folder contents
+after bitbake.
+
+
+
+bitbake app-container
+
+
+
+build/tmp/work/armv8a-poky-linux/helloworld-flask$ ls
+
+0.1-r0
+
+/build/tmp/work/armv8a-poky-linux/helloworld-flask$ cd 0.1-r0/
+
+build/tmp/work/armv8a-poky-linux/helloworld-flask/0.1-r0$ ls -ll
+
+total 84
+
+-rw-r--r--  1 tdydev tdydev    65 Feb  7 11:58 configure.sstate
+
+drwxr-xr-x  3 tdydev tdydev  4096 Feb  7 12:10 deploy-debs
+
+drwxr-xr-x  2 tdydev tdydev  4096 Feb  7 11:38 deploy-source-date-epoch
+
+-rwxrwxr-x  1 tdydev tdydev   518 Feb  2 14:24 flask-app
+
+-rw-r--r--  1 tdydev tdydev   511 Feb  7 11:58 flask-app-service.yaml
+
+-rw-r--r--  1 tdydev tdydev   178 Feb  7 11:58 flask-app.yaml
+
+drwxr-xr-x  2 tdydev tdydev  4096 Feb  7 11:35 helloworld-flask-0.1
+
+drwxr-xr-x  4 tdydev tdydev  4096 Feb  7 11:58 image
+
+drwxr-xr-x  3 tdydev tdydev  4096 Feb  7 11:38 license-destdir
+
+drwxr-xr-x  4 tdydev tdydev  4096 Apr  5  2011 package
+
+drwxr-xr-x 10 tdydev tdydev  4096 Feb  7 12:10 packages-split
+
+drwxr-xr-x  7 tdydev tdydev  4096 Apr  5  2011 pkgdata
+
+drwxr-xr-x  7 tdydev tdydev  4096 Feb  7 11:58 pkgdata-pdata-input
+
+drwxr-xr-x  7 tdydev tdydev  4096 Feb  7 11:58 pkgdata-sysroot
+
+drwxrwxr-x  2 tdydev tdydev  4096 Feb  7 12:10 pseudo
+
+drwxr-xr-x  5 tdydev tdydev  4096 Feb  7 12:10 recipe-sysroot
+
+drwxr-xr-x  8 tdydev tdydev  4096 Feb  7 12:10 recipe-sysroot-native
+
+drwxr-xr-x  2 tdydev tdydev  4096 Feb  7 11:35 source-date-epoch
+
+drwxr-xr-x  2 tdydev tdydev 12288
+
+
+
+
+
+
+Regards
+
+Simon
+
+
+On Sun, Feb 5, 2023 at 4:00 PM SIMON BABY via lists.yoctoproject.org
+<simonkbaby=gmail.com@lists.yoctoproject.org> wrote:
+
+> Hi Richard,
+>
+> I added extra code in the recipe to print the sudo permissions to compare
+> with actual permissions.
+>
+> Regards
+> Simon
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#59173):
+> https://lists.yoctoproject.org/g/yocto/message/59173
+> Mute This Topic: https://lists.yoctoproject.org/mt/96733939/4946642
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> simonkbaby@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 7104 bytes --]
+
+^ permalink raw reply	[flat|nested] 26+ messages in thread
+* Re: [yocto] error when try to use sudo command in recipe
+  2023-02-09 18:45             ` SIMON BABY
+@ 2023-02-09 18:54               ` Alexander Kanavin
+  2023-02-10  7:46               ` adrian.freihofer
+  1 sibling, 0 replies; 26+ messages in thread
+From: Alexander Kanavin @ 2023-02-09 18:54 UTC (permalink / raw)
+  To: SIMON BABY; +Cc: yocto
+
+Note that per its README, meta-virtualization has a dedicated mailing
+list and an irc channel, so perhaps you could ask there?
+
+https://git.yoctoproject.org/meta-virtualization/tree/README says
+
+Mailing list: https://lists.yoctoproject.org/g/meta-virtualization
+IRC: libera.chat #meta-virt channel
+
+Alex
+
+On Thu, 9 Feb 2023 at 19:45, SIMON BABY <simonkbaby@gmail.com> wrote:
+>
+> Hello,
+>
+>
+>
+> I was testing the meta-virtualization/recipes-demo/images/ app-container. I was able to build the container. But I am not sure where is the image created  and how do we run the image using docker commands. I also see the .yaml files.
+>
+> On the target I can see /usr/bin/flask-app. Below is the folder contents after bitbake.
+>
+>
+>
+> bitbake app-container
+>
+>
+>
+> build/tmp/work/armv8a-poky-linux/helloworld-flask$ ls
+>
+> 0.1-r0
+>
+> /build/tmp/work/armv8a-poky-linux/helloworld-flask$ cd 0.1-r0/
+>
+> build/tmp/work/armv8a-poky-linux/helloworld-flask/0.1-r0$ ls -ll
+>
+> total 84
+>
+> -rw-r--r--  1 tdydev tdydev    65 Feb  7 11:58 configure.sstate
+>
+> drwxr-xr-x  3 tdydev tdydev  4096 Feb  7 12:10 deploy-debs
+>
+> drwxr-xr-x  2 tdydev tdydev  4096 Feb  7 11:38 deploy-source-date-epoch
+>
+> -rwxrwxr-x  1 tdydev tdydev   518 Feb  2 14:24 flask-app
+>
+> -rw-r--r--  1 tdydev tdydev   511 Feb  7 11:58 flask-app-service.yaml
+>
+> -rw-r--r--  1 tdydev tdydev   178 Feb  7 11:58 flask-app.yaml
+>
+> drwxr-xr-x  2 tdydev tdydev  4096 Feb  7 11:35 helloworld-flask-0.1
+>
+> drwxr-xr-x  4 tdydev tdydev  4096 Feb  7 11:58 image
+>
+> drwxr-xr-x  3 tdydev tdydev  4096 Feb  7 11:38 license-destdir
+>
+> drwxr-xr-x  4 tdydev tdydev  4096 Apr  5  2011 package
+>
+> drwxr-xr-x 10 tdydev tdydev  4096 Feb  7 12:10 packages-split
+>
+> drwxr-xr-x  7 tdydev tdydev  4096 Apr  5  2011 pkgdata
+>
+> drwxr-xr-x  7 tdydev tdydev  4096 Feb  7 11:58 pkgdata-pdata-input
+>
+> drwxr-xr-x  7 tdydev tdydev  4096 Feb  7 11:58 pkgdata-sysroot
+>
+> drwxrwxr-x  2 tdydev tdydev  4096 Feb  7 12:10 pseudo
+>
+> drwxr-xr-x  5 tdydev tdydev  4096 Feb  7 12:10 recipe-sysroot
+>
+> drwxr-xr-x  8 tdydev tdydev  4096 Feb  7 12:10 recipe-sysroot-native
+>
+> drwxr-xr-x  2 tdydev tdydev  4096 Feb  7 11:35 source-date-epoch
+>
+> drwxr-xr-x  2 tdydev tdydev 12288
+>
+>
+>
+>
+>
+>
+> Regards
+>
+> Simon
+>
+>
+>
+> On Sun, Feb 5, 2023 at 4:00 PM SIMON BABY via lists.yoctoproject.org <simonkbaby=gmail.com@lists.yoctoproject.org> wrote:
+>>
+>> Hi Richard,
+>>
+>> I added extra code in the recipe to print the sudo permissions to compare with actual permissions.
+>>
+>> Regards
+>> Simon
+>>
+>>
+>>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#59204): https://lists.yoctoproject.org/g/yocto/message/59204
+> Mute This Topic: https://lists.yoctoproject.org/mt/96733939/1686489
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 26+ messages in thread
+* Re: [yocto] error when try to use sudo command in recipe
+  2023-02-09 18:45             ` SIMON BABY
+  2023-02-09 18:54               ` Alexander Kanavin
+@ 2023-02-10  7:46               ` adrian.freihofer
+  2023-02-10 21:09                 ` SIMON BABY
+  1 sibling, 1 reply; 26+ messages in thread
+From: adrian.freihofer @ 2023-02-10  7:46 UTC (permalink / raw)
+  To: SIMON BABY, yocto
+
+Hi Simon
+
+I guess in the deploy folder (build/tmp/deploy/...) you will find a tar
+archive which can be used with e.g. docker import.
+
+If you need to upload the OCI image to a container registry skopeo
+might be used somehow like that:
+
+bitbake "skopeo-native:do_addto_recipe_sysroot"
+OCI_DIR="build/tmp/deploy/images/${MACHINE}/${TARGET_IMAGE}-
+${MACHINE}.rootfs-oci"
+oe-run-native skopeo-native skopeo login -u "${CI_REGISTRY_USER}" -p
+"${CI_REGISTRY_PASSWORD}" "${CI_REGISTRY}" --authfile
+${HOME}/.registry-auth.json
+oe-run-native skopeo-native skopeo copy oci:${OCI_DIR}
+docker://${CI_REGISTRY_IMAGE}:${CI_COMMIT_REF_SLUG}-${OCI_ARCH} --
+authfile ${HOME}/.registry-auth.json
+
+If you need to provide the container for different architectures
+manifest-tool can do that. After uploading images to a registry the
+manifest tool can convert all the per ARCH images into a multi arch
+container image.
+
+Regards,
+Adrian
+
+On Thu, 2023-02-09 at 10:45 -0800, SIMON BABY wrote:
+> Hello,
+>  
+> I was testing the meta-virtualization/recipes-demo/images/ app-
+> container. I was able to build the container. But I am not sure where
+> is the image created  and how do we run the image using docker
+> commands. I also see the .yaml files. 
+> On the target I can see /usr/bin/flask-app. Below is the folder
+> contents after bitbake.
+>  
+> bitbake app-container
+>  
+> build/tmp/work/armv8a-poky-linux/helloworld-flask$ ls
+> 0.1-r0
+> /build/tmp/work/armv8a-poky-linux/helloworld-flask$ cd 0.1-r0/
+> build/tmp/work/armv8a-poky-linux/helloworld-flask/0.1-r0$ ls -ll
+> total 84
+> -rw-r--r--  1 tdydev tdydev    65 Feb  7 11:58 configure.sstate
+> drwxr-xr-x  3 tdydev tdydev  4096 Feb  7 12:10 deploy-debs
+> drwxr-xr-x  2 tdydev tdydev  4096 Feb  7 11:38 deploy-source-date-
+> epoch
+> -rwxrwxr-x  1 tdydev tdydev   518 Feb  2 14:24 flask-app
+> -rw-r--r--  1 tdydev tdydev   511 Feb  7 11:58 flask-app-service.yaml
+> -rw-r--r--  1 tdydev tdydev   178 Feb  7 11:58 flask-app.yaml
+> drwxr-xr-x  2 tdydev tdydev  4096 Feb  7 11:35 helloworld-flask-0.1
+> drwxr-xr-x  4 tdydev tdydev  4096 Feb  7 11:58 image
+> drwxr-xr-x  3 tdydev tdydev  4096 Feb  7 11:38 license-destdir
+> drwxr-xr-x  4 tdydev tdydev  4096 Apr  5  2011 package
+> drwxr-xr-x 10 tdydev tdydev  4096 Feb  7 12:10 packages-split
+> drwxr-xr-x  7 tdydev tdydev  4096 Apr  5  2011 pkgdata
+> drwxr-xr-x  7 tdydev tdydev  4096 Feb  7 11:58 pkgdata-pdata-input
+> drwxr-xr-x  7 tdydev tdydev  4096 Feb  7 11:58 pkgdata-sysroot
+> drwxrwxr-x  2 tdydev tdydev  4096 Feb  7 12:10 pseudo
+> drwxr-xr-x  5 tdydev tdydev  4096 Feb  7 12:10 recipe-sysroot
+> drwxr-xr-x  8 tdydev tdydev  4096 Feb  7 12:10 recipe-sysroot-native
+> drwxr-xr-x  2 tdydev tdydev  4096 Feb  7 11:35 source-date-epoch
+> drwxr-xr-x  2 tdydev tdydev 12288 
+> 
+> 
+> 
+> 
+> 
+> Regards
+> Simon
+> 
+> 
+> On Sun, Feb 5, 2023 at 4:00 PM SIMON BABY via lists.yoctoproject.org
+> <simonkbaby=gmail.com@lists.yoctoproject.org> wrote:
+> > Hi Richard,
+> > 
+> > I added extra code in the recipe to print the sudo permissions to
+> > compare with actual permissions.
+> > 
+> > Regards
+> > Simon
+> > 
+> > 
+> > 
+> 
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#59204):
+> https://lists.yoctoproject.org/g/yocto/message/59204
+> Mute This Topic: https://lists.yoctoproject.org/mt/96733939/4454582
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe:
+> https://lists.yoctoproject.org/g/yocto/unsub [adrian.freihofer@gmail.com
+> ]
+> -=-=-=-=-=-=-=-=-=-=-=-
+> 
+
+
+
+^ permalink raw reply	[flat|nested] 26+ messages in thread
+* Re: error when try to use sudo command in recipe
+  2023-02-10  7:46               ` adrian.freihofer
+@ 2023-02-10 21:09                 ` SIMON BABY
+  0 siblings, 0 replies; 26+ messages in thread
+From: SIMON BABY @ 2023-02-10 21:09 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 256 bytes --]
+
+Hello Adrian,
+
+Thank you for your help. I did not see the tar file created for the specific container under delploy. Do I have to add anything in the .bblayers or local.conf in addition to the default recipe under meta-virtualization?
+
+Regards
+Simon
+
+[-- Attachment #2: Type: text/html, Size: 276 bytes --]
+
+^ permalink raw reply	[flat|nested] 26+ messages in thread
+* Re: error when try to use sudo command in recipe
+  2023-02-06  0:13             ` [yocto] " Richard Purdie
+  2023-02-06  0:31               ` SIMON BABY
+@ 2023-04-03  7:24               ` adrian.dudau
+  2023-04-03 14:57                 ` [yocto] " Khem Raj
+  1 sibling, 1 reply; 26+ messages in thread
+From: adrian.dudau @ 2023-04-03  7:24 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1241 bytes --]
+
+On Mon, Feb 6, 2023 at 01:13 AM, Richard Purdie wrote:
+Hi Richard,
+
+Jumping on this thread to provide some clarifications as I hit the same bug.
+I can confirm that this is not an environment issue. I could reproduce it by adding a sudo call in an empty recipe like this:
+
+SUMMARY = ""
+HOMEPAGE = ""
+LICENSE = ""
+SECTION = ""
+DEPENDS = ""
+
+SRC_URI = ""
+
+do_install() {
+ls -l /usr/bin/sudo
+sudo ls -l /usr/bin/sudo
+}
+
+Running bitbake barebone on my x86 machine produces this error:
+
+| -rwxr-xr-x 1 nobody 65534 232416 Mar  1 13:59 /usr/bin/sudo
+| sudo: /etc/sudo.conf is owned by uid 65534, should be 0
+| sudo: /etc/sudo.conf is owned by uid 65534, should be 0
+| sudo: error in /etc/sudo.conf, line 0 while loading plugin "sudoers_policy"
+| sudo: /usr/libexec/sudo/sudoers.so must be owned by uid 0
+| sudo: fatal error, unable to load plugins
+
+Indeed it seems that ownership is broken somehow in the bb environment. The issue was introduced somewhere between dunfell and kirkstone. I know it's a large timespan but it's a bit time consuming to narrow it down.
+
+Hoping to get some help on this. I would try to investigate further myself but I have no idea where to start to be honest.
+
+Best regards,
+--Adrian
+
+[-- Attachment #2: Type: text/html, Size: 1427 bytes --]
+
+^ permalink raw reply	[flat|nested] 26+ messages in thread
+* Re: [yocto] error when try to use sudo command in recipe
+  2023-04-03  7:24               ` adrian.dudau
+@ 2023-04-03 14:57                 ` Khem Raj
+  2023-04-03 15:42                   ` Adrian Dudau
+  0 siblings, 1 reply; 26+ messages in thread
+From: Khem Raj @ 2023-04-03 14:57 UTC (permalink / raw)
+  To: adrian.dudau; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1988 bytes --]
+
+On Mon, Apr 3, 2023 at 12:25 AM <adrian.dudau@keyfactor.com> wrote:
+
+> On Mon, Feb 6, 2023 at 01:13 AM, Richard Purdie wrote:
+> Hi Richard,
+>
+> Jumping on this thread to provide some clarifications as I hit the same
+> bug.
+> I can confirm that this is not an environment issue. I could reproduce it
+> by adding a sudo call in an empty recipe like this:
+>
+> SUMMARY = ""
+> HOMEPAGE = ""
+> LICENSE = ""
+> SECTION = ""
+> DEPENDS = ""
+>
+> SRC_URI = ""
+>
+> do_install() {
+>     ls -l /usr/bin/sudo
+>     sudo ls -l /usr/bin/sudo
+> }
+>
+
+Build already use a fake root environment using pseudo to intercept the
+calls so this might not be out of line here. What is the original issue you
+are running into ?
+
+
+>
+> Running bitbake barebone on my x86 machine produces this error:
+>
+> | -rwxr-xr-x 1 nobody 65534 232416 Mar  1 13:59 /usr/bin/sudo
+> | sudo: /etc/sudo.conf is owned by uid 65534, should be 0
+> | sudo: /etc/sudo.conf is owned by uid 65534, should be 0
+> | sudo: error in /etc/sudo.conf, line 0 while loading plugin
+> "sudoers_policy"
+> | sudo: /usr/libexec/sudo/sudoers.so must be owned by uid 0
+> | sudo: fatal error, unable to load plugins
+>
+> Indeed it seems that ownership is broken somehow in the bb environment.
+> The issue was introduced somewhere between dunfell and kirkstone. I know
+> it's a large timespan but it's a bit time consuming to narrow it down.
+>
+> Hoping to get some help on this. I would try to investigate further myself
+> but I have no idea where to start to be honest.
+>
+> Best regards,
+> --Adrian
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> You automatically follow any topics you start or reply to.
+> View/Reply Online (#59594):
+> https://lists.yoctoproject.org/g/yocto/message/59594
+> Mute This Topic: https://lists.yoctoproject.org/mt/96733939/1997914
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> raj.khem@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 3012 bytes --]
+
+^ permalink raw reply	[flat|nested] 26+ messages in thread
+* Re: [yocto] error when try to use sudo command in recipe
+  2023-04-03 14:57                 ` [yocto] " Khem Raj
+@ 2023-04-03 15:42                   ` Adrian Dudau
+  2023-04-03 15:59                     ` Bruce Ashfield
+  0 siblings, 1 reply; 26+ messages in thread
+From: Adrian Dudau @ 2023-04-03 15:42 UTC (permalink / raw)
+  To: Khem Raj; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 4442 bytes --]
+
+Hi Khem,
+
+Thanks for the reply, though I am not sure I fully understand the first part of your answer. I'm trying to do something similar to the thread creator, i.e running "podman pull" at build time to populate an image store that I can later install into the target rootfs.
+
+Still, I am failing to understand why /usr/bin/sudo doesn't show up as owned by the root user, even when running under pseudo. Also, why has this changed between Dunfell and master and where exactly has the changed happened..
+
+Best regards,
+--Adrian
+________________________________
+From: Khem Raj <raj.khem@gmail.com>
+Sent: Monday, April 3, 2023 4:57 PM
+To: Adrian Dudau <adrian.dudau@keyfactor.com>
+Cc: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+Subject: Re: [yocto] error when try to use sudo command in recipe
+
+You don't often get email from raj.khem@gmail.com. Learn why this is important<https://aka.ms/LearnAboutSenderIdentification>
+CAUTION: External Sender - Be cautious when clicking links or opening attachments. Please email InfoSec@keyfactor.com with any questions.
+
+
+
+On Mon, Apr 3, 2023 at 12:25 AM <adrian.dudau@keyfactor.com<mailto:adrian.dudau@keyfactor.com>> wrote:
+On Mon, Feb 6, 2023 at 01:13 AM, Richard Purdie wrote:
+Hi Richard,
+
+Jumping on this thread to provide some clarifications as I hit the same bug.
+I can confirm that this is not an environment issue. I could reproduce it by adding a sudo call in an empty recipe like this:
+
+SUMMARY = ""
+HOMEPAGE = ""
+LICENSE = ""
+SECTION = ""
+DEPENDS = ""
+
+SRC_URI = ""
+
+do_install() {
+    ls -l /usr/bin/sudo
+    sudo ls -l /usr/bin/sudo
+}
+
+Build already use a fake root environment using pseudo to intercept the calls so this might not be out of line here. What is the original issue you are running into ?
+
+
+
+Running bitbake barebone on my x86 machine produces this error:
+
+| -rwxr-xr-x 1 nobody 65534 232416 Mar  1 13:59 /usr/bin/sudo
+| sudo: /etc/sudo.conf is owned by uid 65534, should be 0
+| sudo: /etc/sudo.conf is owned by uid 65534, should be 0
+| sudo: error in /etc/sudo.conf, line 0 while loading plugin "sudoers_policy"
+| sudo: /usr/libexec/sudo/sudoers.so must be owned by uid 0
+| sudo: fatal error, unable to load plugins
+
+Indeed it seems that ownership is broken somehow in the bb environment. The issue was introduced somewhere between dunfell and kirkstone. I know it's a large timespan but it's a bit time consuming to narrow it down.
+
+Hoping to get some help on this. I would try to investigate further myself but I have no idea where to start to be honest.
+
+Best regards,
+--Adrian
+
+-=-=-=-=-=-=-=-=-=-=-=-
+Links: You receive all messages sent to this group.
+You automatically follow any topics you start or reply to.
+View/Reply Online (#59594): https://lists.yoctoproject.org/g/yocto/message/59594<https://nam11.safelinks.protection.outlook.com/?url=https%3A%2F%2Flists.yoctoproject.org%2Fg%2Fyocto%2Fmessage%2F59594&data=05%7C01%7Cadrian.dudau%40keyfactor.com%7C285da1e1af0a403ddc9d08db3453cb12%7Cc9ed4b459f70418aaa58f04c80848ca9%7C0%7C0%7C638161306759776144%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=wCdVmKhuBSTGtomYax5nGJ%2FU%2BgDP77qJhiUeo%2FPvmfI%3D&reserved=0>
+Mute This Topic: https://lists.yoctoproject.org/mt/96733939/1997914<https://nam11.safelinks.protection.outlook.com/?url=https%3A%2F%2Flists.yoctoproject.org%2Fmt%2F96733939%2F1997914&data=05%7C01%7Cadrian.dudau%40keyfactor.com%7C285da1e1af0a403ddc9d08db3453cb12%7Cc9ed4b459f70418aaa58f04c80848ca9%7C0%7C0%7C638161306759776144%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=EoBSOu9VHGL1%2BhwdtR6rildYMUnrcihKq3Oi1ifktng%3D&reserved=0>
+Group Owner: yocto+owner@lists.yoctoproject.org<mailto:yocto%2Bowner@lists.yoctoproject.org>
+Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub<https://nam11.safelinks.protection.outlook.com/?url=https%3A%2F%2Flists.yoctoproject.org%2Fg%2Fyocto%2Funsub&data=05%7C01%7Cadrian.dudau%40keyfactor.com%7C285da1e1af0a403ddc9d08db3453cb12%7Cc9ed4b459f70418aaa58f04c80848ca9%7C0%7C0%7C638161306759932359%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=oPMLP5%2BH1TpoImAATccCbMI%2B5vfKZQi2l4ls3CqQ8Yo%3D&reserved=0> [raj.khem@gmail.com<mailto:raj.khem@gmail.com>]
+-=-=-=-=-=-=-=-=-=-=-=-
+
+
+[-- Attachment #2: Type: text/html, Size: 9229 bytes --]
+
+^ permalink raw reply	[flat|nested] 26+ messages in thread
+* Re: [yocto] error when try to use sudo command in recipe
+  2023-04-03 15:42                   ` Adrian Dudau
+@ 2023-04-03 15:59                     ` Bruce Ashfield
+  2023-04-04  7:59                       ` Adrian Dudau
+  0 siblings, 1 reply; 26+ messages in thread
+From: Bruce Ashfield @ 2023-04-03 15:59 UTC (permalink / raw)
+  To: Adrian Dudau; +Cc: Khem Raj, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 3917 bytes --]
+
+On Mon, Apr 3, 2023 at 11:42 AM Adrian Dudau <adrian.dudau@keyfactor.com>
+wrote:
+
+> Hi Khem,
+>
+> Thanks for the reply, though I am not sure I fully understand the first
+> part of your answer. I'm trying to do something similar to the thread
+> creator, i.e running "podman pull" at build time to populate an image store
+> that I can later install into the target rootfs.
+>
+>
+FWIW. The above is something that I have almost working, but had to drop
+the completion of the support for the upcoming release (it was too late,
+and I had to get some kernel changes done). I'm hoping to have something
+usable in the next few months.
+
+If you are trying to generate containers (I don't recommend pulling them)
+and installing them into a container store that is part of the rootfs, then
+collaborating on the meta-virtualization mailing list is a good starting
+point.
+
+Bruce
+
+
+
+> Still, I am failing to understand why /usr/bin/sudo doesn't show up as
+> owned by the root user, even when running under pseudo. Also, why has this
+> changed between Dunfell and master and where exactly has the changed
+> happened..
+>
+> Best regards,
+> --Adrian
+> ------------------------------
+> *From:* Khem Raj <raj.khem@gmail.com>
+> *Sent:* Monday, April 3, 2023 4:57 PM
+> *To:* Adrian Dudau <adrian.dudau@keyfactor.com>
+> *Cc:* yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+> *Subject:* Re: [yocto] error when try to use sudo command in recipe
+>
+> You don't often get email from raj.khem@gmail.com. Learn why this is
+> important <https://aka.ms/LearnAboutSenderIdentification>
+> CAUTION: External Sender - Be cautious when clicking links or opening
+> attachments. Please email InfoSec@keyfactor.com with any questions.
+>
+>
+>
+> On Mon, Apr 3, 2023 at 12:25 AM <adrian.dudau@keyfactor.com> wrote:
+>
+> On Mon, Feb 6, 2023 at 01:13 AM, Richard Purdie wrote:
+> Hi Richard,
+>
+> Jumping on this thread to provide some clarifications as I hit the same
+> bug.
+> I can confirm that this is not an environment issue. I could reproduce it
+> by adding a sudo call in an empty recipe like this:
+>
+> SUMMARY = ""
+> HOMEPAGE = ""
+> LICENSE = ""
+> SECTION = ""
+> DEPENDS = ""
+>
+> SRC_URI = ""
+>
+> do_install() {
+>     ls -l /usr/bin/sudo
+>     sudo ls -l /usr/bin/sudo
+> }
+>
+>
+> Build already use a fake root environment using pseudo to intercept the
+> calls so this might not be out of line here. What is the original issue you
+> are running into ?
+>
+>
+>
+> Running bitbake barebone on my x86 machine produces this error:
+>
+> | -rwxr-xr-x 1 nobody 65534 232416 Mar  1 13:59 /usr/bin/sudo
+> | sudo: /etc/sudo.conf is owned by uid 65534, should be 0
+> | sudo: /etc/sudo.conf is owned by uid 65534, should be 0
+> | sudo: error in /etc/sudo.conf, line 0 while loading plugin
+> "sudoers_policy"
+> | sudo: /usr/libexec/sudo/sudoers.so must be owned by uid 0
+> | sudo: fatal error, unable to load plugins
+>
+> Indeed it seems that ownership is broken somehow in the bb environment.
+> The issue was introduced somewhere between dunfell and kirkstone. I know
+> it's a large timespan but it's a bit time consuming to narrow it down.
+>
+> Hoping to get some help on this. I would try to investigate further myself
+> but I have no idea where to start to be honest.
+>
+> Best regards,
+> --Adrian
+>
+>
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#59601):
+> https://lists.yoctoproject.org/g/yocto/message/59601
+> Mute This Topic: https://lists.yoctoproject.org/mt/96733939/1050810
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> bruce.ashfield@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+-- 
+- Thou shalt not follow the NULL pointer, for chaos and madness await thee
+at its end
+- "Use the force Harry" - Gandalf, Star Trek II
+
+[-- Attachment #2: Type: text/html, Size: 9098 bytes --]
+
+^ permalink raw reply	[flat|nested] 26+ messages in thread
+* Re: [yocto] error when try to use sudo command in recipe
+  2023-04-03 15:59                     ` Bruce Ashfield
+@ 2023-04-04  7:59                       ` Adrian Dudau
+  2023-04-04 10:02                         ` Chen, Qi
+       [not found]                         ` <1752B31EC9C28A4E.3578@lists.yoctoproject.org>
+  0 siblings, 2 replies; 26+ messages in thread
+From: Adrian Dudau @ 2023-04-04  7:59 UTC (permalink / raw)
+  To: Bruce Ashfield; +Cc: Khem Raj, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 6532 bytes --]
+
+I sent an email to the meta-virtualization list describing what I'm trying to achieve and see if others have further ideas.
+
+However, I would still like to continue investigating this sudo bug as it is quite annoying.
+Even when running under pseudo, I don't see why the binary would show as not owned by the root user.
+Dropping down to the devshell, the binary seems to have the right owner:
+
+ ls -l /usr/bin/sudo
+-rwsr-xr-x 1 root root 232416 Mar  1 13:59 /usr/bin/sudo
+
+So any other input to put me on the right tracks would be appreciated.
+
+--Adrian
+
+
+________________________________
+From: Bruce Ashfield <bruce.ashfield@gmail.com>
+Sent: Monday, April 3, 2023 5:59 PM
+To: Adrian Dudau <adrian.dudau@keyfactor.com>
+Cc: Khem Raj <raj.khem@gmail.com>; yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+Subject: Re: [yocto] error when try to use sudo command in recipe
+
+You don't often get email from bruce.ashfield@gmail.com. Learn why this is important<https://aka.ms/LearnAboutSenderIdentification>
+CAUTION: External Sender - Be cautious when clicking links or opening attachments. Please email InfoSec@keyfactor.com with any questions.
+
+
+
+On Mon, Apr 3, 2023 at 11:42 AM Adrian Dudau <adrian.dudau@keyfactor.com<mailto:adrian.dudau@keyfactor.com>> wrote:
+Hi Khem,
+
+Thanks for the reply, though I am not sure I fully understand the first part of your answer. I'm trying to do something similar to the thread creator, i.e running "podman pull" at build time to populate an image store that I can later install into the target rootfs.
+
+
+FWIW. The above is something that I have almost working, but had to drop the completion of the support for the upcoming release (it was too late, and I had to get some kernel changes done). I'm hoping to have something usable in the next few months.
+
+If you are trying to generate containers (I don't recommend pulling them) and installing them into a container store that is part of the rootfs, then collaborating on the meta-virtualization mailing list is a good starting point.
+
+Bruce
+
+
+Still, I am failing to understand why /usr/bin/sudo doesn't show up as owned by the root user, even when running under pseudo. Also, why has this changed between Dunfell and master and where exactly has the changed happened..
+
+Best regards,
+--Adrian
+________________________________
+From: Khem Raj <raj.khem@gmail.com<mailto:raj.khem@gmail.com>>
+Sent: Monday, April 3, 2023 4:57 PM
+To: Adrian Dudau <adrian.dudau@keyfactor.com<mailto:adrian.dudau@keyfactor.com>>
+Cc: yocto@lists.yoctoproject.org<mailto:yocto@lists.yoctoproject.org> <yocto@lists.yoctoproject.org<mailto:yocto@lists.yoctoproject.org>>
+Subject: Re: [yocto] error when try to use sudo command in recipe
+
+You don't often get email from raj.khem@gmail.com<mailto:raj.khem@gmail.com>. Learn why this is important<https://aka.ms/LearnAboutSenderIdentification>
+CAUTION: External Sender - Be cautious when clicking links or opening attachments. Please email InfoSec@keyfactor.com<mailto:InfoSec@keyfactor.com> with any questions.
+
+
+
+On Mon, Apr 3, 2023 at 12:25 AM <adrian.dudau@keyfactor.com<mailto:adrian.dudau@keyfactor.com>> wrote:
+On Mon, Feb 6, 2023 at 01:13 AM, Richard Purdie wrote:
+Hi Richard,
+
+Jumping on this thread to provide some clarifications as I hit the same bug.
+I can confirm that this is not an environment issue. I could reproduce it by adding a sudo call in an empty recipe like this:
+
+SUMMARY = ""
+HOMEPAGE = ""
+LICENSE = ""
+SECTION = ""
+DEPENDS = ""
+
+SRC_URI = ""
+
+do_install() {
+    ls -l /usr/bin/sudo
+    sudo ls -l /usr/bin/sudo
+}
+
+Build already use a fake root environment using pseudo to intercept the calls so this might not be out of line here. What is the original issue you are running into ?
+
+
+
+Running bitbake barebone on my x86 machine produces this error:
+
+| -rwxr-xr-x 1 nobody 65534 232416 Mar  1 13:59 /usr/bin/sudo
+| sudo: /etc/sudo.conf is owned by uid 65534, should be 0
+| sudo: /etc/sudo.conf is owned by uid 65534, should be 0
+| sudo: error in /etc/sudo.conf, line 0 while loading plugin "sudoers_policy"
+| sudo: /usr/libexec/sudo/sudoers.so must be owned by uid 0
+| sudo: fatal error, unable to load plugins
+
+Indeed it seems that ownership is broken somehow in the bb environment. The issue was introduced somewhere between dunfell and kirkstone. I know it's a large timespan but it's a bit time consuming to narrow it down.
+
+Hoping to get some help on this. I would try to investigate further myself but I have no idea where to start to be honest.
+
+Best regards,
+--Adrian
+
+
+
+
+-=-=-=-=-=-=-=-=-=-=-=-
+Links: You receive all messages sent to this group.
+View/Reply Online (#59601): https://lists.yoctoproject.org/g/yocto/message/59601<https://nam11.safelinks.protection.outlook.com/?url=https%3A%2F%2Flists.yoctoproject.org%2Fg%2Fyocto%2Fmessage%2F59601&data=05%7C01%7Cadrian.dudau%40keyfactor.com%7C69ff6c4320f142735e4408db345c6187%7Cc9ed4b459f70418aaa58f04c80848ca9%7C0%7C0%7C638161343621896924%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=orCj0EU%2BmRe7g8TnPWCRLqYcD3wbyG9Ce9F%2BHEPADro%3D&reserved=0>
+Mute This Topic: https://lists.yoctoproject.org/mt/96733939/1050810<https://nam11.safelinks.protection.outlook.com/?url=https%3A%2F%2Flists.yoctoproject.org%2Fmt%2F96733939%2F1050810&data=05%7C01%7Cadrian.dudau%40keyfactor.com%7C69ff6c4320f142735e4408db345c6187%7Cc9ed4b459f70418aaa58f04c80848ca9%7C0%7C0%7C638161343621896924%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=6aOxqle0UshusBqLxHwsPn3stQHkH3ERea16FaSSEFo%3D&reserved=0>
+Group Owner: yocto+owner@lists.yoctoproject.org<mailto:yocto%2Bowner@lists.yoctoproject.org>
+Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub<https://nam11.safelinks.protection.outlook.com/?url=https%3A%2F%2Flists.yoctoproject.org%2Fg%2Fyocto%2Funsub&data=05%7C01%7Cadrian.dudau%40keyfactor.com%7C69ff6c4320f142735e4408db345c6187%7Cc9ed4b459f70418aaa58f04c80848ca9%7C0%7C0%7C638161343621896924%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=lmegTy%2FAfGkEfP1Mdr%2Fxj9capXUNO6YoCXoYxn96e7A%3D&reserved=0> [bruce.ashfield@gmail.com<mailto:bruce.ashfield@gmail.com>]
+-=-=-=-=-=-=-=-=-=-=-=-
+
+
+
+--
+- Thou shalt not follow the NULL pointer, for chaos and madness await thee at its end
+- "Use the force Harry" - Gandalf, Star Trek II
+
+
+[-- Attachment #2: Type: text/html, Size: 16743 bytes --]
+
+^ permalink raw reply	[flat|nested] 26+ messages in thread
+* RE: [yocto] error when try to use sudo command in recipe
+  2023-04-04  7:59                       ` Adrian Dudau
+@ 2023-04-04 10:02                         ` Chen, Qi
+       [not found]                         ` <1752B31EC9C28A4E.3578@lists.yoctoproject.org>
+  1 sibling, 0 replies; 26+ messages in thread
+From: Chen, Qi @ 2023-04-04 10:02 UTC (permalink / raw)
+  To: Adrian Dudau, Bruce Ashfield; +Cc: Khem Raj, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 6132 bytes --]
+
+I haven’t done any further investigation, but I don’t think this problem is related to pseudo.
+On one hand, /usr directory is ignored as it’s in PSEUDO_IGNORE_PATHS; on the other hand, LD_PRELOAD does not have effect on setuid programs such as sudo.
+
+Unfortunately I don’t have any clue. Another trick Yocto does is uninative. Not sure if it’s related.
+
+Regards,
+Qi
+
+
+From: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org> On Behalf Of Adrian Dudau
+Sent: Tuesday, April 4, 2023 4:00 PM
+To: Bruce Ashfield <bruce.ashfield@gmail.com>
+Cc: Khem Raj <raj.khem@gmail.com>; yocto@lists.yoctoproject.org
+Subject: Re: [yocto] error when try to use sudo command in recipe
+
+I sent an email to the meta-virtualization list describing what I'm trying to achieve and see if others have further ideas.
+
+However, I would still like to continue investigating this sudo bug as it is quite annoying.
+Even when running under pseudo, I don't see why the binary would show as not owned by the root user.
+Dropping down to the devshell, the binary seems to have the right owner:
+
+ ls -l /usr/bin/sudo
+-rwsr-xr-x 1 root root 232416 Mar  1 13:59 /usr/bin/sudo
+
+So any other input to put me on the right tracks would be appreciated.
+
+--Adrian
+
+
+________________________________
+From: Bruce Ashfield <bruce.ashfield@gmail.com<mailto:bruce.ashfield@gmail.com>>
+Sent: Monday, April 3, 2023 5:59 PM
+To: Adrian Dudau <adrian.dudau@keyfactor.com<mailto:adrian.dudau@keyfactor.com>>
+Cc: Khem Raj <raj.khem@gmail.com<mailto:raj.khem@gmail.com>>; yocto@lists.yoctoproject.org<mailto:yocto@lists.yoctoproject.org> <yocto@lists.yoctoproject.org<mailto:yocto@lists.yoctoproject.org>>
+Subject: Re: [yocto] error when try to use sudo command in recipe
+
+You don't often get email from bruce.ashfield@gmail.com<mailto:bruce.ashfield@gmail.com>. Learn why this is important<https://urldefense.com/v3/__https:/aka.ms/LearnAboutSenderIdentification__;!!AjveYdw8EvQ!bCVRr1HPLpArLcLWGZ8guexuGI6P-mtViLkvOaqoTEec50HxhNr5MJU5YyEGoFz6H9KnzCOprmCRTwLuNYQfP_E0iZSbJQ$>
+CAUTION: External Sender - Be cautious when clicking links or opening attachments. Please email InfoSec@keyfactor.com<mailto:InfoSec@keyfactor.com> with any questions.
+
+
+
+On Mon, Apr 3, 2023 at 11:42 AM Adrian Dudau <adrian.dudau@keyfactor.com<mailto:adrian.dudau@keyfactor.com>> wrote:
+Hi Khem,
+
+Thanks for the reply, though I am not sure I fully understand the first part of your answer. I'm trying to do something similar to the thread creator, i.e running "podman pull" at build time to populate an image store that I can later install into the target rootfs.
+
+
+FWIW. The above is something that I have almost working, but had to drop the completion of the support for the upcoming release (it was too late, and I had to get some kernel changes done). I'm hoping to have something usable in the next few months.
+
+If you are trying to generate containers (I don't recommend pulling them) and installing them into a container store that is part of the rootfs, then collaborating on the meta-virtualization mailing list is a good starting point.
+
+Bruce
+
+
+Still, I am failing to understand why /usr/bin/sudo doesn't show up as owned by the root user, even when running under pseudo. Also, why has this changed between Dunfell and master and where exactly has the changed happened..
+
+Best regards,
+--Adrian
+________________________________
+From: Khem Raj <raj.khem@gmail.com<mailto:raj.khem@gmail.com>>
+Sent: Monday, April 3, 2023 4:57 PM
+To: Adrian Dudau <adrian.dudau@keyfactor.com<mailto:adrian.dudau@keyfactor.com>>
+Cc: yocto@lists.yoctoproject.org<mailto:yocto@lists.yoctoproject.org> <yocto@lists.yoctoproject.org<mailto:yocto@lists.yoctoproject.org>>
+Subject: Re: [yocto] error when try to use sudo command in recipe
+
+You don't often get email from raj.khem@gmail.com<mailto:raj.khem@gmail.com>. Learn why this is important<https://urldefense.com/v3/__https:/aka.ms/LearnAboutSenderIdentification__;!!AjveYdw8EvQ!bCVRr1HPLpArLcLWGZ8guexuGI6P-mtViLkvOaqoTEec50HxhNr5MJU5YyEGoFz6H9KnzCOprmCRTwLuNYQfP_E0iZSbJQ$>
+CAUTION: External Sender - Be cautious when clicking links or opening attachments. Please email InfoSec@keyfactor.com<mailto:InfoSec@keyfactor.com> with any questions.
+
+
+
+On Mon, Apr 3, 2023 at 12:25 AM <adrian.dudau@keyfactor.com<mailto:adrian.dudau@keyfactor.com>> wrote:
+On Mon, Feb 6, 2023 at 01:13 AM, Richard Purdie wrote:
+Hi Richard,
+
+Jumping on this thread to provide some clarifications as I hit the same bug.
+I can confirm that this is not an environment issue. I could reproduce it by adding a sudo call in an empty recipe like this:
+
+SUMMARY = ""
+HOMEPAGE = ""
+LICENSE = ""
+SECTION = ""
+DEPENDS = ""
+
+SRC_URI = ""
+
+do_install() {
+    ls -l /usr/bin/sudo
+    sudo ls -l /usr/bin/sudo
+}
+
+Build already use a fake root environment using pseudo to intercept the calls so this might not be out of line here. What is the original issue you are running into ?
+
+
+
+Running bitbake barebone on my x86 machine produces this error:
+
+| -rwxr-xr-x 1 nobody 65534 232416 Mar  1 13:59 /usr/bin/sudo
+| sudo: /etc/sudo.conf is owned by uid 65534, should be 0
+| sudo: /etc/sudo.conf is owned by uid 65534, should be 0
+| sudo: error in /etc/sudo.conf, line 0 while loading plugin "sudoers_policy"
+| sudo: /usr/libexec/sudo/sudoers.so<https://urldefense.com/v3/__http:/sudoers.so__;!!AjveYdw8EvQ!bCVRr1HPLpArLcLWGZ8guexuGI6P-mtViLkvOaqoTEec50HxhNr5MJU5YyEGoFz6H9KnzCOprmCRTwLuNYQfP_HvviZJJA$> must be owned by uid 0
+| sudo: fatal error, unable to load plugins
+
+Indeed it seems that ownership is broken somehow in the bb environment. The issue was introduced somewhere between dunfell and kirkstone. I know it's a large timespan but it's a bit time consuming to narrow it down.
+
+Hoping to get some help on this. I would try to investigate further myself but I have no idea where to start to be honest.
+
+Best regards,
+--Adrian
+
+
+
+
+
+
+--
+- Thou shalt not follow the NULL pointer, for chaos and madness await thee at its end
+- "Use the force Harry" - Gandalf, Star Trek II
+
+[-- Attachment #2: Type: text/html, Size: 17277 bytes --]
+
+^ permalink raw reply	[flat|nested] 26+ messages in thread
+* RE: [yocto] error when try to use sudo command in recipe
+       [not found]                         ` <1752B31EC9C28A4E.3578@lists.yoctoproject.org>
+@ 2023-04-05 16:17                           ` Chen, Qi
+  2023-04-13  7:08                             ` Adrian Dudau
+  0 siblings, 1 reply; 26+ messages in thread
+From: Chen, Qi @ 2023-04-05 16:17 UTC (permalink / raw)
+  To: Chen, Qi, Adrian Dudau, Bruce Ashfield; +Cc: Khem Raj, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 7182 bytes --]
+
+This problem just bumped into my head so I did a little more investigation.
+The root cause is that bitbake-worker uses a new user namespace if possible.
+The commit in bitbake/poky repo is the following one.
+“””
+bitbake: utils: Add disable_network function
+“””
+The key codes are: libc.unshare(CLONE_NEWNET | CLONE_NEWUSER)
+
+To make things work in your case, the simplest way is to set: do_install[network] = “1”, so that the above codes are not run for this task.
+
+Regards,
+Qi
+
+From: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org> On Behalf Of Chen Qi via lists.yoctoproject.org
+Sent: Tuesday, April 4, 2023 6:02 PM
+To: Adrian Dudau <adrian.dudau@keyfactor.com>; Bruce Ashfield <bruce.ashfield@gmail.com>
+Cc: Khem Raj <raj.khem@gmail.com>; yocto@lists.yoctoproject.org
+Subject: Re: [yocto] error when try to use sudo command in recipe
+
+I haven’t done any further investigation, but I don’t think this problem is related to pseudo.
+On one hand, /usr directory is ignored as it’s in PSEUDO_IGNORE_PATHS; on the other hand, LD_PRELOAD does not have effect on setuid programs such as sudo.
+
+Unfortunately I don’t have any clue. Another trick Yocto does is uninative. Not sure if it’s related.
+
+Regards,
+Qi
+
+
+From: yocto@lists.yoctoproject.org<mailto:yocto@lists.yoctoproject.org> <yocto@lists.yoctoproject.org<mailto:yocto@lists.yoctoproject.org>> On Behalf Of Adrian Dudau
+Sent: Tuesday, April 4, 2023 4:00 PM
+To: Bruce Ashfield <bruce.ashfield@gmail.com<mailto:bruce.ashfield@gmail.com>>
+Cc: Khem Raj <raj.khem@gmail.com<mailto:raj.khem@gmail.com>>; yocto@lists.yoctoproject.org<mailto:yocto@lists.yoctoproject.org>
+Subject: Re: [yocto] error when try to use sudo command in recipe
+
+I sent an email to the meta-virtualization list describing what I'm trying to achieve and see if others have further ideas.
+
+However, I would still like to continue investigating this sudo bug as it is quite annoying.
+Even when running under pseudo, I don't see why the binary would show as not owned by the root user.
+Dropping down to the devshell, the binary seems to have the right owner:
+
+ ls -l /usr/bin/sudo
+-rwsr-xr-x 1 root root 232416 Mar  1 13:59 /usr/bin/sudo
+
+So any other input to put me on the right tracks would be appreciated.
+
+--Adrian
+
+
+________________________________
+From: Bruce Ashfield <bruce.ashfield@gmail.com<mailto:bruce.ashfield@gmail.com>>
+Sent: Monday, April 3, 2023 5:59 PM
+To: Adrian Dudau <adrian.dudau@keyfactor.com<mailto:adrian.dudau@keyfactor.com>>
+Cc: Khem Raj <raj.khem@gmail.com<mailto:raj.khem@gmail.com>>; yocto@lists.yoctoproject.org<mailto:yocto@lists.yoctoproject.org> <yocto@lists.yoctoproject.org<mailto:yocto@lists.yoctoproject.org>>
+Subject: Re: [yocto] error when try to use sudo command in recipe
+
+You don't often get email from bruce.ashfield@gmail.com<mailto:bruce.ashfield@gmail.com>. Learn why this is important<https://urldefense.com/v3/__https:/aka.ms/LearnAboutSenderIdentification__;!!AjveYdw8EvQ!bCVRr1HPLpArLcLWGZ8guexuGI6P-mtViLkvOaqoTEec50HxhNr5MJU5YyEGoFz6H9KnzCOprmCRTwLuNYQfP_E0iZSbJQ$>
+CAUTION: External Sender - Be cautious when clicking links or opening attachments. Please email InfoSec@keyfactor.com<mailto:InfoSec@keyfactor.com> with any questions.
+
+
+
+On Mon, Apr 3, 2023 at 11:42 AM Adrian Dudau <adrian.dudau@keyfactor.com<mailto:adrian.dudau@keyfactor.com>> wrote:
+Hi Khem,
+
+Thanks for the reply, though I am not sure I fully understand the first part of your answer. I'm trying to do something similar to the thread creator, i.e running "podman pull" at build time to populate an image store that I can later install into the target rootfs.
+
+
+FWIW. The above is something that I have almost working, but had to drop the completion of the support for the upcoming release (it was too late, and I had to get some kernel changes done). I'm hoping to have something usable in the next few months.
+
+If you are trying to generate containers (I don't recommend pulling them) and installing them into a container store that is part of the rootfs, then collaborating on the meta-virtualization mailing list is a good starting point.
+
+Bruce
+
+
+Still, I am failing to understand why /usr/bin/sudo doesn't show up as owned by the root user, even when running under pseudo. Also, why has this changed between Dunfell and master and where exactly has the changed happened..
+
+Best regards,
+--Adrian
+________________________________
+From: Khem Raj <raj.khem@gmail.com<mailto:raj.khem@gmail.com>>
+Sent: Monday, April 3, 2023 4:57 PM
+To: Adrian Dudau <adrian.dudau@keyfactor.com<mailto:adrian.dudau@keyfactor.com>>
+Cc: yocto@lists.yoctoproject.org<mailto:yocto@lists.yoctoproject.org> <yocto@lists.yoctoproject.org<mailto:yocto@lists.yoctoproject.org>>
+Subject: Re: [yocto] error when try to use sudo command in recipe
+
+You don't often get email from raj.khem@gmail.com<mailto:raj.khem@gmail.com>. Learn why this is important<https://urldefense.com/v3/__https:/aka.ms/LearnAboutSenderIdentification__;!!AjveYdw8EvQ!bCVRr1HPLpArLcLWGZ8guexuGI6P-mtViLkvOaqoTEec50HxhNr5MJU5YyEGoFz6H9KnzCOprmCRTwLuNYQfP_E0iZSbJQ$>
+CAUTION: External Sender - Be cautious when clicking links or opening attachments. Please email InfoSec@keyfactor.com<mailto:InfoSec@keyfactor.com> with any questions.
+
+
+
+On Mon, Apr 3, 2023 at 12:25 AM <adrian.dudau@keyfactor.com<mailto:adrian.dudau@keyfactor.com>> wrote:
+On Mon, Feb 6, 2023 at 01:13 AM, Richard Purdie wrote:
+Hi Richard,
+
+Jumping on this thread to provide some clarifications as I hit the same bug.
+I can confirm that this is not an environment issue. I could reproduce it by adding a sudo call in an empty recipe like this:
+
+SUMMARY = ""
+HOMEPAGE = ""
+LICENSE = ""
+SECTION = ""
+DEPENDS = ""
+
+SRC_URI = ""
+
+do_install() {
+    ls -l /usr/bin/sudo
+    sudo ls -l /usr/bin/sudo
+}
+
+Build already use a fake root environment using pseudo to intercept the calls so this might not be out of line here. What is the original issue you are running into ?
+
+
+
+Running bitbake barebone on my x86 machine produces this error:
+
+| -rwxr-xr-x 1 nobody 65534 232416 Mar  1 13:59 /usr/bin/sudo
+| sudo: /etc/sudo.conf is owned by uid 65534, should be 0
+| sudo: /etc/sudo.conf is owned by uid 65534, should be 0
+| sudo: error in /etc/sudo.conf, line 0 while loading plugin "sudoers_policy"
+| sudo: /usr/libexec/sudo/sudoers.so<https://urldefense.com/v3/__http:/sudoers.so__;!!AjveYdw8EvQ!bCVRr1HPLpArLcLWGZ8guexuGI6P-mtViLkvOaqoTEec50HxhNr5MJU5YyEGoFz6H9KnzCOprmCRTwLuNYQfP_HvviZJJA$> must be owned by uid 0
+| sudo: fatal error, unable to load plugins
+
+Indeed it seems that ownership is broken somehow in the bb environment. The issue was introduced somewhere between dunfell and kirkstone. I know it's a large timespan but it's a bit time consuming to narrow it down.
+
+Hoping to get some help on this. I would try to investigate further myself but I have no idea where to start to be honest.
+
+Best regards,
+--Adrian
+
+
+
+
+--
+- Thou shalt not follow the NULL pointer, for chaos and madness await thee at its end
+- "Use the force Harry" - Gandalf, Star Trek II
+
+[-- Attachment #2: Type: text/html, Size: 19287 bytes --]
+
+^ permalink raw reply	[flat|nested] 26+ messages in thread
+* Re: [yocto] error when try to use sudo command in recipe
+  2023-04-05 16:17                           ` Chen, Qi
+@ 2023-04-13  7:08                             ` Adrian Dudau
+  0 siblings, 0 replies; 26+ messages in thread
+From: Adrian Dudau @ 2023-04-13  7:08 UTC (permalink / raw)
+  To: Chen, Qi, Bruce Ashfield; +Cc: Khem Raj, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 8178 bytes --]
+
+Hi Qi,
+
+This seems to solve the issue, though I'm not sure this behaviour was intended in the original commit by Richard. Anyways, thanks a lot!
+
+--Adrian
+________________________________
+From: Chen, Qi <Qi.Chen@windriver.com>
+Sent: Wednesday, April 5, 2023 6:17 PM
+To: Chen, Qi <Qi.Chen@windriver.com>; Adrian Dudau <adrian.dudau@keyfactor.com>; Bruce Ashfield <bruce.ashfield@gmail.com>
+Cc: Khem Raj <raj.khem@gmail.com>; yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+Subject: RE: [yocto] error when try to use sudo command in recipe
+
+You don't often get email from qi.chen@windriver.com. Learn why this is important<https://aka.ms/LearnAboutSenderIdentification>
+CAUTION: External Sender - Be cautious when clicking links or opening attachments. Please email InfoSec@keyfactor.com with any questions.
+
+
+This problem just bumped into my head so I did a little more investigation.
+
+The root cause is that bitbake-worker uses a new user namespace if possible.
+
+The commit in bitbake/poky repo is the following one.
+
+“””
+
+bitbake: utils: Add disable_network function
+
+“””
+
+The key codes are: libc.unshare(CLONE_NEWNET | CLONE_NEWUSER)
+
+
+
+To make things work in your case, the simplest way is to set: do_install[network] = “1”, so that the above codes are not run for this task.
+
+
+
+Regards,
+
+Qi
+
+
+
+From: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org> On Behalf Of Chen Qi via lists.yoctoproject.org
+Sent: Tuesday, April 4, 2023 6:02 PM
+To: Adrian Dudau <adrian.dudau@keyfactor.com>; Bruce Ashfield <bruce.ashfield@gmail.com>
+Cc: Khem Raj <raj.khem@gmail.com>; yocto@lists.yoctoproject.org
+Subject: Re: [yocto] error when try to use sudo command in recipe
+
+
+
+I haven’t done any further investigation, but I don’t think this problem is related to pseudo.
+
+On one hand, /usr directory is ignored as it’s in PSEUDO_IGNORE_PATHS; on the other hand, LD_PRELOAD does not have effect on setuid programs such as sudo.
+
+
+
+Unfortunately I don’t have any clue. Another trick Yocto does is uninative. Not sure if it’s related.
+
+
+
+Regards,
+
+Qi
+
+
+
+
+
+From: yocto@lists.yoctoproject.org<mailto:yocto@lists.yoctoproject.org> <yocto@lists.yoctoproject.org<mailto:yocto@lists.yoctoproject.org>> On Behalf Of Adrian Dudau
+Sent: Tuesday, April 4, 2023 4:00 PM
+To: Bruce Ashfield <bruce.ashfield@gmail.com<mailto:bruce.ashfield@gmail.com>>
+Cc: Khem Raj <raj.khem@gmail.com<mailto:raj.khem@gmail.com>>; yocto@lists.yoctoproject.org<mailto:yocto@lists.yoctoproject.org>
+Subject: Re: [yocto] error when try to use sudo command in recipe
+
+
+
+I sent an email to the meta-virtualization list describing what I'm trying to achieve and see if others have further ideas.
+
+
+
+However, I would still like to continue investigating this sudo bug as it is quite annoying.
+
+Even when running under pseudo, I don't see why the binary would show as not owned by the root user.
+
+Dropping down to the devshell, the binary seems to have the right owner:
+
+
+
+ ls -l /usr/bin/sudo
+-rwsr-xr-x 1 root root 232416 Mar  1 13:59 /usr/bin/sudo
+
+
+
+So any other input to put me on the right tracks would be appreciated.
+
+
+
+--Adrian
+
+
+
+
+
+________________________________
+
+From: Bruce Ashfield <bruce.ashfield@gmail.com<mailto:bruce.ashfield@gmail.com>>
+Sent: Monday, April 3, 2023 5:59 PM
+To: Adrian Dudau <adrian.dudau@keyfactor.com<mailto:adrian.dudau@keyfactor.com>>
+Cc: Khem Raj <raj.khem@gmail.com<mailto:raj.khem@gmail.com>>; yocto@lists.yoctoproject.org<mailto:yocto@lists.yoctoproject.org> <yocto@lists.yoctoproject.org<mailto:yocto@lists.yoctoproject.org>>
+Subject: Re: [yocto] error when try to use sudo command in recipe
+
+
+
+You don't often get email from bruce.ashfield@gmail.com<mailto:bruce.ashfield@gmail.com>. Learn why this is important<https://urldefense.com/v3/__https:/aka.ms/LearnAboutSenderIdentification__;!!AjveYdw8EvQ!bCVRr1HPLpArLcLWGZ8guexuGI6P-mtViLkvOaqoTEec50HxhNr5MJU5YyEGoFz6H9KnzCOprmCRTwLuNYQfP_E0iZSbJQ$>
+
+CAUTION: External Sender - Be cautious when clicking links or opening attachments. Please email InfoSec@keyfactor.com<mailto:InfoSec@keyfactor.com> with any questions.
+
+
+
+
+
+
+
+On Mon, Apr 3, 2023 at 11:42 AM Adrian Dudau <adrian.dudau@keyfactor.com<mailto:adrian.dudau@keyfactor.com>> wrote:
+
+Hi Khem,
+
+
+
+Thanks for the reply, though I am not sure I fully understand the first part of your answer. I'm trying to do something similar to the thread creator, i.e running "podman pull" at build time to populate an image store that I can later install into the target rootfs.
+
+
+
+
+
+FWIW. The above is something that I have almost working, but had to drop the completion of the support for the upcoming release (it was too late, and I had to get some kernel changes done). I'm hoping to have something usable in the next few months.
+
+
+
+If you are trying to generate containers (I don't recommend pulling them) and installing them into a container store that is part of the rootfs, then collaborating on the meta-virtualization mailing list is a good starting point.
+
+
+
+Bruce
+
+
+
+
+
+Still, I am failing to understand why /usr/bin/sudo doesn't show up as owned by the root user, even when running under pseudo. Also, why has this changed between Dunfell and master and where exactly has the changed happened..
+
+
+
+Best regards,
+
+--Adrian
+
+________________________________
+
+From: Khem Raj <raj.khem@gmail.com<mailto:raj.khem@gmail.com>>
+Sent: Monday, April 3, 2023 4:57 PM
+To: Adrian Dudau <adrian.dudau@keyfactor.com<mailto:adrian.dudau@keyfactor.com>>
+Cc: yocto@lists.yoctoproject.org<mailto:yocto@lists.yoctoproject.org> <yocto@lists.yoctoproject.org<mailto:yocto@lists.yoctoproject.org>>
+Subject: Re: [yocto] error when try to use sudo command in recipe
+
+
+
+You don't often get email from raj.khem@gmail.com<mailto:raj.khem@gmail.com>. Learn why this is important<https://urldefense.com/v3/__https:/aka.ms/LearnAboutSenderIdentification__;!!AjveYdw8EvQ!bCVRr1HPLpArLcLWGZ8guexuGI6P-mtViLkvOaqoTEec50HxhNr5MJU5YyEGoFz6H9KnzCOprmCRTwLuNYQfP_E0iZSbJQ$>
+
+CAUTION: External Sender - Be cautious when clicking links or opening attachments. Please email InfoSec@keyfactor.com<mailto:InfoSec@keyfactor.com> with any questions.
+
+
+
+
+
+
+
+On Mon, Apr 3, 2023 at 12:25 AM <adrian.dudau@keyfactor.com<mailto:adrian.dudau@keyfactor.com>> wrote:
+
+On Mon, Feb 6, 2023 at 01:13 AM, Richard Purdie wrote:
+Hi Richard,
+
+Jumping on this thread to provide some clarifications as I hit the same bug.
+I can confirm that this is not an environment issue. I could reproduce it by adding a sudo call in an empty recipe like this:
+
+SUMMARY = ""
+HOMEPAGE = ""
+LICENSE = ""
+SECTION = ""
+DEPENDS = ""
+
+SRC_URI = ""
+
+do_install() {
+    ls -l /usr/bin/sudo
+    sudo ls -l /usr/bin/sudo
+}
+
+
+
+Build already use a fake root environment using pseudo to intercept the calls so this might not be out of line here. What is the original issue you are running into ?
+
+
+
+
+Running bitbake barebone on my x86 machine produces this error:
+
+| -rwxr-xr-x 1 nobody 65534 232416 Mar  1 13:59 /usr/bin/sudo
+| sudo: /etc/sudo.conf is owned by uid 65534, should be 0
+| sudo: /etc/sudo.conf is owned by uid 65534, should be 0
+| sudo: error in /etc/sudo.conf, line 0 while loading plugin "sudoers_policy"
+| sudo: /usr/libexec/sudo/sudoers.so<https://urldefense.com/v3/__http:/sudoers.so__;!!AjveYdw8EvQ!bCVRr1HPLpArLcLWGZ8guexuGI6P-mtViLkvOaqoTEec50HxhNr5MJU5YyEGoFz6H9KnzCOprmCRTwLuNYQfP_HvviZJJA$> must be owned by uid 0
+| sudo: fatal error, unable to load plugins
+
+Indeed it seems that ownership is broken somehow in the bb environment. The issue was introduced somewhere between dunfell and kirkstone. I know it's a large timespan but it's a bit time consuming to narrow it down.
+
+Hoping to get some help on this. I would try to investigate further myself but I have no idea where to start to be honest.
+
+Best regards,
+--Adrian
+
+
+
+
+
+
+
+--
+
+- Thou shalt not follow the NULL pointer, for chaos and madness await thee at its end
+- "Use the force Harry" - Gandalf, Star Trek II
+
+[-- Attachment #2: Type: text/html, Size: 21668 bytes --]
+
+^ permalink raw reply	[flat|nested] 26+ messages in thread
+end of thread, other threads:[~2023-04-13  7:08 UTC | newest]
+
+Thread overview: 26+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-02-03 22:08 error when try to use sudo command in recipe SIMON BABY
+2023-02-04 11:09 ` [yocto] " Richard Purdie
+2023-02-05  4:15   ` SIMON BABY
+2023-02-05  7:38     ` [yocto] " Alexander Kanavin
+2023-02-05 16:23       ` SIMON BABY
+2023-02-05 16:43         ` [yocto] " Alexander Kanavin
+2023-02-05  9:54     ` Richard Purdie
+2023-02-05 16:44       ` SIMON BABY
+2023-02-05 17:08         ` [yocto] " Richard Purdie
+2023-02-06  0:00           ` SIMON BABY
+2023-02-06  0:13             ` [yocto] " Richard Purdie
+2023-02-06  0:31               ` SIMON BABY
+2023-02-06  1:05                 ` SIMON BABY
+2023-02-06  4:08                   ` SIMON BABY
+2023-04-03  7:24               ` adrian.dudau
+2023-04-03 14:57                 ` [yocto] " Khem Raj
+2023-04-03 15:42                   ` Adrian Dudau
+2023-04-03 15:59                     ` Bruce Ashfield
+2023-04-04  7:59                       ` Adrian Dudau
+2023-04-04 10:02                         ` Chen, Qi
+     [not found]                         ` <1752B31EC9C28A4E.3578@lists.yoctoproject.org>
+2023-04-05 16:17                           ` Chen, Qi
+2023-04-13  7:08                             ` Adrian Dudau
+2023-02-09 18:45             ` SIMON BABY
+2023-02-09 18:54               ` Alexander Kanavin
+2023-02-10  7:46               ` adrian.freihofer
+2023-02-10 21:09                 ` SIMON BABY
+

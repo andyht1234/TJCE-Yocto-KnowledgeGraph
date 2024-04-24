@@ -1,0 +1,208 @@
+* report one objcopy bug and fix
+@ 2023-06-28  7:55 cddiao
+  2023-06-28 16:48 ` [yocto] " Richard Purdie
+  0 siblings, 1 reply; 6+ messages in thread
+From: cddiao @ 2023-06-28  7:55 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1214 bytes --]
+
+Hi,
+A bug is triggered when using docker + Ubuntu 20.04. 3 LTS. The bug message is :
+
+File: 'xxx/build/poky/meta/classes/kernel-module-split.bbclass', lineno: 68, function: extract_modinfo
+0064:                raise msg
+0065:            cmd = "%sobjcopy -j .modinfo -O binary %s %s" % (d.getVar("HOST_PREFIX") or "", tmpkofile, tmpfile)
+0066:        else:
+0067:            cmd = "%sobjcopy -j .modinfo -O binary %s %s" % (d.getVar("HOST_PREFIX") or "", file, tmpfile)
+*** 0068:        subprocess.check_call(cmd, shell=True)
+Exception: subprocess.CalledProcessError: Command 'aarch64-poky-linux-objcopy -j .modinfo -O binary ../keymaps/rc-alink-dtu-m.ko   ../tmpwhs5uwlt' returned non-zero exit status 1.
+
+The  " rc-alink-dtu-m.ko " file is damaged, and can't  analysis by file command :
+$ file -b rc-alink-dtu-m.ko
+data
+and the damaged is caused by  build/poky/meta/classes/package.bbclass  perform_packagecopy()
+cmd = 'tar --exclude=./sysroot-only -cf - -C %s -p -S . | tar -xf - -C %s' % (dest, dvar)
+
+remove the "-S " can fix the bug.
+notes: this bug only appears in Ubuntu 20.04. 3 LTS, and Ubuntu 20.04. 6 LTS do not have the issue.
+
+[-- Attachment #2: Type: text/html, Size: 2707 bytes --]
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] report one objcopy bug and fix
+  2023-06-28  7:55 report one objcopy bug and fix cddiao
+@ 2023-06-28 16:48 ` Richard Purdie
+  2023-06-29  2:48   ` cddiao
+  0 siblings, 1 reply; 6+ messages in thread
+From: Richard Purdie @ 2023-06-28 16:48 UTC (permalink / raw)
+  To: cddiao, yocto
+
+On Wed, 2023-06-28 at 00:55 -0700, cddiao@ambarella.com wrote:
+> Hi,
+>     A bug is triggered when using docker + Ubuntu 20.04.3 LTS. The
+> bug message is :
+> 
+> File: 'xxx/build/poky/meta/classes/kernel-module-split.bbclass',
+> lineno: 68, function: extract_modinfo
+>      0064:                raise msg
+>      0065:            cmd = "%sobjcopy -j .modinfo -O binary %s %s" %
+> (d.getVar("HOST_PREFIX") or "", tmpkofile, tmpfile)
+>      0066:        else:
+>      0067:            cmd = "%sobjcopy -j .modinfo -O binary %s %s" %
+> (d.getVar("HOST_PREFIX") or "", file, tmpfile)
+>  *** 0068:        subprocess.check_call(cmd, shell=True)
+>  Exception: subprocess.CalledProcessError: Command 'aarch64-poky-
+> linux-objcopy -j .modinfo -O binary ../keymaps/rc-alink-dtu-m.ko  
+> ../tmpwhs5uwlt' returned non-zero exit status 1.
+>  
+>     The  "rc-alink-dtu-m.ko" file is damaged, and can't  analysis by
+> file command :
+>        $ file -b rc-alink-dtu-m.ko
+>           data
+>     and the damaged is caused by 
+> build/poky/meta/classes/package.bbclass  perform_packagecopy()
+>         cmd = 'tar --exclude=./sysroot-only -cf - -C %s -p -S . | tar
+> -xf - -C %s' % (dest, dvar)
+> 
+>     remove the "-S " can fix the bug.
+>     notes: this bug only appears in Ubuntu 20.04.3 LTS, and Ubuntu
+> 20.04.6 LTS do not have the issue.
+
+Do you have the tar versions for the two distro versions? Was this a
+bug that was fixed in tar?
+
+I'm not sure we can easily work around this, it may be better to error
+if a build is attempted with a known broken tar version?
+
+Cheers,
+
+Richard
+
+
+
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: report one objcopy bug and fix
+  2023-06-28 16:48 ` [yocto] " Richard Purdie
+@ 2023-06-29  2:48   ` cddiao
+  2023-06-29  8:34     ` [yocto] " Richard Purdie
+  0 siblings, 1 reply; 6+ messages in thread
+From: cddiao @ 2023-06-29  2:48 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 410 bytes --]
+
+Hi Richard,
+the tar version is
+
+tar --version
+tar (GNU tar) 1.30
+Copyright (C) 2017 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>.
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.
+
+Written by John Gilmore and Jay Fenlason.
+
+both of the two distro are the same.
+
+[-- Attachment #2: Type: text/html, Size: 817 bytes --]
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] report one objcopy bug and fix
+  2023-06-29  2:48   ` cddiao
+@ 2023-06-29  8:34     ` Richard Purdie
+  2023-06-30  2:36       ` cddiao
+  0 siblings, 1 reply; 6+ messages in thread
+From: Richard Purdie @ 2023-06-29  8:34 UTC (permalink / raw)
+  To: cddiao, yocto
+
+On Wed, 2023-06-28 at 19:48 -0700, cddiao@ambarella.com wrote:
+> Hi Richard,
+>     the tar version is
+>  tar --version
+> tar (GNU tar) 1.30
+> Copyright (C) 2017 Free Software Foundation, Inc.
+> License GPLv3+: GNU GPL version 3 or later
+> <https://gnu.org/licenses/gpl.html>.
+> This is free software: you are free to change and redistribute it.
+> There is NO WARRANTY, to the extent permitted by law.
+> 
+> Written by John Gilmore and Jay Fenlason.
+> 
+> both of the two distro are the same.
+
+
+That is rather unfortunate as we can't tell them apart :( I'm not sure
+what we can do about this other than warn that 20.04.3 isn't supported
+and/or has a bug?
+
+Cheers,
+
+Richard
+
+
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: report one objcopy bug and fix
+  2023-06-29  8:34     ` [yocto] " Richard Purdie
+@ 2023-06-30  2:36       ` cddiao
+  2023-06-30  9:10         ` [yocto] " Khem Raj
+  0 siblings, 1 reply; 6+ messages in thread
+From: cddiao @ 2023-06-30  2:36 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 272 bytes --]
+
+Hi Richard,
+How about to remove "-S" in the tar commands ?
+I only tested 20.04.3 and 20.04.6. I didn't test the other distro, so I'm not sure if there's anything wrong with the other distro.
+To be on the safe side, remove the "-S" can solve the problem fundamentally.
+
+[-- Attachment #2: Type: text/html, Size: 354 bytes --]
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] report one objcopy bug and fix
+  2023-06-30  2:36       ` cddiao
+@ 2023-06-30  9:10         ` Khem Raj
+  0 siblings, 0 replies; 6+ messages in thread
+From: Khem Raj @ 2023-06-30  9:10 UTC (permalink / raw)
+  To: cddiao; +Cc: yocto
+
+On Fri, Jun 30, 2023 at 4:36 AM <cddiao@ambarella.com> wrote:
+>
+> Hi Richard,
+>      How about to remove "-S" in the tar commands ?
+
+This would make the archives not use sparse optimization and increase
+the size of resulting archives. I think it will
+penalize all other hosts. I would just suggest calling out a
+workaround for a particular version of distro where it's problematic
+and move on. anyway 20.04 LTS is already at 20.04.6 at the moment.
+
+>      I only tested 20.04.3 and 20.04.6. I didn't test the other distro, so I'm not sure if there's anything wrong with the other distro.
+>     To be on the safe side, remove the "-S" can solve the problem fundamentally.
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> You automatically follow any topics you start or reply to.
+> View/Reply Online (#60482): https://lists.yoctoproject.org/g/yocto/message/60482
+> Mute This Topic: https://lists.yoctoproject.org/mt/99828392/1997914
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [raj.khem@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+end of thread, other threads:[~2023-06-30  9:10 UTC | newest]
+
+Thread overview: 6+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-06-28  7:55 report one objcopy bug and fix cddiao
+2023-06-28 16:48 ` [yocto] " Richard Purdie
+2023-06-29  2:48   ` cddiao
+2023-06-29  8:34     ` [yocto] " Richard Purdie
+2023-06-30  2:36       ` cddiao
+2023-06-30  9:10         ` [yocto] " Khem Raj
+

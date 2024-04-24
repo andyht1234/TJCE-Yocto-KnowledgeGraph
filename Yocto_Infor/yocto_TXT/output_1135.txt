@@ -1,0 +1,169 @@
+* Recipe to install third-party RPM  #bitbake
+@ 2022-12-08 16:56 dspore
+  2022-12-09  4:28 ` [yocto] " Federico Pellegrin
+  0 siblings, 1 reply; 3+ messages in thread
+From: dspore @ 2022-12-08 16:56 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1054 bytes --]
+
+Hello,
+I need to deploy a third-party package as part of my Yocto image.  I am not sure how to build a recipe that will automate the installation of this RPM and dependencies.  If any of these dependent packages are not already included in the core-image-base image, I'll have to put together recipes for those as well and add them to the main recipe for the package (the RPM I want to install).  I have a basic idea of what needs to be done but am fuzzy on the detail.  I'll need to create a recipe that points to my RPM file via SRC_URI, but I am not sure what commands need to be included to make sure the RPM is seen as a package I can add via my local.conf.  The goal is to have the package installed in the final image such that the software is running as if the RPM was installed manually at the command prompt on the target board.   I've done a lot of googling, but the few posts I could find contain bits of information that aren't that useful to a Yocto newbie.  Note that I am using latest version of Kirkstone.
+
+Thanks!
+
+David
+
+[-- Attachment #2: Type: text/html, Size: 1110 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] Recipe to install third-party RPM #bitbake
+  2022-12-08 16:56 Recipe to install third-party RPM #bitbake dspore
+@ 2022-12-09  4:28 ` Federico Pellegrin
+  2022-12-09 15:29   ` dspore
+  0 siblings, 1 reply; 3+ messages in thread
+From: Federico Pellegrin @ 2022-12-09  4:28 UTC (permalink / raw)
+  To: dspore; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2934 bytes --]
+
+Hello David,
+There is nothing really special compared to "usual" recipes or whatever you
+use RPM or another packager.
+
+In short:
+1) You should create (likely in a layer of yours) the recipe for your
+"third-party" package. You should put in this package the right
+dependencies (using either DEPENDS or RDEPENDS, depending if it is build or
+runtime dependency) and of course any other parts needed to build/install
+it.
+2) Of course should your new package depend on packages that are not
+already in Yocto, you should create as well recipes for those. If they are
+already in Yocto, you will just refer to them.
+3) You should do (in your layer) an image recipe or extend the
+core-image-base, adding your new recipe. You don't really need to add all
+the dependencies there but just your final package, the dependencies will
+be automatically (depending on the definitions in recipes) be pulled in.
+4) the fact that is a RPM (or deb, or ipk) is just a detail, things will
+work in image generation the same way. What will change is then of course
+possibly how you manage those packages at runtime (ie. updates or the like).
+
+I guess most of the things shortly mentioned above are then well documented
+here:
+https://wiki.yoctoproject.org/wiki/Building_your_own_recipes_from_first_principles
+
+Hope that helps,
+Federico
+
+
+
+Il giorno gio 8 dic 2022 alle ore 17:56 <dspore@parraid.com> ha scritto:
+
+> Hello,
+> I need to deploy a third-party package as part of my Yocto image.  I am
+> not sure how to build a recipe that will automate the installation of this
+> RPM and dependencies.  If any of these dependent packages are not already
+> included in the core-image-base image, I'll have to put together recipes
+> for those as well and add them to the main recipe for the package (the RPM
+> I want to install).  I have a basic idea of what needs to be done but am
+> fuzzy on the detail.  I'll need to create a recipe that points to my RPM
+> file via SRC_URI, but I am not sure what commands need to be included to
+> make sure the RPM is seen as a package I can add via my local.conf.  The
+> goal is to have the package installed in the final image such that the
+> software is running as if the RPM was installed manually at the command
+> prompt on the target board.   I've done a lot of googling, but the few
+> posts I could find contain bits of information that aren't that useful to a
+> Yocto newbie.  Note that I am using latest version of Kirkstone.
+>
+> Thanks!
+>
+> David
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#58764):
+> https://lists.yoctoproject.org/g/yocto/message/58764
+> Mute This Topic: https://lists.yoctoproject.org/mt/95542036/5117409
+> Mute #bitbake:https://lists.yoctoproject.org/g/yocto/mutehashtag/bitbake
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> fede@evolware.org]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 4089 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: Recipe to install third-party RPM #bitbake
+  2022-12-09  4:28 ` [yocto] " Federico Pellegrin
+@ 2022-12-09 15:29   ` dspore
+  0 siblings, 0 replies; 3+ messages in thread
+From: dspore @ 2022-12-09 15:29 UTC (permalink / raw)
+  To: yocto
+
+
+[-- Attachment #1.1: Type: text/plain, Size: 1829 bytes --]
+
+Federico,
+
+Thanks for your reply.  I did build a recipe for a tar.gz source archive previously, which worked.  But for the RPM I felt like I was missing something.  Meanwhile, my multilib build for core-image-base is failing with the error below.  This is without any custom recipes.  I am not sure what to about this missing manifest file.  I thought perhaps it was SDK related so I tried running *bitbake core-image-base -c populate_sdk*... but got a similar error.   If I knew the root cause of this error, I might be able to fix it.  But it seems that unless I've setup local.conf incorrectly, doing multilib should just work out of the box.  Note that I successfully built *core-image-base* WITHOUT multilib configured in my local.conf.  Simply adding the multilib config entries causes this error (local.conf attached).
+
+ERROR: core-image-base-1.0-r0 do_prepare_recipe_sysroot: Manifest /home/parraid/var-fsl-yocto/build_xwayland/tmp/sstate-control/manifest-x86_64_x86_64-nativesdk-lib32-qemuwrapper-cross.populate_sysroot not found in imx8mp_var_dart armv7at2hf-neon-mx8mp armv7ahf-neon-mx8mp armv7at2hf-vfp-mx8mp armv7ahf-vfp-mx8mp armv6thf-vfp-mx8mp armv6hf-vfp-mx8mp armv5tehf-vfp-mx8mp armv5ehf-vfp-mx8mp armv5thf-vfp-mx8mp armv5hf-vfp-mx8mp armv8a-mx8mp armv8a-crc-crypto armv8a-crypto armv8a-crc armv8a aarch64 allarch x86_64_x86_64-nativesdk (variant 'lib32')?
+ERROR: Logfile of failure stored in: /home/parraid/var-fsl-yocto/build_xwayland/tmp/work/imx8mp_var_dart-fslc-linux/core-image-base/1.0-r0/temp/log.do_prepare_recipe_sysroot.2763965
+ERROR: Task (/home/parraid/var-fsl-yocto/sources/poky/meta/recipes-core/images/core-image-base.bb:do_prepare_recipe_sysroot) failed with exit code '1'
+
+I feel if I can get this error resolved, it would be tremendous progress.
+
+Thanks again!
+
+David
+
+[-- Attachment #1.2: Type: text/html, Size: 2003 bytes --]
+
+[-- Attachment #2: local.conf --]
+[-- Type: application/octet-stream, Size: 1127 bytes --]
+
+MACHINE ??= 'imx8mp-var-dart'
+DISTRO ?= 'fslc-xwayland'
+USER_CLASSES ?= "buildstats"
+PATCHRESOLVE = "noop"
+ROOT_HOME = "/root"
+BB_DISKMON_DIRS ??= "\
+    STOPTASKS,${TMPDIR},1G,100K \
+    STOPTASKS,${DL_DIR},1G,100K \
+    STOPTASKS,${SSTATE_DIR},1G,100K \
+    STOPTASKS,/tmp,100M,100K \
+    HALT,${TMPDIR},100M,1K \
+    HALT,${DL_DIR},100M,1K \
+    HALT,${SSTATE_DIR},100M,1K \
+    HALT,/tmp,10M,1K"
+PACKAGECONFIG:append:pn-qemu-system-native = " sdl"
+CONF_VERSION = "2"
+RM_OLD_IMAGE = "1"
+DISTRO_FEATURES:append = " systemd"
+DISTRO_FEATURES:append = " virtualization"
+DISTRO_FEATURES:append = " security"
+DISTRO_FEATURES:append = " apparmor"
+VIRTUAL-RUNTIME_init_manager = "systemd"
+DISTRO_FEATURES_BACKFILL_CONSIDERED = "sysvinit"
+VIRTUAL-RUNTIME_initscripts = ""
+require conf/multilib.conf
+MULTILIBS = "multilib:lib32"
+DEFAULTTUNE:virtclass-multilib-lib32 = "armv7athf-neon"
+INHERIT += "rm_work"
+RM_WORK_EXCLUDE += "snapd"
+DL_DIR ?= "${BSPDIR}/downloads/"
+ACCEPT_FSL_EULA = "1"
+INHERIT += "extrausers"
+EXTRA_USERS_PARAMS = "usermod -p '' root; "
+IMAGE_INSTALL:append = " lib32-glibc lib32-libgcc lib32-libstdc++ lib32-bash"
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2022-12-09 15:29 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-12-08 16:56 Recipe to install third-party RPM #bitbake dspore
+2022-12-09  4:28 ` [yocto] " Federico Pellegrin
+2022-12-09 15:29   ` dspore
+

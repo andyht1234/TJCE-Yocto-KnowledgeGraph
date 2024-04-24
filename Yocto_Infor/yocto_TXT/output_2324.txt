@@ -1,0 +1,250 @@
+* Building embedded app for host machine
+@ 2022-01-20 15:24 Mauro Ziliani
+  2022-01-21  4:44 ` [yocto] " Randy MacLeod
+  0 siblings, 1 reply; 2+ messages in thread
+From: Mauro Ziliani @ 2022-01-20 15:24 UTC (permalink / raw)
+  To: yocto
+
+Hi all.
+
+I have this doubt.
+
+Is it possible the make a toolchain which can produce the same app for 
+host machine?
+
+
+I try to explain my think.
+
+
+I produced an app for imx6dlsabresd with qt-5.6.2 using x86_64 as SDKMACHINE
+
+  Can I make the same app with the same qt-5.6.2 but running directly on 
+x86_64?
+
+
+Now i make this, building the same qt version for host machine, but 
+outside yocto ring
+
+
+[I hope to be clear, mu english is terrible]
+
+
+Best regards,
+
+   MZ
+
+
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+* Re: [yocto] Building embedded app for host machine
+  2022-01-20 15:24 Building embedded app for host machine Mauro Ziliani
+@ 2022-01-21  4:44 ` Randy MacLeod
+  0 siblings, 0 replies; 2+ messages in thread
+From: Randy MacLeod @ 2022-01-21  4:44 UTC (permalink / raw)
+  To: mauro, yocto
+
+On 2022-01-20 10:24, Mauro Ziliani via lists.yoctoproject.org wrote:
+> Hi all.
+> 
+> I have this doubt.
+> 
+> Is it possible the make a toolchain which can produce the same app for 
+> host machine?
+> 
+> 
+> I try to explain my think.
+> 
+> 
+> I produced an app for imx6dlsabresd with qt-5.6.2 using x86_64 as 
+> SDKMACHINE
+> 
+>   Can I make the same app with the same qt-5.6.2 but running directly on 
+> x86_64?
+
+Hi,
+
+
+Yes. Likely you just need to do:
+$ MACHINE=qemux86-64 bitbake your-image
+with the right configuration and then run it in docker. See below.
+
+
+
+There are at least three options depending on what your goal is.
+
+1. use qemux86-64 with kvm support
+2. maybe use oe-run-native?
+3. as above, build for an intel MACHINE using the linux-dummy kernel.
+
+
+1. use runqemu -- you might know about this already.
+
+This is how most testing for userspace in Yocto happens.
+The default target is qemux86-64 and you boot up a fill VM
+that can run graphics as well of course. See the docs or just
+run:
+$ runqemu help
+$ runqemu kvm graphics <other options>
+
+but you don't want the kernel overhead.
+
+
+2. oe-run-native
+
+Let's deal with the idea of building the -native recipe even though
+I suspect it isn't the approach you should take.
+
+See:
+
+https://wiki.yoctoproject.org/wiki/Technical_FAQ#What_does_.22native.22_mean.3F
+and examples in oe-core such as:
+
+so for any recipe that inherits 'native', you can run:
+$ bitbake app-native
+
+Sometimes there problems with this aside from needing the full 
+dependency tree
+to also support -native. There are lots of examples in oe-core of 
+-native recipes:
+
+$ find meta -name "*native*bb" | wc -l
+
+29
+
+
+Consider quilt:
+$ bitbake m4-native
+...
+$ bitbake quilt-native -c addto_recipe_sysroot
+$ oe-run-native quilt-native quilt
+
+Running bitbake -e quilt-native
+
+/usr/lib/python3.6/importlib/_bootstrap.py:219: ImportWarning: can't 
+resolve package from __spec__ or __package__, falling back on __name__ 
+and __path__
+
+   return f(*args, **kwds)
+
+Usage: quilt [--trace[=verbose]] [--quiltrc=XX] command [-h] ...
+
+        quilt --version
+
+Commands are:
+
+         add       files   import   previous  series
+
+         annotate  fold    mail     push      setup
+
+...
+
+And for 'fun' I checked that vim works too:
+$ oe-run-native vim-native vim.vim
+
+Anyway, that's just an example and it's really mainly suitable for 
+simple command line apps in my opinion.
+I doubt, but haven't checked if any of the recipes in the meta-qt5 layer 
+support being built as -native.
+
+
+3. docker
+
+The option that makes sense to me is to specify your host system as the
+target MACHINE or just use qemux86-64 and build a container image as 
+explained here:
+
+https://pretalx.com/media/oe-workshop-2020/submissions/AN87VC/resources/Building_Containers_with_OpenEmbedded__Cur_WqbQgmv.pdf
+
+
+Reading the pdf, it seems one can just set this in conf/local.conf:
+
+MACHINE = "qemux86-64"
+IMAGE_FSTYPES = "container"
+PREFERRED_PROVIDER_virtual/kernel = "linux-dummy"
+IMAGE_LINGUAS:append = " en-us"
+
+$ bitbake core-image-minimal
+
+copy the tarball to the system where you have docker working:
+
+laptop$ scp 
+mybuilder:/path/to/build/tmp/deploy/images/qemux86-64/core-image-minimal-qemux86-64.tar.bz2 
+/tmp
+laptop$ docker import /tmp/core-image-minimal-qemux86-64.tar.bz2 
+core-image-minimal
+laptop$ docker run -it core-image-minimal /bin/sh
+
+sh-5.1# cat /etc/os-release
+ID=wrlinux
+NAME="Wind River Linux development"
+VERSION="10.22.03.0"
+VERSION_ID=10.22.03.0
+PRETTY_NAME="Wind River Linux development 22.03"
+
+
+Note that I've done this in our WR Linux dev environment but it should 
+just work for any recent Yocto distro.
+
+
+You can run just one X11 app using:
+
+laptop$ xhost +  <-- lets anyone connect to your display so careful.
+laptop: docker run -it --rm --privileged --net=host \
+    --env="DISPLAY" \
+    --volume="$HOME/.Xauthority:/root/.Xauthority:rw" \
+    wrlinux-image-std-xfce \
+    /usr/bin/xfce4-terminal
+
+Careful that you don't inadvertently start a second display manager.
+That could really mess up your system input and force you to have to:
+$ docker ps
+$ docker kill <container-id>
+;-)
+
+../Randy
+
+
+Marketing: WR Linux uses this to make app containers easy:
+
+https://docs.windriver.com/bundle/Wind_River_Linux_Open_Virtualization_Features_Guide_LTS_21/page/xvn1630019013539.html
+
+> 
+> 
+> Now i make this, building the same qt version for host machine, but 
+> outside yocto ring
+> 
+> 
+> [I hope to be clear, mu english is terrible]
+> 
+> 
+> Best regards,
+> 
+>    MZ
+> 
+> 
+> 
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#55932): https://lists.yoctoproject.org/g/yocto/message/55932
+> Mute This Topic: https://lists.yoctoproject.org/mt/88560927/3616765
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [randy.macleod@windriver.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+> 
+
+
+-- 
+# Randy MacLeod
+# Wind River Linux
+
+
+
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2022-01-21  4:45 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-01-20 15:24 Building embedded app for host machine Mauro Ziliani
+2022-01-21  4:44 ` [yocto] " Randy MacLeod
+

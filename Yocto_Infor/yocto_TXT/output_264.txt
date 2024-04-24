@@ -1,0 +1,225 @@
+* Qemu not working for raspberry pi
+@ 2023-08-19 12:42 shrikantvaishnav
+  2023-08-19 17:09 ` [yocto] " Khem Raj
+  0 siblings, 1 reply; 4+ messages in thread
+From: shrikantvaishnav @ 2023-08-19 12:42 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 330 bytes --]
+
+Hi all,
+i want to run my raspberry pi in qemu and for this, I have created the image using core-image-weston and also set machine to: *MACHINE ??= "qemux86-64"*.after this whenever I try to run using qemu it shows
+*Error:"runqemu - ERROR - IMAGE_LINK_NAME wasn't set to find corresponding .qemuboot.conf file"
+
+* Please help
+
+[-- Attachment #2: Type: text/html, Size: 375 bytes --]
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] Qemu not working for raspberry pi
+  2023-08-19 12:42 Qemu not working for raspberry pi shrikantvaishnav
+@ 2023-08-19 17:09 ` Khem Raj
+  2023-08-19 17:21   ` Alexander Kanavin
+  0 siblings, 1 reply; 4+ messages in thread
+From: Khem Raj @ 2023-08-19 17:09 UTC (permalink / raw)
+  To: shrikantvaishnav; +Cc: yocto
+
+On Sat, Aug 19, 2023 at 5:42 AM <shrikantvaishnav@hotmail.com> wrote:
+>
+> Hi all,
+> i want to run my raspberry pi in qemu and for this, I have created the image using core-image-weston and also set machine to:MACHINE ??= "qemux86-64" .after this whenever I try to run using qemu it shows
+> Error:"runqemu - ERROR - IMAGE_LINK_NAME wasn't set to find corresponding .qemuboot.conf file"
+
+Its not clear what you are trying to do but I guess you have built an
+image for RPI which
+you want to run on an emulator instead of real hardware. In that case,
+you have to use
+either qemuarm or qemuarm64 depending upon your image being 64bit or
+32bit. you might
+have to explore runqemu options where you can point it to a kernel and
+rootfs explicitly
+and use that to point it to the rpi images. This may not work even
+after that since there might be more tweaks needed for the pi image to
+run in qemu.
+
+>
+> Please help
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> You automatically follow any topics you start or reply to.
+> View/Reply Online (#60830): https://lists.yoctoproject.org/g/yocto/message/60830
+> Mute This Topic: https://lists.yoctoproject.org/mt/100837806/1997914
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [raj.khem@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] Qemu not working for raspberry pi
+  2023-08-19 17:09 ` [yocto] " Khem Raj
+@ 2023-08-19 17:21   ` Alexander Kanavin
+  2023-08-19 17:48     ` adrian.freihofer
+  0 siblings, 1 reply; 4+ messages in thread
+From: Alexander Kanavin @ 2023-08-19 17:21 UTC (permalink / raw)
+  To: Khem Raj; +Cc: shrikantvaishnav, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1865 bytes --]
+
+It’s well possible that emulating the arm hardware is not needed, in this
+case x86_64 is vastly better, as it will run at native speeds with kvm.
+When qemu translates arm to x86, the performance drops 10x or more.
+
+The issue preventing qemu from running is something else in any case, I’d
+suggest making a plain poky build in a new build directory from scratch
+actually.
+
+Alex
+
+On Sat 19. Aug 2023 at 19.09, Khem Raj <raj.khem@gmail.com> wrote:
+
+> On Sat, Aug 19, 2023 at 5:42 AM <shrikantvaishnav@hotmail.com> wrote:
+> >
+> > Hi all,
+> > i want to run my raspberry pi in qemu and for this, I have created the
+> image using core-image-weston and also set machine to:MACHINE ??=
+> "qemux86-64" .after this whenever I try to run using qemu it shows
+> > Error:"runqemu - ERROR - IMAGE_LINK_NAME wasn't set to find
+> corresponding .qemuboot.conf file"
+>
+> Its not clear what you are trying to do but I guess you have built an
+> image for RPI which
+> you want to run on an emulator instead of real hardware. In that case,
+> you have to use
+> either qemuarm or qemuarm64 depending upon your image being 64bit or
+> 32bit. you might
+> have to explore runqemu options where you can point it to a kernel and
+> rootfs explicitly
+> and use that to point it to the rpi images. This may not work even
+> after that since there might be more tweaks needed for the pi image to
+> run in qemu.
+>
+> >
+> > Please help
+> >
+> >
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#60831):
+> https://lists.yoctoproject.org/g/yocto/message/60831
+> Mute This Topic: https://lists.yoctoproject.org/mt/100837806/1686489
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> alex.kanavin@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 2870 bytes --]
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] Qemu not working for raspberry pi
+  2023-08-19 17:21   ` Alexander Kanavin
+@ 2023-08-19 17:48     ` adrian.freihofer
+  0 siblings, 0 replies; 4+ messages in thread
+From: adrian.freihofer @ 2023-08-19 17:48 UTC (permalink / raw)
+  To: Alexander Kanavin, Khem Raj; +Cc: shrikantvaishnav, yocto
+
+On Sat, 2023-08-19 at 19:21 +0200, Alexander Kanavin wrote:
+> It’s well possible that emulating the arm hardware is not needed, in
+> this case x86_64 is vastly better, as it will run at native speeds
+> with kvm. When qemu translates arm to x86, the performance drops 10x
+> or more.
+> 
+> The issue preventing qemu from running is something else in any case,
+> I’d suggest making a plain poky build in a new build directory from
+> scratch actually.
+
+This approach has two advantage (as Alex already pointed out):
+- The firmware runs with native speed of the host machine if started
+with kvm.
+- It's trivial to setup. It just works.
+
+But it also also comes with a major disadvantage: It requires to build
+everything twice: Once for the target architecture and once for the
+host architecture.
+
+The compromise which just works but does not require an extra build for
+Qemu is what we have with the beaglebone-yocto machine in poky:
+https://git.yoctoproject.org/poky/tree/meta-yocto-bsp/conf/machine/beaglebone-yocto.conf.
+
+This allows to build for the target hardware but also running the same
+firmware image with runqemu. The trick is to add the QB_ configuration
+lines to the machine conf file and adding some drivers for the Qemu
+emulated hardware to the target kernel.
+I guess the Raspberry layer could be improved to support this as well.
+But I do not use it.
+
+Regards,
+Adrian
+
+> 
+> Alex
+> 
+> On Sat 19. Aug 2023 at 19.09, Khem Raj <raj.khem@gmail.com> wrote:
+> > On Sat, Aug 19, 2023 at 5:42 AM <shrikantvaishnav@hotmail.com>
+> > wrote:
+> > > 
+> > > Hi all,
+> > > i want to run my raspberry pi in qemu and for this, I have
+> > > created the image using core-image-weston and also set machine
+> > > to:MACHINE ??= "qemux86-64" .after this whenever I try to run
+> > > using qemu it shows
+> > > Error:"runqemu - ERROR - IMAGE_LINK_NAME wasn't set to find
+> > > corresponding .qemuboot.conf file"
+> > 
+> > Its not clear what you are trying to do but I guess you have built
+> > an
+> > image for RPI which
+> > you want to run on an emulator instead of real hardware. In that
+> > case,
+> > you have to use
+> > either qemuarm or qemuarm64 depending upon your image being 64bit
+> > or
+> > 32bit. you might
+> > have to explore runqemu options where you can point it to a kernel
+> > and
+> > rootfs explicitly
+> > and use that to point it to the rpi images. This may not work even
+> > after that since there might be more tweaks needed for the pi image
+> > to
+> > run in qemu.
+> > 
+> > > 
+> > > Please help
+> > > 
+> > > 
+> > 
+> > 
+> > 
+> 
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#60832):
+> https://lists.yoctoproject.org/g/yocto/message/60832
+> Mute This Topic: https://lists.yoctoproject.org/mt/100837806/4454582
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe:
+> https://lists.yoctoproject.org/g/yocto/unsub [adrian.freihofer@gmail.com
+> ]
+> -=-=-=-=-=-=-=-=-=-=-=-
+> 
+
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+end of thread, other threads:[~2023-08-19 17:48 UTC | newest]
+
+Thread overview: 4+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-08-19 12:42 Qemu not working for raspberry pi shrikantvaishnav
+2023-08-19 17:09 ` [yocto] " Khem Raj
+2023-08-19 17:21   ` Alexander Kanavin
+2023-08-19 17:48     ` adrian.freihofer
+

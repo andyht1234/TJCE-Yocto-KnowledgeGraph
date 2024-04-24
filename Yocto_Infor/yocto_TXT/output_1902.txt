@@ -1,0 +1,420 @@
+* [PATCH yocto-autobuilder-helper v12] Add a banner on the old documentation docs.
+@ 2022-04-27 17:27 Abongwa Bonalais Amahnui
+  2022-05-03  9:51 ` [yocto] " Quentin Schulz
+  0 siblings, 1 reply; 3+ messages in thread
+From: Abongwa Bonalais Amahnui @ 2022-04-27 17:27 UTC (permalink / raw)
+  To: yocto; +Cc: Abongwa Bonalais Amahnui
+
+Signed-off-by: Abongwa Bonalais Amahnui <abongwabonalais@gmail.com>
+---
+ scripts/docs_fix_all_html_css.py | 111 +++++++++++++++++++++++++++++++
+ scripts/run-docs-build           |   2 +
+ 2 files changed, 113 insertions(+)
+ create mode 100644 scripts/docs_fix_all_html_css.py
+
+diff --git a/scripts/docs_fix_all_html_css.py b/scripts/docs_fix_all_html_css.py
+new file mode 100644
+index 0000000..db99054
+--- /dev/null
++++ b/scripts/docs_fix_all_html_css.py
+@@ -0,0 +1,111 @@
++#!/usr/bin/env python3
++#
++# SPDX-License-Identifier: GPL-2.0-only
++#
++#Signed-off-by: Abongwa Bonalais Amahnui <abongwabonalais@gmail.com>
++#
++#
++# function to append to the content of a html file below the body tag
++#
++#
++
++import os
++
++
++
++html_content_dunfell = '''
++<div id="outdated-warning">This document is outdated, you should select the <a href="https://docs.yoctoproject.org/">latest release version</a> in this series.</div>
++<div xml:lang="en" class="body" lang="en">
++'''
++html_content = '''
++<div id="outdated-warning">This version of the project is now considered obsolete, please select and use a <a href="https://docs.yoctoproject.org">more recent version</a>.</div>
++<div xml:lang="en" class="body" lang="en">
++'''
++
++# <div xml:lang="en" class="body" lang="en"> and </div> are added to the html files to wrap all the content below the body tag in a div tag whose class is known so it can be controlled in the css file
++last_div = '''
++</div>
++
++'''
++
++css_replacement_content = '''
++ 
++  font-family: Verdana, Sans, sans-serif;
++
++  /*min-width: 640px;*/
++  width: 100%;
++  margin:  0;
++  padding: 0;
++  color: #333;
++  overflow-x: hidden;
++  }
++ 
++ /*added books too*/
++.body{
++margin:  0 auto;
++min-width: 640px;
++padding: 0 5em 5em 5em;
++}
++/* added the id below to make the banner show and be fixed*/
++#outdated-warning{
++text-align: center;
++background-color: rgb(255, 186, 186); 
++color: rgb(106, 14, 14); 
++padding: 0.5em 0; 
++width: 100%;
++position: fixed;
++top: 0;
++
++
++'''
++    # pattern = '^3.1*'
++    # exclude = re.search(pattern, dir)
++def loop_through_html_directories(dir):
++    exclude = []
++    for root, dirs, filenames in os.walk(dir):
++         # exclude banner for 3.1.x upward as it is an LTS release and is still supported
++        exclude = [ name for name in os.listdir(dir) if name.startswith('3.1') ]
++        for d in dirs:
++            if d in exclude:
++                dirs.remove(d)
++        for filename in filenames:
++            if filename.endswith('.html'):
++                with open(os.path.join(root, filename), 'r', encoding="ISO-8859-1") as f:
++                    current_content = f.read()
++                with open(os.path.join(root, filename), 'w') as f:
++                    f.write(current_content.replace('<body>', '<body>' + html_content))
++                    f.write(current_content.replace('</body>', last_div + '</body>'))
++            if filename.endswith('.css'):
++                with open(os.path.join(root, filename), 'r', encoding="ISO-8859-1") as f:
++                    css_content = f.read()
++                with open(os.path.join(root, filename), 'w') as f:
++                    f.write(css_content.replace(css_content[css_content.find('body {'):css_content.find('}'[0])], 'body {' + css_replacement_content ))
++    print(exclude)
++loop_through_html_directories('.')
++
++
++
++
++def dunfell_tags(dir):
++    dunfell_banners = []
++    for root, dirs, filenames in os.walk(dir):
++        dunfell_banners = [ name for name in os.listdir(dir) if not name.startswith('3.1') ]
++        for d in dirs:
++            if d in dunfell_banners:
++                dirs.remove(d)
++
++        for filename in filenames:
++            if filename.endswith('.html'):
++                with open(os.path.join(root, filename), 'r', encoding="ISO-8859-1") as f:
++                    current_content = f.read()
++                with open(os.path.join(root, filename), 'w') as f:
++                    f.write(current_content.replace('<body>', '<body>' + html_content_dunfell))
++                    f.write(current_content.replace('</body>', last_div + '</body>'))
++            if filename.endswith('.css'):
++                with open(os.path.join(root, filename), 'r', encoding="ISO-8859-1") as f:
++                    css_content = f.read()
++                with open(os.path.join(root, filename), 'w') as f:
++                    f.write(css_content.replace(css_content[css_content.find('body {'):css_content.find('}'[0])], 'body {' + css_replacement_content ))
++    print(dunfell_banners)
++dunfell_tags('.')
+diff --git a/scripts/run-docs-build b/scripts/run-docs-build
+index ecc5332..307ac19 100755
+--- a/scripts/run-docs-build
++++ b/scripts/run-docs-build
+@@ -37,6 +37,8 @@ cd $outputdir
+ echo Extracing old content from archive
+ tar -xJf $docbookarchive
+ 
++$scriptdir/docs_fix_all_html_css.py
++
+ cd $bbdocs
+ mkdir $outputdir/bitbake
+ 
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 3+ messages in thread
+* Re: [yocto] [PATCH yocto-autobuilder-helper v12] Add a banner on the old documentation docs.
+  2022-04-27 17:27 [PATCH yocto-autobuilder-helper v12] Add a banner on the old documentation docs Abongwa Bonalais Amahnui
+@ 2022-05-03  9:51 ` Quentin Schulz
+  2022-05-03 22:21   ` Abongwa Amahnui Bonalais
+  0 siblings, 1 reply; 3+ messages in thread
+From: Quentin Schulz @ 2022-05-03  9:51 UTC (permalink / raw)
+  To: Abongwa Amahnui Bonalais, yocto
+
+Hi Amahnui,
+
+On 4/27/22 19:27, Abongwa Amahnui Bonalais wrote:> Signed-off-by: 
+Abongwa Bonalais Amahnui <abongwabonalais@gmail.com>> ---
+
+
+Adding a comment in the commit log to explain why this patch is needed 
+and what it does would be great.
+
+>   scripts/docs_fix_all_html_css.py | 111 +++++++++++++++++++++++++++++++
+>   scripts/run-docs-build           |   2 +
+>   2 files changed, 113 insertions(+)
+>   create mode 100644 scripts/docs_fix_all_html_css.py
+> 
+> diff --git a/scripts/docs_fix_all_html_css.py b/scripts/docs_fix_all_html_css.py
+> new file mode 100644
+> index 0000000..db99054
+> --- /dev/null
+> +++ b/scripts/docs_fix_all_html_css.py
+> @@ -0,0 +1,111 @@
+> +#!/usr/bin/env python3
+> +#
+> +# SPDX-License-Identifier: GPL-2.0-only
+> +#
+> +#Signed-off-by: Abongwa Bonalais Amahnui <abongwabonalais@gmail.com>
+> +#
+> +#
+> +# function to append to the content of a html file below the body tag
+> +#
+
+Please add a comment as to what this script is supposed to to. You're 
+discussing the implementation here more than the finality. We need to 
+know when opening the file and reading the comment what this 
+should/would be used for.
+
+> +#
+> +
+> +import os
+> +
+> +
+> +
+> +html_content_dunfell = '''
+> +<div id="outdated-warning">This document is outdated, you should select the <a href="https://urldefense.proofpoint.com/v2/url?u=https-3A__docs.yoctoproject.org_&amp;d=DwMDAg&amp;c=_sEr5x9kUWhuk4_nFwjJtA&amp;r=LYjLexDn7rXIzVmkNPvw5ymA1XTSqHGq8yBP6m6qZZ4njZguQhZhkI_-172IIy1t&amp;m=aRH3jUhIOsO6ovQMKiTHiW-F3Xwnx9HWg6yTF99QSvNBJXbkOkdzSNhwGt6I4zHl&amp;s=QnWAweVmLt12aTlVPVFZsjAeYelStsO_8RsqIskX0Sk&amp;e=">latest release version</a> in this series.</div>
+> +<div xml:lang="en" class="body" lang="en">
+> +'''
+
+I would nitpick here and say we should probably point to 
+https://docs.yoctoproject.org/dunfell in the href. But that can be 
+fixed/discussed later.
+
+> +html_content = '''
+> +<div id="outdated-warning">This version of the project is now considered obsolete, please select and use a <a href="https://urldefense.proofpoint.com/v2/url?u=https-3A__docs.yoctoproject.org&amp;d=DwMDAg&amp;c=_sEr5x9kUWhuk4_nFwjJtA&amp;r=LYjLexDn7rXIzVmkNPvw5ymA1XTSqHGq8yBP6m6qZZ4njZguQhZhkI_-172IIy1t&amp;m=aRH3jUhIOsO6ovQMKiTHiW-F3Xwnx9HWg6yTF99QSvNBJXbkOkdzSNhwGt6I4zHl&amp;s=XxAPqWFTh9XMmtK4eywrsIFkuOGfwEs8acOxvNGck2g&amp;e=">more recent version</a>.</div>
+> +<div xml:lang="en" class="body" lang="en">
+> +'''
+> +
+> +# <div xml:lang="en" class="body" lang="en"> and </div> are added to the html files to wrap all the content below the body tag in a div tag whose class is known so it can be controlled in the css file
+
+You are explaining what you are doing, which we can usually understand 
+by reading the code, instead of explaining why you're doing it which is 
+something we cannot guess. Why was it not possible to just insert the 
+banner in the body tag as a div before any other element/tag?
+
+> +last_div = '''
+> +</div>
+> +
+> +'''
+> +
+> +css_replacement_content = '''
+> +
+> +  font-family: Verdana, Sans, sans-serif;
+> +
+> +  /*min-width: 640px;*/
+
+You can remove this commented part as it does not provide any context or 
+help.
+
+> +  width: 100%;
+> +  margin:  0;
+> +  padding: 0;
+> +  color: #333;
+> +  overflow-x: hidden;
+> +  }
+> +
+> + /*added books too*/
+
+Not sure what I am supposed to understand with this comment?
+
+> +.body{
+> +margin:  0 auto;
+> +min-width: 640px;
+> +padding: 0 5em 5em 5em;
+> +}
+> +/* added the id below to make the banner show and be fixed*/
+> +#outdated-warning{
+> +text-align: center;
+> +background-color: rgb(255, 186, 186);
+> +color: rgb(106, 14, 14);
+> +padding: 0.5em 0;
+> +width: 100%;
+> +position: fixed;
+> +top: 0;
+> +
+> +
+> +'''
+> +    # pattern = '^3.1*'
+> +    # exclude = re.search(pattern, dir)
+
+Useless comments, please remove.
+
+> +def loop_through_html_directories(dir):
+> +    exclude = []
+> +    for root, dirs, filenames in os.walk(dir):
+> +         # exclude banner for 3.1.x upward as it is an LTS release and is still supported
+> +        exclude = [ name for name in os.listdir(dir) if name.startswith('3.1') ]
+> +        for d in dirs:
+> +            if d in exclude:
+> +                dirs.remove(d)
+> +        for filename in filenames:
+> +            if filename.endswith('.html'):
+> +                with open(os.path.join(root, filename), 'r', encoding="ISO-8859-1") as f:
+> +                    current_content = f.read()
+> +                with open(os.path.join(root, filename), 'w') as f:
+> +                    f.write(current_content.replace('<body>', '<body>' + html_content))
+> +                    f.write(current_content.replace('</body>', last_div + '</body>'))
+> +            if filename.endswith('.css'):
+> +                with open(os.path.join(root, filename), 'r', encoding="ISO-8859-1") as f:
+> +                    css_content = f.read()
+> +                with open(os.path.join(root, filename), 'w') as f:
+> +                    f.write(css_content.replace(css_content[css_content.find('body {'):css_content.find('}'[0])], 'body {' + css_replacement_content ))
+> +    print(exclude)
+> +loop_through_html_directories('.')
+> +
+
+The function name is not really helpful, you're explaining the 
+implementation more than the outcome of it. I should call this function 
+if I want to add a banner for olds docs. I could suggest 
+add_banner_old_docs as a function name instead, though other people 
+could probably come up with something more meaningful.
+
+> +
+> +
+> +
+> +def dunfell_tags(dir):
+> +    dunfell_banners = []
+> +    for root, dirs, filenames in os.walk(dir):
+> +        dunfell_banners = [ name for name in os.listdir(dir) if not name.startswith('3.1') ]
+> +        for d in dirs:
+> +            if d in dunfell_banners:
+> +                dirs.remove(d)
+> +
+> +        for filename in filenames:
+> +            if filename.endswith('.html'):
+> +                with open(os.path.join(root, filename), 'r', encoding="ISO-8859-1") as f:
+> +                    current_content = f.read()
+> +                with open(os.path.join(root, filename), 'w') as f:
+> +                    f.write(current_content.replace('<body>', '<body>' + html_content_dunfell))
+> +                    f.write(current_content.replace('</body>', last_div + '</body>'))
+> +            if filename.endswith('.css'):
+> +                with open(os.path.join(root, filename), 'r', encoding="ISO-8859-1") as f:
+> +                    css_content = f.read()
+> +                with open(os.path.join(root, filename), 'w') as f:
+> +                    f.write(css_content.replace(css_content[css_content.find('body {'):css_content.find('}'[0])], 'body {' + css_replacement_content ))
+> +    print(dunfell_banners)
+
+This is all extremely complex just for using a different variable 
+depending on the name of the directory.
+
++def add_banner_old_docs(dir):
++    exclude = []
++    for root, dirs, filenames in os.walk(dir):
++        if root.startswith('./3.1'):
++            html_replacement = html_content_dunfell
++        else:
++            html_replacement = html_content
++
++        for filename in filenames:
++            if filename.endswith('.html'):
++                with open(os.path.join(root, filename), 'r', 
+encoding="ISO-8859-1") as f:
++                    current_content = f.read()
++                with open(os.path.join(root, filename), 'w') as f:
++                    f.write(current_content.replace('<body>', '<body>' 
++ html_replacement))
++                    f.write(current_content.replace('</body>', last_div 
++ '</body>'))
++            if filename.endswith('.css'):
++                with open(os.path.join(root, filename), 'r', 
+encoding="ISO-8859-1") as f:
++                    css_content = f.read()
++                with open(os.path.join(root, filename), 'w') as f:
++ 
+f.write(css_content.replace(css_content[css_content.find('body 
+{'):css_content.find('}'[0])], 'body {' + css_replacement_content ))
++    print(exclude)
++add_banner_old_docs('.')
+
+Cheers,
+Quentin
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [PATCH yocto-autobuilder-helper v12] Add a banner on the old documentation docs.
+  2022-05-03  9:51 ` [yocto] " Quentin Schulz
+@ 2022-05-03 22:21   ` Abongwa Amahnui Bonalais
+  0 siblings, 0 replies; 3+ messages in thread
+From: Abongwa Amahnui Bonalais @ 2022-05-03 22:21 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1444 bytes --]
+
+Hi Quentin
+On Tue, May 3, 2022 at 10:51 AM, Quentin Schulz wrote:
+
+> 
+> 
+>> +
+>> +
+>> +
+>> +def dunfell_tags(dir):
+>> + dunfell_banners = []
+>> + for root, dirs, filenames in os.walk(dir):
+>> + dunfell_banners = [ name for name in os.listdir(dir) if not
+>> name.startswith('3.1') ]
+>> + for d in dirs:
+>> + if d in dunfell_banners:
+>> + dirs.remove(d)
+>> +
+>> + for filename in filenames:
+>> + if filename.endswith('.html'):
+>> + with open(os.path.join(root, filename), 'r', encoding="ISO-8859-1") as
+>> f:
+>> + current_content = f.read()
+>> + with open(os.path.join(root, filename), 'w') as f:
+>> + f.write(current_content.replace('<body>', '<body>' +
+>> html_content_dunfell))
+>> + f.write(current_content.replace('</body>', last_div + '</body>'))
+>> + if filename.endswith('.css'):
+>> + with open(os.path.join(root, filename), 'r', encoding="ISO-8859-1") as
+>> f:
+>> + css_content = f.read()
+>> + with open(os.path.join(root, filename), 'w') as f:
+>> + f.write(css_content.replace(css_content[css_content.find('body
+>> {'):css_content.find('}'[0])], 'body {' + css_replacement_content ))
+>> + print(dunfell_banners)
+> 
+> This is all extremely complex just for using a different variable
+> depending on the name of the directory.
+
+I wish to ask if your'e referring to the last line of code or this entire function, I have actuallly removed the print(dunfell_banners) line
+
+Thanks a lot for reviewing.
+
+[-- Attachment #2: Type: text/html, Size: 1517 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2022-05-03 22:21 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-04-27 17:27 [PATCH yocto-autobuilder-helper v12] Add a banner on the old documentation docs Abongwa Bonalais Amahnui
+2022-05-03  9:51 ` [yocto] " Quentin Schulz
+2022-05-03 22:21   ` Abongwa Amahnui Bonalais
+

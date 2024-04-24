@@ -1,0 +1,1353 @@
+* [PATCH 1/2] image-without-static-linkage: add class
+@ 2022-07-04 16:25 Johannes Schilling
+  2022-07-04 16:25 ` [PATCH 2/2] image-without-static-linkage: add selftest Johannes Schilling
+                   ` (3 more replies)
+  0 siblings, 4 replies; 6+ messages in thread
+From: Johannes Schilling @ 2022-07-04 16:25 UTC (permalink / raw)
+  To: yocto; +Cc: Johannes Schilling
+
+This class provides a new image QA check that tries to detect static
+linkage of a set of well-known libraries, leveraging the detectors from
+cve-bin-tool[0].
+
+To use in your project, provide a config file as described in the header
+comment of the class, and inherit image-without-static-linkage in your
+image recipe.
+
+[0] https://github.com/intel/cve-bin-tool/tree/main/cve_bin_tool/checkers
+---
+ classes/image-without-static-linkage.bbclass  |  65 +++++++++
+ .../python/python3-packaging_%.bbappend       |   1 +
+ .../cve-bin-tool/cve-bin-tool-native.bb       |  34 +++++
+ .../files/cve-bin-tool-static-linkage-checker | 126 ++++++++++++++++++
+ 4 files changed, 226 insertions(+)
+ create mode 100644 classes/image-without-static-linkage.bbclass
+ create mode 100644 recipes-devtools/python/python3-packaging_%.bbappend
+ create mode 100644 recipes-security/cve-bin-tool/cve-bin-tool-native.bb
+ create mode 100644 recipes-security/cve-bin-tool/files/cve-bin-tool-static-linkage-checker
+
+diff --git a/classes/image-without-static-linkage.bbclass b/classes/image-without-static-linkage.bbclass
+new file mode 100644
+index 0000000..c6f2013
+--- /dev/null
++++ b/classes/image-without-static-linkage.bbclass
+@@ -0,0 +1,65 @@
++# Provide a QA check for statically linked copies of libraries.
++#
++# You need to provide a config file in TOML format and point the
++# variable `STATIC_LINKAGE_CHECK_CONFIG_FILE` to it.
++#
++# The file format is as follows
++# ```
++# [checkers]
++# modules = [
++#   # list of checker module names of cve-bin-tool checkers lib to
++#   # enable, i.e. file names in the cve_bin_tool/checkers subfolder.
++#   # https://github.com/intel/cve-bin-tool/tree/main/cve_bin_tool/checkers
++#   "librsvg",
++#   "zlib",
++# ]
++#
++# [exceptions]
++# ignore_dirs = [
++#   # list of directories, everything under these is completely ignored
++#   "/var/lib/opkg",
++# ]
++#
++# [exceptions.ignore_checks]
++#   # for each binary path, a list of checkers from the global list to
++#   # ignore for this binary (allowlist)
++#   "/bin/ary/name" = [ "zlib" ],
++# ```
++
++IMAGE_QA_COMMANDS += "image_check_static_linkage"
++
++DEPENDS += "cve-bin-tool-native"
++
++inherit python3native
++
++
++STATIC_LINKAGE_CUSTOM_ERROR_MESSAGE ??= ""
++
++python image_check_static_linkage() {
++    import json
++    from pathlib import Path
++    import subprocess
++
++    from oe.utils import ImageQAFailed
++
++    check_result = subprocess.check_output(["cve-bin-tool-static-linkage-checker",
++        "--config", d.getVar("STATIC_LINKAGE_CHECK_CONFIG_FILE"),
++        d.getVar("IMAGE_ROOTFS"),
++    ])
++    check_result = json.loads(check_result)
++
++    deploy_dir = Path(d.getVar("DEPLOYDIR"))
++    deploy_dir.mkdir(parents=True, exist_ok=True)
++    image_basename = d.getVar("IMAGE_BASENAME")
++    stats_filename = "static_linkage_stats-" + image_basename + ".json"
++    with open(deploy_dir / stats_filename, "w") as stats_out:
++        json.dump(check_result, stats_out)
++
++    binaries_with_violations = {k: v for k, v in check_result.items() if v}
++    if binaries_with_violations:
++        msg = "Static linkage check: found {} violations".format(len(binaries_with_violations))
++        for violator, violations in binaries_with_violations.items():
++            msg += "\n{}: {}".format(violator, violations)
++
++        raise ImageQAFailed(msg, image_check_static_linkage)
++}
+diff --git a/recipes-devtools/python/python3-packaging_%.bbappend b/recipes-devtools/python/python3-packaging_%.bbappend
+new file mode 100644
+index 0000000..d6f5869
+--- /dev/null
++++ b/recipes-devtools/python/python3-packaging_%.bbappend
+@@ -0,0 +1 @@
++BBCLASSEXTEND += "native"
+diff --git a/recipes-security/cve-bin-tool/cve-bin-tool-native.bb b/recipes-security/cve-bin-tool/cve-bin-tool-native.bb
+new file mode 100644
+index 0000000..3efbdf7
+--- /dev/null
++++ b/recipes-security/cve-bin-tool/cve-bin-tool-native.bb
+@@ -0,0 +1,34 @@
++SUMMARY = "Scanner for statically linked library copies"
++HOMEPAGE = "https://github.com/intel/cve-bin-tool"
++
++LICENSE = "GPL-3.0"
++LIC_FILES_CHKSUM = "file://LICENSE.md;md5=97a733ff40c50b4bfc74471e1f6ca88b"
++
++VERSION = "3.1"
++
++
++SRC_URI = "\
++    https://github.com/intel/cve-bin-tool/archive/refs/tags/v${VERSION}.tar.gz \
++    file://cve-bin-tool-static-linkage-checker \
++"
++
++SRC_URI[md5sum] = "af6958f8be7f7ce0d2b5ddffa34a1aee"
++SRC_URI[sha256sum] = "c4faaa401a2605a0d3f3c947deaf01cb56b4da927bfc29b5e959cde243bf5daf"
++
++inherit python3native native
++
++S = "${WORKDIR}/cve-bin-tool-3.1"
++inherit setuptools3
++
++RDEPENDS_${PN} = "\
++  python3-rich-native \
++  python3-packaging-native \
++"
++
++do_install:append() {
++  install -m 0755 "${WORKDIR}/cve-bin-tool-static-linkage-checker" "${D}${bindir}"
++}
++FILES-${PN}:append = "${bindir}/cve-bin-tool-static-linkage-checker"
++
++do_configure[noexec] = "1"
++do_compile[noexec] = "1"
+diff --git a/recipes-security/cve-bin-tool/files/cve-bin-tool-static-linkage-checker b/recipes-security/cve-bin-tool/files/cve-bin-tool-static-linkage-checker
+new file mode 100644
+index 0000000..7da1b3b
+--- /dev/null
++++ b/recipes-security/cve-bin-tool/files/cve-bin-tool-static-linkage-checker
+@@ -0,0 +1,126 @@
++#!/usr/bin/env python3
++
++from importlib import import_module
++from pathlib import Path
++
++import argparse
++import json
++import subprocess
++import toml
++
++
++def parse_args():
++    """
++    Parse command line arguments.
++    """
++    parser = argparse.ArgumentParser(
++        prog=sys.argv[0],
++        description="Checker for staticly linked copies of libraries",
++    )
++
++    parser.add_argument(
++        "directory",
++        help="Path to the directory to scan",
++    )
++
++    parser.add_argument(
++        "--config",
++        help="Path to the config file",
++        required=True,
++    )
++
++    return parser.parse_args()
++
++
++def list_input_files(rootdir):
++    """
++    Iterate over the input rootfs and find any file that is an executable ELF file, yielding their
++    names for the next step to iterate over.
++    """
++    import sys
++    with subprocess.Popen(
++        ["find", rootdir, "-type", "f", "-executable", "-printf", "/%P\\n"],
++        stdout=subprocess.PIPE,
++    ) as find:
++        for line in find.stdout:
++            executable_filename = line.decode().strip()
++            file_out = subprocess.check_output(["file", rootdir + executable_filename]).decode()
++            if "ELF " not in file_out:
++                continue
++
++            yield executable_filename
++
++
++# PurePath.is_relative_to was only added in python 3.9
++def _path_is_relative_to(subdir, base):
++    try:
++        subdir.relative_to(base)
++        return True
++    except ValueError:
++        return False
++
++
++def check_file(root_dir, filename, checkers, exceptions):
++    """
++    Check an executable file for traces of static linkage using all the checkers specified and
++    applying all exceptions specified.
++    """
++    full_filepath = root_dir + filename
++    strings_out = subprocess.check_output(["strings", full_filepath]).decode()
++
++    filepath = Path(filename)
++    if any(
++        _path_is_relative_to(Path(ex), filepath) for ex in exceptions["ignore_dirs"]
++    ):
++        return []
++
++    found_lib_versions = []
++    for checker_name, checker in checkers.items():
++        if filename in exceptions["ignore_checks"]:
++            if checker_name in exceptions["ignore_checks"][filename]:
++                continue
++
++        vi = checker().get_version(strings_out, filename)
++        if vi and vi["is_or_contains"] == "contains" and vi["version"] != "UNKNOWN":
++            found_lib_versions.append({checker_name: vi["version"]})
++
++    return found_lib_versions
++
++
++def _load_checker_class(mod_name):
++    """
++    Load a checker class given the module name.
++
++    The class and module name can be generated from each other (the setup.py file for cve-bin-tool
++    does the same), e.g. module `libjpeg_turbo` contains checker class `LibjpegTurboChecker`.
++    """
++    class_name = "".join(mod_name.replace("_", " ").title().split()) + "Checker"
++
++    mod = import_module(f"cve_bin_tool.checkers.{mod_name}")
++    return getattr(mod, class_name)
++
++
++def main():
++    """
++    Main entry point.
++    """
++    args = parse_args()
++    config = toml.load(args.config)
++
++    all_checkers = {
++        modname: _load_checker_class(modname)
++        for modname in config["checkers"]["modules"]
++    }
++
++    violations = {
++        f: check_file(args.directory, f, all_checkers, config["exceptions"])
++        for f in list_input_files(args.directory)
++    }
++
++    print(json.dumps(violations))
++
++
++if __name__ == "__main__":
++    import sys
++
++    sys.exit(main())
+-- 
+2.36.1
+
+
+
+^ permalink raw reply related	[flat|nested] 6+ messages in thread
+* [PATCH 2/2] image-without-static-linkage: add selftest
+  2022-07-04 16:25 [PATCH 1/2] image-without-static-linkage: add class Johannes Schilling
+@ 2022-07-04 16:25 ` Johannes Schilling
+  2022-07-05  8:05 ` [yocto] [PATCH 1/2] image-without-static-linkage: add class Alexandre Belloni
+                   ` (2 subsequent siblings)
+  3 siblings, 0 replies; 6+ messages in thread
+From: Johannes Schilling @ 2022-07-04 16:25 UTC (permalink / raw)
+  To: yocto; +Cc: Johannes Schilling
+
+diff --git a/lib/oeqa/selftest/cases/static_linkage_checker.py b/lib/oeqa/selftest/cases/static_linkage_checker.py
+new file mode 100644
+index 0000000..a5fdf6b
+--- /dev/null
++++ b/lib/oeqa/selftest/cases/static_linkage_checker.py
+@@ -0,0 +1,39 @@
++import os
++import re
++
++from oeqa.selftest.case import OESelftestTestCase
++from oeqa.utils.commands import bitbake
++
++class StaticLinkageCheck(OESelftestTestCase):
++    def test_static_linkage_check(self):
++        self.write_recipeinc('emptytest', """
++SUMMARY = "A small image just capable of allowing a device to boot."
++
++IMAGE_INSTALL = "packagegroup-core-boot ${CORE_IMAGE_EXTRA_INSTALL}"
++
++CORE_IMAGE_EXTRA_INSTALL ?= ""
++
++LICENSE = "MIT"
++
++inherit image
++
++IMAGE_ROOTFS_SIZE ?= "8192"
++
++inherit image-without-static-linkage
++
++STATIC_LINKAGE_CHECK_CONFIG = "${WORKDIR}/static-linkage-check-config.toml"
++
++do_write_config() {
++    echo "[checkers]\nmodules = [ "zlib", "librsvg" ]\n" > "${STATIC_LINKAGE_CHECK_CONFIG}"
++    echo "[exceptions]" >> "${STATIC_LINKAGE_CHECK_CONFIG}"
++    echo "ignore_dirs = []" >> "${STATIC_LINKAGE_CHECK_CONFIG}"
++    echo "ignore_checks = {}" >> "${STATIC_LINKAGE_CHECK_CONFIG}"
++}
++
++addtask do_write_config before do_image_qa
++        """)
++
++        result = bitbake("-c image_qa emptytest", ignore_status=True)
++        if result.status != 0:
++            self.logger.warn(result.output)
++            raise self.failureException("build failed, something went wrong...")
+-- 
+2.36.1
+
+
+
+^ permalink raw reply related	[flat|nested] 6+ messages in thread
+* Re: [yocto] [PATCH 1/2] image-without-static-linkage: add class
+  2022-07-04 16:25 [PATCH 1/2] image-without-static-linkage: add class Johannes Schilling
+  2022-07-04 16:25 ` [PATCH 2/2] image-without-static-linkage: add selftest Johannes Schilling
+@ 2022-07-05  8:05 ` Alexandre Belloni
+  2022-07-05  8:47 ` Quentin Schulz
+       [not found] ` <16FEAD00052C073D.2437@lists.yoctoproject.org>
+  3 siblings, 0 replies; 6+ messages in thread
+From: Alexandre Belloni @ 2022-07-05  8:05 UTC (permalink / raw)
+  To: johannes.schilling; +Cc: yocto
+
+Hello,
+
+Both patches are missing your SoB, please add those. Also, It would be
+great if you could add a From: as this makes it easier to get your patch
+from the list. This should do the trick:
+
+git config --global sendemail.from email@provider
+
+Thanks!
+
+On 04/07/2022 18:25:03+0200, Johannes Schilling via lists.yoctoproject.org wrote:
+> This class provides a new image QA check that tries to detect static
+> linkage of a set of well-known libraries, leveraging the detectors from
+> cve-bin-tool[0].
+> 
+> To use in your project, provide a config file as described in the header
+> comment of the class, and inherit image-without-static-linkage in your
+> image recipe.
+> 
+> [0] https://github.com/intel/cve-bin-tool/tree/main/cve_bin_tool/checkers
+> ---
+>  classes/image-without-static-linkage.bbclass  |  65 +++++++++
+>  .../python/python3-packaging_%.bbappend       |   1 +
+>  .../cve-bin-tool/cve-bin-tool-native.bb       |  34 +++++
+>  .../files/cve-bin-tool-static-linkage-checker | 126 ++++++++++++++++++
+>  4 files changed, 226 insertions(+)
+>  create mode 100644 classes/image-without-static-linkage.bbclass
+>  create mode 100644 recipes-devtools/python/python3-packaging_%.bbappend
+>  create mode 100644 recipes-security/cve-bin-tool/cve-bin-tool-native.bb
+>  create mode 100644 recipes-security/cve-bin-tool/files/cve-bin-tool-static-linkage-checker
+> 
+> diff --git a/classes/image-without-static-linkage.bbclass b/classes/image-without-static-linkage.bbclass
+> new file mode 100644
+> index 0000000..c6f2013
+> --- /dev/null
+> +++ b/classes/image-without-static-linkage.bbclass
+> @@ -0,0 +1,65 @@
+> +# Provide a QA check for statically linked copies of libraries.
+> +#
+> +# You need to provide a config file in TOML format and point the
+> +# variable `STATIC_LINKAGE_CHECK_CONFIG_FILE` to it.
+> +#
+> +# The file format is as follows
+> +# ```
+> +# [checkers]
+> +# modules = [
+> +#   # list of checker module names of cve-bin-tool checkers lib to
+> +#   # enable, i.e. file names in the cve_bin_tool/checkers subfolder.
+> +#   # https://github.com/intel/cve-bin-tool/tree/main/cve_bin_tool/checkers
+> +#   "librsvg",
+> +#   "zlib",
+> +# ]
+> +#
+> +# [exceptions]
+> +# ignore_dirs = [
+> +#   # list of directories, everything under these is completely ignored
+> +#   "/var/lib/opkg",
+> +# ]
+> +#
+> +# [exceptions.ignore_checks]
+> +#   # for each binary path, a list of checkers from the global list to
+> +#   # ignore for this binary (allowlist)
+> +#   "/bin/ary/name" = [ "zlib" ],
+> +# ```
+> +
+> +IMAGE_QA_COMMANDS += "image_check_static_linkage"
+> +
+> +DEPENDS += "cve-bin-tool-native"
+> +
+> +inherit python3native
+> +
+> +
+> +STATIC_LINKAGE_CUSTOM_ERROR_MESSAGE ??= ""
+> +
+> +python image_check_static_linkage() {
+> +    import json
+> +    from pathlib import Path
+> +    import subprocess
+> +
+> +    from oe.utils import ImageQAFailed
+> +
+> +    check_result = subprocess.check_output(["cve-bin-tool-static-linkage-checker",
+> +        "--config", d.getVar("STATIC_LINKAGE_CHECK_CONFIG_FILE"),
+> +        d.getVar("IMAGE_ROOTFS"),
+> +    ])
+> +    check_result = json.loads(check_result)
+> +
+> +    deploy_dir = Path(d.getVar("DEPLOYDIR"))
+> +    deploy_dir.mkdir(parents=True, exist_ok=True)
+> +    image_basename = d.getVar("IMAGE_BASENAME")
+> +    stats_filename = "static_linkage_stats-" + image_basename + ".json"
+> +    with open(deploy_dir / stats_filename, "w") as stats_out:
+> +        json.dump(check_result, stats_out)
+> +
+> +    binaries_with_violations = {k: v for k, v in check_result.items() if v}
+> +    if binaries_with_violations:
+> +        msg = "Static linkage check: found {} violations".format(len(binaries_with_violations))
+> +        for violator, violations in binaries_with_violations.items():
+> +            msg += "\n{}: {}".format(violator, violations)
+> +
+> +        raise ImageQAFailed(msg, image_check_static_linkage)
+> +}
+> diff --git a/recipes-devtools/python/python3-packaging_%.bbappend b/recipes-devtools/python/python3-packaging_%.bbappend
+> new file mode 100644
+> index 0000000..d6f5869
+> --- /dev/null
+> +++ b/recipes-devtools/python/python3-packaging_%.bbappend
+> @@ -0,0 +1 @@
+> +BBCLASSEXTEND += "native"
+> diff --git a/recipes-security/cve-bin-tool/cve-bin-tool-native.bb b/recipes-security/cve-bin-tool/cve-bin-tool-native.bb
+> new file mode 100644
+> index 0000000..3efbdf7
+> --- /dev/null
+> +++ b/recipes-security/cve-bin-tool/cve-bin-tool-native.bb
+> @@ -0,0 +1,34 @@
+> +SUMMARY = "Scanner for statically linked library copies"
+> +HOMEPAGE = "https://github.com/intel/cve-bin-tool"
+> +
+> +LICENSE = "GPL-3.0"
+> +LIC_FILES_CHKSUM = "file://LICENSE.md;md5=97a733ff40c50b4bfc74471e1f6ca88b"
+> +
+> +VERSION = "3.1"
+> +
+> +
+> +SRC_URI = "\
+> +    https://github.com/intel/cve-bin-tool/archive/refs/tags/v${VERSION}.tar.gz \
+> +    file://cve-bin-tool-static-linkage-checker \
+> +"
+> +
+> +SRC_URI[md5sum] = "af6958f8be7f7ce0d2b5ddffa34a1aee"
+> +SRC_URI[sha256sum] = "c4faaa401a2605a0d3f3c947deaf01cb56b4da927bfc29b5e959cde243bf5daf"
+> +
+> +inherit python3native native
+> +
+> +S = "${WORKDIR}/cve-bin-tool-3.1"
+> +inherit setuptools3
+> +
+> +RDEPENDS_${PN} = "\
+> +  python3-rich-native \
+> +  python3-packaging-native \
+> +"
+> +
+> +do_install:append() {
+> +  install -m 0755 "${WORKDIR}/cve-bin-tool-static-linkage-checker" "${D}${bindir}"
+> +}
+> +FILES-${PN}:append = "${bindir}/cve-bin-tool-static-linkage-checker"
+> +
+> +do_configure[noexec] = "1"
+> +do_compile[noexec] = "1"
+> diff --git a/recipes-security/cve-bin-tool/files/cve-bin-tool-static-linkage-checker b/recipes-security/cve-bin-tool/files/cve-bin-tool-static-linkage-checker
+> new file mode 100644
+> index 0000000..7da1b3b
+> --- /dev/null
+> +++ b/recipes-security/cve-bin-tool/files/cve-bin-tool-static-linkage-checker
+> @@ -0,0 +1,126 @@
+> +#!/usr/bin/env python3
+> +
+> +from importlib import import_module
+> +from pathlib import Path
+> +
+> +import argparse
+> +import json
+> +import subprocess
+> +import toml
+> +
+> +
+> +def parse_args():
+> +    """
+> +    Parse command line arguments.
+> +    """
+> +    parser = argparse.ArgumentParser(
+> +        prog=sys.argv[0],
+> +        description="Checker for staticly linked copies of libraries",
+> +    )
+> +
+> +    parser.add_argument(
+> +        "directory",
+> +        help="Path to the directory to scan",
+> +    )
+> +
+> +    parser.add_argument(
+> +        "--config",
+> +        help="Path to the config file",
+> +        required=True,
+> +    )
+> +
+> +    return parser.parse_args()
+> +
+> +
+> +def list_input_files(rootdir):
+> +    """
+> +    Iterate over the input rootfs and find any file that is an executable ELF file, yielding their
+> +    names for the next step to iterate over.
+> +    """
+> +    import sys
+> +    with subprocess.Popen(
+> +        ["find", rootdir, "-type", "f", "-executable", "-printf", "/%P\\n"],
+> +        stdout=subprocess.PIPE,
+> +    ) as find:
+> +        for line in find.stdout:
+> +            executable_filename = line.decode().strip()
+> +            file_out = subprocess.check_output(["file", rootdir + executable_filename]).decode()
+> +            if "ELF " not in file_out:
+> +                continue
+> +
+> +            yield executable_filename
+> +
+> +
+> +# PurePath.is_relative_to was only added in python 3.9
+> +def _path_is_relative_to(subdir, base):
+> +    try:
+> +        subdir.relative_to(base)
+> +        return True
+> +    except ValueError:
+> +        return False
+> +
+> +
+> +def check_file(root_dir, filename, checkers, exceptions):
+> +    """
+> +    Check an executable file for traces of static linkage using all the checkers specified and
+> +    applying all exceptions specified.
+> +    """
+> +    full_filepath = root_dir + filename
+> +    strings_out = subprocess.check_output(["strings", full_filepath]).decode()
+> +
+> +    filepath = Path(filename)
+> +    if any(
+> +        _path_is_relative_to(Path(ex), filepath) for ex in exceptions["ignore_dirs"]
+> +    ):
+> +        return []
+> +
+> +    found_lib_versions = []
+> +    for checker_name, checker in checkers.items():
+> +        if filename in exceptions["ignore_checks"]:
+> +            if checker_name in exceptions["ignore_checks"][filename]:
+> +                continue
+> +
+> +        vi = checker().get_version(strings_out, filename)
+> +        if vi and vi["is_or_contains"] == "contains" and vi["version"] != "UNKNOWN":
+> +            found_lib_versions.append({checker_name: vi["version"]})
+> +
+> +    return found_lib_versions
+> +
+> +
+> +def _load_checker_class(mod_name):
+> +    """
+> +    Load a checker class given the module name.
+> +
+> +    The class and module name can be generated from each other (the setup.py file for cve-bin-tool
+> +    does the same), e.g. module `libjpeg_turbo` contains checker class `LibjpegTurboChecker`.
+> +    """
+> +    class_name = "".join(mod_name.replace("_", " ").title().split()) + "Checker"
+> +
+> +    mod = import_module(f"cve_bin_tool.checkers.{mod_name}")
+> +    return getattr(mod, class_name)
+> +
+> +
+> +def main():
+> +    """
+> +    Main entry point.
+> +    """
+> +    args = parse_args()
+> +    config = toml.load(args.config)
+> +
+> +    all_checkers = {
+> +        modname: _load_checker_class(modname)
+> +        for modname in config["checkers"]["modules"]
+> +    }
+> +
+> +    violations = {
+> +        f: check_file(args.directory, f, all_checkers, config["exceptions"])
+> +        for f in list_input_files(args.directory)
+> +    }
+> +
+> +    print(json.dumps(violations))
+> +
+> +
+> +if __name__ == "__main__":
+> +    import sys
+> +
+> +    sys.exit(main())
+> -- 
+> 2.36.1
+> 
+
+> 
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#57439): https://lists.yoctoproject.org/g/yocto/message/57439
+> Mute This Topic: https://lists.yoctoproject.org/mt/92168377/3617179
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alexandre.belloni@bootlin.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+> 
+
+
+-- 
+Alexandre Belloni, co-owner and COO, Bootlin
+Embedded Linux and Kernel engineering
+https://bootlin.com
+
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] [PATCH 1/2] image-without-static-linkage: add class
+  2022-07-04 16:25 [PATCH 1/2] image-without-static-linkage: add class Johannes Schilling
+  2022-07-04 16:25 ` [PATCH 2/2] image-without-static-linkage: add selftest Johannes Schilling
+  2022-07-05  8:05 ` [yocto] [PATCH 1/2] image-without-static-linkage: add class Alexandre Belloni
+@ 2022-07-05  8:47 ` Quentin Schulz
+       [not found] ` <16FEAD00052C073D.2437@lists.yoctoproject.org>
+  3 siblings, 0 replies; 6+ messages in thread
+From: Quentin Schulz @ 2022-07-05  8:47 UTC (permalink / raw)
+  To: johannes.schilling, yocto
+
+Hi Johannes,
+
+Thanks for the patch.
+
+On 7/4/22 18:25, Johannes Schilling via lists.yoctoproject.org wrote:
+> This class provides a new image QA check that tries to detect static
+> linkage of a set of well-known libraries, leveraging the detectors from
+> cve-bin-tool[0].
+> 
+> To use in your project, provide a config file as described in the header
+> comment of the class, and inherit image-without-static-linkage in your
+> image recipe.
+> 
+> [0] https://urldefense.proofpoint.com/v2/url?u=https-3A__github.com_intel_cve-2Dbin-2Dtool_tree_main_cve-5Fbin-5Ftool_checkers&d=DwIFAg&c=_sEr5x9kUWhuk4_nFwjJtA&r=LYjLexDn7rXIzVmkNPvw5ymA1XTSqHGq8yBP6m6qZZ4njZguQhZhkI_-172IIy1t&m=Hh9S5cawTgVqdeYOsBqc8rVaNr9ZaBpIWiDZ_AmMvLe1nDPvairY_aW0wkexnXFC&s=9KPe08w-rv38bJzJx3MOSvKRgtdKbTkKVUTuKQhTIZk&e=
+> ---
+>   classes/image-without-static-linkage.bbclass  |  65 +++++++++
+>   .../python/python3-packaging_%.bbappend       |   1 +
+>   .../cve-bin-tool/cve-bin-tool-native.bb       |  34 +++++
+>   .../files/cve-bin-tool-static-linkage-checker | 126 ++++++++++++++++++
+>   4 files changed, 226 insertions(+)
+>   create mode 100644 classes/image-without-static-linkage.bbclass
+>   create mode 100644 recipes-devtools/python/python3-packaging_%.bbappend
+>   create mode 100644 recipes-security/cve-bin-tool/cve-bin-tool-native.bb
+>   create mode 100644 recipes-security/cve-bin-tool/files/cve-bin-tool-static-linkage-checker
+> 
+> diff --git a/classes/image-without-static-linkage.bbclass b/classes/image-without-static-linkage.bbclass
+> new file mode 100644
+> index 0000000..c6f2013
+> --- /dev/null
+> +++ b/classes/image-without-static-linkage.bbclass
+> @@ -0,0 +1,65 @@
+> +# Provide a QA check for statically linked copies of libraries.
+> +#
+> +# You need to provide a config file in TOML format and point the
+> +# variable `STATIC_LINKAGE_CHECK_CONFIG_FILE` to it.
+> +#
+> +# The file format is as follows
+> +# ```
+> +# [checkers]
+> +# modules = [
+> +#   # list of checker module names of cve-bin-tool checkers lib to
+> +#   # enable, i.e. file names in the cve_bin_tool/checkers subfolder.
+> +#   # https://urldefense.proofpoint.com/v2/url?u=https-3A__github.com_intel_cve-2Dbin-2Dtool_tree_main_cve-5Fbin-5Ftool_checkers&d=DwIFAg&c=_sEr5x9kUWhuk4_nFwjJtA&r=LYjLexDn7rXIzVmkNPvw5ymA1XTSqHGq8yBP6m6qZZ4njZguQhZhkI_-172IIy1t&m=Hh9S5cawTgVqdeYOsBqc8rVaNr9ZaBpIWiDZ_AmMvLe1nDPvairY_aW0wkexnXFC&s=9KPe08w-rv38bJzJx3MOSvKRgtdKbTkKVUTuKQhTIZk&e=
+> +#   "librsvg",
+> +#   "zlib",
+> +# ]
+> +#
+> +# [exceptions]
+> +# ignore_dirs = [
+> +#   # list of directories, everything under these is completely ignored
+> +#   "/var/lib/opkg",
+> +# ]
+> +#
+> +# [exceptions.ignore_checks]
+> +#   # for each binary path, a list of checkers from the global list to
+> +#   # ignore for this binary (allowlist)
+> +#   "/bin/ary/name" = [ "zlib" ],
+> +# ```
+> +
+> +IMAGE_QA_COMMANDS += "image_check_static_linkage"
+> +
+> +DEPENDS += "cve-bin-tool-native"
+> +
+> +inherit python3native
+> +
+> +
+> +STATIC_LINKAGE_CUSTOM_ERROR_MESSAGE ??= ""
+> +
+> +python image_check_static_linkage() {
+> +    import json
+> +    from pathlib import Path
+> +    import subprocess
+> +
+> +    from oe.utils import ImageQAFailed
+> +
+> +    check_result = subprocess.check_output(["cve-bin-tool-static-linkage-checker",
+> +        "--config", d.getVar("STATIC_LINKAGE_CHECK_CONFIG_FILE"),
+> +        d.getVar("IMAGE_ROOTFS"),
+> +    ])
+> +    check_result = json.loads(check_result)
+> +
+> +    deploy_dir = Path(d.getVar("DEPLOYDIR"))
+> +    deploy_dir.mkdir(parents=True, exist_ok=True)
+> +    image_basename = d.getVar("IMAGE_BASENAME")
+> +    stats_filename = "static_linkage_stats-" + image_basename + ".json"
+> +    with open(deploy_dir / stats_filename, "w") as stats_out:
+> +        json.dump(check_result, stats_out)
+> +
+> +    binaries_with_violations = {k: v for k, v in check_result.items() if v}
+> +    if binaries_with_violations:
+> +        msg = "Static linkage check: found {} violations".format(len(binaries_with_violations))
+> +        for violator, violations in binaries_with_violations.items():
+> +            msg += "\n{}: {}".format(violator, violations)
+> +
+> +        raise ImageQAFailed(msg, image_check_static_linkage)
+> +} > diff --git a/recipes-devtools/python/python3-packaging_%.bbappend 
+b/recipes-devtools/python/python3-packaging_%.bbappend
+> new file mode 100644
+> index 0000000..d6f5869
+> --- /dev/null
+> +++ b/recipes-devtools/python/python3-packaging_%.bbappend
+> @@ -0,0 +1 @@
+> +BBCLASSEXTEND += "native"
+
+I would say to put this change directly in python3-packaging recipe, no 
+need for a bbappend.
+
+> diff --git a/recipes-security/cve-bin-tool/cve-bin-tool-native.bb b/recipes-security/cve-bin-tool/cve-bin-tool-native.bb
+> new file mode 100644
+> index 0000000..3efbdf7
+> --- /dev/null
+> +++ b/recipes-security/cve-bin-tool/cve-bin-tool-native.bb
+> @@ -0,0 +1,34 @@
+> +SUMMARY = "Scanner for statically linked library copies"
+> +HOMEPAGE = "https://urldefense.proofpoint.com/v2/url?u=https-3A__github.com_intel_cve-2Dbin-2Dtool&d=DwIFAg&c=_sEr5x9kUWhuk4_nFwjJtA&r=LYjLexDn7rXIzVmkNPvw5ymA1XTSqHGq8yBP6m6qZZ4njZguQhZhkI_-172IIy1t&m=Hh9S5cawTgVqdeYOsBqc8rVaNr9ZaBpIWiDZ_AmMvLe1nDPvairY_aW0wkexnXFC&s=EeXrVAokCJc_mQJv65wsyoKKTcNPVZNUJoMzfnfECxg&e= "
+> +
+> +LICENSE = "GPL-3.0"
+> +LIC_FILES_CHKSUM = "file://LICENSE.md;md5=97a733ff40c50b4bfc74471e1f6ca88b"
+> +
+> +VERSION = "3.1"
+> +
+> +
+> +SRC_URI = "\
+> +    https://urldefense.proofpoint.com/v2/url?u=https-3A__github.com_intel_cve-2Dbin-2Dtool_archive_refs_tags_v-24-257BVERSION-257D.tar.gz&d=DwIFAg&c=_sEr5x9kUWhuk4_nFwjJtA&r=LYjLexDn7rXIzVmkNPvw5ymA1XTSqHGq8yBP6m6qZZ4njZguQhZhkI_-172IIy1t&m=Hh9S5cawTgVqdeYOsBqc8rVaNr9ZaBpIWiDZ_AmMvLe1nDPvairY_aW0wkexnXFC&s=Zsl7OBDrfnYUlSJUhoyVM9PfYwURRjvVRUVBqfi3hFM&e=  \
+> +    file://cve-bin-tool-static-linkage-checker \
+> +"
+> +
+> +SRC_URI[md5sum] = "af6958f8be7f7ce0d2b5ddffa34a1aee"
+> +SRC_URI[sha256sum] = "c4faaa401a2605a0d3f3c947deaf01cb56b4da927bfc29b5e959cde243bf5daf"
+> +
+> +inherit python3native native
+> +
+> +S = "${WORKDIR}/cve-bin-tool-3.1"
+> +inherit setuptools3
+> +
+
+
+I guess you could have all inherit in the same line (and also, pretty 
+sure native class should be inherited last).
+
+> +RDEPENDS_${PN} = "\
+
+RDEPENDS:${PN}
+
+> +  python3-rich-native \
+> +  python3-packaging-native \
+> +"
+> +
+> +do_install:append() {
+> +  install -m 0755 "${WORKDIR}/cve-bin-tool-static-linkage-checker" "${D}${bindir}"
+> +}
+> +FILES-${PN}:append = "${bindir}/cve-bin-tool-static-linkage-checker"
+> +
+
+FILES:${PN}:append (also why append and not a simple += ?)
+
+> +do_configure[noexec] = "1"
+> +do_compile[noexec] = "1" > diff --git 
+a/recipes-security/cve-bin-tool/files/cve-bin-tool-static-linkage-checker b/recipes-security/cve-bin-tool/files/cve-bin-tool-static-linkage-checker
+> new file mode 100644
+> index 0000000..7da1b3b
+> --- /dev/null
+> +++ b/recipes-security/cve-bin-tool/files/cve-bin-tool-static-linkage-checker
+> @@ -0,0 +1,126 @@
+> +#!/usr/bin/env python3
+> +
+
+We at least need SPDX license tag here.
+
+> +from importlib import import_module
+> +from pathlib import Path
+> +
+> +import argparse
+> +import json
+> +import subprocess
+> +import toml
+> +
+
+This isn't a core module (yet?) as far as I could tell, so you're 
+missing a DEPENDS/RDEPENDS on the python recipe/package that provides 
+this python module.
+
+On a side note, I'm not entirely sure we would like to maintain a 
+wrapper script specific to OE/Yocto in here. Is there any chance of 
+seeing this or some variant upstreamed to cve-bin-tool git repo instead?
+
+Cheers,
+Quentin
+
+> +
+> +def parse_args():
+> +    """
+> +    Parse command line arguments.
+> +    """
+> +    parser = argparse.ArgumentParser(
+> +        prog=sys.argv[0],
+> +        description="Checker for staticly linked copies of libraries",
+> +    )
+> +
+> +    parser.add_argument(
+> +        "directory",
+> +        help="Path to the directory to scan",
+> +    )
+> +
+> +    parser.add_argument(
+> +        "--config",
+> +        help="Path to the config file",
+> +        required=True,
+> +    )
+> +
+> +    return parser.parse_args()
+> +
+> +
+> +def list_input_files(rootdir):
+> +    """
+> +    Iterate over the input rootfs and find any file that is an executable ELF file, yielding their
+> +    names for the next step to iterate over.
+> +    """
+> +    import sys
+> +    with subprocess.Popen(
+> +        ["find", rootdir, "-type", "f", "-executable", "-printf", "/%P\\n"],
+> +        stdout=subprocess.PIPE,
+> +    ) as find:
+> +        for line in find.stdout:
+> +            executable_filename = line.decode().strip()
+> +            file_out = subprocess.check_output(["file", rootdir + executable_filename]).decode()
+> +            if "ELF " not in file_out:
+> +                continue
+> +
+> +            yield executable_filename
+> +
+> +
+> +# PurePath.is_relative_to was only added in python 3.9
+> +def _path_is_relative_to(subdir, base):
+> +    try:
+> +        subdir.relative_to(base)
+> +        return True
+> +    except ValueError:
+> +        return False
+> +
+> +
+> +def check_file(root_dir, filename, checkers, exceptions):
+> +    """
+> +    Check an executable file for traces of static linkage using all the checkers specified and
+> +    applying all exceptions specified.
+> +    """
+> +    full_filepath = root_dir + filename
+> +    strings_out = subprocess.check_output(["strings", full_filepath]).decode()
+> +
+> +    filepath = Path(filename)
+> +    if any(
+> +        _path_is_relative_to(Path(ex), filepath) for ex in exceptions["ignore_dirs"]
+> +    ):
+> +        return []
+> +
+> +    found_lib_versions = []
+> +    for checker_name, checker in checkers.items():
+> +        if filename in exceptions["ignore_checks"]:
+> +            if checker_name in exceptions["ignore_checks"][filename]:
+> +                continue
+> +
+> +        vi = checker().get_version(strings_out, filename)
+> +        if vi and vi["is_or_contains"] == "contains" and vi["version"] != "UNKNOWN":
+> +            found_lib_versions.append({checker_name: vi["version"]})
+> +
+> +    return found_lib_versions
+> +
+> +
+> +def _load_checker_class(mod_name):
+> +    """
+> +    Load a checker class given the module name.
+> +
+> +    The class and module name can be generated from each other (the setup.py file for cve-bin-tool
+> +    does the same), e.g. module `libjpeg_turbo` contains checker class `LibjpegTurboChecker`.
+> +    """
+> +    class_name = "".join(mod_name.replace("_", " ").title().split()) + "Checker"
+> +
+> +    mod = import_module(f"cve_bin_tool.checkers.{mod_name}")
+> +    return getattr(mod, class_name)
+> +
+> +
+> +def main():
+> +    """
+> +    Main entry point.
+> +    """
+> +    args = parse_args()
+> +    config = toml.load(args.config)
+> +
+> +    all_checkers = {
+> +        modname: _load_checker_class(modname)
+> +        for modname in config["checkers"]["modules"]
+> +    }
+> +
+> +    violations = {
+> +        f: check_file(args.directory, f, all_checkers, config["exceptions"])
+> +        for f in list_input_files(args.directory)
+> +    }
+> +
+> +    print(json.dumps(violations))
+> +
+> +
+> +if __name__ == "__main__":
+> +    import sys
+> +
+> +    sys.exit(main())
+> 
+> 
+> 
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#57439): https://urldefense.proofpoint.com/v2/url?u=https-3A__lists.yoctoproject.org_g_yocto_message_57439&d=DwIFaQ&c=_sEr5x9kUWhuk4_nFwjJtA&r=LYjLexDn7rXIzVmkNPvw5ymA1XTSqHGq8yBP6m6qZZ4njZguQhZhkI_-172IIy1t&m=Hh9S5cawTgVqdeYOsBqc8rVaNr9ZaBpIWiDZ_AmMvLe1nDPvairY_aW0wkexnXFC&s=fhF-Bp16IzErWKiC5cHDhco8Vr6qeAQvnku916eVePQ&e=
+> Mute This Topic: https://urldefense.proofpoint.com/v2/url?u=https-3A__lists.yoctoproject.org_mt_92168377_6293953&d=DwIFaQ&c=_sEr5x9kUWhuk4_nFwjJtA&r=LYjLexDn7rXIzVmkNPvw5ymA1XTSqHGq8yBP6m6qZZ4njZguQhZhkI_-172IIy1t&m=Hh9S5cawTgVqdeYOsBqc8rVaNr9ZaBpIWiDZ_AmMvLe1nDPvairY_aW0wkexnXFC&s=PmhHmonOJoabS8hMDLxEC0Dmc-Qur5hup9eDZ1aVToY&e=
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://urldefense.proofpoint.com/v2/url?u=https-3A__lists.yoctoproject.org_g_yocto_unsub&d=DwIFaQ&c=_sEr5x9kUWhuk4_nFwjJtA&r=LYjLexDn7rXIzVmkNPvw5ymA1XTSqHGq8yBP6m6qZZ4njZguQhZhkI_-172IIy1t&m=Hh9S5cawTgVqdeYOsBqc8rVaNr9ZaBpIWiDZ_AmMvLe1nDPvairY_aW0wkexnXFC&s=Humk2R0kxOZoVS6ajsOcTkv5OvG_MVwKpuC2PE_NXuM&e=  [quentin.schulz@theobroma-systems.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+> 
+
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] [PATCHv2 1/2] image-without-static-linkage: add class
+       [not found] ` <16FEAD00052C073D.2437@lists.yoctoproject.org>
+@ 2022-07-18 13:41   ` Schilling, Johannes
+  2022-07-18 13:42   ` [yocto] [PATCHv2 2/2] image-without-static-linkage: add selftest Schilling, Johannes
+  1 sibling, 0 replies; 6+ messages in thread
+From: Schilling, Johannes @ 2022-07-18 13:41 UTC (permalink / raw)
+  To: yocto
+
+From b56b89881a6c68f316cd381ddae67e0484ff116b Mon Sep 17 00:00:00 2001
+From: Johannes Schilling <johannes.schilling@methodpark.de>
+Date: Fri, 24 Jun 2022 12:26:57 +0200
+Subject: [PATCH 1/2] image-without-static-linkage: add class
+
+This class provides a new image QA check that tries to detect static
+linkage of a set of well-known libraries, leveraging the detectors from
+cve-bin-tool[0].
+
+To use in your project, provide a config file as described in the header
+comment of the class, and inherit image-without-static-linkage in your
+image recipe.
+
+[0] https://github.com/intel/cve-bin-tool/tree/main/cve_bin_tool/checkers
+
+Signed-Off-By: Johannes Schilling <johannes.schilling@methodpark.de>
+---
+ classes/image-without-static-linkage.bbclass  |  65 +++++++++
+ .../cve-bin-tool/cve-bin-tool-native_3.1.bb   |  32 +++++
+ .../files/cve-bin-tool-static-linkage-checker | 127 ++++++++++++++++++
+ 4 files changed, 225 insertions(+)
+ create mode 100644 classes/image-without-static-linkage.bbclass
+ create mode 100644 recipes-security/cve-bin-tool/cve-bin-tool-native_3.1.bb
+ create mode 100644 recipes-security/cve-bin-tool/files/cve-bin-tool-static-linkage-checker
+
+diff --git a/classes/image-without-static-linkage.bbclass b/classes/image-without-static-linkage.bbclass
+new file mode 100644
+index 0000000..c6f2013
+--- /dev/null
++++ b/classes/image-without-static-linkage.bbclass
+@@ -0,0 +1,65 @@
++# Provide a QA check for statically linked copies of libraries.
++#
++# You need to provide a config file in TOML format and point the
++# variable `STATIC_LINKAGE_CHECK_CONFIG_FILE` to it.
++#
++# The file format is as follows
++# ```
++# [checkers]
++# modules = [
++#   # list of checker module names of cve-bin-tool checkers lib to
++#   # enable, i.e. file names in the cve_bin_tool/checkers subfolder.
++#   # https://github.com/intel/cve-bin-tool/tree/main/cve_bin_tool/checkers
++#   "librsvg",
++#   "zlib",
++# ]
++#
++# [exceptions]
++# ignore_dirs = [
++#   # list of directories, everything under these is completely ignored
++#   "/var/lib/opkg",
++# ]
++#
++# [exceptions.ignore_checks]
++#   # for each binary path, a list of checkers from the global list to
++#   # ignore for this binary (allowlist)
++#   "/bin/ary/name" = [ "zlib" ],
++# ```
++
++IMAGE_QA_COMMANDS += "image_check_static_linkage"
++
++DEPENDS += "cve-bin-tool-native"
++
++inherit python3native
++
++
++STATIC_LINKAGE_CUSTOM_ERROR_MESSAGE ??= ""
++
++python image_check_static_linkage() {
++    import json
++    from pathlib import Path
++    import subprocess
++
++    from oe.utils import ImageQAFailed
++
++    check_result = subprocess.check_output(["cve-bin-tool-static-linkage-checker",
++        "--config", d.getVar("STATIC_LINKAGE_CHECK_CONFIG_FILE"),
++        d.getVar("IMAGE_ROOTFS"),
++    ])
++    check_result = json.loads(check_result)
++
++    deploy_dir = Path(d.getVar("DEPLOYDIR"))
++    deploy_dir.mkdir(parents=True, exist_ok=True)
++    image_basename = d.getVar("IMAGE_BASENAME")
++    stats_filename = "static_linkage_stats-" + image_basename + ".json"
++    with open(deploy_dir / stats_filename, "w") as stats_out:
++        json.dump(check_result, stats_out)
++
++    binaries_with_violations = {k: v for k, v in check_result.items() if v}
++    if binaries_with_violations:
++        msg = "Static linkage check: found {} violations".format(len(binaries_with_violations))
++        for violator, violations in binaries_with_violations.items():
++            msg += "\n{}: {}".format(violator, violations)
++
++        raise ImageQAFailed(msg, image_check_static_linkage)
++}
+diff --git a/recipes-security/cve-bin-tool/cve-bin-tool-native_3.1.bb b/recipes-security/cve-bin-tool/cve-bin-tool-native_3.1.bb
+new file mode 100644
+index 0000000..64a3d01
+--- /dev/null
++++ b/recipes-security/cve-bin-tool/cve-bin-tool-native_3.1.bb
+@@ -0,0 +1,32 @@
++SUMMARY = "Scanner for statically linked library copies"
++HOMEPAGE = "https://github.com/intel/cve-bin-tool"
++
++LICENSE = "GPL-3.0"
++LIC_FILES_CHKSUM = "file://LICENSE.md;md5=97a733ff40c50b4bfc74471e1f6ca88b"
++
++
++SRC_URI = "\
++    https://github.com/intel/cve-bin-tool/archive/refs/tags/v${PV}.tar.gz \
++    file://cve-bin-tool-static-linkage-checker \
++"
++
++SRC_URI[sha256sum] = "c4faaa401a2605a0d3f3c947deaf01cb56b4da927bfc29b5e959cde243bf5daf"
++
++inherit setuptools3 native
++
++S = "${WORKDIR}/${BPN}-${PV}"
++
++RDEPENDS:${PN} = "\
++  python3-rich-native \
++  python3-packaging-native \
++  python3-toml-native \
++"
++
++do_install:append() {
++  install -m 0755 "${WORKDIR}/cve-bin-tool-static-linkage-checker" "${D}${bindir}"
++}
++
++FILES:${PN} += "${bindir}/cve-bin-tool-static-linkage-checker"
++
++do_configure[noexec] = "1"
++do_compile[noexec] = "1"
+diff --git a/recipes-security/cve-bin-tool/files/cve-bin-tool-static-linkage-checker b/recipes-security/cve-bin-tool/files/cve-bin-tool-static-linkage-checker
+new file mode 100644
+index 0000000..16ba86d
+--- /dev/null
++++ b/recipes-security/cve-bin-tool/files/cve-bin-tool-static-linkage-checker
+@@ -0,0 +1,127 @@
++#!/usr/bin/env python3
++# SPDX-License-Identifier: GPL-3.0
++
++from importlib import import_module
++from pathlib import Path
++
++import argparse
++import json
++import subprocess
++import toml
++
++
++def parse_args():
++    """
++    Parse command line arguments.
++    """
++    parser = argparse.ArgumentParser(
++        prog=sys.argv[0],
++        description="Checker for staticly linked copies of libraries",
++    )
++
++    parser.add_argument(
++        "directory",
++        help="Path to the directory to scan",
++    )
++
++    parser.add_argument(
++        "--config",
++        help="Path to the config file",
++        required=True,
++    )
++
++    return parser.parse_args()
++
++
++def list_input_files(rootdir):
++    """
++    Iterate over the input rootfs and find any file that is an executable ELF file, yielding their
++    names for the next step to iterate over.
++    """
++    import sys
++    with subprocess.Popen(
++        ["find", rootdir, "-type", "f", "-executable", "-printf", "/%P\\n"],
++        stdout=subprocess.PIPE,
++    ) as find:
++        for line in find.stdout:
++            executable_filename = line.decode().strip()
++            file_out = subprocess.check_output(["file", rootdir + executable_filename]).decode()
++            if "ELF " not in file_out:
++                continue
++
++            yield executable_filename
++
++
++# PurePath.is_relative_to was only added in python 3.9
++def _path_is_relative_to(subdir, base):
++    try:
++        subdir.relative_to(base)
++        return True
++    except ValueError:
++        return False
++
++
++def check_file(root_dir, filename, checkers, exceptions):
++    """
++    Check an executable file for traces of static linkage using all the checkers specified and
++    applying all exceptions specified.
++    """
++    full_filepath = root_dir + filename
++    strings_out = subprocess.check_output(["strings", full_filepath]).decode()
++
++    filepath = Path(filename)
++    if any(
++        _path_is_relative_to(Path(ex), filepath) for ex in exceptions["ignore_dirs"]
++    ):
++        return []
++
++    found_lib_versions = []
++    for checker_name, checker in checkers.items():
++        if filename in exceptions["ignore_checks"]:
++            if checker_name in exceptions["ignore_checks"][filename]:
++                continue
++
++        vi = checker().get_version(strings_out, filename)
++        if vi and vi["is_or_contains"] == "contains" and vi["version"] != "UNKNOWN":
++            found_lib_versions.append({checker_name: vi["version"]})
++
++    return found_lib_versions
++
++
++def _load_checker_class(mod_name):
++    """
++    Load a checker class given the module name.
++
++    The class and module name can be generated from each other (the setup.py file for cve-bin-tool
++    does the same), e.g. module `libjpeg_turbo` contains checker class `LibjpegTurboChecker`.
++    """
++    class_name = "".join(mod_name.replace("_", " ").title().split()) + "Checker"
++
++    mod = import_module(f"cve_bin_tool.checkers.{mod_name}")
++    return getattr(mod, class_name)
++
++
++def main():
++    """
++    Main entry point.
++    """
++    args = parse_args()
++    config = toml.load(args.config)
++
++    all_checkers = {
++        modname: _load_checker_class(modname)
++        for modname in config["checkers"]["modules"]
++    }
++
++    violations = {
++        f: check_file(args.directory, f, all_checkers, config["exceptions"])
++        for f in list_input_files(args.directory)
++    }
++
++    print(json.dumps(violations))
++
++
++if __name__ == "__main__":
++    import sys
++
++    sys.exit(main())
+
+
+This e-mail may contain privileged or confidential information. If you are not the intended recipient: (1) you may not disclose, use, distribute, copy or rely upon this message or attachment(s); and (2) please notify the sender by reply e-mail, and then delete this message and its attachment(s). Underwriters Laboratories Inc. and its affiliates disclaim all liability for any errors, omissions, corruption or virus in this message or any attachments.
+
+^ permalink raw reply related	[flat|nested] 6+ messages in thread
+* Re: [yocto] [PATCHv2 2/2] image-without-static-linkage: add selftest
+       [not found] ` <16FEAD00052C073D.2437@lists.yoctoproject.org>
+  2022-07-18 13:41   ` [yocto] [PATCHv2 " Schilling, Johannes
+@ 2022-07-18 13:42   ` Schilling, Johannes
+  1 sibling, 0 replies; 6+ messages in thread
+From: Schilling, Johannes @ 2022-07-18 13:42 UTC (permalink / raw)
+  To: yocto
+
+From 87c3c8cc4f3e67b2bc06af53705f18c0a9de5dd7 Mon Sep 17 00:00:00 2001
+From: Johannes Schilling <johannes.schilling@methodpark.de>
+Date: Mon, 27 Jun 2022 16:12:25 +0200
+Subject: [PATCH 2/2] image-without-static-linkage: add selftest
+
+The selftest runs the static linkage check QA test on a small rootfs,
+expecting no static linkage against the two checkers "zlib" and
+"librsvg". This tests that the class and the config are correctly pulled
+in, the checkers are found an run, and will fail if yocto's core image
+ever does ship statically linked copies of one of these.
+
+Signed-Off-By: Johannes Schilling <johannes.schilling@methodpark.de>
+---
+ .../selftest/cases/static_linkage_checker.py  | 39 +++++++++++++++++++
+ 1 file changed, 39 insertions(+)
+ create mode 100644 lib/oeqa/selftest/cases/static_linkage_checker.py
+
+diff --git a/lib/oeqa/selftest/cases/static_linkage_checker.py b/lib/oeqa/selftest/cases/static_linkage_checker.py
+new file mode 100644
+index 0000000..a5fdf6b
+--- /dev/null
++++ b/lib/oeqa/selftest/cases/static_linkage_checker.py
+@@ -0,0 +1,39 @@
++import os
++import re
++
++from oeqa.selftest.case import OESelftestTestCase
++from oeqa.utils.commands import bitbake
++
++class StaticLinkageCheck(OESelftestTestCase):
++    def test_static_linkage_check(self):
++        self.write_recipeinc('emptytest', """
++SUMMARY = "A small image just capable of allowing a device to boot."
++
++IMAGE_INSTALL = "packagegroup-core-boot ${CORE_IMAGE_EXTRA_INSTALL}"
++
++CORE_IMAGE_EXTRA_INSTALL ?= ""
++
++LICENSE = "MIT"
++
++inherit image
++
++IMAGE_ROOTFS_SIZE ?= "8192"
++
++inherit image-without-static-linkage
++
++STATIC_LINKAGE_CHECK_CONFIG = "${WORKDIR}/static-linkage-check-config.toml"
++
++do_write_config() {
++    echo "[checkers]\nmodules = [ "zlib", "librsvg" ]\n" > "${STATIC_LINKAGE_CHECK_CONFIG}"
++    echo "[exceptions]" >> "${STATIC_LINKAGE_CHECK_CONFIG}"
++    echo "ignore_dirs = []" >> "${STATIC_LINKAGE_CHECK_CONFIG}"
++    echo "ignore_checks = {}" >> "${STATIC_LINKAGE_CHECK_CONFIG}"
++}
++
++addtask do_write_config before do_image_qa
++        """)
++
++        result = bitbake("-c image_qa emptytest", ignore_status=True)
++        if result.status != 0:
++            self.logger.warn(result.output)
++            raise self.failureException("build failed, something went wrong...")
+
+
+This e-mail may contain privileged or confidential information. If you are not the intended recipient: (1) you may not disclose, use, distribute, copy or rely upon this message or attachment(s); and (2) please notify the sender by reply e-mail, and then delete this message and its attachment(s). Underwriters Laboratories Inc. and its affiliates disclaim all liability for any errors, omissions, corruption or virus in this message or any attachments.
+
+^ permalink raw reply related	[flat|nested] 6+ messages in thread
+end of thread, other threads:[~2022-07-18 13:42 UTC | newest]
+
+Thread overview: 6+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-07-04 16:25 [PATCH 1/2] image-without-static-linkage: add class Johannes Schilling
+2022-07-04 16:25 ` [PATCH 2/2] image-without-static-linkage: add selftest Johannes Schilling
+2022-07-05  8:05 ` [yocto] [PATCH 1/2] image-without-static-linkage: add class Alexandre Belloni
+2022-07-05  8:47 ` Quentin Schulz
+     [not found] ` <16FEAD00052C073D.2437@lists.yoctoproject.org>
+2022-07-18 13:41   ` [yocto] [PATCHv2 " Schilling, Johannes
+2022-07-18 13:42   ` [yocto] [PATCHv2 2/2] image-without-static-linkage: add selftest Schilling, Johannes
+
