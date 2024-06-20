@@ -1,0 +1,305 @@
+* fltk recipe fails
+@ 2023-02-20  7:51 Ron Eggler
+  2023-02-20  8:23 ` [yocto] " Takayasu Ito
+  0 siblings, 1 reply; 3+ messages in thread
+From: Ron Eggler @ 2023-02-20  7:51 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2177 bytes --]
+
+Hi,
+
+I need too build fltk but the recipe from openembedded 
+(http://cgit.openembedded.org/meta-openembedded/tree/meta-oe/recipes-support/fltk/fltk.bb?h=master) 
+requires a patch file that I could not find. Hence I built my own recipe 
+which looks something like:
+[fltk.bb]
+SUMMARY = "Fast Light Toolkit (FLTK) is a cross-platform GUI development 
+library."
+DESCRIPTION = "FLTK provides modern GUI functionality without the bloat 
+and supports 3D graphics via OpenGL and its built-in GLUT emulation."
+
+LICENSE = "LGPLv2.1+"
+LIC_FILES_CHKSUM = "file://COPYING;md5=353c9fd4163eef6500f7e057aed0b083"
+
+SRCREV = "master"
+SRC_URI = "git://github.com/fltk/fltk.git;branch=${SRCREV}"
+
+S = "${WORKDIR}/git"
+
+inherit autotools
+
+do_configure_prepend() {
+     ${WORKDIR}/git/autogen.sh
+}
+[/fltk.bb]
+
+I'm running into an issue with autoge.sh tho, the script appears simple:
+[autogen.sh]
+#! /bin/sh
+#
+# This file is no longer referred to in the documentation, it's kept
+# for backwards compatibility only.
+#
+# Just run `autoconf` instead to generate `configure` and you're done.
+#
+# The old README.Unix.txt stated that it should be executed from within
+# the "FLTK source-code directory", hence changing directories is not
+# useful and would break if the user's home directory contained spaces.
+# Changing directories has been removed in FLTK 1.4.0 and this file
+# has been simplified substantially.
+#
+# Instead of executing it as documented in pre-1.4 README files the new docs
+# instruct to just execute `autoconf` which is sufficient and equivalent to
+# the old instructions.
+
+autoconf --force || exit 1
+
+test -n "$NOCONFIGURE" || ./configure "$@"
+[/autogen.sh]
+
+However, when I attempt to build my image, I get something like:
+DEBUG: Executing shell function do_configure
+autoconf: error: no input file
+WARNING: exit code 1 from a shell command.
+ERROR: Execution of 
+'/home/yocto/rzg_vlp_v3.0.0/build/tmp/work/aarch64-poky-linux/fltk/1.0-r0/temp/run.do_configure.242968' 
+failed with exit code 1
+
+The autoconf man page states:
+
+"-f, --force
+consider all files obsolete"
+i.e. I would expect it to work w/o any input files. What am I missing 
+and how can I get fltk built succesfully?
+
+
+[-- Attachment #2: Type: text/html, Size: 3411 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] fltk recipe fails
+  2023-02-20  7:51 fltk recipe fails Ron Eggler
+@ 2023-02-20  8:23 ` Takayasu Ito
+  2023-02-21  4:12   ` Ron Eggler
+  0 siblings, 1 reply; 3+ messages in thread
+From: Takayasu Ito @ 2023-02-20  8:23 UTC (permalink / raw)
+  To: yocto
+
+Hi Ron
+
+The patch file can be found at
+http://cgit.openembedded.org/meta-openembedded/tree/meta-oe/recipes-support/fltk/fltk
+
+
+On 2023/02/20 16:51, Mistyron wrote:
+> Hi,
+> 
+> I need too build fltk but the recipe from openembedded 
+> (http://cgit.openembedded.org/meta-openembedded/tree/meta-oe/recipes-support/fltk/fltk.bb?h=master) requires a patch file that I could not find. Hence I built my own recipe which looks something like:
+> [fltk.bb]
+> SUMMARY = "Fast Light Toolkit (FLTK) is a cross-platform GUI development 
+> library."
+> DESCRIPTION = "FLTK provides modern GUI functionality without the bloat 
+> and supports 3D graphics via OpenGL and its built-in GLUT emulation."
+> 
+> LICENSE = "LGPLv2.1+"
+> LIC_FILES_CHKSUM = "file://COPYING;md5=353c9fd4163eef6500f7e057aed0b083"
+> 
+> SRCREV = "master"
+> SRC_URI = "git://github.com/fltk/fltk.git;branch=${SRCREV}"
+> 
+> S = "${WORKDIR}/git"
+> 
+> inherit autotools
+> 
+> do_configure_prepend() {
+>      ${WORKDIR}/git/autogen.sh
+> }
+> [/fltk.bb]
+> 
+> I'm running into an issue with autoge.sh tho, the script appears simple:
+> [autogen.sh]
+> #! /bin/sh
+> #
+> # This file is no longer referred to in the documentation, it's kept
+> # for backwards compatibility only.
+> #
+> # Just run `autoconf` instead to generate `configure` and you're done.
+> #
+> # The old README.Unix.txt stated that it should be executed from within
+> # the "FLTK source-code directory", hence changing directories is not
+> # useful and would break if the user's home directory contained spaces.
+> # Changing directories has been removed in FLTK 1.4.0 and this file
+> # has been simplified substantially.
+> #
+> # Instead of executing it as documented in pre-1.4 README files the new docs
+> # instruct to just execute `autoconf` which is sufficient and equivalent to
+> # the old instructions.
+> 
+> autoconf --force || exit 1
+> 
+> test -n "$NOCONFIGURE" || ./configure "$@"
+> [/autogen.sh]
+> 
+> However, when I attempt to build my image, I get something like:
+> DEBUG: Executing shell function do_configure
+> autoconf: error: no input file
+> WARNING: exit code 1 from a shell command.
+> ERROR: Execution of 
+> '/home/yocto/rzg_vlp_v3.0.0/build/tmp/work/aarch64-poky-linux/fltk/1.0-r0/temp/run.do_configure.242968' failed with exit code 1
+> 
+> The autoconf man page states:
+> 
+> "-f, --force
+> consider all files obsolete"
+> i.e. I would expect it to work w/o any input files. What am I missing 
+> and how can I get fltk built succesfully?
+> 
+> 
+> 
+> 
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#59248): https://lists.yoctoproject.org/g/yocto/message/59248
+> Mute This Topic: https://lists.yoctoproject.org/mt/97082226/3617373
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [ito@lineo.co.jp]
+> -=-=-=-=-=-=-=-=-=-=-=-
+> 
+
+-- 
+Takayasu Ito
+Yocto Project Ambassador
+Solution Department Lineo Solutions, Inc.
+https://www.lineo.co.jp/english/
+Email: ito@lineo.co.jp
+
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] fltk recipe fails
+  2023-02-20  8:23 ` [yocto] " Takayasu Ito
+@ 2023-02-21  4:12   ` Ron Eggler
+  0 siblings, 0 replies; 3+ messages in thread
+From: Ron Eggler @ 2023-02-21  4:12 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 3277 bytes --]
+
+Hi Takayasu,
+
+Thank you for this. I have cloned the fltk/ dir from the dunfell branch 
+to my build host. This seemed to help out with the fltk issue but I have 
+to suspend work on this for now.
+
+Thanks,
+
+Ron
+
+On 2/20/23 00:23, Takayasu Ito wrote:
+> Hi Ron
+>
+> The patch file can be found at
+> http://cgit.openembedded.org/meta-openembedded/tree/meta-oe/recipes-support/fltk/fltk 
+>
+>
+>
+> On 2023/02/20 16:51, Mistyron wrote:
+>> Hi,
+>>
+>> I need too build fltk but the recipe from openembedded 
+>> (http://cgit.openembedded.org/meta-openembedded/tree/meta-oe/recipes-support/fltk/fltk.bb?h=master) 
+>> requires a patch file that I could not find. Hence I built my own 
+>> recipe which looks something like:
+>> [fltk.bb]
+>> SUMMARY = "Fast Light Toolkit (FLTK) is a cross-platform GUI 
+>> development library."
+>> DESCRIPTION = "FLTK provides modern GUI functionality without the 
+>> bloat and supports 3D graphics via OpenGL and its built-in GLUT 
+>> emulation."
+>>
+>> LICENSE = "LGPLv2.1+"
+>> LIC_FILES_CHKSUM = "file://COPYING;md5=353c9fd4163eef6500f7e057aed0b083"
+>>
+>> SRCREV = "master"
+>> SRC_URI = "git://github.com/fltk/fltk.git;branch=${SRCREV}"
+>>
+>> S = "${WORKDIR}/git"
+>>
+>> inherit autotools
+>>
+>> do_configure_prepend() {
+>>      ${WORKDIR}/git/autogen.sh
+>> }
+>> [/fltk.bb]
+>>
+>> I'm running into an issue with autoge.sh tho, the script appears simple:
+>> [autogen.sh]
+>> #! /bin/sh
+>> #
+>> # This file is no longer referred to in the documentation, it's kept
+>> # for backwards compatibility only.
+>> #
+>> # Just run `autoconf` instead to generate `configure` and you're done.
+>> #
+>> # The old README.Unix.txt stated that it should be executed from within
+>> # the "FLTK source-code directory", hence changing directories is not
+>> # useful and would break if the user's home directory contained spaces.
+>> # Changing directories has been removed in FLTK 1.4.0 and this file
+>> # has been simplified substantially.
+>> #
+>> # Instead of executing it as documented in pre-1.4 README files the 
+>> new docs
+>> # instruct to just execute `autoconf` which is sufficient and 
+>> equivalent to
+>> # the old instructions.
+>>
+>> autoconf --force || exit 1
+>>
+>> test -n "$NOCONFIGURE" || ./configure "$@"
+>> [/autogen.sh]
+>>
+>> However, when I attempt to build my image, I get something like:
+>> DEBUG: Executing shell function do_configure
+>> autoconf: error: no input file
+>> WARNING: exit code 1 from a shell command.
+>> ERROR: Execution of 
+>> '/home/yocto/rzg_vlp_v3.0.0/build/tmp/work/aarch64-poky-linux/fltk/1.0-r0/temp/run.do_configure.242968' 
+>> failed with exit code 1
+>>
+>> The autoconf man page states:
+>>
+>> "-f, --force
+>> consider all files obsolete"
+>> i.e. I would expect it to work w/o any input files. What am I missing 
+>> and how can I get fltk built succesfully?
+>>
+>>
+>>
+>>
+>>
+>>
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#59249):https://lists.yoctoproject.org/g/yocto/message/59249
+> Mute This Topic:https://lists.yoctoproject.org/mt/97082226/7254380
+> Group Owner:yocto+owner@lists.yoctoproject.org
+> Unsubscribe:https://lists.yoctoproject.org/g/yocto/unsub  [ron.eggler@mistywest.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+-- 
+RON EGGLER Firmware Engineer (he/him/his) www.mistywest.com
+
+[-- Attachment #2: Type: text/html, Size: 5992 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2023-02-21  4:12 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-02-20  7:51 fltk recipe fails Ron Eggler
+2023-02-20  8:23 ` [yocto] " Takayasu Ito
+2023-02-21  4:12   ` Ron Eggler
+

@@ -1,0 +1,193 @@
+* #raspberrypi #ffmpeg
+@ 2023-05-04 10:40 Ed Watson
+  2023-05-04 11:29 ` [yocto] " Ross Burton
+                   ` (2 more replies)
+  0 siblings, 3 replies; 4+ messages in thread
+From: Ed Watson @ 2023-05-04 10:40 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1178 bytes --]
+
+Hello,
+
+I am trying to get v4l_mem2mem in to ffmpeg. It does hardware h264 encoding on a RPI4
+
+ffmpeg  -encoders | grep h264
+
+for example
+
+ffmpeg -f v4l2  - i /dev/video0 -v:c v4l_mem2mem out.mp4
+
+would take the a webcam output and encode it in h264 using the hardware encoder.
+
+On raspberry pi os:
+
+V..... libx264              libx264 H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10 (codec h264)
+
+V..... libx264rgb           libx264 H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10 RGB (codec h264)
+
+V..... h264_omx             OpenMAX IL H.264 video encoder (codec h264)
+
+V..... h264_v4l2m2m         V4L2 mem2mem H.264 encoder wrapper (codec h264)
+
+V..... h264_vaapi           H.264/AVC (VAAPI) (codec h264)
+
+On yocto so far this is what I have managed so far ....
+
+V....D libx264              libx264 H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10 (codec h264)
+
+V....D libx264rgb           libx264 H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10 RGB (codec h264)
+
+I am working from this:
+
+https://git.yoctoproject.org/poky/tree/meta/recipes-multimedia/ffmpeg/ffmpeg_5.1.2.bb?h=langdale
+
+Anyone else go anywhere close?
+
+[-- Attachment #2: Type: text/html, Size: 4485 bytes --]
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] #raspberrypi #ffmpeg
+  2023-05-04 10:40 #raspberrypi #ffmpeg Ed Watson
+@ 2023-05-04 11:29 ` Ross Burton
+       [not found] ` <175BED4DE45E8E90.14539@lists.yoctoproject.org>
+       [not found] ` <GST4UR.R24GL1IDZDSM3@googlemail.com>
+  2 siblings, 0 replies; 4+ messages in thread
+From: Ross Burton @ 2023-05-04 11:29 UTC (permalink / raw)
+  To: edmundwatson; +Cc: yocto
+
+On 4 May 2023, at 11:40, Ed Watson via lists.yoctoproject.org <edmundwatson=gmail.com@lists.yoctoproject.org> wrote:
+> 
+> Hello, 
+> 
+> I am trying to get v4l_mem2mem in to ffmpeg. It does hardware h264 encoding on a RPI4
+> ffmpeg  -encoders | grep h264
+>  
+> for example
+>  ffmpeg -f v4l2  -i /dev/video0 -v:c v4l_mem2mem out.mp4
+> 
+> would take the a webcam output and encode it in h264 using the hardware encoder. 
+>  On raspberry pi os:
+>  V..... libx264              libx264 H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10 (codec h264)
+>  V..... libx264rgb           libx264 H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10 RGB (codec h264)
+>  V..... h264_omx             OpenMAX IL H.264 video encoder (codec h264)
+>  V..... h264_v4l2m2m         V4L2 mem2mem H.264 encoder wrapper (codec h264)
+>  V..... h264_vaapi           H.264/AVC (VAAPI) (codec h264)
+> On yocto so far this is what I have managed so far ....
+>  V....D libx264              libx264 H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10 (codec h264)
+>  V....D libx264rgb           libx264 H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10 RGB (codec h264)
+
+Sounds like you need to enable v4l support, which looks like being --enable-libv4l2.
+
+A patch to add a PACKAGECONFIG for that would be great.
+
+Ross
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] #raspberrypi #ffmpeg
+       [not found] ` <175BED4DE45E8E90.14539@lists.yoctoproject.org>
+@ 2023-05-04 13:11   ` Ross Burton
+  0 siblings, 0 replies; 4+ messages in thread
+From: Ross Burton @ 2023-05-04 13:11 UTC (permalink / raw)
+  To: Ross Burton; +Cc: edmundwatson, yocto
+
+On 4 May 2023, at 12:29, Ross Burton via lists.yoctoproject.org <ross.burton=arm.com@lists.yoctoproject.org> wrote:
+> 
+> On 4 May 2023, at 11:40, Ed Watson via lists.yoctoproject.org <edmundwatson=gmail.com@lists.yoctoproject.org> wrote:
+>> 
+>> Hello, 
+>> 
+>> I am trying to get v4l_mem2mem in to ffmpeg. It does hardware h264 encoding on a RPI4
+>> ffmpeg  -encoders | grep h264
+>> 
+>> for example
+>> ffmpeg -f v4l2  -i /dev/video0 -v:c v4l_mem2mem out.mp4
+>> 
+>> would take the a webcam output and encode it in h264 using the hardware encoder. 
+>> On raspberry pi os:
+>> V..... libx264              libx264 H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10 (codec h264)
+>> V..... libx264rgb           libx264 H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10 RGB (codec h264)
+>> V..... h264_omx             OpenMAX IL H.264 video encoder (codec h264)
+>> V..... h264_v4l2m2m         V4L2 mem2mem H.264 encoder wrapper (codec h264)
+>> V..... h264_vaapi           H.264/AVC (VAAPI) (codec h264)
+>> On yocto so far this is what I have managed so far ....
+>> V....D libx264              libx264 H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10 (codec h264)
+>> V....D libx264rgb           libx264 H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10 RGB (codec h264)
+> 
+> Sounds like you need to enable v4l support, which looks like being --enable-libv4l2.
+> 
+> A patch to add a PACKAGECONFIG for that would be great.
+
+FYI I just sent the patch to oe-core for ffmpeg, as it was a trivial change.  I’ve not tested it solves your problem, but you’re trying to use V4L2 support without it being enabled, so I suspect it will once you enable it.
+
+Ross
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] #raspberrypi #ffmpeg
+       [not found] ` <GST4UR.R24GL1IDZDSM3@googlemail.com>
+@ 2023-05-26 13:16   ` Ed Watson
+  0 siblings, 0 replies; 4+ messages in thread
+From: Ed Watson @ 2023-05-26 13:16 UTC (permalink / raw)
+  To: Markus Volk; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1428 bytes --]
+
+Hello,
+
+Great thanks very much. Just getting to this..
+
+Ok I am working on kirtstone RPI4-64bit
+
+https://github.com/MarkusVolk/meta-kodi/tree/kirkstone/nexus/recipes-multimedia/ffmpeg/ffmpeg
+
+| DEBUG: Python function extend_recipe_sysroot finished
+| DEBUG: Executing shell function autotools_preconfigure
+| DEBUG: Shell function autotools_preconfigure finished
+| DEBUG: Executing python function autotools_aclocals
+| DEBUG: SITE files ['endian-little', 'bit-64', 'arm-common', 'arm-64',
+'common-linux', 'common-glibc', 'aarch64-linux', 'common']
+| DEBUG: Python function autotools_aclocals finished
+| DEBUG: Executing shell function do_configure
+| ERROR: v4l2_m2m requested, but not all dependencies are satisfied:
+linux_videodev2_h sem_timedwait
+
+
+This is missing a kernel module right, do you also have the machine configs
+around ?
+
+Ed Watson
+
+
+
+On Thu, 4 May 2023 at 13:41, Markus Volk <mrksvolk@googlemail.com> wrote:
+
+> Am Do, 4. Mai 2023 um 03:40:30 -0700 schrieb Ed Watson <
+> edmundwatson@gmail.com>:
+>
+> Anyone else go anywhere close?
+>
+>
+> Got it working on rpi4. Unfortunaltely drmprime is running stable only
+> with direct-to-plane rendering and behaves wonky if used with egl. Not
+> ideal for wayland but working fine with gbm.
+>
+> I have imported some needed patches from LibreElec project.
+> This might be useful for you:
+>
+> https://github.com/MarkusVolk/meta-kodi/tree/master/recipes-multimedia/ffmpeg/ffmpeg
+>
+
+[-- Attachment #2: Type: text/html, Size: 2432 bytes --]
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+end of thread, other threads:[~2023-05-26 13:17 UTC | newest]
+
+Thread overview: 4+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-05-04 10:40 #raspberrypi #ffmpeg Ed Watson
+2023-05-04 11:29 ` [yocto] " Ross Burton
+     [not found] ` <175BED4DE45E8E90.14539@lists.yoctoproject.org>
+2023-05-04 13:11   ` Ross Burton
+     [not found] ` <GST4UR.R24GL1IDZDSM3@googlemail.com>
+2023-05-26 13:16   ` Ed Watson
+

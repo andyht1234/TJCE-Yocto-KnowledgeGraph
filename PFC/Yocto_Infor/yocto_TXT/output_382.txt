@@ -1,0 +1,313 @@
+* Devtool fails if SRCREV is set to ${AUTOREV}  #kirkstone #devtool #yocto
+@ 2022-08-18 10:32 shibi.cbe
+  2022-08-26 20:38 ` acox
+  0 siblings, 1 reply; 6+ messages in thread
+From: shibi.cbe @ 2022-08-18 10:32 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 6291 bytes --]
+
+Hello Everyone
+
+We perform yocto build and do devtool modify for one of package it works
+if we perform devtool modify for another package without resetting the previously modified package we are getting below error in modified package during parsing bb step
+
+recipefile:
+
+SRC_URI="git://git.com/pkg/linux;branch=mulberry-5.10;protocol=ssh;name=linux;destsuffix=git
+
+SRCREV = "${AUTOREV}"
+
+PV = "5.10+git${SRCPV}"
+
+Yocto version: Kirkstone
+BB_SRCREV_POLICY = "clear"
+
+Error:
+
+ERROR: /local/home/test/workspace/poky/../sources/meta-mulberry/recipes-kernel/linux/linux_5.10.bb: Error executing a python function in <code>:                                                                                                                   | ETA:  --:--:--
+
+The stack trace of python calls that resulted in this exception/failure was:
+File: '<code>', lineno: 21, function: <module>
+
+0017:__anon_56__local_home_test_workspace_poky_meta_classes_kernel_fitimage_bbclass(d)
+
+0018:__anon_795__local_home_test_workspace_poky_meta_classes_kernel_fitimage_bbclass(d)
+
+0019:__anon_7__local_home_test_workspace_poky_meta_classes_kernel_devicetree_bbclass(d)
+
+0020:__anon_717__local_home_test_workspace_poky_meta_classes_kernel_yocto_bbclass(d)
+
+*** 0021:__anon_145__local_home_test_workspace_poky_meta_classes_externalsrc_bbclass(d)
+
+File: '/local/home/shibikri/mulberry_workspace/poky/meta/classes/externalsrc.bbclass', lineno: 66, function: __anon_145__local_home_test_workspace_poky_meta_classes_externalsrc_bbclass
+0062:        else:
+0063:            d.setVar('B', '${WORKDIR}/${BPN}-${PV}/')
+0064:
+0065:        local_srcuri = []
+*** 0066:        fetch = bb.fetch2.Fetch((d.getVar('SRC_URI') or '').split(), d)
+0067:        for url in fetch.urls:
+0068:            url_data = fetch.ud[url]
+0069:            parm = url_data.parm
+0070:            if (url_data.type == 'file' or
+File: '/local/home/test/workspace/poky/bitbake/lib/bb/fetch2/__init__.py', lineno: 1680, function: __init__
+1676:
+1677:        for url in urls:
+1678:            if url not in self.ud:
+1679:                try:
+*** 1680:                    self.ud[url] = FetchData(url, d, localonly)
+1681:                except NonLocalMethod:
+1682:                    if localonly:
+1683:                        self.ud[url] = None
+1684:                        pass
+File: '/local/home/test/workspace/poky/bitbake/lib/bb/fetch2/__init__.py', lineno: 1317, function: __init__
+1313:            logger.warning('Consider updating %s recipe to use "protocol" not "proto" in SRC_URI.', d.getVar('PN'))
+1314:            self.parm["protocol"] = self.parm.get("proto", None)
+1315:
+1316:        if hasattr(self.method, "urldata_init"):
+*** 1317:            self.method.urldata_init(self, d)
+1318:
+1319:        if "localpath" in self.parm:
+1320:            # if user sets localpath for file, use it instead.\
+1321:            self.localpath = self.parm["localpath"]
+File: '/local/home/shibikri/test/workspace/poky/bitbake/lib/bb/fetch2/git.py', lineno: 249, function: urldata_init
+0245:        write_tarballs = d.getVar("BB_GENERATE_MIRROR_TARBALLS") or "0"
+0246:        ud.write_tarballs = write_tarballs != "0" or ud.rebaseable
+0247:        ud.write_shallow_tarballs = (d.getVar("BB_GENERATE_SHALLOW_TARBALLS") or write_tarballs) != "0"
+0248:
+*** 0249:        ud.setup_revisions(d)
+0250:
+0251:        for name in ud.names:
+0252:            # Ensure anything that doesn't look like a sha256 checksum/revision is translated into one
+0253:            if not ud.revisions[name] or len(ud.revisions[name]) != 40  or (False in [c in "abcdef0123456789" for c in ud.revisions[name]]):
+File: '/local/home/test/workspace/poky/bitbake/lib/bb/fetch2/__init__.py', lineno: 1347, function: setup_revisions
+1343:
+1344:    def setup_revisions(self, d):
+1345:        self.revisions = {}
+1346:        for name in self.names:
+*** 1347:            self.revisions[name] = srcrev_internal_helper(self, d, name)
+1348:
+1349:        # add compatibility code for non name specified case
+1350:        if len(self.names) == 1:
+1351:            self.revision = self.revisions[self.names[0]]
+File: '/local/home/test/workspace/poky/bitbake/lib/bb/fetch2/__init__.py', lineno: 1212, function: srcrev_internal_helper
+1208:
+1209:    if srcrev == "INVALID" or not srcrev:
+1210:        raise FetchError("Please set a valid SRCREV for url %s (possible key names are %s, or use a ;rev=X URL parameter)" % (str(attempts), ud.url), ud.url)
+1211:    if srcrev == "AUTOINC":
+*** 1212:        srcrev = ud.method.latest_revision(ud, d, name)
+1213:
+1214:    return srcrev
+1215:
+1216:def get_checksum_file_list(d):
+File: '/local/home/test/workspace/poky/bitbake/lib/bb/fetch2/__init__.py', lineno: 1624, function: latest_revision
+1620:        key = self.generate_revision_key(ud, d, name)
+1621:        try:
+1622:            return revs[key]
+1623:        except KeyError:
+*** 1624:            revs[key] = rev = self._latest_revision(ud, d, name)
+1625:            return rev
+1626:
+1627:    def sortable_revision(self, ud, d, name):
+1628:        latest_rev = self._build_revision(ud, d, name)
+File: '/local/home/test/workspace/poky/bitbake/lib/bb/fetch2/git.py', lineno: 734, function: _latest_revision
+0730:        """
+0731:        Compute the HEAD revision for the url
+0732:        """
+0733:        if not d.getVar("__BBSEENSRCREV"):
+*** 0734:            raise bb.fetch2.FetchError("Recipe uses a floating tag/branch without a fixed SRCREV yet doesn't call bb.fetch2.get_srcrev() (use SRCPV in PV for OE).")
+0735:
+0736:        # Ensure we mark as not cached
+0737:        bb.fetch2.get_autorev(d)
+0738:
+Exception: bb.fetch2.FetchError: Fetcher failure: Recipe uses a floating tag/branch without a fixed SRCREV yet doesn't call bb.fetch2.get_srcrev() (use SRCPV in PV for OE).
+ERROR: Parsing halted due to errors, see error messages above
+
+[-- Attachment #2: Type: text/html, Size: 10697 bytes --]
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: Devtool fails if SRCREV is set to ${AUTOREV} #kirkstone #devtool #yocto
+  2022-08-18 10:32 Devtool fails if SRCREV is set to ${AUTOREV} #kirkstone #devtool #yocto shibi.cbe
+@ 2022-08-26 20:38 ` acox
+  2023-07-11 21:54   ` Tom Isaacson
+  0 siblings, 1 reply; 6+ messages in thread
+From: acox @ 2022-08-26 20:38 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1267 bytes --]
+
+I'm having the exact same issue when just modifying a custom linux recipie which is essntially the same as the one provided but referencing 5.15 after transposing recipies from dunfell to kirkstone. The builds without any devtool modify sources work fine but the second I am working with a devtool'd linux it produces that error. So the current best workflow seems to be to make changes in a branch on the remote repository which will require forking the kernel sources and then pointing the branch at the branch created on the fork of the repository.
+
+In my naieve attempts to troubleshoot this I tried changing SRCREV to the same branch name I was referencing and changed the error message to the new format where it changes the raise line to the following it seemed to be using SRCREV for ud.unresolvedrev[name], that doesn't seem correct to me as if I changed the SRCREV to "5.15" (different from the git branch) it would output "5.15". Not sure if this is expected.
+
+raise bb.fetch2.FetchError("Recipe uses a floating tag/branch '%s' for repo '%s' without a fixed SRCREV yet doesn't call bb.fetch2.get_srcrev() (use SRCPV in PV for OE)." % (ud.unresolvedrev[name], ud.host+ud.path))
+
+^ https://git.yoctoproject.org/poky/plain/bitbake/lib/bb/fetch2/git.py
+
+[-- Attachment #2: Type: text/html, Size: 1298 bytes --]
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: Devtool fails if SRCREV is set to ${AUTOREV} #kirkstone #devtool #yocto
+  2022-08-26 20:38 ` acox
+@ 2023-07-11 21:54   ` Tom Isaacson
+  2023-07-12 17:03     ` [yocto] " Alexander Kanavin
+  0 siblings, 1 reply; 6+ messages in thread
+From: Tom Isaacson @ 2023-07-11 21:54 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 110 bytes --]
+
+Is there a fix for this yet? We just upgraded to Kirkstone and are running into the same problem.
+
+Thanks.
+
+[-- Attachment #2: Type: text/html, Size: 490 bytes --]
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] Devtool fails if SRCREV is set to ${AUTOREV} #kirkstone #devtool #yocto
+  2023-07-11 21:54   ` Tom Isaacson
+@ 2023-07-12 17:03     ` Alexander Kanavin
+  2023-07-12 17:43       ` Tom Isaacson
+  0 siblings, 1 reply; 6+ messages in thread
+From: Alexander Kanavin @ 2023-07-12 17:03 UTC (permalink / raw)
+  To: Tom Isaacson; +Cc: yocto
+
+Devtool does not have a maintainer. If you can look into the issue, it
+would be appreciated.
+
+Alex
+
+On Tue, 11 Jul 2023 at 23:54, Tom Isaacson <tom.isaacson@teknique.com> wrote:
+>
+> Is there a fix for this yet? We just upgraded to Kirkstone and are running into the same problem.
+>
+> Thanks.
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#60550): https://lists.yoctoproject.org/g/yocto/message/60550
+> Mute This Topic: https://lists.yoctoproject.org/mt/93100438/1686489
+> Mute #kirkstone:https://lists.yoctoproject.org/g/yocto/mutehashtag/kirkstone
+> Mute #devtool:https://lists.yoctoproject.org/g/yocto/mutehashtag/devtool
+> Mute #yocto:https://lists.yoctoproject.org/g/yocto/mutehashtag/yocto
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] Devtool fails if SRCREV is set to ${AUTOREV} #kirkstone #devtool #yocto
+  2023-07-12 17:03     ` [yocto] " Alexander Kanavin
+@ 2023-07-12 17:43       ` Tom Isaacson
+  2023-07-12 17:55         ` Alexander Kanavin
+  0 siblings, 1 reply; 6+ messages in thread
+From: Tom Isaacson @ 2023-07-12 17:43 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: yocto
+
+It worked fine on Dunfell, it's only a problem now we've migrated. The
+workaround is to add "SRCREV = <your hash>" to
+poky/build/workspace/appends/<package>.bbappend
+
+What changes were there around AUTOREV between Dunfell and Kirkstone?
+Is this still an issue on Mickledore?
+
+On Thu, Jul 13, 2023 at 5:03 AM Alexander Kanavin
+<alex.kanavin@gmail.com> wrote:
+>
+> Devtool does not have a maintainer. If you can look into the issue, it
+> would be appreciated.
+>
+> Alex
+>
+> On Tue, 11 Jul 2023 at 23:54, Tom Isaacson <tom.isaacson@teknique.com> wrote:
+> >
+> > Is there a fix for this yet? We just upgraded to Kirkstone and are running into the same problem.
+> >
+> > Thanks.
+> >
+> > -=-=-=-=-=-=-=-=-=-=-=-
+> > Links: You receive all messages sent to this group.
+> > View/Reply Online (#60550): https://lists.yoctoproject.org/g/yocto/message/60550
+> > Mute This Topic: https://lists.yoctoproject.org/mt/93100438/1686489
+> > Mute #kirkstone:https://lists.yoctoproject.org/g/yocto/mutehashtag/kirkstone
+> > Mute #devtool:https://lists.yoctoproject.org/g/yocto/mutehashtag/devtool
+> > Mute #yocto:https://lists.yoctoproject.org/g/yocto/mutehashtag/yocto
+> > Group Owner: yocto+owner@lists.yoctoproject.org
+> > Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com]
+> > -=-=-=-=-=-=-=-=-=-=-=-
+> >
+
+
+
+-- 
+Tom Isaacson
+
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] Devtool fails if SRCREV is set to ${AUTOREV} #kirkstone #devtool #yocto
+  2023-07-12 17:43       ` Tom Isaacson
+@ 2023-07-12 17:55         ` Alexander Kanavin
+  0 siblings, 0 replies; 6+ messages in thread
+From: Alexander Kanavin @ 2023-07-12 17:55 UTC (permalink / raw)
+  To: Tom Isaacson; +Cc: yocto
+
+You need to try if it's still broken on current master and then bisect
+this, to identify where the issue was introduced, and where it was
+fixed, if it was.
+
+Alex
+
+On Wed, 12 Jul 2023 at 19:43, Tom Isaacson <tom.isaacson@teknique.com> wrote:
+>
+> It worked fine on Dunfell, it's only a problem now we've migrated. The
+> workaround is to add "SRCREV = <your hash>" to
+> poky/build/workspace/appends/<package>.bbappend
+>
+> What changes were there around AUTOREV between Dunfell and Kirkstone?
+> Is this still an issue on Mickledore?
+>
+> On Thu, Jul 13, 2023 at 5:03 AM Alexander Kanavin
+> <alex.kanavin@gmail.com> wrote:
+> >
+> > Devtool does not have a maintainer. If you can look into the issue, it
+> > would be appreciated.
+> >
+> > Alex
+> >
+> > On Tue, 11 Jul 2023 at 23:54, Tom Isaacson <tom.isaacson@teknique.com> wrote:
+> > >
+> > > Is there a fix for this yet? We just upgraded to Kirkstone and are running into the same problem.
+> > >
+> > > Thanks.
+> > >
+> > > -=-=-=-=-=-=-=-=-=-=-=-
+> > > Links: You receive all messages sent to this group.
+> > > View/Reply Online (#60550): https://lists.yoctoproject.org/g/yocto/message/60550
+> > > Mute This Topic: https://lists.yoctoproject.org/mt/93100438/1686489
+> > > Mute #kirkstone:https://lists.yoctoproject.org/g/yocto/mutehashtag/kirkstone
+> > > Mute #devtool:https://lists.yoctoproject.org/g/yocto/mutehashtag/devtool
+> > > Mute #yocto:https://lists.yoctoproject.org/g/yocto/mutehashtag/yocto
+> > > Group Owner: yocto+owner@lists.yoctoproject.org
+> > > Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com]
+> > > -=-=-=-=-=-=-=-=-=-=-=-
+> > >
+>
+>
+>
+> --
+> Tom Isaacson
+
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+end of thread, other threads:[~2023-07-12 17:56 UTC | newest]
+
+Thread overview: 6+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-08-18 10:32 Devtool fails if SRCREV is set to ${AUTOREV} #kirkstone #devtool #yocto shibi.cbe
+2022-08-26 20:38 ` acox
+2023-07-11 21:54   ` Tom Isaacson
+2023-07-12 17:03     ` [yocto] " Alexander Kanavin
+2023-07-12 17:43       ` Tom Isaacson
+2023-07-12 17:55         ` Alexander Kanavin
+

@@ -1,0 +1,206 @@
+* Cross-compile custom ROS2 package for Yocto #bitbake
+@ 2021-11-08 14:39 bojankoce
+  0 siblings, 0 replies; 4+ messages in thread
+From: bojankoce @ 2021-11-08 14:39 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2640 bytes --]
+
+Dear Sirs,
+
+I have a hard time to cross-compile and to properly include the custom ROS2 foxy package into the Yocto image. I properly added meta-ros layer and ROS2 foxy distro to our Yocto build by following instructions from here ( https://github.com/ros/meta-ros/wiki/OpenEmbedded-Build-Instructions#add-meta-ros-to-an-existing-openembedded-project ) ( Sanity Tests ( https://github.com/ros/meta-ros/wiki/OpenEmbedded-Build-Instructions#ros-2-sanity-test ) pass successfully).
+
+I wanted to use a devtool and build a simple custom ROS2 package containing publisher and subscriber nodes. The source code of the package is on the git - link ( https://github.com/bojankoce/ros2pkg ).
+
+I used tips and tricks from here ( https://wiki.yoctoproject.org/wiki/TipsAndTricks/Creating_Recipes_for_ROS_modules ) to create ROS2 recipes with the devtool. My custom bitbake recipe for the simple ROS2 package looks like this ( my-first-yocto-pkg_git.bb file):
+
+DESCRIPTION = "Example of minimal publisher/subscriber using rclcpp."
+LICENSE = "Apache-2.0"
+LIC_FILES_CHKSUM = "file://package.xml;beginline=8;endline=8;md5=3a75fd635766e2f76c3d90ee6495f310"
+
+SRC_URI = "git://github.com/bojankoce/ros2pkg;protocol=https"
+
+# Modify these as desired
+PV = "0.1.0"
+SRCREV = "1312445de2e6861d9561c0f89f4827b94c2ff6b1"
+
+DEPENDS = "rclcpp std-msgs"
+
+S = "${WORKDIR}/git"
+
+# NOTE: unable to map the following CMake package dependencies: rclcpp ament_lint_auto std_msgs ros_ament_cmake
+inherit ros_ament_cmake
+
+However, when I tried to build the package with the devtool build my-first-yocto-pkg command, I get the following error:
+
+CMake Error at CMakeLists. txt : 19 ( find_package ):
+ By not providing "Findament_cmake.cmake" in CMAKE_MODULE_PATH this project
+ has asked CMake to find a package configuration file provided by
+ "ament_cmake" , but CMake did not find one.
+
+ Could not find a package configuration file provided by "ament_cmake" with
+ any of the following names :
+
+   ament_cmakeConfig. cmake
+   ament_cmake - config. cmake
+
+ Add the installation prefix of "ament_cmake" to CMAKE_PREFIX_PATH or set
+ "ament_cmake_DIR" to a directory containing one of the above files.  If
+ "ament_cmake" provides a separate development package or SDK , be sure it
+ has been installed.
+
+The issue is around ament_cmake. I included the inherit ros_ament_cmake line into the recipe but this does not help. Do you have any idea about what I am missing here? Is there any better way to cross-compile and include a custom ROS2 foxy package into the Yocto image?
+
+Thanks in advance for your time and efforts.
+
+Cheers,
+Bojan.
+
+[-- Attachment #2: Type: text/html, Size: 5904 bytes --]
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: Cross-compile custom ROS2 package for Yocto #bitbake
+       [not found] <55121fce-4a5c-381d-6829-958f1789b5de@googlemail.com>
+@ 2021-11-12 19:38 ` bojankoce
+  0 siblings, 0 replies; 4+ messages in thread
+From: bojankoce @ 2021-11-12 19:38 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 250 bytes --]
+
+Hello, Matthias.
+
+It seems the issue was around naming. Now it works fine even without FILES:${PN} at the end of .bb file.
+I am now good to move forward.
+
+Thank you very much for your assistance. It is really appreciated.
+
+Sincerely,
+Bojan.
+
+[-- Attachment #2: Type: text/html, Size: 312 bytes --]
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: Cross-compile custom ROS2 package for Yocto #bitbake
+  2021-11-10 14:29 ` bojankoce
+@ 2021-11-10 19:37   ` bojankoce
+  0 siblings, 0 replies; 4+ messages in thread
+From: bojankoce @ 2021-11-10 19:37 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 800 bytes --]
+
+In addition to the above changes, I also included instructions inside conf/local.conf file to install my first ROS2 package:
+IMAGE_INSTALL_append=" ros-core my-first-yocto-pkg"
+After that, I was able to bitbake the complete Yocto image, put it on the SD card, and boot the Yocto on my devkit. After sourcing ros2_setup.sh script, I entered:
+
+ros2 pkg list command to list all available ROS2 packages on the system.
+
+my_first_yocto_pkg package was on the list so I was happy and excited!
+
+I wanted to do the final touch and launch the *talker* node from the packet with:
+
+ros2 run my_first_yocto_pkg talker
+However, I got the info that No executable is found ! What the heck!
+
+Do you have any idea what I did wrong in the whole process?
+
+Appreciate your efforts!
+
+Sincerely,
+Bojan.
+
+[-- Attachment #2: Type: text/html, Size: 1160 bytes --]
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: Cross-compile custom ROS2 package for Yocto #bitbake
+       [not found] <1ff40696-f207-70f0-1cd6-7aa47a18bdde@googlemail.com>
+@ 2021-11-10 14:29 ` bojankoce
+  2021-11-10 19:37   ` bojankoce
+  0 siblings, 1 reply; 4+ messages in thread
+From: bojankoce @ 2021-11-10 14:29 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 3064 bytes --]
+
+Hello, Matthias.
+
+I added `amente-cmake-native` inti DEPENDS and, indeed, I got a different error this time:
+
+> 
+> Initialising tasks: 100%
+> |######################################################################################################|
+> Time: 0:00:02
+> Sstate summary: Wanted 0 Local 0 Network 0 Missed 0 Current 578 (0% match,
+> 100% complete)
+> NOTE: Executing Tasks
+> NOTE: my-first-yocto-pkg: compiling from external source tree
+> /home/bojan/var-fslc-yocto-playground/build_xwayland/workspace/sources/my-first-yocto-pkg
+> 
+> ERROR: my-first-yocto-pkg-0.1.0-r0 do_package: QA Issue:
+> my-first-yocto-pkg: Files/directories were installed but not shipped in
+> any package:
+> /usr/share/my_first_yocto_pkg
+> /usr/share/my_first_yocto_pkg/local_setup.zsh
+> /usr/share/my_first_yocto_pkg/local_setup.bash
+> /usr/share/my_first_yocto_pkg/package.xml
+> /usr/share/my_first_yocto_pkg/local_setup.sh
+> /usr/share/my_first_yocto_pkg/package.dsv
+> /usr/share/my_first_yocto_pkg/local_setup.dsv
+> /usr/share/my_first_yocto_pkg/environment
+> /usr/share/my_first_yocto_pkg/cmake
+> /usr/share/my_first_yocto_pkg/environment/path.sh
+> /usr/share/my_first_yocto_pkg/environment/path.dsv
+> /usr/share/my_first_yocto_pkg/environment/ament_prefix_path.dsv
+> /usr/share/my_first_yocto_pkg/environment/ament_prefix_path.sh
+> /usr/share/my_first_yocto_pkg/cmake/my_first_yocto_pkgConfig.cmake
+> /usr/share/my_first_yocto_pkg/cmake/my_first_yocto_pkgConfig-version.cmake
+> 
+> /usr/lib/my_first_yocto_pkg/talker
+> /usr/lib/my_first_yocto_pkg/listener
+> Please set FILES such that these items are packaged. Alternatively if they
+> are unneeded, avoid installing them or delete them within do_install.
+> my-first-yocto-pkg: 17 installed and not shipped files.
+> [installed-vs-shipped]
+> ERROR: my-first-yocto-pkg-0.1.0-r0 do_package: Fatal QA errors found,
+> failing task.
+> ERROR: Logfile of failure stored in:
+> /home/bojan/var-fslc-yocto-playground/build_xwayland/tmp/work/cortexa53-crypto-fslc-linux/my-first-yocto-pkg/0.1.0-r0/temp/log.do_package.15149
+> 
+> ERROR: Task
+> (/home/bojan/var-fslc-yocto-playground/build_xwayland/workspace/recipes/my-first-yocto-pkg/my-first-yocto-pkg_git.bb:do_package)
+> failed with exit code '1'
+> NOTE: Tasks Summary: Attempted 2200 tasks of which 2192 didn't need to be
+> rerun and 1 failed.
+> NOTE: Writing buildhistory
+> NOTE: Writing buildhistory took: 3 seconds
+> 
+> Summary: 1 task failed:
+> /home/bojan/var-fslc-yocto-playground/build_xwayland/workspace/recipes/my-first-yocto-pkg/my-first-yocto-pkg_git.bb:do_package
+> 
+> Summary: There was 1 WARNING message shown.
+> Summary: There were 2 ERROR messages shown, returning a non-zero exit
+> code.
+
+I needed to append the following lines at the end of my-first-yocto-pkg_git.bb file in order to resolve it:
+> 
+> 
+> FILES_${PN} += "/usr/share/my_first_yocto_pkg/*"
+> FILES_${PN} += "/usr/lib/my_first_yocto_pkg/*"
+> FILES_${PN}-dev = "/usr/share/my_first_yocto_pkg/*
+> /usr/lib/my_first_yocto_pkg/* ${includedir}"
+
+[-- Attachment #2: Type: text/html, Size: 3259 bytes --]
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+end of thread, other threads:[~2021-11-12 19:38 UTC | newest]
+
+Thread overview: 4+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-11-08 14:39 Cross-compile custom ROS2 package for Yocto #bitbake bojankoce
+     [not found] <1ff40696-f207-70f0-1cd6-7aa47a18bdde@googlemail.com>
+2021-11-10 14:29 ` bojankoce
+2021-11-10 19:37   ` bojankoce
+     [not found] <55121fce-4a5c-381d-6829-958f1789b5de@googlemail.com>
+2021-11-12 19:38 ` bojankoce
+

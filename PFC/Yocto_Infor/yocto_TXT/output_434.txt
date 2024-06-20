@@ -1,0 +1,640 @@
+* [meta-raspberrypi] vc4-fkms-v3d vs. vc4-kms-v3d
+@ 2023-06-23 21:39 Manuel Wagesreither
+  2023-06-23 22:04 ` [yocto] " Khem Raj
+  0 siblings, 1 reply; 12+ messages in thread
+From: Manuel Wagesreither @ 2023-06-23 21:39 UTC (permalink / raw)
+  To: yocto
+
+Hi users of meta-raspberrypi,
+
+I'd like to ask around if for you people vc4-kms-v3d (opposed to vc4-fkms-v3d) *really* is the working way to get vc4 support on a Raspberry Pi 4 Model B.
+
+Both on master and kirkstone, vc4-kms-v3d is the default. It's defined in /conf/machine/raspberrypi4-64.conf:
+
+VC4DTBO ?= "vc4-kms-v3d"
+
+I was mildly surprised to find this, because on my system (running Kirkstone) I can get the screen to work only if I specify vc4-fkms-v3d.
+
+Commit a6fa6b3aec36b92c3750852dd6788af9d2ce08f6 [1] broke my build. The commit message further suggests that vc4-Fkms-v3d is broken, while vc4-kms-v3d is not. So I'm wondering:hy is it exactly the other way round on my machine?
+
+    raspberrypi4: Use full kms (vc4-kms-v3d) DT overlay
+
+    With latest 5.10 kernel fkms version fails to bring up VC4 and we do not
+    get dri device initialized ( /dev/dri ) is empty, which means we can not
+    launch wayland componsitors.
+
+Best regards,
+Manuel
+
+
+^ permalink raw reply	[flat|nested] 12+ messages in thread
+* Re: [yocto] [meta-raspberrypi] vc4-fkms-v3d vs. vc4-kms-v3d
+  2023-06-23 21:39 [meta-raspberrypi] vc4-fkms-v3d vs. vc4-kms-v3d Manuel Wagesreither
+@ 2023-06-23 22:04 ` Khem Raj
+  2023-06-24 14:46   ` Manuel Wagesreither
+  0 siblings, 1 reply; 12+ messages in thread
+From: Khem Raj @ 2023-06-23 22:04 UTC (permalink / raw)
+  To: Manuel Wagesreither; +Cc: yocto
+
+On Fri, Jun 23, 2023 at 2:39 PM Manuel Wagesreither <ManWag@fastmail.fm> wrote:
+>
+> Hi users of meta-raspberrypi,
+>
+> I'd like to ask around if for you people vc4-kms-v3d (opposed to vc4-fkms-v3d) *really* is the working way to get vc4 support on a Raspberry Pi 4 Model B.
+>
+> Both on master and kirkstone, vc4-kms-v3d is the default. It's defined in /conf/machine/raspberrypi4-64.conf:
+>
+> VC4DTBO ?= "vc4-kms-v3d"
+>
+> I was mildly surprised to find this, because on my system (running Kirkstone) I can get the screen to work only if I specify vc4-fkms-v3d.
+>
+> Commit a6fa6b3aec36b92c3750852dd6788af9d2ce08f6 [1] broke my build. The commit message further suggests that vc4-Fkms-v3d is broken, while vc4-kms-v3d is not. So I'm wondering:hy is it exactly the other way round on my machine?
+>
+>     raspberrypi4: Use full kms (vc4-kms-v3d) DT overlay
+>
+>     With latest 5.10 kernel fkms version fails to bring up VC4 and we do not
+>     get dri device initialized ( /dev/dri ) is empty, which means we can not
+>     launch wayland componsitors.
+>
+
+We have moved away from 5.10 kernel to 5.15 and then 6.1, so its
+possible that fkms is working fine again.
+If you test it with both vc4graphics and userland graphics do both work ?
+
+> Best regards,
+> Manuel
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> You automatically follow any topics you start or reply to.
+> View/Reply Online (#60421): https://lists.yoctoproject.org/g/yocto/message/60421
+> Mute This Topic: https://lists.yoctoproject.org/mt/99727959/1997914
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [raj.khem@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 12+ messages in thread
+* Re: [yocto] [meta-raspberrypi] vc4-fkms-v3d vs. vc4-kms-v3d
+  2023-06-23 22:04 ` [yocto] " Khem Raj
+@ 2023-06-24 14:46   ` Manuel Wagesreither
+  2023-06-24 15:25     ` Khem Raj
+  0 siblings, 1 reply; 12+ messages in thread
+From: Manuel Wagesreither @ 2023-06-24 14:46 UTC (permalink / raw)
+  To: Khem Raj; +Cc: yocto
+
+Am Sa, 24. Jun 2023, um 00:04, schrieb Khem Raj:
+> On Fri, Jun 23, 2023 at 2:39 PM Manuel Wagesreither <ManWag@fastmail.fm> wrote:
+>>
+>> Hi users of meta-raspberrypi,
+>>
+>> I'd like to ask around if for you people vc4-kms-v3d (opposed to vc4-fkms-v3d) *really* is the working way to get vc4 support on a Raspberry Pi 4 Model B.
+>>
+>> Both on master and kirkstone, vc4-kms-v3d is the default. It's defined in /conf/machine/raspberrypi4-64.conf:
+>>
+>> VC4DTBO ?= "vc4-kms-v3d"
+>>
+>> I was mildly surprised to find this, because on my system (running Kirkstone) I can get the screen to work only if I specify vc4-fkms-v3d.
+>>
+>> Commit a6fa6b3aec36b92c3750852dd6788af9d2ce08f6 [1] broke my build. The commit message further suggests that vc4-Fkms-v3d is broken, while vc4-kms-v3d is not. So I'm wondering:hy is it exactly the other way round on my machine?
+>>
+>>     raspberrypi4: Use full kms (vc4-kms-v3d) DT overlay
+>>
+>>     With latest 5.10 kernel fkms version fails to bring up VC4 and we do not
+>>     get dri device initialized ( /dev/dri ) is empty, which means we can not
+>>     launch wayland componsitors.
+>>
+>
+> We have moved away from 5.10 kernel to 5.15 and then 6.1, so its
+> possible that fkms is working fine again.
+> If you test it with both vc4graphics and userland graphics do both work ?
+
+The meta-raspberrypi commit I'm on (a6fa6b3aec36b92c3750852dd6788af9d2ce08f6) has recipes for Linux 5.10.110 and 5.15.34 and on both of them vc4-fkms-v3d works while vc4-kms-v3d does not.
+
+* When using vc4-kms-v3d, the screen goes dark very early in the boot process.
+* When using vc4-kms-v3d, kmscube and weston-wayland both work.
+
+
+
+^ permalink raw reply	[flat|nested] 12+ messages in thread
+* Re: [yocto] [meta-raspberrypi] vc4-fkms-v3d vs. vc4-kms-v3d
+  2023-06-24 14:46   ` Manuel Wagesreither
+@ 2023-06-24 15:25     ` Khem Raj
+  2023-06-24 16:02       ` Manuel Wagesreither
+  0 siblings, 1 reply; 12+ messages in thread
+From: Khem Raj @ 2023-06-24 15:25 UTC (permalink / raw)
+  To: Manuel Wagesreither; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1925 bytes --]
+
+On Sat, Jun 24, 2023 at 7:47 AM Manuel Wagesreither <ManWag@fastmail.fm>
+wrote:
+
+> Am Sa, 24. Jun 2023, um 00:04, schrieb Khem Raj:
+> > On Fri, Jun 23, 2023 at 2:39 PM Manuel Wagesreither <ManWag@fastmail.fm>
+> wrote:
+> >>
+> >> Hi users of meta-raspberrypi,
+> >>
+> >> I'd like to ask around if for you people vc4-kms-v3d (opposed to
+> vc4-fkms-v3d) *really* is the working way to get vc4 support on a Raspberry
+> Pi 4 Model B.
+> >>
+> >> Both on master and kirkstone, vc4-kms-v3d is the default. It's defined
+> in /conf/machine/raspberrypi4-64.conf:
+> >>
+> >> VC4DTBO ?= "vc4-kms-v3d"
+> >>
+> >> I was mildly surprised to find this, because on my system (running
+> Kirkstone) I can get the screen to work only if I specify vc4-fkms-v3d.
+> >>
+> >> Commit a6fa6b3aec36b92c3750852dd6788af9d2ce08f6 [1] broke my build. The
+> commit message further suggests that vc4-Fkms-v3d is broken, while
+> vc4-kms-v3d is not. So I'm wondering:hy is it exactly the other way round
+> on my machine?
+> >>
+> >>     raspberrypi4: Use full kms (vc4-kms-v3d) DT overlay
+> >>
+> >>     With latest 5.10 kernel fkms version fails to bring up VC4 and we
+> do not
+> >>     get dri device initialized ( /dev/dri ) is empty, which means we
+> can not
+> >>     launch wayland componsitors.
+> >>
+> >
+> > We have moved away from 5.10 kernel to 5.15 and then 6.1, so its
+> > possible that fkms is working fine again.
+> > If you test it with both vc4graphics and userland graphics do both work ?
+>
+> The meta-raspberrypi commit I'm on
+> (a6fa6b3aec36b92c3750852dd6788af9d2ce08f6) has recipes for Linux 5.10.110
+> and 5.15.34 and on both of them vc4-fkms-v3d works while vc4-kms-v3d does
+> not.
+>
+> * When using vc4-kms-v3d, the screen goes dark very early in the boot
+> process.
+> * When using vc4-kms-v3d, kmscube and weston-wayland both work.
+
+
+Which release branch are you using for
+Your project
+
+>
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 2622 bytes --]
+
+^ permalink raw reply	[flat|nested] 12+ messages in thread
+* Re: [yocto] [meta-raspberrypi] vc4-fkms-v3d vs. vc4-kms-v3d
+  2023-06-24 15:25     ` Khem Raj
+@ 2023-06-24 16:02       ` Manuel Wagesreither
+  2023-06-24 17:12         ` f_l_k
+  0 siblings, 1 reply; 12+ messages in thread
+From: Manuel Wagesreither @ 2023-06-24 16:02 UTC (permalink / raw)
+  To: Khem Raj; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2014 bytes --]
+
+Am Sa, 24. Jun 2023, um 17:25, schrieb Khem Raj:
+> On Sat, Jun 24, 2023 at 7:47 AM Manuel Wagesreither <ManWag@fastmail.fm> wrote:
+>> Am Sa, 24. Jun 2023, um 00:04, schrieb Khem Raj:
+>> > On Fri, Jun 23, 2023 at 2:39 PM Manuel Wagesreither <ManWag@fastmail.fm> wrote:
+>> >>
+>> >> Hi users of meta-raspberrypi,
+>> >>
+>> >> I'd like to ask around if for you people vc4-kms-v3d (opposed to vc4-fkms-v3d) *really* is the working way to get vc4 support on a Raspberry Pi 4 Model B.
+>> >>
+>> >> Both on master and kirkstone, vc4-kms-v3d is the default. It's defined in /conf/machine/raspberrypi4-64.conf:
+>> >>
+>> >> VC4DTBO ?= "vc4-kms-v3d"
+>> >>
+>> >> I was mildly surprised to find this, because on my system (running Kirkstone) I can get the screen to work only if I specify vc4-fkms-v3d.
+>> >>
+>> >> Commit a6fa6b3aec36b92c3750852dd6788af9d2ce08f6 [1] broke my build. The commit message further suggests that vc4-Fkms-v3d is broken, while vc4-kms-v3d is not. So I'm wondering:hy is it exactly the other way round on my machine?
+>> >>
+>> >>     raspberrypi4: Use full kms (vc4-kms-v3d) DT overlay
+>> >>
+>> >>     With latest 5.10 kernel fkms version fails to bring up VC4 and we do not
+>> >>     get dri device initialized ( /dev/dri ) is empty, which means we can not
+>> >>     launch wayland componsitors.
+>> >>
+>> >
+>> > We have moved away from 5.10 kernel to 5.15 and then 6.1, so its
+>> > possible that fkms is working fine again.
+>> > If you test it with both vc4graphics and userland graphics do both work ?
+>> 
+>> The meta-raspberrypi commit I'm on (a6fa6b3aec36b92c3750852dd6788af9d2ce08f6) has recipes for Linux 5.10.110 and 5.15.34 and on both of them vc4-fkms-v3d works while vc4-kms-v3d does not.
+>> 
+>> * When using vc4-kms-v3d, the screen goes dark very early in the boot process.
+>> * When using vc4-kms-v3d, kmscube and weston-wayland both work.
+> 
+> Which release branch are you using for
+> Your project 
+
+I'm two commits behind kirkstone, on meta-raspberrypi.
+
+[-- Attachment #2: Type: text/html, Size: 3256 bytes --]
+
+^ permalink raw reply	[flat|nested] 12+ messages in thread
+* Re: [yocto] [meta-raspberrypi] vc4-fkms-v3d vs. vc4-kms-v3d
+  2023-06-24 16:02       ` Manuel Wagesreither
+@ 2023-06-24 17:12         ` f_l_k
+  2023-06-24 22:01           ` Manuel Wagesreither
+  0 siblings, 1 reply; 12+ messages in thread
+From: f_l_k @ 2023-06-24 17:12 UTC (permalink / raw)
+  To: Manuel Wagesreither; +Cc: Khem Raj, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2919 bytes --]
+
+Two pitfalls come to mind here
+
+It used to be necessary to use vc4-kms-v3d-pi4 dtbo. At some point this 
+was changed so that even for the rpi4 only vc4-kms-v3d overlay had to 
+be loaded and vc4-kms-v3d-pi4 was automatically reloaded. If your 
+software version is old enough, using vc4-kms-v3d-pi4 dtoverlay might 
+be necessary.
+
+kms relies completely on edid. fkms is more tolerant and often displays 
+an image without a valid edid. I would therefore most likely guess a 
+problem reading the edit information. Things I would try first are 
+using  a different HDMI cable or switching the hdmi port.
+
+On Sat, Jun 24 2023 at 06:02:52 PM +0200, Manuel Wagesreither 
+<ManWag@FastMail.FM> wrote:
+> Am Sa, 24. Jun 2023, um 17:25, schrieb Khem Raj:
+>> On Sat, Jun 24, 2023 at 7:47 AM Manuel Wagesreither 
+>> <ManWag@fastmail.fm <mailto:ManWag@fastmail.fm>> wrote:
+>>> Am Sa, 24. Jun 2023, um 00:04, schrieb Khem Raj:
+>>> > On Fri, Jun 23, 2023 at 2:39 PM Manuel Wagesreither 
+>>> <ManWag@fastmail.fm <mailto:ManWag@fastmail.fm>> wrote:
+>>> >>
+>>> >> Hi users of meta-raspberrypi,
+>>> >>
+>>> >> I'd like to ask around if for you people vc4-kms-v3d (opposed to 
+>>> vc4-fkms-v3d) *really* is the working way to get vc4 support on a 
+>>> Raspberry Pi 4 Model B.
+>>> >>
+>>> >> Both on master and kirkstone, vc4-kms-v3d is the default. It's 
+>>> defined in /conf/machine/raspberrypi4-64.conf:
+>>> >>
+>>> >> VC4DTBO ?= "vc4-kms-v3d"
+>>> >>
+>>> >> I was mildly surprised to find this, because on my system 
+>>> (running Kirkstone) I can get the screen to work only if I specify 
+>>> vc4-fkms-v3d.
+>>> >>
+>>> >> Commit a6fa6b3aec36b92c3750852dd6788af9d2ce08f6 [1] broke my 
+>>> build. The commit message further suggests that vc4-Fkms-v3d is 
+>>> broken, while vc4-kms-v3d is not. So I'm wondering:hy is it exactly 
+>>> the other way round on my machine?
+>>> >>
+>>> >>     raspberrypi4: Use full kms (vc4-kms-v3d) DT overlay
+>>> >>
+>>> >>     With latest 5.10 kernel fkms version fails to bring up VC4 
+>>> and we do not
+>>> >>     get dri device initialized ( /dev/dri ) is empty, which 
+>>> means we can not
+>>> >>     launch wayland componsitors.
+>>> >>
+>>> >
+>>> > We have moved away from 5.10 kernel to 5.15 and then 6.1, so its
+>>> > possible that fkms is working fine again.
+>>> > If you test it with both vc4graphics and userland graphics do 
+>>> both work ?
+>>> 
+>>> The meta-raspberrypi commit I'm on 
+>>> (a6fa6b3aec36b92c3750852dd6788af9d2ce08f6) has recipes for Linux 
+>>> 5.10.110 and 5.15.34 and on both of them vc4-fkms-v3d works while 
+>>> vc4-kms-v3d does not.
+>>> 
+>>> * When using vc4-kms-v3d, the screen goes dark very early in the 
+>>> boot process.
+>>> * When using vc4-kms-v3d, kmscube and weston-wayland both work.
+>> 
+>> Which release branch are you using for
+>> Your project
+> 
+> I'm two commits behind kirkstone, on meta-raspberrypi.
+
+
+[-- Attachment #2: Type: text/html, Size: 4075 bytes --]
+
+^ permalink raw reply	[flat|nested] 12+ messages in thread
+* Re: [yocto] [meta-raspberrypi] vc4-fkms-v3d vs. vc4-kms-v3d
+  2023-06-24 17:12         ` f_l_k
+@ 2023-06-24 22:01           ` Manuel Wagesreither
+  2023-06-25  0:47             ` f_l_k
+  0 siblings, 1 reply; 12+ messages in thread
+From: Manuel Wagesreither @ 2023-06-24 22:01 UTC (permalink / raw)
+  To: Markus Volk; +Cc: Khem Raj, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 3894 bytes --]
+
+Am Sa, 24. Jun 2023, um 19:12, schrieb Markus Volk:
+> Two pitfalls come to mind here
+> 
+> It used to be necessary to use vc4-kms-v3d-pi4 dtbo. At some point this was changed so that even for the rpi4 only vc4-kms-v3d overlay had to be loaded and vc4-kms-v3d-pi4 was automatically reloaded. If your software version is old enough, using vc4-kms-v3d-pi4 dtoverlay might be necessary.
+> 
+> kms relies completely on edid. fkms is more tolerant and often displays an image without a valid edid. I would therefore most likely guess a problem reading the edit information. Things I would try first are using  a different HDMI cable or switching the hdmi port.
+> 
+> On Sat, Jun 24 2023 at 06:02:52 PM +0200, Manuel Wagesreither <ManWag@FastMail.FM> wrote:
+>> Am Sa, 24. Jun 2023, um 17:25, schrieb Khem Raj:
+>>> On Sat, Jun 24, 2023 at 7:47 AM Manuel Wagesreither <ManWag@fastmail.fm> wrote:
+>>>> Am Sa, 24. Jun 2023, um 00:04, schrieb Khem Raj:
+>>>> > On Fri, Jun 23, 2023 at 2:39 PM Manuel Wagesreither <ManWag@fastmail.fm> wrote:
+>>>> >>
+>>>> >> Hi users of meta-raspberrypi,
+>>>> >>
+>>>> >> I'd like to ask around if for you people vc4-kms-v3d (opposed to vc4-fkms-v3d) *really* is the working way to get vc4 support on a Raspberry Pi 4 Model B.
+>>>> >>
+>>>> >> Both on master and kirkstone, vc4-kms-v3d is the default. It's defined in /conf/machine/raspberrypi4-64.conf:
+>>>> >>
+>>>> >> VC4DTBO ?= "vc4-kms-v3d"
+>>>> >>
+>>>> >> I was mildly surprised to find this, because on my system (running Kirkstone) I can get the screen to work only if I specify vc4-fkms-v3d.
+>>>> >>
+>>>> >> Commit a6fa6b3aec36b92c3750852dd6788af9d2ce08f6 [1] broke my build. The commit message further suggests that vc4-Fkms-v3d is broken, while vc4-kms-v3d is not. So I'm wondering:hy is it exactly the other way round on my machine?
+>>>> >>
+>>>> >>     raspberrypi4: Use full kms (vc4-kms-v3d) DT overlay
+>>>> >>
+>>>> >>     With latest 5.10 kernel fkms version fails to bring up VC4 and we do not
+>>>> >>     get dri device initialized ( /dev/dri ) is empty, which means we can not
+>>>> >>     launch wayland componsitors.
+>>>> >>
+>>>> >
+>>>> > We have moved away from 5.10 kernel to 5.15 and then 6.1, so its
+>>>> > possible that fkms is working fine again.
+>>>> > If you test it with both vc4graphics and userland graphics do both work ?
+>>>> 
+>>>> The meta-raspberrypi commit I'm on (a6fa6b3aec36b92c3750852dd6788af9d2ce08f6) has recipes for Linux 5.10.110 and 5.15.34 and on both of them vc4-fkms-v3d works while vc4-kms-v3d does not.
+>>>> 
+>>>> * When using vc4-kms-v3d, the screen goes dark very early in the boot process.
+>>>> * When using vc4-kms-v3d, kmscube and weston-wayland both work.
+>>> 
+>>> Which release branch are you using for
+>>> Your project 
+>> 
+>> I'm two commits behind kirkstone, on meta-raspberrypi.
+
+
+The HDMI port is unused on my raspi. I'm using the official Raspberry Pi 7" Touchscreen connected via DSI.
+
+Specifiying...
+
+    dtoverlay=vc4-kms-v3d
+    dtoverlay=vc4-kms-v3d-pi4
+
+in config.txt doesn't change anything.
+
+This is  what both Linux 5.10.110 and 5.15.34 prints on the serial line: (Screen is not working then.)
+
+[    1.400937] fb0: switching to vc4drmfb from simple
+[    1.402332] Console: switching to colour dummy device 80x25
+[    1.440694] vc4-drm gpu: bound fe400000.hvs (ops vc4_hvs_ops)
+
+
+When specifying
+
+    dtoverlay=vc4-fkms-v3d
+
+both Linux versions emit:
+
+[    1.387428] fb0: switching to vc4drmfb from simple
+[    1.388812] Console: switching to colour dummy device 80x25
+[    1.390196] vc4-drm gpu: bound fe600000.firmwarekms (ops vc4_fkms_ops)
+[    1.391001] [drm] Initialized vc4 0.0.0 20140616 for gpu on minor 0
+[    1.417292] Console: switching to colour frame buffer device 100x30
+[    1.433224] vc4-drm gpu: [drm] fb0: vc4drmfb frame buffer device
+
+and provide a working screen.
+
+[-- Attachment #2: Type: text/html, Size: 5897 bytes --]
+
+^ permalink raw reply	[flat|nested] 12+ messages in thread
+* Re: [yocto] [meta-raspberrypi] vc4-fkms-v3d vs. vc4-kms-v3d
+  2023-06-24 22:01           ` Manuel Wagesreither
+@ 2023-06-25  0:47             ` f_l_k
+  2023-06-25  9:58               ` Electronic Consult
+  2023-06-25 13:21               ` [yocto] " Manuel Wagesreither
+  0 siblings, 2 replies; 12+ messages in thread
+From: f_l_k @ 2023-06-25  0:47 UTC (permalink / raw)
+  To: Manuel Wagesreither; +Cc: Markus Volk, Khem Raj, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 391 bytes --]
+
+On Sun, Jun 25 2023 at 12:01:29 AM +0200, Manuel Wagesreither 
+<ManWag@FastMail.FM> wrote:
+> The HDMI port is unused on my raspi. I'm using the official Raspberry 
+> Pi 7" Touchscreen connected via DSI.
+
+Have you also added ?
+
+dtoverlay=vc4-kms-dsi-7inch
+dtoverlay=rpi-ft5406
+
+I never dealt with the 7'' Display but i guess they are needed for kms
+
+hdmi_force_hotplug=1
+
+may also be needed
+
+
+[-- Attachment #2: Type: text/html, Size: 5297 bytes --]
+
+^ permalink raw reply	[flat|nested] 12+ messages in thread
+* Re: [meta-raspberrypi] vc4-fkms-v3d vs. vc4-kms-v3d
+  2023-06-25  0:47             ` f_l_k
+@ 2023-06-25  9:58               ` Electronic Consult
+  2023-06-25 13:32                 ` [yocto] " Manuel Wagesreither
+  2023-06-25 13:21               ` [yocto] " Manuel Wagesreither
+  1 sibling, 1 reply; 12+ messages in thread
+From: Electronic Consult @ 2023-06-25  9:58 UTC (permalink / raw)
+  To: yocto
+
+
+[-- Attachment #1.1: Type: text/plain, Size: 810 bytes --]
+
+Hello folks,
+
+I'm in the same situation as Manuel (RPi4, official touchscreen) & have come to a similar conclusion. I had issues getting a graphics output on the screen until I used:
+
+VC4DTBO = "vc4-fkms-v3d-pi4"
+
+With this I can get both console output & graphics.
+
+I used the attached kas file to generate an image. I didn't try with Wayland as it wasn't required, I was incorporating meta-qt6 which requires EGLFS for the RPi4 (http://doc.qt.io/qt-6/configure-linux-device.html).
+
+I may be grasping for coincidences but on another project using meta-atmel I had issues with the 5.15 kernel, seems there was significant changes ( https://www.phoronix.com/news/DRM-Misc-Next-First-5.15 ) to the DRM. I recently updated to 6.1 & the issues were resolved.
+
+Hope this is of some assistance,
+
+Owen
+
+[-- Attachment #1.2: Type: text/html, Size: 920 bytes --]
+
+[-- Attachment #2: poky-rpi-qt-custom.yml --]
+[-- Type: application/x-yaml, Size: 3540 bytes --]
+
+^ permalink raw reply	[flat|nested] 12+ messages in thread
+* Re: [yocto] [meta-raspberrypi] vc4-fkms-v3d vs. vc4-kms-v3d
+  2023-06-25  0:47             ` f_l_k
+  2023-06-25  9:58               ` Electronic Consult
+@ 2023-06-25 13:21               ` Manuel Wagesreither
+  1 sibling, 0 replies; 12+ messages in thread
+From: Manuel Wagesreither @ 2023-06-25 13:21 UTC (permalink / raw)
+  To: Markus Volk; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 3058 bytes --]
+
+dtoverlay=vc4-kms-dsi-7inch does indeed improve things for the better. Both console output and wayland-weston now work.
+I had to specify it together with dtoverlay=vc4-kms-v3d-pi4, which confirm the observations you posted in some previous mail.
+
+Caveats:
+* wayland-weston does no longer deactivate the backlight when locking the screen.
+* The following messages are posted into the kernel log at irregular intervals: (10 seconds to 5 minutes)
+
+[ 1268.647667] edt_ft5x06 10-0038: Unable to fetch data, error: -121
+[ 1269.694193] i2c-bcm2835 fe205000.i2c: i2c transfer timed out
+[ 1269.700866] edt_ft5x06 10-0038: Unable to fetch data, error: -110
+[ 1269.708008] edt_ft5x06 10-0038: Unable to fetch data, error: -5
+
+I was completely unaware of the vc4-kms-dsi-7inch configuration option -- neither [1] nor [2] mention it.
+
+[1] https://www.raspberrypi.com/documentation/computers/config_txt.html
+[2] https://www.raspberrypi.com/documentation/accessories/display.html
+
+ ---------
+
+Adding dtoverlay=rpi-ft5406 decreased the interval of the following messages down to one second(!):
+
+[  620.227151] i2c-bcm2835 fe205000.i2c: i2c transfer timed out
+[  620.234335] edt_ft5x06 10-0038: Unable to fetch data, error: -110
+
+----------
+
+Adding hdmi_force_hotplug=1 didn't have any effects I observed.
+
+----------
+
+Also I observed the following *sporadic* phenomenons. Sporadic meaning, that they were gone after rebooting with unchanged configuration:
+* One time, I couldn't observe any of the kernel messages above.
+* One time, the visual output of the screen was mirrored on the vertical axis. (Right is left and vice versa.) Touch screen input was not affected. (I know there are rpi-ft5406 options to explicitly define screen mirroring which might help me with this issue.)
+* One time, when wayland-weston was deactivating the screen, the screen remained bright white instead as-black-as-it-can-get-with-backlight-on.
+
+I'm wondering if these observations can be explained by unstable communication. Maybe I should re-attach the DSI cable. On the other hand, fkms works absolutely rocksolid -- No issues whatsover.
+
+In which ways do the display and the kernel communicate with each other. Is backlight controlled through DSI, or are there seperate communication channels (I2C, SPI) for that? What about touch events? Am eager to learn more.
+
+I guess I'll just keep using fkms for now until I had a chance to upgrade to the newest kernel. Let's see if this issues are present there as well. All the observations above are with respect to Linux 5.15.34.
+
+Thanks everyone in this thread for your support!
+
+
+Am So, 25. Jun 2023, um 02:47, schrieb Markus Volk:
+> On Sun, Jun 25 2023 at 12:01:29 AM +0200, Manuel Wagesreither <ManWag@FastMail.FM> wrote:
+>> The HDMI port is unused on my raspi. I'm using the official Raspberry Pi 7" Touchscreen connected via DSI.
+> 
+> Have you also added ?
+> 
+> dtoverlay=vc4-kms-dsi-7inch
+> dtoverlay=rpi-ft5406
+> 
+> I never dealt with the 7'' Display but i guess they are needed for kms
+> 
+> hdmi_force_hotplug=1
+> 
+> may also be needed
+
+[-- Attachment #2: Type: text/html, Size: 11403 bytes --]
+
+^ permalink raw reply	[flat|nested] 12+ messages in thread
+* Re: [yocto] [meta-raspberrypi] vc4-fkms-v3d vs. vc4-kms-v3d
+  2023-06-25  9:58               ` Electronic Consult
+@ 2023-06-25 13:32                 ` Manuel Wagesreither
+  2023-06-25 20:26                   ` Electronic Consult
+  0 siblings, 1 reply; 12+ messages in thread
+From: Manuel Wagesreither @ 2023-06-25 13:32 UTC (permalink / raw)
+  To: Electronic Consult, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 812 bytes --]
+
+Am So, 25. Jun 2023, um 11:58, schrieb Electronic Consult:
+> I used the attached kas file to generate an image. I didn't try with Wayland as it wasn't required, I was incorporating meta-qt6 which requires EGLFS for the RPi4 (http://doc.qt.io/qt-6/configure-linux-device.html).
+That's my final goal as well -- letting an Qt6 python application run on the target using EGLFS.
+
+I'm just not there yet, am still about to write the Qt6 application. If you experienced any gotchas, I'd be happy to learn abou them.
+
+> I may be grasping for coincidences but on another project using meta-atmel I had issues with the 5.15 kernel, seems there was significant changes  <https://www.phoronix.com/news/DRM-Misc-Next-First-5.15>to the DRM. I recently updated to 6.1 & the issues were resolved.
+Will do so to.
+
+Regards,
+Manuel
+
+[-- Attachment #2: Type: text/html, Size: 1314 bytes --]
+
+^ permalink raw reply	[flat|nested] 12+ messages in thread
+* Re: [meta-raspberrypi] vc4-fkms-v3d vs. vc4-kms-v3d
+  2023-06-25 13:32                 ` [yocto] " Manuel Wagesreither
+@ 2023-06-25 20:26                   ` Electronic Consult
+  0 siblings, 0 replies; 12+ messages in thread
+From: Electronic Consult @ 2023-06-25 20:26 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1030 bytes --]
+
+Manuel,
+
+Most of what you require should be here:
+
+https://github.com/OOHehir/meta-test
+
+The key bits to enabling EGLFS seem to be:
+
+PACKAGECONFIG:remove:rpi = "x11 wayland"
+PACKAGECONFIG:append:rpi = " examples accessibility eglfs gles2 gbm linuxfb tslib libinput"
+
+I found I wasn't getting any fonts in qt applications until I added this to my local.conf:
+
+IMAGE_INSTALL:append = "\
+ttf-dejavu-sans \
+ttf-dejavu-sans-mono \
+ttf-dejavu-sans-condensed \
+ttf-dejavu-serif \
+ttf-dejavu-serif-condensed \
+ttf-dejavu-common \
+"
+
+The layer includes some test recipes:
+
+https://github.com/OOHehir/meta-test/tree/main/recipes-qt
+
+Including widget (console only so far), qml & qml with quick-controls. These last two output graphics successfully to the 'official' screen & support touch input.
+
+I haven't tried python with qt6 but perhaps the above will be some use.
+
+I was considering submitting a pull request to meta-raspasberrypi to enable meta-qt6 on the RPi4, seems like it might help others.
+
+Owen
+
+[-- Attachment #2: Type: text/html, Size: 1851 bytes --]
+
+^ permalink raw reply	[flat|nested] 12+ messages in thread
+end of thread, other threads:[~2023-06-25 20:26 UTC | newest]
+
+Thread overview: 12+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-06-23 21:39 [meta-raspberrypi] vc4-fkms-v3d vs. vc4-kms-v3d Manuel Wagesreither
+2023-06-23 22:04 ` [yocto] " Khem Raj
+2023-06-24 14:46   ` Manuel Wagesreither
+2023-06-24 15:25     ` Khem Raj
+2023-06-24 16:02       ` Manuel Wagesreither
+2023-06-24 17:12         ` f_l_k
+2023-06-24 22:01           ` Manuel Wagesreither
+2023-06-25  0:47             ` f_l_k
+2023-06-25  9:58               ` Electronic Consult
+2023-06-25 13:32                 ` [yocto] " Manuel Wagesreither
+2023-06-25 20:26                   ` Electronic Consult
+2023-06-25 13:21               ` [yocto] " Manuel Wagesreither
+

@@ -1,0 +1,498 @@
+* [meta-rockchip] [PATCH] Allow KERNEL_IMAGETYPE override v2
+@ 2023-09-26  4:36 anthony.t.davies
+  2023-09-26  8:08 ` [yocto] " Quentin Schulz
+  2023-09-26 11:04 ` Quentin Schulz
+  0 siblings, 2 replies; 6+ messages in thread
+From: anthony.t.davies @ 2023-09-26  4:36 UTC (permalink / raw)
+  To: yocto; +Cc: twoerner, Anthony Davies
+
+From: Anthony Davies <anthony.t.davies@gmail.com>
+
+Apologies, this is the correct patch
+
+Updated inc files to allow overriding KERNEL_IMAGETYPE in local.conf
+
+Fixed bug where dtb couldnt be found when generating KERNEL_IMAGETYPE
+other then fitImage image due to KERNEL_DEVICETREE containing the dtb
+directory which is not available in the DEPLOY_DIR_IMAGE directory
+---
+ conf/machine/include/px30.inc         | 2 +-
+ conf/machine/include/rk3066.inc       | 2 +-
+ conf/machine/include/rk3188.inc       | 2 +-
+ conf/machine/include/rk3288.inc       | 2 +-
+ conf/machine/include/rk3328.inc       | 2 +-
+ conf/machine/include/rk3399.inc       | 2 +-
+ conf/machine/include/rockchip-wic.inc | 5 ++++-
+ 7 files changed, 10 insertions(+), 7 deletions(-)
+
+diff --git a/conf/machine/include/px30.inc b/conf/machine/include/px30.inc
+index a3727fb..badcbcd 100644
+--- a/conf/machine/include/px30.inc
++++ b/conf/machine/include/px30.inc
+@@ -12,7 +12,7 @@ require conf/machine/include/rockchip-wic.inc
+ 
+ KBUILD_DEFCONFIG ?= "defconfig"
+ KERNEL_CLASSES = "kernel-fitimage"
+-KERNEL_IMAGETYPE = "fitImage"
++KERNEL_IMAGETYPE ?= "fitImage"
+ 
+ TFA_PLATFORM = "px30"
+ TFA_BUILD_TARGET = "bl31"
+diff --git a/conf/machine/include/rk3066.inc b/conf/machine/include/rk3066.inc
+index fa97906..3510df2 100644
+--- a/conf/machine/include/rk3066.inc
++++ b/conf/machine/include/rk3066.inc
+@@ -11,4 +11,4 @@ SERIAL_CONSOLES = "115200;ttyS2"
+ 
+ KBUILD_DEFCONFIG = "multi_v7_defconfig"
+ KERNEL_FEATURES:append:rk3066 = " bsp/rockchip/remove-non-rockchip-arch-arm.scc"
+-KERNEL_IMAGETYPE = "zImage"
++KERNEL_IMAGETYPE ?= "zImage"
+diff --git a/conf/machine/include/rk3188.inc b/conf/machine/include/rk3188.inc
+index bc96a0c..830f908 100644
+--- a/conf/machine/include/rk3188.inc
++++ b/conf/machine/include/rk3188.inc
+@@ -11,4 +11,4 @@ SERIAL_CONSOLES = "115200;ttyFIQ0"
+ 
+ KBUILD_DEFCONFIG = "multi_v7_defconfig"
+ KERNEL_FEATURES:append:rk3188 = " bsp/rockchip/remove-non-rockchip-arch-arm.scc"
+-KERNEL_IMAGETYPE = "zImage"
++KERNEL_IMAGETYPE ?= "zImage"
+diff --git a/conf/machine/include/rk3288.inc b/conf/machine/include/rk3288.inc
+index b4c559d..e682c0b 100644
+--- a/conf/machine/include/rk3288.inc
++++ b/conf/machine/include/rk3288.inc
+@@ -11,6 +11,6 @@ SERIAL_CONSOLES = "115200;ttyS2"
+ 
+ KBUILD_DEFCONFIG ?= "multi_v7_defconfig"
+ KERNEL_FEATURES:append:rk3288 = " bsp/rockchip/remove-non-rockchip-arch-arm.scc"
+-KERNEL_IMAGETYPE = "zImage"
++KERNEL_IMAGETYPE ?= "zImage"
+ 
+ UBOOT_SUFFIX ?= "bin"
+diff --git a/conf/machine/include/rk3328.inc b/conf/machine/include/rk3328.inc
+index f9f8792..6be777c 100644
+--- a/conf/machine/include/rk3328.inc
++++ b/conf/machine/include/rk3328.inc
+@@ -13,7 +13,7 @@ require conf/machine/include/rockchip-wic.inc
+ KBUILD_DEFCONFIG ?= "defconfig"
+ KERNEL_FEATURES:append:rk3328 = " bsp/rockchip/remove-non-rockchip-arch-arm64.scc"
+ KERNEL_CLASSES = "kernel-fitimage"
+-KERNEL_IMAGETYPE = "fitImage"
++KERNEL_IMAGETYPE ?= "fitImage"
+ 
+ TFA_PLATFORM = "rk3328"
+ TFA_BUILD_TARGET = "bl31"
+diff --git a/conf/machine/include/rk3399.inc b/conf/machine/include/rk3399.inc
+index 88c87af..5a3f439 100644
+--- a/conf/machine/include/rk3399.inc
++++ b/conf/machine/include/rk3399.inc
+@@ -13,7 +13,7 @@ require conf/machine/include/rockchip-wic.inc
+ KBUILD_DEFCONFIG ?= "defconfig"
+ KERNEL_FEATURES:append:rk3399 = " bsp/rockchip/remove-non-rockchip-arch-arm64.scc"
+ KERNEL_CLASSES = "kernel-fitimage"
+-KERNEL_IMAGETYPE = "fitImage"
++KERNEL_IMAGETYPE ?= "fitImage"
+ 
+ TFA_PLATFORM = "rk3399"
+ TFA_BUILD_TARGET = "bl31"
+diff --git a/conf/machine/include/rockchip-wic.inc b/conf/machine/include/rockchip-wic.inc
+index 635288c..8ff6066 100644
+--- a/conf/machine/include/rockchip-wic.inc
++++ b/conf/machine/include/rockchip-wic.inc
+@@ -11,9 +11,12 @@ WKS_FILE_DEPENDS ?= " \
+ 	virtual/bootloader \
+ 	virtual/kernel \
+ 	"
++ 
++KERNEL_DEVICETREE_BASENAME = "${@os.path.basename('${KERNEL_DEVICETREE}')}"
++
+ IMAGE_BOOT_FILES = " \
+ 	${KERNEL_IMAGETYPE} \
+-	${@bb.utils.contains('KERNEL_IMAGETYPE', 'fitImage', '', '${KERNEL_DEVICETREE}', d)} \
++	${@bb.utils.contains('KERNEL_IMAGETYPE', 'fitImage', '', '${KERNEL_DEVICETREE_BASENAME}', d)} \
+ 	"
+ 
+ # use the first-defined <baud>;<device> pair in SERIAL_CONSOLES
+-- 
+2.34.1
+
+
+
+^ permalink raw reply related	[flat|nested] 6+ messages in thread
+* Re: [yocto] [meta-rockchip] [PATCH] Allow KERNEL_IMAGETYPE override v2
+  2023-09-26  4:36 [meta-rockchip] [PATCH] Allow KERNEL_IMAGETYPE override v2 anthony.t.davies
+@ 2023-09-26  8:08 ` Quentin Schulz
+  2023-09-26  8:25   ` Anthony Davies
+  2023-09-26 11:04 ` Quentin Schulz
+  1 sibling, 1 reply; 6+ messages in thread
+From: Quentin Schulz @ 2023-09-26  8:08 UTC (permalink / raw)
+  To: anthony.t.davies, yocto; +Cc: twoerner
+
+Hi Anthony,
+
+Thanks for the patch!
+
+On 9/26/23 06:36, Anthony Davies via lists.yoctoproject.org wrote:
+> [You don't often get email from anthony.t.davies=gmail.com@lists.yoctoproject.org. Learn why this is important at https://aka.ms/LearnAboutSenderIdentification ]
+> 
+> From: Anthony Davies <anthony.t.davies@gmail.com>
+> 
+> Apologies, this is the correct patch
+> 
+> Updated inc files to allow overriding KERNEL_IMAGETYPE in local.conf
+> 
+> Fixed bug where dtb couldnt be found when generating KERNEL_IMAGETYPE
+> other then fitImage image due to KERNEL_DEVICETREE containing the dtb
+> directory which is not available in the DEPLOY_DIR_IMAGE directory
+
+Here we are missing your Signed-off-by.
+
+I would highly suggest to split this into two separate commits, one for 
+allowing to override the KERNEL_IMAGETYPE through local.conf and another 
+one for the device tree thing.
+
+On another topic, I really feel like this is more of an issue with the 
+class handling KERNEL_DEVICETREE when we're not using a fitImage don't 
+you think? Otherwise all layers will have to fix this one up and I don't 
+think that's the right way to go.
+
+Cheers,
+Quentin
+
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] [meta-rockchip] [PATCH] Allow KERNEL_IMAGETYPE override v2
+  2023-09-26  8:08 ` [yocto] " Quentin Schulz
+@ 2023-09-26  8:25   ` Anthony Davies
+  2023-09-26  9:13     ` Quentin Schulz
+  0 siblings, 1 reply; 6+ messages in thread
+From: Anthony Davies @ 2023-09-26  8:25 UTC (permalink / raw)
+  To: Quentin Schulz; +Cc: yocto, twoerner
+
+Hi Quentin
+
+Happy to contribute but not all that familiar with emailing patches, sorry.
+
+I lumped them together because if you modify the KERNEL_IMAGETYPE you
+trigger the bug.
+
+I agree moving it out of the include file would be the best way to go
+but if you dont have the directory in the KERNEL_DEVICETREE it will
+fail to compile, quickly searching other layers are handling it
+similar to how I have, probably just in a more robust way.
+
+Regards,
+
+Tony
+
+
+On Tue, 26 Sept 2023 at 18:08, Quentin Schulz
+<quentin.schulz@theobroma-systems.com> wrote:
+>
+> Hi Anthony,
+>
+> Thanks for the patch!
+>
+> On 9/26/23 06:36, Anthony Davies via lists.yoctoproject.org wrote:
+> > [You don't often get email from anthony.t.davies=gmail.com@lists.yoctoproject.org. Learn why this is important at https://aka.ms/LearnAboutSenderIdentification ]
+> >
+> > From: Anthony Davies <anthony.t.davies@gmail.com>
+> >
+> > Apologies, this is the correct patch
+> >
+> > Updated inc files to allow overriding KERNEL_IMAGETYPE in local.conf
+> >
+> > Fixed bug where dtb couldnt be found when generating KERNEL_IMAGETYPE
+> > other then fitImage image due to KERNEL_DEVICETREE containing the dtb
+> > directory which is not available in the DEPLOY_DIR_IMAGE directory
+>
+> Here we are missing your Signed-off-by.
+>
+> I would highly suggest to split this into two separate commits, one for
+> allowing to override the KERNEL_IMAGETYPE through local.conf and another
+> one for the device tree thing.
+>
+> On another topic, I really feel like this is more of an issue with the
+> class handling KERNEL_DEVICETREE when we're not using a fitImage don't
+> you think? Otherwise all layers will have to fix this one up and I don't
+> think that's the right way to go.
+>
+> Cheers,
+> Quentin
+
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] [meta-rockchip] [PATCH] Allow KERNEL_IMAGETYPE override v2
+  2023-09-26  8:25   ` Anthony Davies
+@ 2023-09-26  9:13     ` Quentin Schulz
+  2023-09-26  9:16       ` Quentin Schulz
+  0 siblings, 1 reply; 6+ messages in thread
+From: Quentin Schulz @ 2023-09-26  9:13 UTC (permalink / raw)
+  To: Anthony Davies; +Cc: yocto, twoerner
+
+Hi Anthony,
+
+On 9/26/23 10:25, Anthony Davies wrote:
+> Hi Quentin
+> 
+> Happy to contribute but not all that familiar with emailing patches, sorry.
+> 
+
+The Signed-off-by needs to be present in the commit log already, it is 
+not related to mailing list submission. It is added with git commit 
+--signoff (or git commit -s), c.f. 
+https://docs.yoctoproject.org/contributor-guide/submit-changes.html. 
+You're not the first one to forget it (or not know about it), nor will 
+you be the last one, so no worries :)
+
+> I lumped them together because if you modify the KERNEL_IMAGETYPE you
+> trigger the bug.
+> 
+
+But... you're not modifying the KERNEL_IMAGETYPE, you're merely allow it 
+to be changed. So you're technically not introducing a bug. And if we 
+wanted to be pedantic, we could say that this bug can technically 
+already be triggered by changing the KERNEL_IMAGETYPE in the machine 
+configuration file (and not in local.conf).
+
+If you want to make sure one cannot modify the KERNEL_IMAGETYPE and 
+break the build, then you can add the commit handling the devicetree 
+before the one allowing to override the image type.
+
+> I agree moving it out of the include file would be the best way to go
+> but if you dont have the directory in the KERNEL_DEVICETREE it will
+> fail to compile, quickly searching other layers are handling it
+> similar to how I have, probably just in a more robust way.
+> 
+
+This means we really need to fix this in openembedded-core! We shouldn't 
+rely on all layers to fix it themselves if we can avoid it.
+
+Regards,
+Quentin
+
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] [meta-rockchip] [PATCH] Allow KERNEL_IMAGETYPE override v2
+  2023-09-26  9:13     ` Quentin Schulz
+@ 2023-09-26  9:16       ` Quentin Schulz
+  0 siblings, 0 replies; 6+ messages in thread
+From: Quentin Schulz @ 2023-09-26  9:16 UTC (permalink / raw)
+  To: Anthony Davies; +Cc: yocto, twoerner
+
+
+
+On 9/26/23 11:13, Quentin Schulz via lists.yoctoproject.org wrote:
+> Hi Anthony,
+> 
+> On 9/26/23 10:25, Anthony Davies wrote:
+>> Hi Quentin
+>>
+>> Happy to contribute but not all that familiar with emailing patches, 
+>> sorry.
+>>
+> 
+> The Signed-off-by needs to be present in the commit log already, it is 
+> not related to mailing list submission. It is added with git commit 
+> --signoff (or git commit -s), c.f. 
+> https://docs.yoctoproject.org/contributor-guide/submit-changes.html. You're not the first one to forget it (or not know about it), nor will you be the last one, so no worries :)
+> 
+>> I lumped them together because if you modify the KERNEL_IMAGETYPE you
+>> trigger the bug.
+>>
+> 
+> But... you're not modifying the KERNEL_IMAGETYPE, you're merely allow it 
+> to be changed. So you're technically not introducing a bug. And if we 
+> wanted to be pedantic, we could say that this bug can technically 
+> already be triggered by changing the KERNEL_IMAGETYPE in the machine 
+> configuration file (and not in local.conf).
+> 
+> If you want to make sure one cannot modify the KERNEL_IMAGETYPE and 
+> break the build, then you can add the commit handling the devicetree 
+> before the one allowing to override the image type.
+> 
+>> I agree moving it out of the include file would be the best way to go
+>> but if you dont have the directory in the KERNEL_DEVICETREE it will
+>> fail to compile, quickly searching other layers are handling it
+>> similar to how I have, probably just in a more robust way.
+>>
+> 
+> This means we really need to fix this in openembedded-core! We shouldn't 
+> rely on all layers to fix it themselves if we can avoid it.
+> 
+
+Could you please provide the error log, which version of OE-Core/poky 
+you're building so we know a bit where to look :) ?
+
+Cheers,
+Quentin
+
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] [meta-rockchip] [PATCH] Allow KERNEL_IMAGETYPE override v2
+  2023-09-26  4:36 [meta-rockchip] [PATCH] Allow KERNEL_IMAGETYPE override v2 anthony.t.davies
+  2023-09-26  8:08 ` [yocto] " Quentin Schulz
+@ 2023-09-26 11:04 ` Quentin Schulz
+  1 sibling, 0 replies; 6+ messages in thread
+From: Quentin Schulz @ 2023-09-26 11:04 UTC (permalink / raw)
+  To: anthony.t.davies, yocto; +Cc: twoerner
+
+Hi Anthony,
+
+On 9/26/23 06:36, Anthony Davies via lists.yoctoproject.org wrote:
+> [You don't often get email from anthony.t.davies=gmail.com@lists.yoctoproject.org. Learn why this is important at https://aka.ms/LearnAboutSenderIdentification ]
+> 
+> From: Anthony Davies <anthony.t.davies@gmail.com>
+> 
+> Apologies, this is the correct patch
+> 
+> Updated inc files to allow overriding KERNEL_IMAGETYPE in local.conf
+> 
+> Fixed bug where dtb couldnt be found when generating KERNEL_IMAGETYPE
+> other then fitImage image due to KERNEL_DEVICETREE containing the dtb
+> directory which is not available in the DEPLOY_DIR_IMAGE directory
+> ---
+>   conf/machine/include/px30.inc         | 2 +-
+>   conf/machine/include/rk3066.inc       | 2 +-
+>   conf/machine/include/rk3188.inc       | 2 +-
+>   conf/machine/include/rk3288.inc       | 2 +-
+>   conf/machine/include/rk3328.inc       | 2 +-
+>   conf/machine/include/rk3399.inc       | 2 +-
+>   conf/machine/include/rockchip-wic.inc | 5 ++++-
+>   7 files changed, 10 insertions(+), 7 deletions(-)
+> 
+> diff --git a/conf/machine/include/px30.inc b/conf/machine/include/px30.inc
+> index a3727fb..badcbcd 100644
+> --- a/conf/machine/include/px30.inc
+> +++ b/conf/machine/include/px30.inc
+> @@ -12,7 +12,7 @@ require conf/machine/include/rockchip-wic.inc
+> 
+>   KBUILD_DEFCONFIG ?= "defconfig"
+>   KERNEL_CLASSES = "kernel-fitimage"
+> -KERNEL_IMAGETYPE = "fitImage"
+> +KERNEL_IMAGETYPE ?= "fitImage"
+> 
+>   TFA_PLATFORM = "px30"
+>   TFA_BUILD_TARGET = "bl31"
+> diff --git a/conf/machine/include/rk3066.inc b/conf/machine/include/rk3066.inc
+> index fa97906..3510df2 100644
+> --- a/conf/machine/include/rk3066.inc
+> +++ b/conf/machine/include/rk3066.inc
+> @@ -11,4 +11,4 @@ SERIAL_CONSOLES = "115200;ttyS2"
+> 
+>   KBUILD_DEFCONFIG = "multi_v7_defconfig"
+>   KERNEL_FEATURES:append:rk3066 = " bsp/rockchip/remove-non-rockchip-arch-arm.scc"
+> -KERNEL_IMAGETYPE = "zImage"
+> +KERNEL_IMAGETYPE ?= "zImage"
+> diff --git a/conf/machine/include/rk3188.inc b/conf/machine/include/rk3188.inc
+> index bc96a0c..830f908 100644
+> --- a/conf/machine/include/rk3188.inc
+> +++ b/conf/machine/include/rk3188.inc
+> @@ -11,4 +11,4 @@ SERIAL_CONSOLES = "115200;ttyFIQ0"
+> 
+>   KBUILD_DEFCONFIG = "multi_v7_defconfig"
+>   KERNEL_FEATURES:append:rk3188 = " bsp/rockchip/remove-non-rockchip-arch-arm.scc"
+> -KERNEL_IMAGETYPE = "zImage"
+> +KERNEL_IMAGETYPE ?= "zImage"
+> diff --git a/conf/machine/include/rk3288.inc b/conf/machine/include/rk3288.inc
+> index b4c559d..e682c0b 100644
+> --- a/conf/machine/include/rk3288.inc
+> +++ b/conf/machine/include/rk3288.inc
+> @@ -11,6 +11,6 @@ SERIAL_CONSOLES = "115200;ttyS2"
+> 
+>   KBUILD_DEFCONFIG ?= "multi_v7_defconfig"
+>   KERNEL_FEATURES:append:rk3288 = " bsp/rockchip/remove-non-rockchip-arch-arm.scc"
+> -KERNEL_IMAGETYPE = "zImage"
+> +KERNEL_IMAGETYPE ?= "zImage"
+> 
+>   UBOOT_SUFFIX ?= "bin"
+> diff --git a/conf/machine/include/rk3328.inc b/conf/machine/include/rk3328.inc
+> index f9f8792..6be777c 100644
+> --- a/conf/machine/include/rk3328.inc
+> +++ b/conf/machine/include/rk3328.inc
+> @@ -13,7 +13,7 @@ require conf/machine/include/rockchip-wic.inc
+>   KBUILD_DEFCONFIG ?= "defconfig"
+>   KERNEL_FEATURES:append:rk3328 = " bsp/rockchip/remove-non-rockchip-arch-arm64.scc"
+>   KERNEL_CLASSES = "kernel-fitimage"
+> -KERNEL_IMAGETYPE = "fitImage"
+> +KERNEL_IMAGETYPE ?= "fitImage"
+> 
+>   TFA_PLATFORM = "rk3328"
+>   TFA_BUILD_TARGET = "bl31"
+> diff --git a/conf/machine/include/rk3399.inc b/conf/machine/include/rk3399.inc
+> index 88c87af..5a3f439 100644
+> --- a/conf/machine/include/rk3399.inc
+> +++ b/conf/machine/include/rk3399.inc
+> @@ -13,7 +13,7 @@ require conf/machine/include/rockchip-wic.inc
+>   KBUILD_DEFCONFIG ?= "defconfig"
+>   KERNEL_FEATURES:append:rk3399 = " bsp/rockchip/remove-non-rockchip-arch-arm64.scc"
+>   KERNEL_CLASSES = "kernel-fitimage"
+> -KERNEL_IMAGETYPE = "fitImage"
+> +KERNEL_IMAGETYPE ?= "fitImage"
+> 
+>   TFA_PLATFORM = "rk3399"
+>   TFA_BUILD_TARGET = "bl31"
+> diff --git a/conf/machine/include/rockchip-wic.inc b/conf/machine/include/rockchip-wic.inc
+> index 635288c..8ff6066 100644
+> --- a/conf/machine/include/rockchip-wic.inc
+> +++ b/conf/machine/include/rockchip-wic.inc
+> @@ -11,9 +11,12 @@ WKS_FILE_DEPENDS ?= " \
+>          virtual/bootloader \
+>          virtual/kernel \
+>          "
+> +
+> +KERNEL_DEVICETREE_BASENAME = "${@os.path.basename('${KERNEL_DEVICETREE}')}"
+> +
+
+KERNEL_DEVICETREE is a space-separated list so we need to handle it this 
+way I think?
+
+Something like:
+"""
+${@os.path.basename(x) for x in (d.getVar("KERNEL_DEVICETREE") or 
+"").split()
+"""
+
+but which is valid Python :) (not tested).
+
+Otherwise, I guess this could be added to oe-core directly no? What do 
+you think?
+
+Cheers,
+Quentin
+
+>   IMAGE_BOOT_FILES = " \
+>          ${KERNEL_IMAGETYPE} \
+> -       ${@bb.utils.contains('KERNEL_IMAGETYPE', 'fitImage', '', '${KERNEL_DEVICETREE}', d)} \
+> +       ${@bb.utils.contains('KERNEL_IMAGETYPE', 'fitImage', '', '${KERNEL_DEVICETREE_BASENAME}', d)} \
+>          "
+> 
+>   # use the first-defined <baud>;<device> pair in SERIAL_CONSOLES
+> --
+> 2.34.1
+> 
+> 
+> 
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#61114): https://lists.yoctoproject.org/g/yocto/message/61114
+> Mute This Topic: https://lists.yoctoproject.org/mt/101589776/6293953
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [quentin.schulz@theobroma-systems.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+> 
+
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+end of thread, other threads:[~2023-09-26 11:05 UTC | newest]
+
+Thread overview: 6+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-09-26  4:36 [meta-rockchip] [PATCH] Allow KERNEL_IMAGETYPE override v2 anthony.t.davies
+2023-09-26  8:08 ` [yocto] " Quentin Schulz
+2023-09-26  8:25   ` Anthony Davies
+2023-09-26  9:13     ` Quentin Schulz
+2023-09-26  9:16       ` Quentin Schulz
+2023-09-26 11:04 ` Quentin Schulz
+

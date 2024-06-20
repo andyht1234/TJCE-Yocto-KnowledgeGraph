@@ -1,0 +1,311 @@
+* Register out-of-tree fetcher with devtool
+@ 2023-06-02  4:47 Weihmann, Konrad (Avnet Embedded)
+  2023-06-02 20:10 ` [yocto] " adrian.freihofer
+  2023-06-04 12:51 ` Richard Purdie
+  0 siblings, 2 replies; 5+ messages in thread
+From: Weihmann, Konrad (Avnet Embedded) @ 2023-06-02  4:47 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 695 bytes --]
+
+Hi all,
+
+we do have an out-of-tree fetcher that I would like to make use of with devtool, for instance for upgrade checking.
+Within our recipes the fetcher is registered by this workaround
+
+python () {
+    import foo
+    bb.fetch2.methods.append(foo.FooFetcher())
+}
+
+Which isn't the nicest possible solution still does the trick.
+
+But that doesn't work for devtool, as it seems to not take any but oe-core lib-paths into consideration.
+
+For devtool check-upgrade-status <recipe with above code snippet>
+
+I get something like "no handler for foo://... found".
+
+Is there any way to register this out-of-tree fetcher module so tinfoil/devtool can "see" them?
+
+Cheers
+Konrad
+
+
+[-- Attachment #2: Type: text/html, Size: 2671 bytes --]
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] Register out-of-tree fetcher with devtool
+  2023-06-02  4:47 Register out-of-tree fetcher with devtool Weihmann, Konrad (Avnet Embedded)
+@ 2023-06-02 20:10 ` adrian.freihofer
+  2023-06-04  8:01   ` Weihmann, Konrad (Avnet Embedded)
+  2023-06-04 12:51 ` Richard Purdie
+  1 sibling, 1 reply; 5+ messages in thread
+From: adrian.freihofer @ 2023-06-02 20:10 UTC (permalink / raw)
+  To: Weihmann, Konrad (Avnet Embedded), yocto
+
+On Fri, 2023-06-02 at 04:47 +0000, Weihmann, Konrad (Avnet Embedded)
+wrote:
+> 
+> 
+> 
+> Hi all,
+>  
+> we do have an out-of-tree fetcher that I would like to make use of
+> with devtool, for instance for upgrade checking.
+> Within our recipes the fetcher is registered by this workaround
+> 
+> python () {
+>     import foo
+>     bb.fetch2.methods.append(foo.FooFetcher())
+> }
+Hi Konrad
+
+Is there a specific reason why you need to fetch at the time of
+parsing? Or would it be possible to override the do_fetch task?
+
+Regards,
+Adrian
+
+>  
+> Which isn’t the nicest possible solution still does the trick.
+>  
+> But that doesn’t work for devtool, as it seems to not take any but
+> oe-core lib-paths into consideration.
+> 
+> For devtool check-upgrade-status <recipe with above code snippet>
+> 
+> I get something like “no handler for foo://… found”.
+> 
+> Is there any way to register this out-of-tree fetcher module so
+> tinfoil/devtool can “see” them?
+>  
+> Cheers
+> Konrad
+>  
+> 
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#60162):
+> https://lists.yoctoproject.org/g/yocto/message/60162
+> Mute This Topic: https://lists.yoctoproject.org/mt/99280594/4454582
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe:
+> https://lists.yoctoproject.org/g/yocto/unsub [adrian.freihofer@gmail.com
+> ]
+> -=-=-=-=-=-=-=-=-=-=-=-
+> 
+
+-- 
+Adrian Freihofer
+Gschwaderweg 29
+8610 Uster
++41 76 503 37 98
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] Register out-of-tree fetcher with devtool
+  2023-06-02 20:10 ` [yocto] " adrian.freihofer
+@ 2023-06-04  8:01   ` Weihmann, Konrad (Avnet Embedded)
+  0 siblings, 0 replies; 5+ messages in thread
+From: Weihmann, Konrad (Avnet Embedded) @ 2023-06-04  8:01 UTC (permalink / raw)
+  To: adrian.freihofer, yocto
+
+
+
+> -----Original Message-----
+> From: adrian.freihofer@gmail.com <adrian.freihofer@gmail.com>
+> Sent: Freitag, 2. Juni 2023 22:11
+> To: Weihmann, Konrad (Avnet Embedded) <Konrad.Weihmann@avnet.eu>;
+> yocto@lists.yoctoproject.org
+> Subject: [External]Re: [yocto] Register out-of-tree fetcher with devtool
+> 
+> On Fri, 2023-06-02 at 04:47 +0000, Weihmann, Konrad (Avnet Embedded)
+> wrote:
+> >
+> >
+> >
+> > Hi all,
+> >
+> > we do have an out-of-tree fetcher that I would like to make use of
+> > with devtool, for instance for upgrade checking.
+> > Within our recipes the fetcher is registered by this workaround
+> >
+> > python () {
+> >     import foo
+> >     bb.fetch2.methods.append(foo.FooFetcher())
+> > }
+> Hi Konrad
+> 
+> Is there a specific reason why you need to fetch at the time of parsing? Or
+> would it be possible to override the do_fetch task?
+> 
+> Regards,
+> Adrian
+> 
+
+Appending the fetcher class implementation does not actually run the code to fetch anything, it's just so the parser can see the code.
+Fetching itself is still run in the fetch task.
+And overriding that one would have the downside that I would need to duplicate a lot of bitbake code as well to make it work, so I don't think that would be a valid option.
+Just think of the pre-mirror handling, blob creation and all the other features I would need to copy code from core/bitbake.
+In addition, overriding do_fetch wouldn't get me any closer with the integration of devtool check-upgrade-status, as that one doesn't even trigger do_fetch, but other parts of the fetcher class implementation, which would be still unseen by devtool.
+In conclusion, as I wrote, it's not pretty but the currently best way I can think of to integrate an out-of-tree implementation into the core workflow.
+But if anyone has a better proposal I really would like to hear it.
+
+Cheers
+Konrad
+
+> >
+> > Which isn’t the nicest possible solution still does the trick.
+> >
+> > But that doesn’t work for devtool, as it seems to not take any but
+> > oe-core lib-paths into consideration.
+> >
+> > For devtool check-upgrade-status <recipe with above code snippet>
+> >
+> > I get something like “no handler for foo://… found”.
+> >
+> > Is there any way to register this out-of-tree fetcher module so
+> > tinfoil/devtool can “see” them?
+> >
+> > Cheers
+> > Konrad
+> >
+> >
+> > 
+> >
+> 
+> --
+> Adrian Freihofer
+> Gschwaderweg 29
+> 8610 Uster
+> +41 76 503 37 98
+
+We continuously commit to comply with the applicable data protection laws and ensure fair and transparent processing of your personal data. 
+Please read our privacy statement including an information notice and data protection policy for detailed information on our website.
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] Register out-of-tree fetcher with devtool
+  2023-06-02  4:47 Register out-of-tree fetcher with devtool Weihmann, Konrad (Avnet Embedded)
+  2023-06-02 20:10 ` [yocto] " adrian.freihofer
+@ 2023-06-04 12:51 ` Richard Purdie
+  2023-06-04 13:22   ` Weihmann, Konrad (Avnet Embedded)
+  1 sibling, 1 reply; 5+ messages in thread
+From: Richard Purdie @ 2023-06-04 12:51 UTC (permalink / raw)
+  To: Weihmann, Konrad (Avnet Embedded), yocto
+
+On Fri, 2023-06-02 at 04:47 +0000, Weihmann, Konrad (Avnet Embedded)
+wrote:
+> 
+> 
+> 
+> Hi all,
+>  
+> we do have an out-of-tree fetcher that I would like to make use of
+> with devtool, for instance for upgrade checking.
+> Within our recipes the fetcher is registered by this workaround
+> 
+> python () {
+>     import foo
+>     bb.fetch2.methods.append(foo.FooFetcher())
+> }
+>  
+> Which isn’t the nicest possible solution still does the trick.
+>  
+> But that doesn’t work for devtool, as it seems to not take any but
+> oe-core lib-paths into consideration.
+> 
+> For devtool check-upgrade-status <recipe with above code snippet>
+> 
+> I get something like “no handler for foo://… found”.
+> 
+> Is there any way to register this out-of-tree fetcher module so
+> tinfoil/devtool can “see” them?
+
+Currently, no, there isn't a good API for doing this. It is something
+I've wondered how to fix for a while.
+
+The addpylib directive we recently added does go some way to allowing
+layers to pragmatically add python modules. There might be options to
+buildup upon that extend the fetcher from there?
+
+Cheers,
+
+Richard
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* RE: Re: [yocto] Register out-of-tree fetcher with devtool
+  2023-06-04 12:51 ` Richard Purdie
+@ 2023-06-04 13:22   ` Weihmann, Konrad (Avnet Embedded)
+  0 siblings, 0 replies; 5+ messages in thread
+From: Weihmann, Konrad (Avnet Embedded) @ 2023-06-04 13:22 UTC (permalink / raw)
+  To: Richard Purdie, yocto
+
+> -----Original Message-----
+> From: Richard Purdie <richard.purdie@linuxfoundation.org>
+> Sent: Sonntag, 4. Juni 2023 14:52
+> To: Weihmann, Konrad (Avnet Embedded) <Konrad.Weihmann@avnet.eu>;
+> yocto@lists.yoctoproject.org
+> Subject: [External]Re: [yocto] Register out-of-tree fetcher with devtool
+> 
+> On Fri, 2023-06-02 at 04:47 +0000, Weihmann, Konrad (Avnet Embedded)
+> wrote:
+> >
+> >
+> >
+> > Hi all,
+> >
+> > we do have an out-of-tree fetcher that I would like to make use of
+> > with devtool, for instance for upgrade checking.
+> > Within our recipes the fetcher is registered by this workaround
+> >
+> > python () {
+> >     import foo
+> >     bb.fetch2.methods.append(foo.FooFetcher())
+> > }
+> >
+> > Which isn’t the nicest possible solution still does the trick.
+> >
+> > But that doesn’t work for devtool, as it seems to not take any but
+> > oe-core lib-paths into consideration.
+> >
+> > For devtool check-upgrade-status <recipe with above code snippet>
+> >
+> > I get something like “no handler for foo://… found”.
+> >
+> > Is there any way to register this out-of-tree fetcher module so
+> > tinfoil/devtool can “see” them?
+> 
+> Currently, no, there isn't a good API for doing this. It is something I've
+> wondered how to fix for a while.
+> 
+> The addpylib directive we recently added does go some way to allowing
+> layers to pragmatically add python modules. There might be options to
+> buildup upon that extend the fetcher from there?
+
+Indeed it could be a chance to make it happen - sadly we are currently on kirkstone, so if there isn't an alternative present, I guess I have to stick to recreating the devtool check upgrade status via an additional task.
+If I find the time to, I will post patches or further questions.
+
+Cheers
+Konrad
+
+> 
+> Cheers,
+> 
+> Richard
+
+We continuously commit to comply with the applicable data protection laws and ensure fair and transparent processing of your personal data. 
+Please read our privacy statement including an information notice and data protection policy for detailed information on our website.
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+end of thread, other threads:[~2023-06-04 13:22 UTC | newest]
+
+Thread overview: 5+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-06-02  4:47 Register out-of-tree fetcher with devtool Weihmann, Konrad (Avnet Embedded)
+2023-06-02 20:10 ` [yocto] " adrian.freihofer
+2023-06-04  8:01   ` Weihmann, Konrad (Avnet Embedded)
+2023-06-04 12:51 ` Richard Purdie
+2023-06-04 13:22   ` Weihmann, Konrad (Avnet Embedded)
+

@@ -1,0 +1,480 @@
+* Would COMPATIBLE_IMAGE make sense?
+@ 2021-06-28 23:28 Jonas Vautherin
+  2021-06-29  5:26 ` [yocto] " Frederic Martinsons
+  2021-06-29  6:41 ` Josef Holzmayr
+  0 siblings, 2 replies; 6+ messages in thread
+From: Jonas Vautherin @ 2021-06-28 23:28 UTC (permalink / raw)
+  To: Yocto-mailing-list
+
+[-- Attachment #1: Type: text/plain, Size: 1713 bytes --]
+
+I was thinking about my issue described here [1], and discovered the
+variables called COMPATIBLE_MACHINE and COMPATIBLE_HOST, which "you can use
+to stop recipes from being built for machines (/hosts) with which the
+recipes are not compatible". And so I wondered if it would make sense to
+add COMPATIBLE_IMAGE, for a similar purpose.
+
+Let me explain my issue: I define different images in different layers (say
+`first-project-image` and `second-project-image`), and in each of those
+layers I create `.bbappends` to configure some packages. Typically
+`hostapd` is used by both images, but with a different config file.
+
+The thing is that when I run `bitbake first-project-image`, because
+`second-project-image` is part of my bblayers.conf, then the
+hostapd_%.bbappend from `second-project-image` is used and may have an
+impact on `first-project-image`, which I don't want. I really want this
+bbappend to only affect the image `second-project-image`.
+
+One way I can see to deal with that is to realize that
+`first-project-image` and `second-project-image` are two different
+projects, and build them from two different BUILDDIRs. The thing I don't
+like here is that all the packages are therefore downloaded and built
+twice, which seems like a loss of time and space.
+
+That's where I thought about COMPATIBLE_IMAGE. In the hostapd_%.bbappend of
+`first-project-image`, I would set "COMPATIBLE_IMAGE =
+'first-project-image'", and similarly for "COMPATIBLE_IMAGE =
+'second-project-image'". So that I could still share a BUILDDIR between
+different projects.
+
+How bad of an idea is that?
+
+Thanks in advance,
+Jonas
+
+[1]: https://stackoverflow.com/questions/68167244/image-specific-layers
+
+[-- Attachment #2: Type: text/html, Size: 2057 bytes --]
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] Would COMPATIBLE_IMAGE make sense?
+  2021-06-28 23:28 Would COMPATIBLE_IMAGE make sense? Jonas Vautherin
+@ 2021-06-29  5:26 ` Frederic Martinsons
+  2021-06-29  6:41 ` Josef Holzmayr
+  1 sibling, 0 replies; 6+ messages in thread
+From: Frederic Martinsons @ 2021-06-29  5:26 UTC (permalink / raw)
+  To: Jonas Vautherin; +Cc: Yocto-mailing-list
+
+[-- Attachment #1: Type: text/plain, Size: 2084 bytes --]
+
+Hello, instead of creating a new variable (don't sure of its possible
+usefulness), you can use BBMASK or review dependencies between your layer
+
+PS: I did a similar answer on your stackoverflow question.
+
+On Tue, 29 Jun 2021 at 01:29, Jonas Vautherin <jonas.vautherin@gmail.com>
+wrote:
+
+> I was thinking about my issue described here [1], and discovered the
+> variables called COMPATIBLE_MACHINE and COMPATIBLE_HOST, which "you can use
+> to stop recipes from being built for machines (/hosts) with which the
+> recipes are not compatible". And so I wondered if it would make sense to
+> add COMPATIBLE_IMAGE, for a similar purpose.
+>
+> Let me explain my issue: I define different images in different layers
+> (say `first-project-image` and `second-project-image`), and in each of
+> those layers I create `.bbappends` to configure some packages. Typically
+> `hostapd` is used by both images, but with a different config file.
+>
+> The thing is that when I run `bitbake first-project-image`, because
+> `second-project-image` is part of my bblayers.conf, then the
+> hostapd_%.bbappend from `second-project-image` is used and may have an
+> impact on `first-project-image`, which I don't want. I really want this
+> bbappend to only affect the image `second-project-image`.
+>
+> One way I can see to deal with that is to realize that
+> `first-project-image` and `second-project-image` are two different
+> projects, and build them from two different BUILDDIRs. The thing I don't
+> like here is that all the packages are therefore downloaded and built
+> twice, which seems like a loss of time and space.
+>
+> That's where I thought about COMPATIBLE_IMAGE. In the hostapd_%.bbappend
+> of `first-project-image`, I would set "COMPATIBLE_IMAGE =
+> 'first-project-image'", and similarly for "COMPATIBLE_IMAGE =
+> 'second-project-image'". So that I could still share a BUILDDIR between
+> different projects.
+>
+> How bad of an idea is that?
+>
+> Thanks in advance,
+> Jonas
+>
+> [1]: https://stackoverflow.com/questions/68167244/image-specific-layers
+>
+> 
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 2694 bytes --]
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] Would COMPATIBLE_IMAGE make sense?
+  2021-06-28 23:28 Would COMPATIBLE_IMAGE make sense? Jonas Vautherin
+  2021-06-29  5:26 ` [yocto] " Frederic Martinsons
+@ 2021-06-29  6:41 ` Josef Holzmayr
+  2021-06-29 11:44   ` Erik Boto
+  2021-06-29 11:52   ` Bruce Ashfield
+  1 sibling, 2 replies; 6+ messages in thread
+From: Josef Holzmayr @ 2021-06-29  6:41 UTC (permalink / raw)
+  To: yocto
+
+Howdy!
+
+Am 29.06.2021 um 01:28 schrieb Jonas Vautherin:
+> I was thinking about my issue described here [1], and discovered the 
+> variables called COMPATIBLE_MACHINE and COMPATIBLE_HOST, which "you can 
+> use to stop recipes from being built for machines (/hosts) with which 
+> the recipes are not compatible". And so I wondered if it would make 
+> sense to add COMPATIBLE_IMAGE, for a similar purpose.
+> 
+> Let me explain my issue: I define different images in different layers 
+> (say `first-project-image` and `second-project-image`), and in each of 
+> those layers I create `.bbappends` to configure some packages. Typically 
+> `hostapd` is used by both images, but with a different config file.
+> 
+> The thing is that when I run `bitbake first-project-image`, because 
+> `second-project-image` is part of my bblayers.conf, then the 
+> hostapd_%.bbappend from `second-project-image` is used and may have an 
+> impact on `first-project-image`, which I don't want. I really want this 
+> bbappend to only affect the image `second-project-image`.
+> 
+> One way I can see to deal with that is to realize that 
+> `first-project-image` and `second-project-image` are two different 
+> projects, and build them from two different BUILDDIRs. The thing I don't 
+> like here is that all the packages are therefore downloaded and built 
+> twice, which seems like a loss of time and space.
+> 
+> That's where I thought about COMPATIBLE_IMAGE. In the hostapd_%.bbappend 
+> of `first-project-image`, I would set "COMPATIBLE_IMAGE = 
+> 'first-project-image'", and similarly for "COMPATIBLE_IMAGE = 
+> 'second-project-image'". So that I could still share a BUILDDIR between 
+> different projects.
+
+Yocto chant #1 applies: "Recipe data is local, configuration data is 
+global." Means: the recipe does not see at all which image it is being 
+built for. So it also can't react to it - you can't check a variable 
+against something you do not even see.
+
+> How bad of an idea is that?
+
+It just doesn't work. If that counts as "bad" is left for you to decide :)
+
+What you actually might use is using different DISTROs for the images, 
+because that actually what they mean to do: you change the ABI/API of 
+the image. And you can also define a base DISTRO and COMPATIBLE_DISTRO 
+derivatives, so its all there already. It just cannot be triggered from 
+the image, because, well.. see first pragraph of the answer.
+
+Greetz
+
+> Thanks in advance,
+> Jonas
+> 
+> [1]: https://stackoverflow.com/questions/68167244/image-specific-layers 
+> <https://stackoverflow.com/questions/68167244/image-specific-layers>
+> 
+> 
+> 
+> 
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] Would COMPATIBLE_IMAGE make sense?
+  2021-06-29  6:41 ` Josef Holzmayr
+@ 2021-06-29 11:44   ` Erik Boto
+  2021-06-29 11:52   ` Bruce Ashfield
+  1 sibling, 0 replies; 6+ messages in thread
+From: Erik Boto @ 2021-06-29 11:44 UTC (permalink / raw)
+  To: Josef Holzmayr; +Cc: yocto
+
+On Tue, Jun 29, 2021 at 8:41 AM Josef Holzmayr
+<jester@theyoctojester.info> wrote:
+>
+> Howdy!
+>
+> Am 29.06.2021 um 01:28 schrieb Jonas Vautherin:
+> > I was thinking about my issue described here [1], and discovered the
+> > variables called COMPATIBLE_MACHINE and COMPATIBLE_HOST, which "you can
+> > use to stop recipes from being built for machines (/hosts) with which
+> > the recipes are not compatible". And so I wondered if it would make
+> > sense to add COMPATIBLE_IMAGE, for a similar purpose.
+> >
+> > Let me explain my issue: I define different images in different layers
+> > (say `first-project-image` and `second-project-image`), and in each of
+> > those layers I create `.bbappends` to configure some packages. Typically
+> > `hostapd` is used by both images, but with a different config file.
+> >
+> > The thing is that when I run `bitbake first-project-image`, because
+> > `second-project-image` is part of my bblayers.conf, then the
+> > hostapd_%.bbappend from `second-project-image` is used and may have an
+> > impact on `first-project-image`, which I don't want. I really want this
+> > bbappend to only affect the image `second-project-image`.
+> >
+> > One way I can see to deal with that is to realize that
+> > `first-project-image` and `second-project-image` are two different
+> > projects, and build them from two different BUILDDIRs. The thing I don't
+> > like here is that all the packages are therefore downloaded and built
+> > twice, which seems like a loss of time and space.
+> >
+> > That's where I thought about COMPATIBLE_IMAGE. In the hostapd_%.bbappend
+> > of `first-project-image`, I would set "COMPATIBLE_IMAGE =
+> > 'first-project-image'", and similarly for "COMPATIBLE_IMAGE =
+> > 'second-project-image'". So that I could still share a BUILDDIR between
+> > different projects.
+>
+> Yocto chant #1 applies: "Recipe data is local, configuration data is
+> global." Means: the recipe does not see at all which image it is being
+> built for. So it also can't react to it - you can't check a variable
+> against something you do not even see.
+>
+> > How bad of an idea is that?
+>
+> It just doesn't work. If that counts as "bad" is left for you to decide :)
+>
+> What you actually might use is using different DISTROs for the images,
+> because that actually what they mean to do: you change the ABI/API of
+> the image. And you can also define a base DISTRO and COMPATIBLE_DISTRO
+> derivatives, so its all there already. It just cannot be triggered from
+> the image, because, well.. see first pragraph of the answer.
+
+I agree with everything Josef said, but just wanted to add that if
+it's just different
+configurations needed for different images it might be easier to just
+put the configs
+into separate packages and install the right package in the respective image.
+
+So configuration for first-project-image goes into <somepackage>-foo, and the
+config for second-project-image goes into <somepackage>-bar. Then the image
+would add the correct configuration package.
+
+This only works for the simple cases, and if you really need to change the way
+a package is built the DISTRO way is better.
+
+Erik
+
+>
+> Greetz
+>
+> > Thanks in advance,
+> > Jonas
+> >
+> > [1]: https://stackoverflow.com/questions/68167244/image-specific-layers
+> > <https://stackoverflow.com/questions/68167244/image-specific-layers>
+> >
+> >
+> >
+> >
+>
+> 
+>
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] Would COMPATIBLE_IMAGE make sense?
+  2021-06-29  6:41 ` Josef Holzmayr
+  2021-06-29 11:44   ` Erik Boto
+@ 2021-06-29 11:52   ` Bruce Ashfield
+  2021-06-30 22:42     ` Jonas Vautherin
+  1 sibling, 1 reply; 6+ messages in thread
+From: Bruce Ashfield @ 2021-06-29 11:52 UTC (permalink / raw)
+  To: Josef Holzmayr; +Cc: yocto
+
+On Tue, Jun 29, 2021 at 2:41 AM Josef Holzmayr
+<jester@theyoctojester.info> wrote:
+>
+> Howdy!
+>
+> Am 29.06.2021 um 01:28 schrieb Jonas Vautherin:
+> > I was thinking about my issue described here [1], and discovered the
+> > variables called COMPATIBLE_MACHINE and COMPATIBLE_HOST, which "you can
+> > use to stop recipes from being built for machines (/hosts) with which
+> > the recipes are not compatible". And so I wondered if it would make
+> > sense to add COMPATIBLE_IMAGE, for a similar purpose.
+> >
+> > Let me explain my issue: I define different images in different layers
+> > (say `first-project-image` and `second-project-image`), and in each of
+> > those layers I create `.bbappends` to configure some packages. Typically
+> > `hostapd` is used by both images, but with a different config file.
+> >
+> > The thing is that when I run `bitbake first-project-image`, because
+> > `second-project-image` is part of my bblayers.conf, then the
+> > hostapd_%.bbappend from `second-project-image` is used and may have an
+> > impact on `first-project-image`, which I don't want. I really want this
+> > bbappend to only affect the image `second-project-image`.
+> >
+> > One way I can see to deal with that is to realize that
+> > `first-project-image` and `second-project-image` are two different
+> > projects, and build them from two different BUILDDIRs. The thing I don't
+> > like here is that all the packages are therefore downloaded and built
+> > twice, which seems like a loss of time and space.
+> >
+> > That's where I thought about COMPATIBLE_IMAGE. In the hostapd_%.bbappend
+> > of `first-project-image`, I would set "COMPATIBLE_IMAGE =
+> > 'first-project-image'", and similarly for "COMPATIBLE_IMAGE =
+> > 'second-project-image'". So that I could still share a BUILDDIR between
+> > different projects.
+>
+> Yocto chant #1 applies: "Recipe data is local, configuration data is
+> global." Means: the recipe does not see at all which image it is being
+> built for. So it also can't react to it - you can't check a variable
+> against something you do not even see.
+>
+> > How bad of an idea is that?
+>
+> It just doesn't work. If that counts as "bad" is left for you to decide :)
+>
+> What you actually might use is using different DISTROs for the images,
+> because that actually what they mean to do: you change the ABI/API of
+> the image. And you can also define a base DISTRO and COMPATIBLE_DISTRO
+> derivatives, so its all there already. It just cannot be triggered from
+> the image, because, well.. see first pragraph of the answer.
+
+I was also going to suggest distros.
+
+And also, if the concern really is about builds reusing downloads,
+etc, then by all means configure those different distro builds to
+share download and sstate directories.
+
+Bruce
+
+>
+> Greetz
+>
+> > Thanks in advance,
+> > Jonas
+> >
+> > [1]: https://stackoverflow.com/questions/68167244/image-specific-layers
+> > <https://stackoverflow.com/questions/68167244/image-specific-layers>
+> >
+> >
+> >
+> >
+>
+> 
+>
+
+
+-- 
+- Thou shalt not follow the NULL pointer, for chaos and madness await
+thee at its end
+- "Use the force Harry" - Gandalf, Star Trek II
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] Would COMPATIBLE_IMAGE make sense?
+  2021-06-29 11:52   ` Bruce Ashfield
+@ 2021-06-30 22:42     ` Jonas Vautherin
+  0 siblings, 0 replies; 6+ messages in thread
+From: Jonas Vautherin @ 2021-06-30 22:42 UTC (permalink / raw)
+  To: Bruce Ashfield; +Cc: Josef Holzmayr, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 3638 bytes --]
+
+Thanks a lot for the answers, that's really helpful!
+
+Seems like I should have a closer look at the distros.
+I'll need some time to test it, I'll update here when that is done!
+
+On Tue, Jun 29, 2021 at 1:52 PM Bruce Ashfield <bruce.ashfield@gmail.com>
+wrote:
+
+> On Tue, Jun 29, 2021 at 2:41 AM Josef Holzmayr
+> <jester@theyoctojester.info> wrote:
+> >
+> > Howdy!
+> >
+> > Am 29.06.2021 um 01:28 schrieb Jonas Vautherin:
+> > > I was thinking about my issue described here [1], and discovered the
+> > > variables called COMPATIBLE_MACHINE and COMPATIBLE_HOST, which "you can
+> > > use to stop recipes from being built for machines (/hosts) with which
+> > > the recipes are not compatible". And so I wondered if it would make
+> > > sense to add COMPATIBLE_IMAGE, for a similar purpose.
+> > >
+> > > Let me explain my issue: I define different images in different layers
+> > > (say `first-project-image` and `second-project-image`), and in each of
+> > > those layers I create `.bbappends` to configure some packages.
+> Typically
+> > > `hostapd` is used by both images, but with a different config file.
+> > >
+> > > The thing is that when I run `bitbake first-project-image`, because
+> > > `second-project-image` is part of my bblayers.conf, then the
+> > > hostapd_%.bbappend from `second-project-image` is used and may have an
+> > > impact on `first-project-image`, which I don't want. I really want this
+> > > bbappend to only affect the image `second-project-image`.
+> > >
+> > > One way I can see to deal with that is to realize that
+> > > `first-project-image` and `second-project-image` are two different
+> > > projects, and build them from two different BUILDDIRs. The thing I
+> don't
+> > > like here is that all the packages are therefore downloaded and built
+> > > twice, which seems like a loss of time and space.
+> > >
+> > > That's where I thought about COMPATIBLE_IMAGE. In the
+> hostapd_%.bbappend
+> > > of `first-project-image`, I would set "COMPATIBLE_IMAGE =
+> > > 'first-project-image'", and similarly for "COMPATIBLE_IMAGE =
+> > > 'second-project-image'". So that I could still share a BUILDDIR between
+> > > different projects.
+> >
+> > Yocto chant #1 applies: "Recipe data is local, configuration data is
+> > global." Means: the recipe does not see at all which image it is being
+> > built for. So it also can't react to it - you can't check a variable
+> > against something you do not even see.
+> >
+> > > How bad of an idea is that?
+> >
+> > It just doesn't work. If that counts as "bad" is left for you to decide
+> :)
+> >
+> > What you actually might use is using different DISTROs for the images,
+> > because that actually what they mean to do: you change the ABI/API of
+> > the image. And you can also define a base DISTRO and COMPATIBLE_DISTRO
+> > derivatives, so its all there already. It just cannot be triggered from
+> > the image, because, well.. see first pragraph of the answer.
+>
+> I was also going to suggest distros.
+>
+> And also, if the concern really is about builds reusing downloads,
+> etc, then by all means configure those different distro builds to
+> share download and sstate directories.
+>
+> Bruce
+>
+> >
+> > Greetz
+> >
+> > > Thanks in advance,
+> > > Jonas
+> > >
+> > > [1]:
+> https://stackoverflow.com/questions/68167244/image-specific-layers
+> > > <https://stackoverflow.com/questions/68167244/image-specific-layers>
+> > >
+> > >
+> > >
+> > >
+> >
+> >
+> >
+>
+>
+> --
+> - Thou shalt not follow the NULL pointer, for chaos and madness await
+> thee at its end
+> - "Use the force Harry" - Gandalf, Star Trek II
+>
+> 
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 4836 bytes --]
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+end of thread, other threads:[~2021-06-30 22:42 UTC | newest]
+
+Thread overview: 6+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-06-28 23:28 Would COMPATIBLE_IMAGE make sense? Jonas Vautherin
+2021-06-29  5:26 ` [yocto] " Frederic Martinsons
+2021-06-29  6:41 ` Josef Holzmayr
+2021-06-29 11:44   ` Erik Boto
+2021-06-29 11:52   ` Bruce Ashfield
+2021-06-30 22:42     ` Jonas Vautherin
+

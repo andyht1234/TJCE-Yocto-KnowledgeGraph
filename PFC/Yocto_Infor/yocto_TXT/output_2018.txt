@@ -1,0 +1,631 @@
+* Re: [yocto] SCM usage in source urls and bandwidth
+       [not found] <16E122970083F378.12707@lists.yoctoproject.org>
+@ 2022-03-30 11:10 ` Richard Purdie
+  2022-03-30 11:18   ` Ross Burton
+  0 siblings, 1 reply; 8+ messages in thread
+From: Richard Purdie @ 2022-03-30 11:10 UTC (permalink / raw)
+  To: <yocto@lists.yoctoproject.org>, Khem Raj, Michael Halstead
+
+On Wed, 2022-03-30 at 11:42 +0100, Richard Purdie via lists.yoctoproject.org
+wrote:
+> What are our options? As far as I can see we could:
+> 
+> a) increase the pipe from downloads.yoctoproject.org but that does come at a
+> non-trivial cost to the project.
+> 
+> b) Seek help with hosting some of the larger mirror tarballs from people better
+> able to host them and have that as a first premirror?
+> 
+> c) Switch the binutils and glibc recipes to tarballs and patches. I know Khem
+> finds this less convenient and they keep moving back and forward but we keep
+> running into this issue and having to switch back from git.
+> 
+> d) To soften the blow of c) we could add devupstream support to the recipes? We
+> could script updating the recipe to add the patches?
+> 
+> e) We could drop the PREMIRRORS from poky. This would stop the SCM targets from
+> hitting our mirrors first. That does transfer load to the upstream project SCMs
+> though and I'm not sure that will be appreciated. I did sent that patch, I'm not
+> sure about it though.
+
+I meant to add:
+
+f) Switch the problematic recipes to use shallow clones with something like:
+
+BB_GIT_SHALLOW:pn-binutils = "1"
+BB_GIT_SHALLOW:pn-binutils-cross-${TARGET_ARCH} = "1"
+BB_GIT_SHALLOW:pn-binutils-cross-canadian-${TRANSLATED_TARGET_ARCH} = "1"
+BB_GIT_SHALLOW:pn-binutils-cross-testsuite = "1"
+BB_GIT_SHALLOW:pn-binutils-crosssdk-${SDK_SYS} = "1"
+BB_GIT_SHALLOW:pn-glibc = "1"
+
+The challenge here is that in order to be effective, there needs to be a
+PREMIRROR setup with the shallow tarballs on it. This means we couldn't do e)
+above and have this have much effect unless we craft some very specific
+PREMIRROR entries too.
+
+Cheers,
+
+Richard
+
+
+
+
+
+^ permalink raw reply	[flat|nested] 8+ messages in thread
+* Re: [yocto] SCM usage in source urls and bandwidth
+  2022-03-30 11:10 ` [yocto] SCM usage in source urls and bandwidth Richard Purdie
+@ 2022-03-30 11:18   ` Ross Burton
+  2022-03-30 11:29     ` Richard Purdie
+  0 siblings, 1 reply; 8+ messages in thread
+From: Ross Burton @ 2022-03-30 11:18 UTC (permalink / raw)
+  To: Richard Purdie
+  Cc: <yocto@lists.yoctoproject.org>, Khem Raj, Michael Halstead
+
+On Wed, 30 Mar 2022 at 12:10, Richard Purdie
+<richard.purdie@linuxfoundation.org> wrote:
+> f) Switch the problematic recipes to use shallow clones with something like:
+>
+> BB_GIT_SHALLOW:pn-binutils = "1"
+> BB_GIT_SHALLOW:pn-binutils-cross-${TARGET_ARCH} = "1"
+> BB_GIT_SHALLOW:pn-binutils-cross-canadian-${TRANSLATED_TARGET_ARCH} = "1"
+> BB_GIT_SHALLOW:pn-binutils-cross-testsuite = "1"
+> BB_GIT_SHALLOW:pn-binutils-crosssdk-${SDK_SYS} = "1"
+> BB_GIT_SHALLOW:pn-glibc = "1"
+>
+> The challenge here is that in order to be effective, there needs to be a
+> PREMIRROR setup with the shallow tarballs on it. This means we couldn't do e)
+> above and have this have much effect unless we craft some very specific
+> PREMIRROR entries too.
+
+Even without premirrors this is a lot faster for glibc:
+
+$ time git clone git://sourceware.org/git/glibc.git
+Cloning into 'glibc'...
+remote: Enumerating objects: 6956, done.
+remote: Counting objects: 100% (6956/6956), done.
+remote: Compressing objects: 100% (2938/2938), done.
+remote: Total 670093 (delta 5328), reused 4750 (delta 3932), pack-reused 663137
+Receiving objects: 100% (670093/670093), 205.19 MiB | 16.39 MiB/s, done.
+Resolving deltas: 100% (573265/573265), done.
+Updating files: 100% (19011/19011), done.
+
+real 1m56.255s
+
+$ time git clone git://sourceware.org/git/glibc.git --depth 1
+Cloning into 'glibc'...
+remote: Enumerating objects: 18809, done.
+remote: Counting objects: 100% (18809/18809), done.
+remote: Compressing objects: 100% (9704/9704), done.
+remote: Total 18809 (delta 8812), reused 12185 (delta 7968), pack-reused 0
+Receiving objects: 100% (18809/18809), 41.79 MiB | 11.96 MiB/s, done.
+Resolving deltas: 100% (8812/8812), done.
+Updating files: 100% (19011/19011), done.
+
+real 0m8.701s
+
+A full clone fetches 200MB and takes 2 minutes (a lot of that is
+actually resolving the deltas, not the fetch).  A shallow clone of the
+current HEAD fetches 40MB and is done in 8 seconds.
+
+Why would we need a premirror?
+
+Ross
+
+
+^ permalink raw reply	[flat|nested] 8+ messages in thread
+* Re: [yocto] SCM usage in source urls and bandwidth
+  2022-03-30 11:18   ` Ross Burton
+@ 2022-03-30 11:29     ` Richard Purdie
+  2022-03-30 17:23       ` Khem Raj
+  0 siblings, 1 reply; 8+ messages in thread
+From: Richard Purdie @ 2022-03-30 11:29 UTC (permalink / raw)
+  To: Ross Burton
+  Cc: <yocto@lists.yoctoproject.org>, Khem Raj, Michael Halstead
+
+On Wed, 2022-03-30 at 12:18 +0100, Ross Burton wrote:
+> On Wed, 30 Mar 2022 at 12:10, Richard Purdie
+> <richard.purdie@linuxfoundation.org> wrote:
+> > f) Switch the problematic recipes to use shallow clones with something like:
+> > 
+> > BB_GIT_SHALLOW:pn-binutils = "1"
+> > BB_GIT_SHALLOW:pn-binutils-cross-${TARGET_ARCH} = "1"
+> > BB_GIT_SHALLOW:pn-binutils-cross-canadian-${TRANSLATED_TARGET_ARCH} = "1"
+> > BB_GIT_SHALLOW:pn-binutils-cross-testsuite = "1"
+> > BB_GIT_SHALLOW:pn-binutils-crosssdk-${SDK_SYS} = "1"
+> > BB_GIT_SHALLOW:pn-glibc = "1"
+> > 
+> > The challenge here is that in order to be effective, there needs to be a
+> > PREMIRROR setup with the shallow tarballs on it. This means we couldn't do e)
+> > above and have this have much effect unless we craft some very specific
+> > PREMIRROR entries too.
+> 
+> Even without premirrors this is a lot faster for glibc:
+> 
+> $ time git clone git://sourceware.org/git/glibc.git
+> Cloning into 'glibc'...
+> remote: Enumerating objects: 6956, done.
+> remote: Counting objects: 100% (6956/6956), done.
+> remote: Compressing objects: 100% (2938/2938), done.
+> remote: Total 670093 (delta 5328), reused 4750 (delta 3932), pack-reused 663137
+> Receiving objects: 100% (670093/670093), 205.19 MiB | 16.39 MiB/s, done.
+> Resolving deltas: 100% (573265/573265), done.
+> Updating files: 100% (19011/19011), done.
+> 
+> real 1m56.255s
+> 
+> $ time git clone git://sourceware.org/git/glibc.git --depth 1
+> Cloning into 'glibc'...
+> remote: Enumerating objects: 18809, done.
+> remote: Counting objects: 100% (18809/18809), done.
+> remote: Compressing objects: 100% (9704/9704), done.
+> remote: Total 18809 (delta 8812), reused 12185 (delta 7968), pack-reused 0
+> Receiving objects: 100% (18809/18809), 41.79 MiB | 11.96 MiB/s, done.
+> Resolving deltas: 100% (8812/8812), done.
+> Updating files: 100% (19011/19011), done.
+> 
+> real 0m8.701s
+> 
+> A full clone fetches 200MB and takes 2 minutes (a lot of that is
+> actually resolving the deltas, not the fetch).  A shallow clone of the
+> current HEAD fetches 40MB and is done in 8 seconds.
+> 
+> Why would we need a premirror?
+
+The code doesn't do "--depth=1".
+
+https://git.yoctoproject.org/poky/commit/?id=27d56982c7ba05e86a100b0cca2411ee5ac7a85e
+
+"""
+This implements support for shallow mirror tarballs, not shallow clones.
+Supporting shallow clones directly is not really doable for us, as we'd need
+to hardcode the depth between branch HEAD and the SRCREV, and that depth would
+change as the branch is updated.
+"""
+
+Put another way, you didn't specify a revision in your clone above and if you
+try, it becomes rather tricky.
+
+To make this work we therefore need a mirror with the shallow tarballs on it.
+
+Just for info, the binutils mirror tarball is ~1.3GB, the shallow tarball is
+65MB.
+
+Cheers,
+
+Richard
+
+
+
+
+^ permalink raw reply	[flat|nested] 8+ messages in thread
+* Re: [yocto] SCM usage in source urls and bandwidth
+  2022-03-30 11:29     ` Richard Purdie
+@ 2022-03-30 17:23       ` Khem Raj
+  2022-03-30 21:21         ` Christopher Larson
+  0 siblings, 1 reply; 8+ messages in thread
+From: Khem Raj @ 2022-03-30 17:23 UTC (permalink / raw)
+  To: Richard Purdie
+  Cc: Ross Burton, <yocto@lists.yoctoproject.org>, Michael Halstead
+
+On Wed, Mar 30, 2022 at 4:29 AM Richard Purdie
+<richard.purdie@linuxfoundation.org> wrote:
+>
+> On Wed, 2022-03-30 at 12:18 +0100, Ross Burton wrote:
+> > On Wed, 30 Mar 2022 at 12:10, Richard Purdie
+> > <richard.purdie@linuxfoundation.org> wrote:
+> > > f) Switch the problematic recipes to use shallow clones with something like:
+> > >
+> > > BB_GIT_SHALLOW:pn-binutils = "1"
+> > > BB_GIT_SHALLOW:pn-binutils-cross-${TARGET_ARCH} = "1"
+> > > BB_GIT_SHALLOW:pn-binutils-cross-canadian-${TRANSLATED_TARGET_ARCH} = "1"
+> > > BB_GIT_SHALLOW:pn-binutils-cross-testsuite = "1"
+> > > BB_GIT_SHALLOW:pn-binutils-crosssdk-${SDK_SYS} = "1"
+> > > BB_GIT_SHALLOW:pn-glibc = "1"
+> > >
+> > > The challenge here is that in order to be effective, there needs to be a
+> > > PREMIRROR setup with the shallow tarballs on it. This means we couldn't do e)
+> > > above and have this have much effect unless we craft some very specific
+> > > PREMIRROR entries too.
+> >
+> > Even without premirrors this is a lot faster for glibc:
+> >
+> > $ time git clone git://sourceware.org/git/glibc.git
+> > Cloning into 'glibc'...
+> > remote: Enumerating objects: 6956, done.
+> > remote: Counting objects: 100% (6956/6956), done.
+> > remote: Compressing objects: 100% (2938/2938), done.
+> > remote: Total 670093 (delta 5328), reused 4750 (delta 3932), pack-reused 663137
+> > Receiving objects: 100% (670093/670093), 205.19 MiB | 16.39 MiB/s, done.
+> > Resolving deltas: 100% (573265/573265), done.
+> > Updating files: 100% (19011/19011), done.
+> >
+> > real 1m56.255s
+> >
+> > $ time git clone git://sourceware.org/git/glibc.git --depth 1
+> > Cloning into 'glibc'...
+> > remote: Enumerating objects: 18809, done.
+> > remote: Counting objects: 100% (18809/18809), done.
+> > remote: Compressing objects: 100% (9704/9704), done.
+> > remote: Total 18809 (delta 8812), reused 12185 (delta 7968), pack-reused 0
+> > Receiving objects: 100% (18809/18809), 41.79 MiB | 11.96 MiB/s, done.
+> > Resolving deltas: 100% (8812/8812), done.
+> > Updating files: 100% (19011/19011), done.
+> >
+> > real 0m8.701s
+> >
+> > A full clone fetches 200MB and takes 2 minutes (a lot of that is
+> > actually resolving the deltas, not the fetch).  A shallow clone of the
+> > current HEAD fetches 40MB and is done in 8 seconds.
+> >
+> > Why would we need a premirror?
+>
+> The code doesn't do "--depth=1".
+>
+> https://git.yoctoproject.org/poky/commit/?id=27d56982c7ba05e86a100b0cca2411ee5ac7a85e
+>
+> """
+> This implements support for shallow mirror tarballs, not shallow clones.
+> Supporting shallow clones directly is not really doable for us, as we'd need
+> to hardcode the depth between branch HEAD and the SRCREV, and that depth would
+> change as the branch is updated.
+> """
+>
+> Put another way, you didn't specify a revision in your clone above and if you
+> try, it becomes rather tricky.
+>
+> To make this work we therefore need a mirror with the shallow tarballs on it.
+>
+> Just for info, the binutils mirror tarball is ~1.3GB, the shallow tarball is
+> 65MB.
+
+right, I think shallow clone should be default IMO for all git fetcher tarballs
+
+>
+> Cheers,
+>
+> Richard
+>
+>
+
+
+^ permalink raw reply	[flat|nested] 8+ messages in thread
+* Re: [yocto] SCM usage in source urls and bandwidth
+  2022-03-30 17:23       ` Khem Raj
+@ 2022-03-30 21:21         ` Christopher Larson
+  0 siblings, 0 replies; 8+ messages in thread
+From: Christopher Larson @ 2022-03-30 21:21 UTC (permalink / raw)
+  To: Khem Raj
+  Cc: Richard Purdie, Ross Burton, <yocto@lists.yoctoproject.org>,
+	Michael Halstead
+
+[-- Attachment #1: Type: text/plain, Size: 3726 bytes --]
+
+On Wed, Mar 30, 2022 at 10:24 AM Khem Raj <raj.khem@gmail.com> wrote:
+
+> On Wed, Mar 30, 2022 at 4:29 AM Richard Purdie
+> <richard.purdie@linuxfoundation.org> wrote:
+> >
+> > On Wed, 2022-03-30 at 12:18 +0100, Ross Burton wrote:
+> > > On Wed, 30 Mar 2022 at 12:10, Richard Purdie
+> > > <richard.purdie@linuxfoundation.org> wrote:
+> > > > f) Switch the problematic recipes to use shallow clones with
+> something like:
+> > > >
+> > > > BB_GIT_SHALLOW:pn-binutils = "1"
+> > > > BB_GIT_SHALLOW:pn-binutils-cross-${TARGET_ARCH} = "1"
+> > > > BB_GIT_SHALLOW:pn-binutils-cross-canadian-${TRANSLATED_TARGET_ARCH}
+> = "1"
+> > > > BB_GIT_SHALLOW:pn-binutils-cross-testsuite = "1"
+> > > > BB_GIT_SHALLOW:pn-binutils-crosssdk-${SDK_SYS} = "1"
+> > > > BB_GIT_SHALLOW:pn-glibc = "1"
+> > > >
+> > > > The challenge here is that in order to be effective, there needs to
+> be a
+> > > > PREMIRROR setup with the shallow tarballs on it. This means we
+> couldn't do e)
+> > > > above and have this have much effect unless we craft some very
+> specific
+> > > > PREMIRROR entries too.
+> > >
+> > > Even without premirrors this is a lot faster for glibc:
+> > >
+> > > $ time git clone git://sourceware.org/git/glibc.git
+> > > Cloning into 'glibc'...
+> > > remote: Enumerating objects: 6956, done.
+> > > remote: Counting objects: 100% (6956/6956), done.
+> > > remote: Compressing objects: 100% (2938/2938), done.
+> > > remote: Total 670093 (delta 5328), reused 4750 (delta 3932),
+> pack-reused 663137
+> > > Receiving objects: 100% (670093/670093), 205.19 MiB | 16.39 MiB/s,
+> done.
+> > > Resolving deltas: 100% (573265/573265), done.
+> > > Updating files: 100% (19011/19011), done.
+> > >
+> > > real 1m56.255s
+> > >
+> > > $ time git clone git://sourceware.org/git/glibc.git --depth 1
+> > > Cloning into 'glibc'...
+> > > remote: Enumerating objects: 18809, done.
+> > > remote: Counting objects: 100% (18809/18809), done.
+> > > remote: Compressing objects: 100% (9704/9704), done.
+> > > remote: Total 18809 (delta 8812), reused 12185 (delta 7968),
+> pack-reused 0
+> > > Receiving objects: 100% (18809/18809), 41.79 MiB | 11.96 MiB/s, done.
+> > > Resolving deltas: 100% (8812/8812), done.
+> > > Updating files: 100% (19011/19011), done.
+> > >
+> > > real 0m8.701s
+> > >
+> > > A full clone fetches 200MB and takes 2 minutes (a lot of that is
+> > > actually resolving the deltas, not the fetch).  A shallow clone of the
+> > > current HEAD fetches 40MB and is done in 8 seconds.
+> > >
+> > > Why would we need a premirror?
+> >
+> > The code doesn't do "--depth=1".
+> >
+> >
+> https://git.yoctoproject.org/poky/commit/?id=27d56982c7ba05e86a100b0cca2411ee5ac7a85e
+> >
+> > """
+> > This implements support for shallow mirror tarballs, not shallow clones.
+> > Supporting shallow clones directly is not really doable for us, as we'd
+> need
+> > to hardcode the depth between branch HEAD and the SRCREV, and that depth
+> would
+> > change as the branch is updated.
+> > """
+> >
+> > Put another way, you didn't specify a revision in your clone above and
+> if you
+> > try, it becomes rather tricky.
+> >
+> > To make this work we therefore need a mirror with the shallow tarballs
+> on it.
+> >
+> > Just for info, the binutils mirror tarball is ~1.3GB, the shallow
+> tarball is
+> > 65MB.
+>
+> right, I think shallow clone should be default IMO for all git fetcher
+> tarballs
+
+
+We've been using shallow git tarballs for all recipes for years at Mentor,
+definitely speeds up fetches from local mirrors and reduces how much we
+need to ship to customers to allow them to use BB_NO_NETWORK out of the
+box.
+-- 
+Christopher Larson
+chris_larson@mentor.com, chris.larson@siemens.com, kergoth@gmail.com
+Principal Software Engineer, Embedded Linux Solutions, Siemens Digital
+Industries Software
+
+[-- Attachment #2: Type: text/html, Size: 5366 bytes --]
+
+^ permalink raw reply	[flat|nested] 8+ messages in thread
+* Re: [yocto] SCM usage in source urls and bandwidth
+  2022-03-30 14:05   ` Claude Bing
+@ 2022-03-30 14:51     ` Richard Purdie
+  0 siblings, 0 replies; 8+ messages in thread
+From: Richard Purdie @ 2022-03-30 14:51 UTC (permalink / raw)
+  To: Claude Bing, yocto
+
+On Wed, 2022-03-30 at 10:05 -0400, Claude Bing wrote:
+> On 3/30/22 09:53, Alexandre Belloni via lists.yoctoproject.org wrote:
+> > On 30/03/2022 11:42:46+0100, Richard Purdie wrote:
+> > > [list address fixed, sorry]
+> > > 
+> > > We've been having bandwidth trouble with downloads.yoctoproject.org so we did
+> > > some quick analysis to see what the issue is. Basically in speeding up the
+> > > server which was the rate limit, we hit the limits of the hosting pipe. I'd note
+> > > a few things:
+> > > 
+> > > a) it isn't the sstate mirroring, it is nearly all being used by downloads.
+> > > 
+> > > b) 25% of all our bandwidth is going on "git2_sourceware.org.git.binutils-
+> > > gdb.git.tar.gz" - i.e. downloading the source mirror binutils tarball
+> > > 
+> > > c) 15% is on git2_sourceware.org.git.glibc.git.tar.gz i.e. glibc
+> > > 
+> > > d) OE-Core has downloads.yoctoproject.org as a MIRROR
+> > > 
+> > > e) poky has it as a PREMIRROR
+> > > 
+> > > What are our options? As far as I can see we could:
+> > > 
+> > > a) increase the pipe from downloads.yoctoproject.org but that does come at a
+> > > non-trivial cost to the project.
+> > > 
+> > > b) Seek help with hosting some of the larger mirror tarballs from people better
+> > > able to host them and have that as a first premirror?
+> > > 
+> > > c) Switch the binutils and glibc recipes to tarballs and patches. I know Khem
+> > > finds this less convenient and they keep moving back and forward but we keep
+> > > running into this issue and having to switch back from git.
+> > > 
+> > > d) To soften the blow of c) we could add devupstream support to the recipes? We
+> > > could script updating the recipe to add the patches?
+> > > 
+> > > e) We could drop the PREMIRRORS from poky. This would stop the SCM targets from
+> > > hitting our mirrors first. That does transfer load to the upstream project SCMs
+> > > though and I'm not sure that will be appreciated. I did sent that patch, I'm not
+> > > sure about it though.
+> > 
+> > I would simply drop PREMIRRORS, this is actually a privacy concern for
+> > some of our customers that didn't realize they are leaking the names of
+> > their internal git repositories to downloads.yoctoproject.org.
+> 
+> Indeed, that would be concerning for us as well. Would it be possible to
+> ignore PREMIRRORS based on the recipe layer? Alternatively, we could
+> create blocklists for heavy packages that need to fetch from upstream
+> first rather than drop PREMIRRORS completely. Sometimes, having a
+> secondary source could save valuable time when the upstream is not
+> responsive.
+
+We don't have any support for "per-layer" overrides at this time which would be
+the way to do that. It is something I think we probably do want to consider
+adding but I haven't had the bandwidth to look at it.
+
+I'd note that these mirrors in PREMIRRORS are also in MIRRORS already in OE-Core
+so there is a fallback, it just controls the order they're tried in.
+
+Cheers,
+
+Richard
+
+
+
+^ permalink raw reply	[flat|nested] 8+ messages in thread
+* Re: [yocto] SCM usage in source urls and bandwidth
+  2022-03-30 13:53 ` [yocto] " Alexandre Belloni
+@ 2022-03-30 14:05   ` Claude Bing
+  2022-03-30 14:51     ` Richard Purdie
+  0 siblings, 1 reply; 8+ messages in thread
+From: Claude Bing @ 2022-03-30 14:05 UTC (permalink / raw)
+  To: yocto
+
+On 3/30/22 09:53, Alexandre Belloni via lists.yoctoproject.org wrote:
+> On 30/03/2022 11:42:46+0100, Richard Purdie wrote:
+>> [list address fixed, sorry]
+>>
+>> We've been having bandwidth trouble with downloads.yoctoproject.org so we did
+>> some quick analysis to see what the issue is. Basically in speeding up the
+>> server which was the rate limit, we hit the limits of the hosting pipe. I'd note
+>> a few things:
+>>
+>> a) it isn't the sstate mirroring, it is nearly all being used by downloads.
+>>
+>> b) 25% of all our bandwidth is going on "git2_sourceware.org.git.binutils-
+>> gdb.git.tar.gz" - i.e. downloading the source mirror binutils tarball
+>>
+>> c) 15% is on git2_sourceware.org.git.glibc.git.tar.gz i.e. glibc
+>>
+>> d) OE-Core has downloads.yoctoproject.org as a MIRROR
+>>
+>> e) poky has it as a PREMIRROR
+>>
+>> What are our options? As far as I can see we could:
+>>
+>> a) increase the pipe from downloads.yoctoproject.org but that does come at a
+>> non-trivial cost to the project.
+>>
+>> b) Seek help with hosting some of the larger mirror tarballs from people better
+>> able to host them and have that as a first premirror?
+>>
+>> c) Switch the binutils and glibc recipes to tarballs and patches. I know Khem
+>> finds this less convenient and they keep moving back and forward but we keep
+>> running into this issue and having to switch back from git.
+>>
+>> d) To soften the blow of c) we could add devupstream support to the recipes? We
+>> could script updating the recipe to add the patches?
+>>
+>> e) We could drop the PREMIRRORS from poky. This would stop the SCM targets from
+>> hitting our mirrors first. That does transfer load to the upstream project SCMs
+>> though and I'm not sure that will be appreciated. I did sent that patch, I'm not
+>> sure about it though.
+> 
+> I would simply drop PREMIRRORS, this is actually a privacy concern for
+> some of our customers that didn't realize they are leaking the names of
+> their internal git repositories to downloads.yoctoproject.org.
+
+Indeed, that would be concerning for us as well. Would it be possible to
+ignore PREMIRRORS based on the recipe layer? Alternatively, we could
+create blocklists for heavy packages that need to fetch from upstream
+first rather than drop PREMIRRORS completely. Sometimes, having a
+secondary source could save valuable time when the upstream is not
+responsive.
+
+> 
+> 
+> 
+> 
+> 
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#56599): https://lists.yoctoproject.org/g/yocto/message/56599
+> Mute This Topic: https://lists.yoctoproject.org/mt/90128469/4618432
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [cbing@cybernetics.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+> 
+
+
+^ permalink raw reply	[flat|nested] 8+ messages in thread
+* Re: [yocto] SCM usage in source urls and bandwidth
+  2022-03-30 10:42 Richard Purdie
+@ 2022-03-30 13:53 ` Alexandre Belloni
+  2022-03-30 14:05   ` Claude Bing
+  0 siblings, 1 reply; 8+ messages in thread
+From: Alexandre Belloni @ 2022-03-30 13:53 UTC (permalink / raw)
+  To: Richard Purdie
+  Cc: <yocto@lists.yoctoproject.org>, Khem Raj, Michael Halstead
+
+On 30/03/2022 11:42:46+0100, Richard Purdie wrote:
+> [list address fixed, sorry]
+> 
+> We've been having bandwidth trouble with downloads.yoctoproject.org so we did
+> some quick analysis to see what the issue is. Basically in speeding up the
+> server which was the rate limit, we hit the limits of the hosting pipe. I'd note
+> a few things:
+> 
+> a) it isn't the sstate mirroring, it is nearly all being used by downloads.
+> 
+> b) 25% of all our bandwidth is going on "git2_sourceware.org.git.binutils-
+> gdb.git.tar.gz" - i.e. downloading the source mirror binutils tarball
+> 
+> c) 15% is on git2_sourceware.org.git.glibc.git.tar.gz i.e. glibc
+> 
+> d) OE-Core has downloads.yoctoproject.org as a MIRROR
+> 
+> e) poky has it as a PREMIRROR
+> 
+> What are our options? As far as I can see we could:
+> 
+> a) increase the pipe from downloads.yoctoproject.org but that does come at a
+> non-trivial cost to the project.
+> 
+> b) Seek help with hosting some of the larger mirror tarballs from people better
+> able to host them and have that as a first premirror?
+> 
+> c) Switch the binutils and glibc recipes to tarballs and patches. I know Khem
+> finds this less convenient and they keep moving back and forward but we keep
+> running into this issue and having to switch back from git.
+> 
+> d) To soften the blow of c) we could add devupstream support to the recipes? We
+> could script updating the recipe to add the patches?
+> 
+> e) We could drop the PREMIRRORS from poky. This would stop the SCM targets from
+> hitting our mirrors first. That does transfer load to the upstream project SCMs
+> though and I'm not sure that will be appreciated. I did sent that patch, I'm not
+> sure about it though.
+
+I would simply drop PREMIRRORS, this is actually a privacy concern for
+some of our customers that didn't realize they are leaking the names of
+their internal git repositories to downloads.yoctoproject.org.
+
+
+
+-- 
+Alexandre Belloni, co-owner and COO, Bootlin
+Embedded Linux and Kernel engineering
+https://bootlin.com
+
+
+^ permalink raw reply	[flat|nested] 8+ messages in thread
+end of thread, other threads:[~2022-03-30 21:22 UTC | newest]
+
+Thread overview: 8+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+     [not found] <16E122970083F378.12707@lists.yoctoproject.org>
+2022-03-30 11:10 ` [yocto] SCM usage in source urls and bandwidth Richard Purdie
+2022-03-30 11:18   ` Ross Burton
+2022-03-30 11:29     ` Richard Purdie
+2022-03-30 17:23       ` Khem Raj
+2022-03-30 21:21         ` Christopher Larson
+2022-03-30 10:42 Richard Purdie
+2022-03-30 13:53 ` [yocto] " Alexandre Belloni
+2022-03-30 14:05   ` Claude Bing
+2022-03-30 14:51     ` Richard Purdie
+

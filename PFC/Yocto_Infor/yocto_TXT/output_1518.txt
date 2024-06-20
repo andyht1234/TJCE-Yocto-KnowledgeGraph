@@ -1,0 +1,128 @@
+* Recipe with kernel configuration fragment
+@ 2022-08-10 15:19 Maik Vermeulen
+  2022-08-10 15:35 ` [yocto] " Quentin Schulz
+  0 siblings, 1 reply; 2+ messages in thread
+From: Maik Vermeulen @ 2022-08-10 15:19 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1977 bytes --]
+
+Hi,
+
+For a firewall recipe using nftables we need to make some kernel
+configuration changes.
+At first we added the needed CONFIG_ lines to a bbappend in the
+recipes-kernel directory of our own layer, but I think it would be neater
+to include the CONFIG_ changes in the recipe that needs them, if possible.
+
+So I tried:
+SRC_URI = " \
+    file://nftables.service \
+    file://nftables.conf \
+"
+
+RDEPENDS_${PN} += " \
+    nftables \
+"
+
+inherit systemd
+
+SYSTEMD_AUTO_ENABLE = "enable"
+SYSTEMD_SERVICE_${PN} = "nftables.service"
+
+do_install_append() {
+  install -d ${D}/${systemd_unitdir}/system
+  install -m 0644 ${WORKDIR}/nftables.service ${D}/${systemd_unitdir}/system
+
+  install -d ${D}/${sysconfdir}/nftables
+  install -m 0644 ${WORKDIR}/nftables.conf ${D}/${sysconfdir}/nftables
+}
+
+FILES_${PN} += "${systemd_unitdir}/system/nftables.service"
+FILES_${PN} += "${sysconfdir}/nftables/nftables.conf"
+
+# Make the required changes to the kernel configuration
+FILESEXTRAPATHS_prepend := "${THISDIR}/${PN}-${PV}:"
+
+SRC_URI += " \
+  file://nftables-kernel.cfg \
+"
+
+But unfortunately, the CONFIG_ changes in the nftables-kernel.cfg are not
+being applied..
+
+Any hints? Thanks!
+
+Kind regards,
+
+Maik Vermeulen
+
+Embedded Software Engineer — Lightyear
++31 6 16 82 73 79
+
+-- 
+ 
+<https://lightyear.one/careers?utm_source=signature&utm_campaign=spotlightroles&utm_medium=email#vacancies>
+
+-- 
+
+
+Automotive Campus 70 —5708 JZ Helmond, the Netherlands
+www.lightyear.one 
+<https://lightyear.one/>
+ <https://www.linkedin.com/company/lightyear.one/>
+
+This email may contain information which is privileged and/or 
+confidential. If you received this e-mail in error, please notify us 
+immediately by e-mail and delete the email without copying or disclosing 
+its contents to any other person. Lightyear is a trade name of Atlas 
+Technologies B.V. and is registered at the Dutch Chamber of Commerce under 
+number 67264298. 
+
+[-- Attachment #2: Type: text/html, Size: 2752 bytes --]
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+* Re: [yocto] Recipe with kernel configuration fragment
+  2022-08-10 15:19 Recipe with kernel configuration fragment Maik Vermeulen
+@ 2022-08-10 15:35 ` Quentin Schulz
+  0 siblings, 0 replies; 2+ messages in thread
+From: Quentin Schulz @ 2022-08-10 15:35 UTC (permalink / raw)
+  To: Maik Vermeulen, yocto
+
+Hi Maik,
+
+On 8/10/22 17:19, Maik Vermeulen wrote:
+> Hi,
+> 
+> For a firewall recipe using nftables we need to make some kernel
+> configuration changes.
+> At first we added the needed CONFIG_ lines to a bbappend in the
+> recipes-kernel directory of our own layer, but I think it would be neater
+> to include the CONFIG_ changes in the recipe that needs them, if possible.
+> 
+
+This is not possible because recipe data is local to the recipe, you 
+cannot impact a recipe from another one.
+
+The only way to have 2+ recipes doing some things in sync is by having a 
+variable set in a global scope. Such is the case for configuration files 
+(distro and machine). Since the selection of nftables or not is not 
+related to HW but policy, it should be in a distro configruation file.
+
+You could add a custom DISTRO_FEATURES to your own distro and check the 
+presence of this feature in your kernel recipe and apply the config 
+fragment with required changes. And you can make the nftables package or 
+whatever require this feature with REQUIRED_DISTRO_FEATURES.
+
+Cheers,
+Quentin
+
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2022-08-10 15:35 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-08-10 15:19 Recipe with kernel configuration fragment Maik Vermeulen
+2022-08-10 15:35 ` [yocto] " Quentin Schulz
+

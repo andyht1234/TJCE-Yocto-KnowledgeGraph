@@ -1,0 +1,109 @@
+* [meta-zephyr][PATCH] zephyr-kernel-src-3.3.0: fix build with gcc-13
+@ 2023-05-30 10:04 Naveen Saini
+  0 siblings, 0 replies; only message in thread
+From: Naveen Saini @ 2023-05-30 10:04 UTC (permalink / raw)
+  To: yocto
+
+Configuration error:
+| -- Configuring done (4.9s)
+| CMake Error in CMakeLists.txt:
+|   Target "zephyr_interface" contains relative path in its
+|   INTERFACE_INCLUDE_DIRECTORIES:
+|
+|     "include-fixed"
+
+With GCC-13, limits.h and syslimits.h header files
+are always being installed to include folder.
+https://gcc.gnu.org/git/gitweb.cgi?p=gcc.git;h=be9dd80f933480
+
+Signed-off-by: Naveen Saini <naveen.kumar.saini@intel.com>
+---
+ ...c-target.cmake-fix-build-with-gcc-13.patch | 54 +++++++++++++++++++
+ .../zephyr-kernel/zephyr-kernel-src-3.3.0.inc |  1 +
+ 2 files changed, 55 insertions(+)
+ create mode 100644 meta-zephyr-core/recipes-kernel/zephyr-kernel/files/0001-gcc-target.cmake-fix-build-with-gcc-13.patch
+
+diff --git a/meta-zephyr-core/recipes-kernel/zephyr-kernel/files/0001-gcc-target.cmake-fix-build-with-gcc-13.patch b/meta-zephyr-core/recipes-kernel/zephyr-kernel/files/0001-gcc-target.cmake-fix-build-with-gcc-13.patch
+new file mode 100644
+index 0000000..c239f4f
+--- /dev/null
++++ b/meta-zephyr-core/recipes-kernel/zephyr-kernel/files/0001-gcc-target.cmake-fix-build-with-gcc-13.patch
+@@ -0,0 +1,54 @@
++From ba1ca46190900b5d003e3d0386c20694f04b1710 Mon Sep 17 00:00:00 2001
++From: Naveen Saini <naveen.kumar.saini@intel.com>
++Date: Mon, 29 May 2023 17:48:20 +0800
++Subject: [PATCH] gcc/target.cmake: fix build with gcc-13
++
++Configuration error:
++| -- Configuring done (4.9s)
++| CMake Error in CMakeLists.txt:
++|   Target "zephyr_interface" contains relative path in its
++|   INTERFACE_INCLUDE_DIRECTORIES:
++|
++|     "include-fixed"
++
++With GCC-13, limits.h and syslimits.h header files
++are always being installed to include folder.
++https://gcc.gnu.org/git/gitweb.cgi?p=gcc.git;h=be9dd80f933480
++
++Upstream-Status: Submitted [https://github.com/zephyrproject-rtos/zephyr/pull/58408]
++
++Signed-off-by: Naveen Saini <naveen.kumar.saini@intel.com>
++---
++ cmake/compiler/gcc/target.cmake | 16 +++++++++++++++-
++ 1 file changed, 15 insertions(+), 1 deletion(-)
++
++diff --git a/cmake/compiler/gcc/target.cmake b/cmake/compiler/gcc/target.cmake
++index c970048297..e78a7c6a0b 100644
++--- a/cmake/compiler/gcc/target.cmake
+++++ b/cmake/compiler/gcc/target.cmake
++@@ -34,7 +34,21 @@ if(NOT DEFINED NOSYSDEF_CFLAG)
++   set(NOSYSDEF_CFLAG -undef)
++ endif()
++ 
++-foreach(file_name include/stddef.h include-fixed/limits.h)
+++# GCC-13, does not install limits.h on include-fixed anymore
+++# https://gcc.gnu.org/git/gitweb.cgi?p=gcc.git;h=be9dd80f933480
+++# Add check for GCC version >= 13.1
+++execute_process(
+++    COMMAND ${CMAKE_C_COMPILER} -dumpversion
+++    OUTPUT_VARIABLE TEMP_COMPILER_VERSION
+++    )
+++
+++if(${TEMP_COMPILER_VERSION} VERSION_GREATER_EQUAL 13.1.0)
+++    set(FIX_HEADER_FILE include/limits.h)
+++else()
+++    set(FIX_HEADER_FILE include-fixed/limits.h)
+++endif()
+++
+++foreach(file_name include/stddef.h ${FIX_HEADER_FILE})
++   execute_process(
++     COMMAND ${CMAKE_C_COMPILER} --print-file-name=${file_name}
++     OUTPUT_VARIABLE _OUTPUT
++-- 
++2.34.1
++
+diff --git a/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-kernel-src-3.3.0.inc b/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-kernel-src-3.3.0.inc
+index 3b0ff08..2c99ca2 100644
+--- a/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-kernel-src-3.3.0.inc
++++ b/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-kernel-src-3.3.0.inc
+@@ -117,6 +117,7 @@ SRC_URI_ZEPHYR_THRIFT ?= "git://github.com/zephyrproject-rtos/thrift;protocol=ht
+ SRC_URI_PATCHES ?= "\
+     file://0001-3.3-x86-fix-efi-binary-generation-issue-in-cross-compila.patch;patchdir=zephyr \
+     file://0002-3.3-toolchain-gcc-Fix-separator-between-directives-on-sa.patch;patchdir=zephyr \
++    file://0001-gcc-target.cmake-fix-build-with-gcc-13.patch;patchdir=zephyr \
+ "
+ 
+ SRC_URI = "\
+-- 
+2.34.1
+
+
+
+^ permalink raw reply related	[flat|nested] only message in thread
+only message in thread, other threads:[~2023-05-30  9:40 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-05-30 10:04 [meta-zephyr][PATCH] zephyr-kernel-src-3.3.0: fix build with gcc-13 Naveen Saini
+

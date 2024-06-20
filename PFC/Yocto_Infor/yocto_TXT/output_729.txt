@@ -1,0 +1,202 @@
+* [meta-zephyr][PATCH 1/3] zephyr-core/scripts: Resolve Zephyr tag using git ls-remote
+@ 2023-04-19 16:00 Peter Hoyes
+  2023-04-19 16:00 ` [meta-zephyr][PATCH 2/3] zephyr-core/scripts: Resolve West revisions to SHAs Peter Hoyes
+  2023-04-19 16:00 ` [meta-zephyr][PATCH 3/3] zephyr-core/zephyr-kernel: Use SHA for zcbor module Peter Hoyes
+  0 siblings, 2 replies; 3+ messages in thread
+From: Peter Hoyes @ 2023-04-19 16:00 UTC (permalink / raw)
+  To: yocto; +Cc: Peter Hoyes
+
+From: Peter Hoyes <Peter.Hoyes@arm.com>
+
+To simplify the logic to resolve Git tags to SHAs, and so that it works
+with non-Github repositories, use git ls-remote instead of the Github
+API.
+
+Make the resolve_revision function available as a Jinja filter and move
+the version resolution to the template.
+
+Signed-off-by: Peter Hoyes <Peter.Hoyes@arm.com>
+---
+ meta-zephyr-core/scripts/generate-version.py  | 36 +++++++++++--------
+ .../scripts/zephyr-kernel-src.inc.jinja       |  4 +--
+ 2 files changed, 23 insertions(+), 17 deletions(-)
+
+diff --git a/meta-zephyr-core/scripts/generate-version.py b/meta-zephyr-core/scripts/generate-version.py
+index 550f8df..d795a70 100755
+--- a/meta-zephyr-core/scripts/generate-version.py
++++ b/meta-zephyr-core/scripts/generate-version.py
+@@ -1,8 +1,8 @@
+ #!/usr/bin/env python3
+ 
+-import json
+ import pathlib
+ import re
++import subprocess
+ import sys
+ import urllib.parse
+ import urllib.request
+@@ -16,19 +16,6 @@ version = sys.argv[1]
+ if not re.match(r'\d+.\d+.\d+', version):
+     raise ValueError("Please provide a valid Zephyr version")
+ 
+-# Convert the version (x.y.z) into the Git commit SHA using the Github API
+-# This is a two-step process - first obtain the tag SHA
+-ref_url = f'https://api.github.com/repos/zephyrproject-rtos/zephyr/git/refs/tags/v{version}'
+-with urllib.request.urlopen(ref_url) as f:
+-    ref_data = json.load(f)
+-    ref_sha = ref_data['object']['sha']
+-
+-# Secondly, obtain the commit SHA of the tag SHA
+-tag_url = f'https://api.github.com/repos/zephyrproject-rtos/zephyr/git/tags/{ref_sha}'
+-with urllib.request.urlopen(tag_url) as f:
+-    tag_data = json.load(f)
+-    tag_sha = tag_data['object']['sha']
+-
+ # Obtain the West manifest and decode using west as a library
+ manifest_url = f'https://raw.githubusercontent.com/zephyrproject-rtos/zephyr/v{version}/west.yml'
+ with urllib.request.urlopen(manifest_url) as f:
+@@ -39,7 +26,25 @@ with urllib.request.urlopen(manifest_url) as f:
+ 
+ # projects contains a 'manifest' project for 'self' which we don't want to use
+ projects = list(filter(lambda project: project.name != 'manifest', projects))
+-template_params = dict(version=version, tag_sha=tag_sha, projects=projects)
++template_params = dict(version=version,
++                       zephyr_url='https://github.com/zephyrproject-rtos/zephyr.git',
++                       projects=projects)
++
++# Convert a revision specifier into the Git commit SHA
++def resolve_revision(revision, repo_url):
++    # If revision is a Git SHA, return it
++    if re.match(r'[a-f0-9]{40}', revision):
++        return revision
++
++    # Otherwise, resolve using git ls-remote
++    try:
++        # Prefer a deferenced tag (if annotated)
++        output = subprocess.check_output(['git', 'ls-remote', '--exit-code', repo_url, f'{revision}^{{}}'])
++        return output.split()[0].decode()
++    except subprocess.CalledProcessError:
++        # Fall back to tag name (if lightweight)
++        output = subprocess.check_output(['git', 'ls-remote', '--exit-code', repo_url, revision])
++        return output.split()[0].decode()
+ 
+ def git_url_to_bitbake(url):
+     """
+@@ -62,6 +67,7 @@ template_dir = pathlib.Path(__file__).parent
+ env = jinja2.Environment(loader=jinja2.FileSystemLoader(template_dir))
+ env.filters['git_url_to_bitbake'] = git_url_to_bitbake
+ env.filters['bitbake_var'] = bitbake_var
++env.filters['resolve_revision'] = resolve_revision
+ template = env.get_template('zephyr-kernel-src.inc.jinja')
+ 
+ # Output directly to the zephyr-kernel directory
+diff --git a/meta-zephyr-core/scripts/zephyr-kernel-src.inc.jinja b/meta-zephyr-core/scripts/zephyr-kernel-src.inc.jinja
+index a2d2232..e18fcf1 100644
+--- a/meta-zephyr-core/scripts/zephyr-kernel-src.inc.jinja
++++ b/meta-zephyr-core/scripts/zephyr-kernel-src.inc.jinja
+@@ -3,11 +3,11 @@
+ 
+ SRCREV_FORMAT = "default"
+ 
+-SRCREV_default = "{{ tag_sha }}"
++SRCREV_default = "{{ ('v' ~ version) | resolve_revision(zephyr_url) }}"
+ {% for project in projects -%}
+ SRCREV_{{ project.name }} = "{{ project.revision }}"
+ {% endfor %}
+-SRC_URI_ZEPHYR ?= "git://github.com/zephyrproject-rtos/zephyr.git;protocol=https"
++SRC_URI_ZEPHYR ?= "{{ zephyr_url | git_url_to_bitbake }}"
+ {%- for project in projects %}
+ SRC_URI_ZEPHYR_{{ project.name | bitbake_var }} ?= "{{ project.url | git_url_to_bitbake }}"
+ {%- endfor %}
+-- 
+2.34.1
+
+
+
+^ permalink raw reply related	[flat|nested] 3+ messages in thread
+* [meta-zephyr][PATCH 2/3] zephyr-core/scripts: Resolve West revisions to SHAs
+  2023-04-19 16:00 [meta-zephyr][PATCH 1/3] zephyr-core/scripts: Resolve Zephyr tag using git ls-remote Peter Hoyes
+@ 2023-04-19 16:00 ` Peter Hoyes
+  2023-04-19 16:00 ` [meta-zephyr][PATCH 3/3] zephyr-core/zephyr-kernel: Use SHA for zcbor module Peter Hoyes
+  1 sibling, 0 replies; 3+ messages in thread
+From: Peter Hoyes @ 2023-04-19 16:00 UTC (permalink / raw)
+  To: yocto; +Cc: Peter Hoyes
+
+From: Peter Hoyes <Peter.Hoyes@arm.com>
+
+The West manifest in  Zephyr 3.3 contains a tag (instead of a SHA) for
+zcbor [1]. OE standard practice is to always specifiy revisions using
+SHAs, so in the Jinja template, use the new resolve_revision filter to
+resolve any tags.
+
+[1] https://github.com/zephyrproject-rtos/zephyr/pull/51219#discussion_r998123145
+
+Signed-off-by: Peter Hoyes <Peter.Hoyes@arm.com>
+---
+ meta-zephyr-core/scripts/zephyr-kernel-src.inc.jinja | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/meta-zephyr-core/scripts/zephyr-kernel-src.inc.jinja b/meta-zephyr-core/scripts/zephyr-kernel-src.inc.jinja
+index e18fcf1..2a3faeb 100644
+--- a/meta-zephyr-core/scripts/zephyr-kernel-src.inc.jinja
++++ b/meta-zephyr-core/scripts/zephyr-kernel-src.inc.jinja
+@@ -5,7 +5,7 @@ SRCREV_FORMAT = "default"
+ 
+ SRCREV_default = "{{ ('v' ~ version) | resolve_revision(zephyr_url) }}"
+ {% for project in projects -%}
+-SRCREV_{{ project.name }} = "{{ project.revision }}"
++SRCREV_{{ project.name }} = "{{ project.revision | resolve_revision(project.url) }}"
+ {% endfor %}
+ SRC_URI_ZEPHYR ?= "{{ zephyr_url | git_url_to_bitbake }}"
+ {%- for project in projects %}
+-- 
+2.34.1
+
+
+
+^ permalink raw reply related	[flat|nested] 3+ messages in thread
+* [meta-zephyr][PATCH 3/3] zephyr-core/zephyr-kernel: Use SHA for zcbor module
+  2023-04-19 16:00 [meta-zephyr][PATCH 1/3] zephyr-core/scripts: Resolve Zephyr tag using git ls-remote Peter Hoyes
+  2023-04-19 16:00 ` [meta-zephyr][PATCH 2/3] zephyr-core/scripts: Resolve West revisions to SHAs Peter Hoyes
+@ 2023-04-19 16:00 ` Peter Hoyes
+  1 sibling, 0 replies; 3+ messages in thread
+From: Peter Hoyes @ 2023-04-19 16:00 UTC (permalink / raw)
+  To: yocto; +Cc: Peter Hoyes
+
+From: Peter Hoyes <Peter.Hoyes@arm.com>
+
+Re-run the generate-version.py script for 3.3.0 to convert the tag for
+zcbor to a SHA.
+
+Signed-off-by: Peter Hoyes <Peter.Hoyes@arm.com>
+---
+ .../recipes-kernel/zephyr-kernel/zephyr-kernel-src-3.3.0.inc    | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-kernel-src-3.3.0.inc b/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-kernel-src-3.3.0.inc
+index 245ba81..d9e9df4 100644
+--- a/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-kernel-src-3.3.0.inc
++++ b/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-kernel-src-3.3.0.inc
+@@ -54,7 +54,7 @@ SRCREV_trusted-firmware-a = "28f5e137837f1c1a7a7b2af2dd8bb778c0a27532"
+ SRCREV_tf-m-tests = "0f80a65193ddbbe3f0ac38b33b07b26138c11fa7"
+ SRCREV_psa-arch-tests = "24ed42e34e03ebbc945a7204819c1471cce2bda8"
+ SRCREV_uoscore-uedhoc = "e8920192b66db4f909eb9cd3f155d5245c1ae825"
+-SRCREV_zcbor = "0.6.0"
++SRCREV_zcbor = "0556edac504d1f34699aa8a22fcd507c14756c9e"
+ SRCREV_zscilib = "0035be5e6a45e4ab89755b176d305d7a877fc79c"
+ SRCREV_thrift = "10023645a0e6cb7ce23fcd7fd3dbac9f18df6234"
+ 
+-- 
+2.34.1
+
+
+
+^ permalink raw reply related	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2023-04-19 16:01 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-04-19 16:00 [meta-zephyr][PATCH 1/3] zephyr-core/scripts: Resolve Zephyr tag using git ls-remote Peter Hoyes
+2023-04-19 16:00 ` [meta-zephyr][PATCH 2/3] zephyr-core/scripts: Resolve West revisions to SHAs Peter Hoyes
+2023-04-19 16:00 ` [meta-zephyr][PATCH 3/3] zephyr-core/zephyr-kernel: Use SHA for zcbor module Peter Hoyes
+

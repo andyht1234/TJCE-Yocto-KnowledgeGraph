@@ -1,0 +1,166 @@
+* [meta-parsec][v2][PATCH 1/3] meta-parsec: Add pkg grps
+@ 2022-05-23 14:08 Armin Kuster
+  2022-05-23 14:09 ` [meta-parsec][v2][PATCH 2/3] meta-parsec: add build image Armin Kuster
+  2022-05-23 14:09 ` [meta-parsec][v2][PATCH 3/3] oeqa: add parsec runtime tests Armin Kuster
+  0 siblings, 2 replies; 3+ messages in thread
+From: Armin Kuster @ 2022-05-23 14:08 UTC (permalink / raw)
+  To: yocto
+
+Signed-off-by: Armin Kuster <akuster808@gmail.com>
+
+--
+V2]
+Drop tpm pkgs, use the tpm2 pkg grp
+---
+ .../packagegroup-security-parsec.bb             | 17 +++++++++++++++++
+ 1 file changed, 17 insertions(+)
+ create mode 100644 meta-parsec/recipes-core/packagegroups/packagegroup-security-parsec.bb
+
+diff --git a/meta-parsec/recipes-core/packagegroups/packagegroup-security-parsec.bb b/meta-parsec/recipes-core/packagegroups/packagegroup-security-parsec.bb
+new file mode 100644
+index 0000000..b6c4f59
+--- /dev/null
++++ b/meta-parsec/recipes-core/packagegroups/packagegroup-security-parsec.bb
+@@ -0,0 +1,17 @@
++DESCRIPTION = "Parsec Security packagegroup for Poky"
++LICENSE = "MIT"
++LIC_FILES_CHKSUM = "file://${COMMON_LICENSE_DIR}/MIT;md5=0835ade698e0bcf8506ecda2f7b4f302 \
++                    file://${COREBASE}/meta/COPYING.MIT;md5=3da9cfbcb788c80a0384361b4de20420"
++
++inherit packagegroup
++
++PACKAGES = "\
++    packagegroup-security-parsec \
++    "
++
++SUMMARY:packagegroup-security-parsec = "Security Parsec"
++RDEPENDS:packagegroup-security-parsec = "\
++    softhsm \
++    parsec-tool \
++    parsec-service \
++    "
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 3+ messages in thread
+* [meta-parsec][v2][PATCH 2/3] meta-parsec: add build image.
+  2022-05-23 14:08 [meta-parsec][v2][PATCH 1/3] meta-parsec: Add pkg grps Armin Kuster
+@ 2022-05-23 14:09 ` Armin Kuster
+  2022-05-23 14:09 ` [meta-parsec][v2][PATCH 3/3] oeqa: add parsec runtime tests Armin Kuster
+  1 sibling, 0 replies; 3+ messages in thread
+From: Armin Kuster @ 2022-05-23 14:09 UTC (permalink / raw)
+  To: yocto
+
+Signed-off-by: Armin Kuster <akuster808@gmail.com>
+
+---
+v2]
+Use packagegroup-security-tpm2
+add swtpm
+---
+ .../images/security-parsec-image.bb             | 17 +++++++++++++++++
+ 1 file changed, 17 insertions(+)
+ create mode 100644 meta-parsec/recipes-core/images/security-parsec-image.bb
+
+diff --git a/meta-parsec/recipes-core/images/security-parsec-image.bb b/meta-parsec/recipes-core/images/security-parsec-image.bb
+new file mode 100644
+index 0000000..2ddc543
+--- /dev/null
++++ b/meta-parsec/recipes-core/images/security-parsec-image.bb
+@@ -0,0 +1,17 @@
++DESCRIPTION = "A small image for building meta-parsec packages"
++
++inherit core-image
++
++IMAGE_FEATURES += "ssh-server-openssh"
++
++IMAGE_INSTALL = "\
++    packagegroup-base \
++    packagegroup-core-boot \
++    packagegroup-security-tpm2 \
++    packagegroup-security-parsec \
++    swtpm \
++    os-release" 
++
++export IMAGE_BASENAME = "security-parsec-image"
++
++IMAGE_ROOTFS_EXTRA_SPACE = "5242880"
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 3+ messages in thread
+* [meta-parsec][v2][PATCH 3/3] oeqa: add parsec runtime tests
+  2022-05-23 14:08 [meta-parsec][v2][PATCH 1/3] meta-parsec: Add pkg grps Armin Kuster
+  2022-05-23 14:09 ` [meta-parsec][v2][PATCH 2/3] meta-parsec: add build image Armin Kuster
+@ 2022-05-23 14:09 ` Armin Kuster
+  1 sibling, 0 replies; 3+ messages in thread
+From: Armin Kuster @ 2022-05-23 14:09 UTC (permalink / raw)
+  To: yocto
+
+Signed-off-by: Armin Kuster <akuster808@gmail.com>
+
+---
+v2]
+Add parsec-cli-tests.sh to mix
+---
+ meta-parsec/lib/oeqa/runtime/cases/parsec.py | 33 ++++++++++++++++++++
+ 1 file changed, 33 insertions(+)
+ create mode 100644 meta-parsec/lib/oeqa/runtime/cases/parsec.py
+
+diff --git a/meta-parsec/lib/oeqa/runtime/cases/parsec.py b/meta-parsec/lib/oeqa/runtime/cases/parsec.py
+new file mode 100644
+index 0000000..547f74c
+--- /dev/null
++++ b/meta-parsec/lib/oeqa/runtime/cases/parsec.py
+@@ -0,0 +1,33 @@
++# Copyright (C) 2022 Armin Kuster <akuster808@gmail.com>
++#
++import re
++
++from oeqa.runtime.case import OERuntimeTestCase
++from oeqa.core.decorator.depends import OETestDepends
++from oeqa.runtime.decorator.package import OEHasPackage
++
++class ParsecTest(OERuntimeTestCase):
++    @OEHasPackage(['parsec-service'])
++    @OETestDepends(['ssh.SSHTest.test_ssh'])
++    def test_parsec_service(self):
++        toml_file = '/etc/parsec/config.tom'
++        status, output = self.target.run('echo library_path = "/usr/lib/softhsm/libsofthsm2.so" >> %s' %(toml_file))
++        status, output = self.target.run('echo slot_number = 0 >> %s' %(toml_file))
++        status, output = self.target.run('echo user_pin = "123456" >> %s' %(toml_file))
++        cmds = [
++                '/etc/init.d/parsec stop',
++                'sleep 5',
++                'softhsm2-util --init-token --slot 0 --label "Parsec Service" --pin 123456 --so-pin 123456',
++                'for d in /var/lib/softhsm/tokens/*; do chown -R parsec $d; done', 
++                'mkdir /tmp/myvtpm',
++                'swtpm socket --tpmstate dir=/tmp/myvtpm --tpm2 --ctrl type=tcp,port=2322 --server type=tcp,port=2321 --flags not-need-init &',
++                'export TPM2TOOLS_TCTI="swtpm:port=2321"',
++                'tpm2_startup -c',
++                'sleep 2',
++                '/etc/init.d/parsec start',
++                'parsec-cli-tests.sh'
++               ]
++
++        for cmd in cmds:
++            status, output = self.target.run(cmd)
++            self.assertEqual(status, 0, msg='\n'.join([cmd, output]))
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2022-05-23 14:09 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-05-23 14:08 [meta-parsec][v2][PATCH 1/3] meta-parsec: Add pkg grps Armin Kuster
+2022-05-23 14:09 ` [meta-parsec][v2][PATCH 2/3] meta-parsec: add build image Armin Kuster
+2022-05-23 14:09 ` [meta-parsec][v2][PATCH 3/3] oeqa: add parsec runtime tests Armin Kuster
+

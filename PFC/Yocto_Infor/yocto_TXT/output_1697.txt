@@ -1,0 +1,109 @@
+* [PATCH yocto-autobuilder-helper] scripts/archive_buildstats.py: copy all buildstats
+@ 2022-06-22 21:12 Randy MacLeod
+  2022-06-23  9:06 ` [yocto] " Richard Purdie
+  0 siblings, 1 reply; 2+ messages in thread
+From: Randy MacLeod @ 2022-06-22 21:12 UTC (permalink / raw)
+  To: yocto
+
+As a first pass, collect all the tmp/buildstats logs
+using 'cp -a', to enable review and graphing of all builds.
+The goal is to understand the trends in the /proc/pressure/{cpu|io}
+data that is now gathered as part of the buildstats system.
+
+Signed-off-by: Aryaman Gupta <Aryaman.Gupta@windriver.com>
+Signed-off-by: Randy MacLeod <Randy.MacLeod@windriver.com>
+---
+ scripts/archive_buildstats.py | 27 +++++++++++++++++++++++++++
+ scripts/run-config            |  1 +
+ 2 files changed, 28 insertions(+)
+ create mode 100755 scripts/archive_buildstats.py
+
+diff --git a/scripts/archive_buildstats.py b/scripts/archive_buildstats.py
+new file mode 100755
+index 0000000..bdbe9f4
+--- /dev/null
++++ b/scripts/archive_buildstats.py
+@@ -0,0 +1,27 @@
++#!/usr/bin/env python3
++#
++# SPDX-License-Identifier: GPL-2.0-only
++#
++
++import os, sys
++
++def usage():
++    print("Usage: " + sys.argv[0] + " <src> <dest> <target>")
++
++def main():
++    if len(sys.argv) != 4:
++        usage()
++        sys.exit()
++
++    builddir = sys.argv[1]
++    dest = sys.argv[2]
++    target = sys.argv[3]
++
++    bsdir = os.path.join(builddir, "tmp/buildstats")
++    directory = os.path.join(dest, target)
++
++    os.system('mkdir -p ' + directory)
++    # cp -a <path-to-worker-buildstats> <directory>
++    os.system('cp -a ' +  builddir + ' ' + directory)
++
++main()
+diff --git a/scripts/run-config b/scripts/run-config
+index 838847a..953977e 100755
+--- a/scripts/run-config
++++ b/scripts/run-config
+@@ -334,6 +334,7 @@ elif args.phase == "finish" and args.stepname == "collect-results":
+         hp.printheader("Running results collection")
+         runcmd([scriptsdir + "/collect-results", args.builddir, args.results_dir, args.target])
+         runcmd([scriptsdir + "/summarize_top_output.py", args.results_dir, args.target])
++        runcmd([scriptsdir + "/archive_buildstats.py", args.builddir, args.results_dir, args.target])
+     sys.exit(0)
+ 
+ if jcfg:
+-- 
+2.32.0
+
+
+
+^ permalink raw reply related	[flat|nested] 2+ messages in thread
+* Re: [yocto] [PATCH yocto-autobuilder-helper] scripts/archive_buildstats.py: copy all buildstats
+  2022-06-22 21:12 [PATCH yocto-autobuilder-helper] scripts/archive_buildstats.py: copy all buildstats Randy MacLeod
+@ 2022-06-23  9:06 ` Richard Purdie
+  0 siblings, 0 replies; 2+ messages in thread
+From: Richard Purdie @ 2022-06-23  9:06 UTC (permalink / raw)
+  To: Randy MacLeod, yocto
+
+On Wed, 2022-06-22 at 17:12 -0400, Randy MacLeod wrote:
+> As a first pass, collect all the tmp/buildstats logs
+> using 'cp -a', to enable review and graphing of all builds.
+> The goal is to understand the trends in the /proc/pressure/{cpu|io}
+> data that is now gathered as part of the buildstats system.
+> 
+> Signed-off-by: Aryaman Gupta <Aryaman.Gupta@windriver.com>
+> Signed-off-by: Randy MacLeod <Randy.MacLeod@windriver.com>
+> ---
+>  scripts/archive_buildstats.py | 27 +++++++++++++++++++++++++++
+>  scripts/run-config            |  1 +
+>  2 files changed, 28 insertions(+)
+>  create mode 100755 scripts/archive_buildstats.py
+
+The NAS couldn't cope with the number of small files these data trees
+contained leading to timeouts. If you want to do something like this
+you'll probably have to create tarball archives of the results.
+
+Cheers,
+
+Richard
+
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2022-06-23  9:06 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-06-22 21:12 [PATCH yocto-autobuilder-helper] scripts/archive_buildstats.py: copy all buildstats Randy MacLeod
+2022-06-23  9:06 ` [yocto] " Richard Purdie
+

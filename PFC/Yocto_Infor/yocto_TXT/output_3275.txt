@@ -1,0 +1,900 @@
+* [PATCH yocto-autobuilder-helper] summarize_top_output.py: add script, use it and publish summary
+@ 2021-06-16  8:43 sakib.sajal
+  2021-06-16 15:41 ` [yocto] " Randy MacLeod
+  2021-06-16 17:33 ` Richard Purdie
+  0 siblings, 2 replies; 5+ messages in thread
+From: sakib.sajal @ 2021-06-16  8:43 UTC (permalink / raw)
+  To: yocto
+
+summarize_top_output.py is used to summarize the top
+output that is captured during autobuilder intermittent
+failures.
+
+Use the script to summarize the host top output and
+publish the summary that is created instead of
+the raw logfile.
+
+Signed-off-by: Sakib Sajal <sakib.sajal@windriver.com>
+---
+ scripts/collect-results              |   2 +-
+ scripts/generate-testresult-index.py |   2 +-
+ scripts/run-config                   |   1 +
+ scripts/summarize_top_output.py      | 132 +++++++++++++++++++++++++++
+ 4 files changed, 135 insertions(+), 2 deletions(-)
+ create mode 100755 scripts/summarize_top_output.py
+
+diff --git a/scripts/collect-results b/scripts/collect-results
+index 7474e36..7178380 100755
+--- a/scripts/collect-results
++++ b/scripts/collect-results
+@@ -19,7 +19,7 @@ if [ -e $WORKDIR/buildhistory ]; then
+ fi
+ 
+ HSFILE=$WORKDIR/tmp/buildstats/*/host_stats
+-d=`date +%Y-%m-%d--%H-%M`
++d="intermittent_failure_host_data"
+ 
+ mkdir -p $DEST/$target/$d
+ 
+diff --git a/scripts/generate-testresult-index.py b/scripts/generate-testresult-index.py
+index 7fdc17c..d85d606 100755
+--- a/scripts/generate-testresult-index.py
++++ b/scripts/generate-testresult-index.py
+@@ -154,7 +154,7 @@ for build in sorted(os.listdir(path), key=keygen, reverse=True):
+     hd = []
+     counter = 0
+     # do we really need the loop?
+-    for p in glob.glob(buildpath + "/*/*/host_stats*top.txt"):
++    for p in glob.glob(buildpath + "/*/*/host_stats*top_summary.txt"):
+         n_split = p.split(build)
+         res = reldir[0:-1] + n_split[1]
+         hd.append((res, str(counter)))
+diff --git a/scripts/run-config b/scripts/run-config
+index 8ed88cf..82de91f 100755
+--- a/scripts/run-config
++++ b/scripts/run-config
+@@ -327,6 +327,7 @@ elif args.phase == "finish" and args.stepname == "collect-results":
+     if args.results_dir:
+         hp.printheader("Running results collection")
+         runcmd([scriptsdir + "/collect-results", args.builddir, args.results_dir, args.target])
++        runcmd([scriptsdir + "/summarize_top_output.py", args.results_dir, args.target])
+     sys.exit(0)
+ 
+ if jcfg:
+diff --git a/scripts/summarize_top_output.py b/scripts/summarize_top_output.py
+new file mode 100755
+index 0000000..0606a34
+--- /dev/null
++++ b/scripts/summarize_top_output.py
+@@ -0,0 +1,132 @@
++#!/usr/bin/env python3
++
++import os, sys, glob
++
++# constants
++top_header = 7
++top_summary = 5
++max_cols = 11
++
++# string substitution to make things easier to read
++subs = {
++    "/home/pokybuild/yocto-worker/" : "~/",
++    "/build/build/tmp/work/core2-32-poky-linux/" : "/.../POKY_32/.../",
++    "/build/build/tmp/work/core2-64-poky-linux/" : "/.../POKY_64/.../",
++    "/recipe-sysroot-native/usr/bin/x86_64-poky-linux/../../libexec/x86_64-poky-linux/gcc/x86_64-poky-linux/" : "/...GCC.../"
++}
++
++def usage():
++    print("Usage: " + sys.argv[0] + " <dest> <target>")
++
++def list_top_outputs(logfile):
++    # top delimiter
++    top_start = "start: top output"
++    top_end = "end: top output"
++
++    # list of top outputs
++    top_outputs = []
++
++    # flag
++    collect = False
++    with open(logfile) as log:
++        top_output = []
++        for line in log:
++            lstrip = line.strip()
++            if collect:
++                if lstrip.startswith(top_end):
++                    collect = False
++                    top_outputs.append(top_output)
++                    top_output = []
++                else:
++                    top_output.append(lstrip)
++            if lstrip.startswith(top_start):
++                collect = True
++                    
++    return top_outputs
++
++def summarize_top(top_outs):
++    summaries = []
++    kernel_summaries = []
++    short_summaries = []
++    for top_out in top_outs:
++        summary = {}
++        kernel_summary = {}
++        short_summary = top_out[:top_summary]
++        for line in top_out[top_header:]:
++            cmd = line.split(maxsplit=max_cols)[-1]
++            # kernel processes
++            if cmd[0] == "[" and cmd[-1] == "]":
++                kproc = cmd[1:-1].split("/")[0]
++                if kproc not in kernel_summary:
++                    kernel_summary[kproc] = 1
++                else:
++                    kernel_summary[kproc] += 1
++                continue
++            cmd_split = cmd.split()
++            prog = cmd_split[0]
++            if prog not in summary:
++                summary[prog] = 1
++            else:
++                summary[prog] += 1
++        summary = dict(sorted(summary.items(), key=lambda item: item[1], reverse=True))
++        kernel_summary = dict(sorted(kernel_summary.items(), key=lambda item: item[1], reverse=True))
++        
++        summaries.append(summary)
++        kernel_summaries.append(kernel_summary)
++        short_summaries.append(short_summary)
++
++    return (short_summaries, summaries, kernel_summaries)
++    
++def summarize_path(path):
++    p = path
++    for k, v in subs.items():
++        p = p.replace(k, v)
++    return p
++
++def write_summary(short_summary, summary, kernel_summary, logfile):
++    dirname = os.path.dirname(logfile)
++    fname = os.path.basename(logfile)
++    report_name = fname.split(".")[0] + "_summary.txt"
++    outfile = os.path.join(dirname, report_name)
++    out = "NOTE: program names have been shortened for better readability.\nSubstitutions are as follows:\n"
++    for k, v in subs.items():
++        out += (v + " = " + k + "\n")
++    out += "\n"
++
++    out += "top was invoked " + str(len(short_summary)) + " times.\n\n"
++
++    for i in range(len(short_summary)):
++        for l in short_summary[i]:
++            out += (l + "\n")
++
++        out += ("\nSummary: " + "\n")
++        for k, v in summary[i].items():
++            if v > 1:
++                r = summarize_path(k)
++                out += (str(v) + "  " + r + "\n")
++        
++        out += ("\nKernel Summary: " + "\n")
++        for k, v in kernel_summary[i].items():
++            if v > 1:
++                r = summarize_path(k)
++                out += (str(v) + "  " + r + "\n")
++        out += ("\n")
++
++    with open(outfile, "w") as of:
++        of.write(out)
++
++def main():
++    if len(sys.argv) != 3:
++        usage()
++        sys.exit()
++        
++    dest = sys.argv[1]
++    target = sys.argv[2]
++    host_data_dir = "intermittent_failure_host_data"
++    directory = os.path.join(dest, target, host_data_dir)
++    for f in glob.glob(directory + "/*_top.txt"):
++        outputs = list_top_outputs(f)
++        short_summary, summary, kernel_summary = summarize_top(outputs)
++        write_summary(short_summary, summary, kernel_summary, f)        
++
++main()
+-- 
+2.25.1
+
+
+^ permalink raw reply related	[flat|nested] 5+ messages in thread
+* Re: [yocto] [PATCH yocto-autobuilder-helper] summarize_top_output.py: add script, use it and publish summary
+  2021-06-16  8:43 [PATCH yocto-autobuilder-helper] summarize_top_output.py: add script, use it and publish summary sakib.sajal
+@ 2021-06-16 15:41 ` Randy MacLeod
+  2021-06-16 17:46   ` sakib.sajal
+  2021-06-16 17:33 ` Richard Purdie
+  1 sibling, 1 reply; 5+ messages in thread
+From: Randy MacLeod @ 2021-06-16 15:41 UTC (permalink / raw)
+  To: yocto, Sakib Sajal
+
+On 2021-06-16 4:43 a.m., sakib.sajal@windriver.com wrote:
+> summarize_top_output.py is used to summarize the top
+> output that is captured during autobuilder intermittent
+> failures.
+> 
+> Use the script to summarize the host top output and
+> publish the summary that is created instead of
+> the raw logfile.
+
+
+Looks good Sakib,
+
+Can you show people what the typical output looks like?
+Is the raw top output still published?
+
+../Randy
+
+
+> 
+> Signed-off-by: Sakib Sajal <sakib.sajal@windriver.com>
+> ---
+>   scripts/collect-results              |   2 +-
+>   scripts/generate-testresult-index.py |   2 +-
+>   scripts/run-config                   |   1 +
+>   scripts/summarize_top_output.py      | 132 +++++++++++++++++++++++++++
+>   4 files changed, 135 insertions(+), 2 deletions(-)
+>   create mode 100755 scripts/summarize_top_output.py
+> 
+> diff --git a/scripts/collect-results b/scripts/collect-results
+> index 7474e36..7178380 100755
+> --- a/scripts/collect-results
+> +++ b/scripts/collect-results
+> @@ -19,7 +19,7 @@ if [ -e $WORKDIR/buildhistory ]; then
+>   fi
+>   
+>   HSFILE=$WORKDIR/tmp/buildstats/*/host_stats
+> -d=`date +%Y-%m-%d--%H-%M`
+> +d="intermittent_failure_host_data"
+>   
+>   mkdir -p $DEST/$target/$d
+>   
+> diff --git a/scripts/generate-testresult-index.py b/scripts/generate-testresult-index.py
+> index 7fdc17c..d85d606 100755
+> --- a/scripts/generate-testresult-index.py
+> +++ b/scripts/generate-testresult-index.py
+> @@ -154,7 +154,7 @@ for build in sorted(os.listdir(path), key=keygen, reverse=True):
+>       hd = []
+>       counter = 0
+>       # do we really need the loop?
+> -    for p in glob.glob(buildpath + "/*/*/host_stats*top.txt"):
+> +    for p in glob.glob(buildpath + "/*/*/host_stats*top_summary.txt"):
+>           n_split = p.split(build)
+>           res = reldir[0:-1] + n_split[1]
+>           hd.append((res, str(counter)))
+> diff --git a/scripts/run-config b/scripts/run-config
+> index 8ed88cf..82de91f 100755
+> --- a/scripts/run-config
+> +++ b/scripts/run-config
+> @@ -327,6 +327,7 @@ elif args.phase == "finish" and args.stepname == "collect-results":
+>       if args.results_dir:
+>           hp.printheader("Running results collection")
+>           runcmd([scriptsdir + "/collect-results", args.builddir, args.results_dir, args.target])
+> +        runcmd([scriptsdir + "/summarize_top_output.py", args.results_dir, args.target])
+>       sys.exit(0)
+>   
+>   if jcfg:
+> diff --git a/scripts/summarize_top_output.py b/scripts/summarize_top_output.py
+> new file mode 100755
+> index 0000000..0606a34
+> --- /dev/null
+> +++ b/scripts/summarize_top_output.py
+> @@ -0,0 +1,132 @@
+> +#!/usr/bin/env python3
+> +
+> +import os, sys, glob
+> +
+> +# constants
+> +top_header = 7
+> +top_summary = 5
+> +max_cols = 11
+> +
+> +# string substitution to make things easier to read
+> +subs = {
+> +    "/home/pokybuild/yocto-worker/" : "~/",
+> +    "/build/build/tmp/work/core2-32-poky-linux/" : "/.../POKY_32/.../",
+> +    "/build/build/tmp/work/core2-64-poky-linux/" : "/.../POKY_64/.../",
+> +    "/recipe-sysroot-native/usr/bin/x86_64-poky-linux/../../libexec/x86_64-poky-linux/gcc/x86_64-poky-linux/" : "/...GCC.../"
+> +}
+> +
+> +def usage():
+> +    print("Usage: " + sys.argv[0] + " <dest> <target>")
+> +
+> +def list_top_outputs(logfile):
+> +    # top delimiter
+> +    top_start = "start: top output"
+> +    top_end = "end: top output"
+> +
+> +    # list of top outputs
+> +    top_outputs = []
+> +
+> +    # flag
+> +    collect = False
+> +    with open(logfile) as log:
+> +        top_output = []
+> +        for line in log:
+> +            lstrip = line.strip()
+> +            if collect:
+> +                if lstrip.startswith(top_end):
+> +                    collect = False
+> +                    top_outputs.append(top_output)
+> +                    top_output = []
+> +                else:
+> +                    top_output.append(lstrip)
+> +            if lstrip.startswith(top_start):
+> +                collect = True
+> +
+> +    return top_outputs
+> +
+> +def summarize_top(top_outs):
+> +    summaries = []
+> +    kernel_summaries = []
+> +    short_summaries = []
+> +    for top_out in top_outs:
+> +        summary = {}
+> +        kernel_summary = {}
+> +        short_summary = top_out[:top_summary]
+> +        for line in top_out[top_header:]:
+> +            cmd = line.split(maxsplit=max_cols)[-1]
+> +            # kernel processes
+> +            if cmd[0] == "[" and cmd[-1] == "]":
+> +                kproc = cmd[1:-1].split("/")[0]
+> +                if kproc not in kernel_summary:
+> +                    kernel_summary[kproc] = 1
+> +                else:
+> +                    kernel_summary[kproc] += 1
+> +                continue
+> +            cmd_split = cmd.split()
+> +            prog = cmd_split[0]
+> +            if prog not in summary:
+> +                summary[prog] = 1
+> +            else:
+> +                summary[prog] += 1
+> +        summary = dict(sorted(summary.items(), key=lambda item: item[1], reverse=True))
+> +        kernel_summary = dict(sorted(kernel_summary.items(), key=lambda item: item[1], reverse=True))
+> +
+> +        summaries.append(summary)
+> +        kernel_summaries.append(kernel_summary)
+> +        short_summaries.append(short_summary)
+> +
+> +    return (short_summaries, summaries, kernel_summaries)
+> +
+> +def summarize_path(path):
+> +    p = path
+> +    for k, v in subs.items():
+> +        p = p.replace(k, v)
+> +    return p
+> +
+> +def write_summary(short_summary, summary, kernel_summary, logfile):
+> +    dirname = os.path.dirname(logfile)
+> +    fname = os.path.basename(logfile)
+> +    report_name = fname.split(".")[0] + "_summary.txt"
+> +    outfile = os.path.join(dirname, report_name)
+> +    out = "NOTE: program names have been shortened for better readability.\nSubstitutions are as follows:\n"
+> +    for k, v in subs.items():
+> +        out += (v + " = " + k + "\n")
+> +    out += "\n"
+> +
+> +    out += "top was invoked " + str(len(short_summary)) + " times.\n\n"
+> +
+> +    for i in range(len(short_summary)):
+> +        for l in short_summary[i]:
+> +            out += (l + "\n")
+> +
+> +        out += ("\nSummary: " + "\n")
+> +        for k, v in summary[i].items():
+> +            if v > 1:
+> +                r = summarize_path(k)
+> +                out += (str(v) + "  " + r + "\n")
+> +
+> +        out += ("\nKernel Summary: " + "\n")
+> +        for k, v in kernel_summary[i].items():
+> +            if v > 1:
+> +                r = summarize_path(k)
+> +                out += (str(v) + "  " + r + "\n")
+> +        out += ("\n")
+> +
+> +    with open(outfile, "w") as of:
+> +        of.write(out)
+> +
+> +def main():
+> +    if len(sys.argv) != 3:
+> +        usage()
+> +        sys.exit()
+> +
+> +    dest = sys.argv[1]
+> +    target = sys.argv[2]
+> +    host_data_dir = "intermittent_failure_host_data"
+> +    directory = os.path.join(dest, target, host_data_dir)
+> +    for f in glob.glob(directory + "/*_top.txt"):
+> +        outputs = list_top_outputs(f)
+> +        short_summary, summary, kernel_summary = summarize_top(outputs)
+> +        write_summary(short_summary, summary, kernel_summary, f)
+> +
+> +main()
+> 
+> 
+> 
+> 
+> 
+
+
+-- 
+# Randy MacLeod
+# Wind River Linux
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] [PATCH yocto-autobuilder-helper] summarize_top_output.py: add script, use it and publish summary
+  2021-06-16  8:43 [PATCH yocto-autobuilder-helper] summarize_top_output.py: add script, use it and publish summary sakib.sajal
+  2021-06-16 15:41 ` [yocto] " Randy MacLeod
+@ 2021-06-16 17:33 ` Richard Purdie
+  2021-06-17 13:22   ` sakib.sajal
+  1 sibling, 1 reply; 5+ messages in thread
+From: Richard Purdie @ 2021-06-16 17:33 UTC (permalink / raw)
+  To: sakib.sajal, yocto
+
+On Wed, 2021-06-16 at 04:43 -0400, sakib.sajal@windriver.com wrote:
+> summarize_top_output.py is used to summarize the top
+> output that is captured during autobuilder intermittent
+> failures.
+> 
+> Use the script to summarize the host top output and
+> publish the summary that is created instead of
+> the raw logfile.
+> 
+> 
+> 
+[...]
+>  if jcfg:
+> diff --git a/scripts/summarize_top_output.py b/scripts/summarize_top_output.py
+> new file mode 100755
+> index 0000000..0606a34
+> --- /dev/null
+> +++ b/scripts/summarize_top_output.py
+> @@ -0,0 +1,132 @@
+> +#!/usr/bin/env python3
+> +
+> +import os, sys, glob
+> +
+> +# constants
+> +top_header = 7
+> +top_summary = 5
+> +max_cols = 11
+> +
+> +# string substitution to make things easier to read
+> +subs = {
+> +    "/home/pokybuild/yocto-worker/" : "~/",
+> +    "/build/build/tmp/work/core2-32-poky-linux/" : "/.../POKY_32/.../",
+> +    "/build/build/tmp/work/core2-64-poky-linux/" : "/.../POKY_64/.../",
+> +    "/recipe-sysroot-native/usr/bin/x86_64-poky-linux/../../libexec/x86_64-poky-linux/gcc/x86_64-poky-linux/" : "/...GCC.../"
+> +}
+
+One quick question - the above assumes an x86 target machine using those two tunes. 
+Should that be wildcarded?
+
+Cheers,
+
+Richard
+
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] [PATCH yocto-autobuilder-helper] summarize_top_output.py: add script, use it and publish summary
+  2021-06-16 15:41 ` [yocto] " Randy MacLeod
+@ 2021-06-16 17:46   ` sakib.sajal
+  0 siblings, 0 replies; 5+ messages in thread
+From: sakib.sajal @ 2021-06-16 17:46 UTC (permalink / raw)
+  To: Randy MacLeod, yocto
+
+
+On 2021-06-16 11:41 a.m., Randy MacLeod wrote:
+> On 2021-06-16 4:43 a.m., sakib.sajal@windriver.com wrote:
+>> summarize_top_output.py is used to summarize the top
+>> output that is captured during autobuilder intermittent
+>> failures.
+>>
+>> Use the script to summarize the host top output and
+>> publish the summary that is created instead of
+>> the raw logfile.
+>
+>
+> Looks good Sakib,
+>
+> Can you show people what the typical output looks like?
+> Is the raw top output still published?
+>
+> ../Randy
+>
+The script goes over the raw logfile (for example, foo.txt) which 
+consists of multiple top outputs and summarizes each top output and 
+writes them to foo_summary.txt
+
+Some improvements that can be made:
+
+1) create a separate file for each top summary, ie, if foo.txt has n top 
+outputs, create foo_summary_[1...n].txt
+
+2) since python3 is used to run many different kinds of jobs, it is 
+difficult to generalize python3 threads. the script can be modified to 
+log all the different jobs run under python3, right now it only counts 
+the processes that are running python3.
+
+Any feedback is welcome!
+
+Sample output:
+
+NOTE: program names have been shortened for better readability.
+Substitutions are as follows:
+~/ = /home/pokybuild/yocto-worker/
+/.../POKY_32/.../ = /build/build/tmp/work/core2-32-poky-linux/
+/.../POKY_64/.../ = /build/build/tmp/work/core2-64-poky-linux/
+/...GCC.../ = 
+/recipe-sysroot-native/usr/bin/x86_64-poky-linux/../../libexec/x86_64-poky-linux/gcc/x86_64-poky-linux/
+
+top was invoked 12 times.
+
+top - 16:51:30 up 4 days, 19:26,  1 user,  load average: 93.84, 57.26, 48.58
+Tasks: 1084 total,  80 running, 664 sleeping,   0 stopped,   0 zombie
+%Cpu(s):  2.1 us,  2.0 sy,  9.8 ni, 83.1 id,  2.9 wa,  0.0 hi, 0.0 si,  
+0.0 st
+KiB Mem : 13192559+total,  5571436 free, 14307780 used, 11204637+buff/cache
+KiB Swap:  8388604 total,  8239384 free,   149220 used. 11455193+avail Mem
+
+Summary:
+85  /bin/sh
+41  python3
+39  /bin/bash
+30  x86_64-poky-linux-g++
+29  make
+16 ~/meta-oe/.../POKY_64/.../cpprest/2.10.18-r0/...GCC.../11.1.0/cc1plus
+16 ~/meta-oe/.../POKY_64/.../libvpx/1.8.2-r0/...GCC.../11.1.0/cc1plus
+16  ~/meta-oe/.../POKY_64/.../libvpx/1.8.2-r0/...GCC.../11.1.0/as
+16 
+~/meta-oe/.../POKY_64/.../cpprest/2.10.18-r0/recipe-sysroot-native/usr/bin/x86_64-poky-linux/x86_64-poky-linux-g++
+16 ~/meta-oe/.../POKY_64/.../cpprest/2.10.18-r0/...GCC.../11.1.0/as
+14 ~/meta-oe/.../POKY_64/.../rtorrent/0.9.8-r0/...GCC.../11.1.0/cc1plus
+14 ~/meta-oe/.../POKY_64/.../rtorrent/0.9.8-r0/...GCC.../11.1.0/as
+13 ~/meta-oe/.../POKY_64/.../vulkan-cts/1.2.6.0-r0/...GCC.../11.1.0/cc1plus
+13 ~/meta-oe/.../POKY_64/.../vulkan-cts/1.2.6.0-r0/...GCC.../11.1.0/as
+13 
+~/meta-oe/.../POKY_64/.../vulkan-cts/1.2.6.0-r0/recipe-sysroot-native/usr/bin/x86_64-poky-linux/x86_64-poky-linux-g++
+11  x86_64-poky-linux-gcc
+10 ~/meta-oe/.../POKY_64/.../dovecot/2.3.14-r0/...GCC.../11.1.0/cc1
+10 
+~/meta-oe/.../POKY_64/.../fluentbit/1.3.5-r0/recipe-sysroot-native/usr/bin/x86_64-poky-linux/x86_64-poky-linux-gcc
+10 ~/meta-oe/.../POKY_64/.../dovecot/2.3.14-r0/...GCC.../11.1.0/as
+7 ~/meta-oe/.../POKY_64/.../fluentbit/1.3.5-r0/...GCC.../11.1.0/cc1
+7 ~/meta-oe/.../POKY_64/.../fluentbit/1.3.5-r0/...GCC.../11.1.0/as
+4  /usr/bin/python3
+3  cmake
+2 ~/meta-oe/.../POKY_64/.../vulkan-cts/1.2.6.0-r0/...GCC.../11.1.0/ar
+2  sh
+2  /lib/systemd/systemd
+2  (sd-pam)
+2  ninja
+2  bitbake-server
+2 
+~/meta-oe/.../POKY_64/.../vulkan-cts/1.2.6.0-r0/recipe-sysroot-native/usr/bin/x86_64-poky-linux/x86_64-poky-linux-gcc-ar
+
+Kernel Summary:
+293  kworker
+56  ksoftirqd
+56  migration
+56  watchdog
+56  cpuhp
+3  jbd2
+3  ext4-rsv-conver
+2  kdmflush
+2  bioset
+....
+
+Sakib
+
+>
+>>
+>> Signed-off-by: Sakib Sajal <sakib.sajal@windriver.com>
+>> ---
+>>   scripts/collect-results              |   2 +-
+>>   scripts/generate-testresult-index.py |   2 +-
+>>   scripts/run-config                   |   1 +
+>>   scripts/summarize_top_output.py      | 132 +++++++++++++++++++++++++++
+>>   4 files changed, 135 insertions(+), 2 deletions(-)
+>>   create mode 100755 scripts/summarize_top_output.py
+>>
+>> diff --git a/scripts/collect-results b/scripts/collect-results
+>> index 7474e36..7178380 100755
+>> --- a/scripts/collect-results
+>> +++ b/scripts/collect-results
+>> @@ -19,7 +19,7 @@ if [ -e $WORKDIR/buildhistory ]; then
+>>   fi
+>>     HSFILE=$WORKDIR/tmp/buildstats/*/host_stats
+>> -d=`date +%Y-%m-%d--%H-%M`
+>> +d="intermittent_failure_host_data"
+>>     mkdir -p $DEST/$target/$d
+>>   diff --git a/scripts/generate-testresult-index.py 
+>> b/scripts/generate-testresult-index.py
+>> index 7fdc17c..d85d606 100755
+>> --- a/scripts/generate-testresult-index.py
+>> +++ b/scripts/generate-testresult-index.py
+>> @@ -154,7 +154,7 @@ for build in sorted(os.listdir(path), key=keygen, 
+>> reverse=True):
+>>       hd = []
+>>       counter = 0
+>>       # do we really need the loop?
+>> -    for p in glob.glob(buildpath + "/*/*/host_stats*top.txt"):
+>> +    for p in glob.glob(buildpath + "/*/*/host_stats*top_summary.txt"):
+>>           n_split = p.split(build)
+>>           res = reldir[0:-1] + n_split[1]
+>>           hd.append((res, str(counter)))
+>> diff --git a/scripts/run-config b/scripts/run-config
+>> index 8ed88cf..82de91f 100755
+>> --- a/scripts/run-config
+>> +++ b/scripts/run-config
+>> @@ -327,6 +327,7 @@ elif args.phase == "finish" and args.stepname == 
+>> "collect-results":
+>>       if args.results_dir:
+>>           hp.printheader("Running results collection")
+>>           runcmd([scriptsdir + "/collect-results", args.builddir, 
+>> args.results_dir, args.target])
+>> +        runcmd([scriptsdir + "/summarize_top_output.py", 
+>> args.results_dir, args.target])
+>>       sys.exit(0)
+>>     if jcfg:
+>> diff --git a/scripts/summarize_top_output.py 
+>> b/scripts/summarize_top_output.py
+>> new file mode 100755
+>> index 0000000..0606a34
+>> --- /dev/null
+>> +++ b/scripts/summarize_top_output.py
+>> @@ -0,0 +1,132 @@
+>> +#!/usr/bin/env python3
+>> +
+>> +import os, sys, glob
+>> +
+>> +# constants
+>> +top_header = 7
+>> +top_summary = 5
+>> +max_cols = 11
+>> +
+>> +# string substitution to make things easier to read
+>> +subs = {
+>> +    "/home/pokybuild/yocto-worker/" : "~/",
+>> +    "/build/build/tmp/work/core2-32-poky-linux/" : "/.../POKY_32/.../",
+>> +    "/build/build/tmp/work/core2-64-poky-linux/" : "/.../POKY_64/.../",
+>> + 
+>> "/recipe-sysroot-native/usr/bin/x86_64-poky-linux/../../libexec/x86_64-poky-linux/gcc/x86_64-poky-linux/" 
+>> : "/...GCC.../"
+>> +}
+>> +
+>> +def usage():
+>> +    print("Usage: " + sys.argv[0] + " <dest> <target>")
+>> +
+>> +def list_top_outputs(logfile):
+>> +    # top delimiter
+>> +    top_start = "start: top output"
+>> +    top_end = "end: top output"
+>> +
+>> +    # list of top outputs
+>> +    top_outputs = []
+>> +
+>> +    # flag
+>> +    collect = False
+>> +    with open(logfile) as log:
+>> +        top_output = []
+>> +        for line in log:
+>> +            lstrip = line.strip()
+>> +            if collect:
+>> +                if lstrip.startswith(top_end):
+>> +                    collect = False
+>> +                    top_outputs.append(top_output)
+>> +                    top_output = []
+>> +                else:
+>> +                    top_output.append(lstrip)
+>> +            if lstrip.startswith(top_start):
+>> +                collect = True
+>> +
+>> +    return top_outputs
+>> +
+>> +def summarize_top(top_outs):
+>> +    summaries = []
+>> +    kernel_summaries = []
+>> +    short_summaries = []
+>> +    for top_out in top_outs:
+>> +        summary = {}
+>> +        kernel_summary = {}
+>> +        short_summary = top_out[:top_summary]
+>> +        for line in top_out[top_header:]:
+>> +            cmd = line.split(maxsplit=max_cols)[-1]
+>> +            # kernel processes
+>> +            if cmd[0] == "[" and cmd[-1] == "]":
+>> +                kproc = cmd[1:-1].split("/")[0]
+>> +                if kproc not in kernel_summary:
+>> +                    kernel_summary[kproc] = 1
+>> +                else:
+>> +                    kernel_summary[kproc] += 1
+>> +                continue
+>> +            cmd_split = cmd.split()
+>> +            prog = cmd_split[0]
+>> +            if prog not in summary:
+>> +                summary[prog] = 1
+>> +            else:
+>> +                summary[prog] += 1
+>> +        summary = dict(sorted(summary.items(), key=lambda item: 
+>> item[1], reverse=True))
+>> +        kernel_summary = dict(sorted(kernel_summary.items(), 
+>> key=lambda item: item[1], reverse=True))
+>> +
+>> +        summaries.append(summary)
+>> +        kernel_summaries.append(kernel_summary)
+>> +        short_summaries.append(short_summary)
+>> +
+>> +    return (short_summaries, summaries, kernel_summaries)
+>> +
+>> +def summarize_path(path):
+>> +    p = path
+>> +    for k, v in subs.items():
+>> +        p = p.replace(k, v)
+>> +    return p
+>> +
+>> +def write_summary(short_summary, summary, kernel_summary, logfile):
+>> +    dirname = os.path.dirname(logfile)
+>> +    fname = os.path.basename(logfile)
+>> +    report_name = fname.split(".")[0] + "_summary.txt"
+>> +    outfile = os.path.join(dirname, report_name)
+>> +    out = "NOTE: program names have been shortened for better 
+>> readability.\nSubstitutions are as follows:\n"
+>> +    for k, v in subs.items():
+>> +        out += (v + " = " + k + "\n")
+>> +    out += "\n"
+>> +
+>> +    out += "top was invoked " + str(len(short_summary)) + " times.\n\n"
+>> +
+>> +    for i in range(len(short_summary)):
+>> +        for l in short_summary[i]:
+>> +            out += (l + "\n")
+>> +
+>> +        out += ("\nSummary: " + "\n")
+>> +        for k, v in summary[i].items():
+>> +            if v > 1:
+>> +                r = summarize_path(k)
+>> +                out += (str(v) + "  " + r + "\n")
+>> +
+>> +        out += ("\nKernel Summary: " + "\n")
+>> +        for k, v in kernel_summary[i].items():
+>> +            if v > 1:
+>> +                r = summarize_path(k)
+>> +                out += (str(v) + "  " + r + "\n")
+>> +        out += ("\n")
+>> +
+>> +    with open(outfile, "w") as of:
+>> +        of.write(out)
+>> +
+>> +def main():
+>> +    if len(sys.argv) != 3:
+>> +        usage()
+>> +        sys.exit()
+>> +
+>> +    dest = sys.argv[1]
+>> +    target = sys.argv[2]
+>> +    host_data_dir = "intermittent_failure_host_data"
+>> +    directory = os.path.join(dest, target, host_data_dir)
+>> +    for f in glob.glob(directory + "/*_top.txt"):
+>> +        outputs = list_top_outputs(f)
+>> +        short_summary, summary, kernel_summary = summarize_top(outputs)
+>> +        write_summary(short_summary, summary, kernel_summary, f)
+>> +
+>> +main()
+>>
+>>
+>>
+>> 
+>>
+>
+>
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] [PATCH yocto-autobuilder-helper] summarize_top_output.py: add script, use it and publish summary
+  2021-06-16 17:33 ` Richard Purdie
+@ 2021-06-17 13:22   ` sakib.sajal
+  0 siblings, 0 replies; 5+ messages in thread
+From: sakib.sajal @ 2021-06-17 13:22 UTC (permalink / raw)
+  To: Richard Purdie, yocto
+
+
+On 2021-06-16 1:33 p.m., Richard Purdie wrote:
+> [Please note: This e-mail is from an EXTERNAL e-mail address]
+>
+> On Wed, 2021-06-16 at 04:43 -0400, sakib.sajal@windriver.com wrote:
+>> summarize_top_output.py is used to summarize the top
+>> output that is captured during autobuilder intermittent
+>> failures.
+>>
+>> Use the script to summarize the host top output and
+>> publish the summary that is created instead of
+>> the raw logfile.
+>>
+>>
+>>
+> [...]
+>>   if jcfg:
+>> diff --git a/scripts/summarize_top_output.py b/scripts/summarize_top_output.py
+>> new file mode 100755
+>> index 0000000..0606a34
+>> --- /dev/null
+>> +++ b/scripts/summarize_top_output.py
+>> @@ -0,0 +1,132 @@
+>> +#!/usr/bin/env python3
+>> +
+>> +import os, sys, glob
+>> +
+>> +# constants
+>> +top_header = 7
+>> +top_summary = 5
+>> +max_cols = 11
+>> +
+>> +# string substitution to make things easier to read
+>> +subs = {
+>> +    "/home/pokybuild/yocto-worker/" : "~/",
+>> +    "/build/build/tmp/work/core2-32-poky-linux/" : "/.../POKY_32/.../",
+>> +    "/build/build/tmp/work/core2-64-poky-linux/" : "/.../POKY_64/.../",
+>> +    "/recipe-sysroot-native/usr/bin/x86_64-poky-linux/../../libexec/x86_64-poky-linux/gcc/x86_64-poky-linux/" : "/...GCC.../"
+>> +}
+> One quick question - the above assumes an x86 target machine using those two tunes.
+> Should that be wildcarded?
+>
+> Cheers,
+>
+> Richard
+
+Yes it should be. We've looked at a number of logs and I will send a V2 
+with wild-carding for the cross-compiler paths.
+
+After the V2, I plan on submitting patches for the following in roughly 
+the presented order:
+
+1) any process that is listed once (singleton) is not reported in the 
+summary, but we are planning to make exceptions for "special" commands 
+such as "rm" and "tar"
+
+2) i noticed some zombie processes and it might be worthwhile to report 
+them. Right now they are not indicated in the summary. Should we report 
+all zombies or ignore the singletons?
+
+For example I'd collapse [Parser-31], [Parser-32] into [Parser-N]
+
+
+3) It would be nice to specify other builds going on and the top level 
+directory
+
+4) currently top does not show PPID, should we include the information 
+in the output? This is useful for more context in the raw logfile.
+
+5) show top 5 or 10 virtual memory users
+
+
+ From the yp-ab index page, there are no logs for arm host. I will run a 
+build and make sure the script work well there as well.
+
+Any ideas on why the arm host builds are not being shown on the index page?
+
+Sakib
+
+>
+>
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+end of thread, other threads:[~2021-06-17 13:22 UTC | newest]
+
+Thread overview: 5+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-06-16  8:43 [PATCH yocto-autobuilder-helper] summarize_top_output.py: add script, use it and publish summary sakib.sajal
+2021-06-16 15:41 ` [yocto] " Randy MacLeod
+2021-06-16 17:46   ` sakib.sajal
+2021-06-16 17:33 ` Richard Purdie
+2021-06-17 13:22   ` sakib.sajal
+

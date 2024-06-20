@@ -1,0 +1,185 @@
+* qemu: Enable guest access to the internet
+@ 2022-03-19  0:13 Manuel Wagesreither
+  2022-03-19  7:43 ` AW: [yocto] " Matthias Klein
+  0 siblings, 1 reply; 4+ messages in thread
+From: Manuel Wagesreither @ 2022-03-19  0:13 UTC (permalink / raw)
+  To: yocto
+
+Hi all,
+
+I would like to configure my host to allow the yocto-built qemu guest access the internet. I'm running qemu with kvm virtualization and slirp, and according to [1] it should just work. I'd like to find out why it doesn't.
+
+[1] https://www.linux-kvm.org/page/Networking#User_Networking
+
+Here's the current situation:
+
+* The guest has ip 10.0.2.15 and can ping my host with `ping 10.0.2.2`.
+* The host has no ip 10.0.0.0/16.
+* The guest cannot ping my hosts only ipv4 interface (besides lo) `ping 192.168.178.24`.
+* The guest cannot ping devices in the same LAN as my host: `ping 192.168.178.101`.
+* The host has sysctl configured like so:
+
+    net.ipv4.conf.all.accept_source_route = 1
+    net.ipv4.conf.all.send_redirects = 1
+    net.ipv4.ip_forward = 1
+    net.ipv6.conf.all.accept_source_route = 1
+    net.ipv6.conf.all.forwarding = 1
+
+* The hosts routing table:
+
+    Destination     Gateway         Genmask         Flags Metric Ref    Use Iface
+    0.0.0.0         192.168.178.1   0.0.0.0         UG    600    0        0 wlp3s0
+    169.254.0.0     0.0.0.0         255.255.0.0     U     1000   0        0 wlp3s0
+    192.168.178.0   0.0.0.0         255.255.255.0   U     600    0        0 wlp3s0
+
+* runqemu starts qemu with hostfwd=tcp::2222-:22. That is, qemu is instructed to on the host listen on port 2222 and forward packets to port 22 of the guest.
+* From the host I can ssh into the guest with `ssh root@localhost -p2222`.
+
+When the ssh connection is up, `netstat -tupen` on the host prints
+
+    Proto Recv-Q Send-Q Local Address           Foreign Address         State       User       Inode      PID/Program name
+    tcp        0      0 127.0.0.1:2222          127.0.0.1:37548         ESTABLISHED 1000       34788      2301/qemu-system-x8 
+    tcp        0      0 127.0.0.1:37548         127.0.0.1:2222          ESTABLISHED 1000       40091      2331/ssh
+
+`netstat -tuen` inside the guest prints
+
+    Proto Recv-Q Send-Q Local Address           Foreign Address         State       
+    tcp        0      0 ::ffff:10.0.2.15:22     ::ffff:10.0.2.2:37548   ESTABLISHED
+
+
+Has anyone any ideas?
+
+Thanks, regards,
+Manuel
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* AW: [yocto] qemu: Enable guest access to the internet
+  2022-03-19  0:13 qemu: Enable guest access to the internet Manuel Wagesreither
+@ 2022-03-19  7:43 ` Matthias Klein
+  2022-03-19  8:30   ` Manuel Wagesreither
+  0 siblings, 1 reply; 4+ messages in thread
+From: Matthias Klein @ 2022-03-19  7:43 UTC (permalink / raw)
+  To: ManWag, yocto
+
+Hello Manuel,
+
+the last time I tried, I had to set the IP 192.168.7.2 and the gateway 192.168.7.1 in the guest.
+
+Then everything worked through the tap device.
+
+Best regards,
+Matthias
+
+-----Ursprüngliche Nachricht-----
+Von: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org> Im Auftrag von Manuel Wagesreither via lists.yoctoproject.org
+Gesendet: Samstag, 19. März 2022 01:13
+An: yocto@lists.yoctoproject.org
+Betreff: [yocto] qemu: Enable guest access to the internet
+
+Hi all,
+
+I would like to configure my host to allow the yocto-built qemu guest access the internet. I'm running qemu with kvm virtualization and slirp, and according to [1] it should just work. I'd like to find out why it doesn't.
+
+[1] https://www.linux-kvm.org/page/Networking#User_Networking
+
+Here's the current situation:
+
+* The guest has ip 10.0.2.15 and can ping my host with `ping 10.0.2.2`.
+* The host has no ip 10.0.0.0/16.
+* The guest cannot ping my hosts only ipv4 interface (besides lo) `ping 192.168.178.24`.
+* The guest cannot ping devices in the same LAN as my host: `ping 192.168.178.101`.
+* The host has sysctl configured like so:
+
+    net.ipv4.conf.all.accept_source_route = 1
+    net.ipv4.conf.all.send_redirects = 1
+    net.ipv4.ip_forward = 1
+    net.ipv6.conf.all.accept_source_route = 1
+    net.ipv6.conf.all.forwarding = 1
+
+* The hosts routing table:
+
+    Destination     Gateway         Genmask         Flags Metric Ref    Use Iface
+    0.0.0.0         192.168.178.1   0.0.0.0         UG    600    0        0 wlp3s0
+    169.254.0.0     0.0.0.0         255.255.0.0     U     1000   0        0 wlp3s0
+    192.168.178.0   0.0.0.0         255.255.255.0   U     600    0        0 wlp3s0
+
+* runqemu starts qemu with hostfwd=tcp::2222-:22. That is, qemu is instructed to on the host listen on port 2222 and forward packets to port 22 of the guest.
+* From the host I can ssh into the guest with `ssh root@localhost -p2222`.
+
+When the ssh connection is up, `netstat -tupen` on the host prints
+
+    Proto Recv-Q Send-Q Local Address           Foreign Address         State       User       Inode      PID/Program name
+    tcp        0      0 127.0.0.1:2222          127.0.0.1:37548         ESTABLISHED 1000       34788      2301/qemu-system-x8 
+    tcp        0      0 127.0.0.1:37548         127.0.0.1:2222          ESTABLISHED 1000       40091      2331/ssh
+
+`netstat -tuen` inside the guest prints
+
+    Proto Recv-Q Send-Q Local Address           Foreign Address         State       
+    tcp        0      0 ::ffff:10.0.2.15:22     ::ffff:10.0.2.2:37548   ESTABLISHED
+
+
+Has anyone any ideas?
+
+Thanks, regards,
+Manuel
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] qemu: Enable guest access to the internet
+  2022-03-19  7:43 ` AW: [yocto] " Matthias Klein
+@ 2022-03-19  8:30   ` Manuel Wagesreither
+       [not found]     ` <e8a3861080c96ef49272fd35680654d7c79ab57b.camel@linuxfoundation.org>
+  0 siblings, 1 reply; 4+ messages in thread
+From: Manuel Wagesreither @ 2022-03-19  8:30 UTC (permalink / raw)
+  To: Matthias Klein, yocto
+
+Hi Matthias,
+
+Am Sa, 19. Mär 2022, um 08:43, schrieb Matthias Klein:
+> Then everything worked through the tap device.
+
+Please note I'd like to use SLIRP instead of TAP as TAP needs root on the host.
+
+But I guess I could just try it for once, just to see if it works...
+
+Regards,
+Manuel
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] qemu: Enable guest access to the internet
+       [not found]     ` <e8a3861080c96ef49272fd35680654d7c79ab57b.camel@linuxfoundation.org>
+@ 2022-03-20 17:28       ` Manuel Wagesreither
+  0 siblings, 0 replies; 4+ messages in thread
+From: Manuel Wagesreither @ 2022-03-20 17:28 UTC (permalink / raw)
+  To: Richard Purdie, yocto
+
+Hi Richard,
+
+Am Sa, 19. Mär 2022, um 13:00, schrieb Richard Purdie:
+> SLIRP only allows specific ports and will not work for general internet
+> connectivity. It can be done without root but the downside is it isn't as
+> powerful. TAP would allow the guest internet access but needs to be setup in
+> advance (using the gen-tapdevs script) or for there to be sudo access to setup
+> what is needed.
+
+I hoped I could SLIRP for general internet connectivity to work by enabling NAT on the host. If I recall correctly, I could see the pings I sent from inside the qemu guest to 10.0.2.2 show up on my host, hence I assumed there is a chance. (I checked with wireguard.) With systemd-networkd NAT seems to be quite easy to set up: [1].
+
+    [1] https://www.freedesktop.org/software/systemd/man/systemd.network.html#IPMasquerade=
+
+Regards,
+Manuel
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+end of thread, other threads:[~2022-03-20 17:29 UTC | newest]
+
+Thread overview: 4+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-03-19  0:13 qemu: Enable guest access to the internet Manuel Wagesreither
+2022-03-19  7:43 ` AW: [yocto] " Matthias Klein
+2022-03-19  8:30   ` Manuel Wagesreither
+     [not found]     ` <e8a3861080c96ef49272fd35680654d7c79ab57b.camel@linuxfoundation.org>
+2022-03-20 17:28       ` Manuel Wagesreither
+

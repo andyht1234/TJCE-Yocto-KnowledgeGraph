@@ -1,0 +1,262 @@
+* How to insure SRCREV is consistent with PV
+@ 2022-08-09  9:00 Philippe Midol-Monnet
+  2022-08-09  9:26 ` [yocto] " Martin Jansa
+  0 siblings, 1 reply; 4+ messages in thread
+From: Philippe Midol-Monnet @ 2022-08-09  9:00 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 349 bytes --]
+
+Hi
+
+Since the last version of bibake it looks like SRCREV must be set with a
+SHA1 in order to fetch source from a git repository. We previously set it
+with a tag corresponding to PV.
+Manually retrieving the sha1 of the commit of a tag can easily lead to
+mistakes.
+
+Is there a way to ensure that the SRCREV is consistent with  PV?
+
+Regards
+
+Philippe
+
+[-- Attachment #2: Type: text/html, Size: 494 bytes --]
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] How to insure SRCREV is consistent with PV
+  2022-08-09  9:00 How to insure SRCREV is consistent with PV Philippe Midol-Monnet
+@ 2022-08-09  9:26 ` Martin Jansa
+  2022-08-10 14:16   ` Philippe Midol-Monnet
+  0 siblings, 1 reply; 4+ messages in thread
+From: Martin Jansa @ 2022-08-09  9:26 UTC (permalink / raw)
+  To: Philippe Midol-Monnet; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1813 bytes --]
+
+In webOS we use do_unpack postinst which checks that the SRCREV matches
+with the expected tag name and that the tag is annotated, see
+https://github.com/webosose/meta-webosose/blob/master/meta-webos/classes/webos_enhanced_submissions.bbclass#L117
+
+Then for our own components (mostly using CMake) we also pass the version
+from the recipe into CMake:
+https://github.com/webosose/meta-webosose/blob/master/meta-webos/classes/webos_cmake.bbclass#L30
+which is then compared with the version inside the component source during
+the build:
+https://github.com/webosose/cmake-modules-webos/blob/c3a5d821d1723c89936eaca82dc6d15605ad45ee/webOS/webOS.cmake#L530
+so you cannot claim different version even if you tag matches it.
+
+It's a bit more complicated, because we use WEBOS_VERSION variable which is
+then split into PV (VERSION + SUBMISSION) and SRCREV,
+but with enforced consistency across all our components this worked quite
+well.
+
+Cheers,
+
+On Tue, Aug 9, 2022 at 11:00 AM Philippe Midol-Monnet <
+philippe.midol-monnet@easymile.com> wrote:
+
+> Hi
+>
+> Since the last version of bibake it looks like SRCREV must be set with a
+> SHA1 in order to fetch source from a git repository. We previously set it
+> with a tag corresponding to PV.
+> Manually retrieving the sha1 of the commit of a tag can easily lead to
+> mistakes.
+>
+> Is there a way to ensure that the SRCREV is consistent with  PV?
+>
+> Regards
+>
+> Philippe
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#57812):
+> https://lists.yoctoproject.org/g/yocto/message/57812
+> Mute This Topic: https://lists.yoctoproject.org/mt/92911220/3617156
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> Martin.Jansa@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 3193 bytes --]
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] How to insure SRCREV is consistent with PV
+  2022-08-09  9:26 ` [yocto] " Martin Jansa
+@ 2022-08-10 14:16   ` Philippe Midol-Monnet
+  2022-08-10 14:32     ` Martin Jansa
+  0 siblings, 1 reply; 4+ messages in thread
+From: Philippe Midol-Monnet @ 2022-08-10 14:16 UTC (permalink / raw)
+  To: Martin Jansa; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2091 bytes --]
+
+Hello
+
+Thanks for your answer.
+
+Reading your code, I wonder why you need to do a fetch, it looks very
+resource consuming.
+
+Philippe
+
+On Tue, 9 Aug 2022 at 11:27, Martin Jansa <martin.jansa@gmail.com> wrote:
+
+> In webOS we use do_unpack postinst which checks that the SRCREV matches
+> with the expected tag name and that the tag is annotated, see
+>
+> https://github.com/webosose/meta-webosose/blob/master/meta-webos/classes/webos_enhanced_submissions.bbclass#L117
+>
+> Then for our own components (mostly using CMake) we also pass the version
+> from the recipe into CMake:
+>
+> https://github.com/webosose/meta-webosose/blob/master/meta-webos/classes/webos_cmake.bbclass#L30
+> which is then compared with the version inside the component source during
+> the build:
+>
+> https://github.com/webosose/cmake-modules-webos/blob/c3a5d821d1723c89936eaca82dc6d15605ad45ee/webOS/webOS.cmake#L530
+> so you cannot claim different version even if you tag matches it.
+>
+> It's a bit more complicated, because we use WEBOS_VERSION variable which
+> is then split into PV (VERSION + SUBMISSION) and SRCREV,
+> but with enforced consistency across all our components this worked quite
+> well.
+>
+> Cheers,
+>
+> On Tue, Aug 9, 2022 at 11:00 AM Philippe Midol-Monnet <
+> philippe.midol-monnet@easymile.com> wrote:
+>
+>> Hi
+>>
+>> Since the last version of bibake it looks like SRCREV must be set with a
+>> SHA1 in order to fetch source from a git repository. We previously set it
+>> with a tag corresponding to PV.
+>> Manually retrieving the sha1 of the commit of a tag can easily lead to
+>> mistakes.
+>>
+>> Is there a way to ensure that the SRCREV is consistent with  PV?
+>>
+>> Regards
+>>
+>> Philippe
+>>
+>> -=-=-=-=-=-=-=-=-=-=-=-
+>> Links: You receive all messages sent to this group.
+>> View/Reply Online (#57812):
+>> https://lists.yoctoproject.org/g/yocto/message/57812
+>> Mute This Topic: https://lists.yoctoproject.org/mt/92911220/3617156
+>> Group Owner: yocto+owner@lists.yoctoproject.org
+>> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+>> Martin.Jansa@gmail.com]
+>> -=-=-=-=-=-=-=-=-=-=-=-
+>>
+>>
+
+[-- Attachment #2: Type: text/html, Size: 3838 bytes --]
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] How to insure SRCREV is consistent with PV
+  2022-08-10 14:16   ` Philippe Midol-Monnet
+@ 2022-08-10 14:32     ` Martin Jansa
+  0 siblings, 0 replies; 4+ messages in thread
+From: Martin Jansa @ 2022-08-10 14:32 UTC (permalink / raw)
+  To: Philippe Midol-Monnet; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2864 bytes --]
+
+Hello,
+
+the fetch is still executed in do_fetch task (and uses MIRROR/PREMIRROR
+etc), maybe you mean the 2nd fetch when the tag doesn't exist in specified
+branch added here:
+https://github.com/openwebos/meta-webos/commit/bb59814990619065be5dcdbdeaa469e8fb2b8213
+and that's executed only when needed (in case the tag WEBOS_VERSION points
+to was pushed to repo, before the branch was created - at least that was
+the case almost 10 years ago, there is longer history in old
+openwebos/meta-webos repo:
+https://github.com/openwebos/meta-webos/commits/master/classes/webos_enhanced_submissions.bbclass
+
+Cheers,
+
+On Wed, Aug 10, 2022 at 4:16 PM Philippe Midol-Monnet <
+philippe.midol-monnet@easymile.com> wrote:
+
+> Hello
+>
+> Thanks for your answer.
+>
+> Reading your code, I wonder why you need to do a fetch, it looks very
+> resource consuming.
+>
+> Philippe
+>
+> On Tue, 9 Aug 2022 at 11:27, Martin Jansa <martin.jansa@gmail.com> wrote:
+>
+>> In webOS we use do_unpack postinst which checks that the SRCREV matches
+>> with the expected tag name and that the tag is annotated, see
+>>
+>> https://github.com/webosose/meta-webosose/blob/master/meta-webos/classes/webos_enhanced_submissions.bbclass#L117
+>>
+>> Then for our own components (mostly using CMake) we also pass the version
+>> from the recipe into CMake:
+>>
+>> https://github.com/webosose/meta-webosose/blob/master/meta-webos/classes/webos_cmake.bbclass#L30
+>> which is then compared with the version inside the component source
+>> during the build:
+>>
+>> https://github.com/webosose/cmake-modules-webos/blob/c3a5d821d1723c89936eaca82dc6d15605ad45ee/webOS/webOS.cmake#L530
+>> so you cannot claim different version even if you tag matches it.
+>>
+>> It's a bit more complicated, because we use WEBOS_VERSION variable which
+>> is then split into PV (VERSION + SUBMISSION) and SRCREV,
+>> but with enforced consistency across all our components this worked quite
+>> well.
+>>
+>> Cheers,
+>>
+>> On Tue, Aug 9, 2022 at 11:00 AM Philippe Midol-Monnet <
+>> philippe.midol-monnet@easymile.com> wrote:
+>>
+>>> Hi
+>>>
+>>> Since the last version of bibake it looks like SRCREV must be set with a
+>>> SHA1 in order to fetch source from a git repository. We previously set it
+>>> with a tag corresponding to PV.
+>>> Manually retrieving the sha1 of the commit of a tag can easily lead to
+>>> mistakes.
+>>>
+>>> Is there a way to ensure that the SRCREV is consistent with  PV?
+>>>
+>>> Regards
+>>>
+>>> Philippe
+>>>
+>>> -=-=-=-=-=-=-=-=-=-=-=-
+>>> Links: You receive all messages sent to this group.
+>>> View/Reply Online (#57812):
+>>> https://lists.yoctoproject.org/g/yocto/message/57812
+>>> Mute This Topic: https://lists.yoctoproject.org/mt/92911220/3617156
+>>> Group Owner: yocto+owner@lists.yoctoproject.org
+>>> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+>>> Martin.Jansa@gmail.com]
+>>> -=-=-=-=-=-=-=-=-=-=-=-
+>>>
+>>>
+
+[-- Attachment #2: Type: text/html, Size: 5161 bytes --]
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+end of thread, other threads:[~2022-08-10 14:32 UTC | newest]
+
+Thread overview: 4+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-08-09  9:00 How to insure SRCREV is consistent with PV Philippe Midol-Monnet
+2022-08-09  9:26 ` [yocto] " Martin Jansa
+2022-08-10 14:16   ` Philippe Midol-Monnet
+2022-08-10 14:32     ` Martin Jansa
+

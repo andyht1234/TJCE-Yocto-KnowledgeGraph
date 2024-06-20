@@ -1,0 +1,105 @@
+* Documentation: How to build multiple packages from one source repository
+@ 2023-09-14 11:57 David Daniel
+  2023-09-14 12:01 ` [yocto] " Alexander Kanavin
+  0 siblings, 1 reply; 3+ messages in thread
+From: David Daniel @ 2023-09-14 11:57 UTC (permalink / raw)
+  To: yocto
+
+Hi everybody
+
+I am a newcomer currently trying to figure out, how I can build a
+library and a binary from one source repository in one recipe. The
+reason for the "one recipe" is that both, the library and the binary
+come from the same source repository (OpenBLT). The problem is, that
+the project is split up into different parts, whereas the binary used
+on the target depends on the library, which is a separate CMake
+project.
+So this means, I need to run two different builds, two configures, two
+builds and two deployments on top of one source repository.
+Neither using the search function on the project documentation
+(https://docs.yoctoproject.org/search.html) nor google pointed me to a
+hint on how to start doing so.
+I am still trying to figure things out, merely by trial and error,
+which is quite cumbersome and extremely time consuming. My current
+approach is something like
+
+PACKAGES += "${PN}-lib ${PN}-bin"
+
+But I am still confused on how to use them.
+
+So to me the questions arrive how can I achieve
+
+* That I first configure and build the library
+* Then configure and build the binary using the previously built
+library
+* Then install the library and the binary in the image and provide the
+library also in the sdk
+
+I could create two recipes - but that would mean, the same sources are
+downloaded twice, am I right?
+
+Best Regards
+David
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] Documentation: How to build multiple packages from one source repository
+  2023-09-14 11:57 Documentation: How to build multiple packages from one source repository David Daniel
+@ 2023-09-14 12:01 ` Alexander Kanavin
+  2023-09-14 12:12   ` David Daniel
+  0 siblings, 1 reply; 3+ messages in thread
+From: Alexander Kanavin @ 2023-09-14 12:01 UTC (permalink / raw)
+  To: David Daniel; +Cc: yocto
+
+On Thu, 14 Sept 2023 at 13:57, David Daniel <david.daniel@vrag.ch> wrote:
+> I could create two recipes - but that would mean, the same sources are
+> downloaded twice, am I right?
+
+Two recipes seems like the best option, if the library and the
+executable build processes are completely decoupled. You needn't worry
+about downloading twice: if SRC_URI entry is the same, fetch tasks for
+the two recipes will mutually exclude each other, and then reuse the
+result from the other task that ran first.
+
+Alex
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] Documentation: How to build multiple packages from one source repository
+  2023-09-14 12:01 ` [yocto] " Alexander Kanavin
+@ 2023-09-14 12:12   ` David Daniel
+  0 siblings, 0 replies; 3+ messages in thread
+From: David Daniel @ 2023-09-14 12:12 UTC (permalink / raw)
+  To: yocto
+
+Am Donnerstag, dem 14.09.2023 um 14:01 +0200 schrieb Alexander Kanavin:
+> On Thu, 14 Sept 2023 at 13:57, David Daniel <david.daniel@vrag.ch>
+> wrote:
+> > I could create two recipes - but that would mean, the same sources
+> > are
+> > downloaded twice, am I right?
+> 
+> Two recipes seems like the best option, if the library and the
+> executable build processes are completely decoupled. You needn't
+> worry
+> about downloading twice: if SRC_URI entry is the same, fetch tasks
+> for
+> the two recipes will mutually exclude each other, and then reuse the
+> result from the other task that ran first.
+> 
+> Alex
+
+Ah I see, if I use the same source in two different recipes, it won't
+get downloaded twice. That's definitely the better approach then. That
+way I can make the binary depending on the library.
+
+Thanks!
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2023-09-14 12:12 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-09-14 11:57 Documentation: How to build multiple packages from one source repository David Daniel
+2023-09-14 12:01 ` [yocto] " Alexander Kanavin
+2023-09-14 12:12   ` David Daniel
+

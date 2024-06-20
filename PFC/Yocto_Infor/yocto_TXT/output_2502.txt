@@ -1,0 +1,146 @@
+* Behaviour of .bbappend when default script is not present
+@ 2021-12-08  9:26 Beek, Léon van de
+  2021-12-08  9:29 ` [yocto] " Konrad Weihmann
+  0 siblings, 1 reply; 3+ messages in thread
+From: Beek, Léon van de @ 2021-12-08  9:26 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1316 bytes --]
+
+Dear all,
+
+My situation is as follows:
+
+
+  *   Using Kas container to build and enable easy CI, I have 2 .yaml files creating my 2 builds for 2 different machines: RaspberryPi and Qemu.
+  *   Qemu yaml file does not contain meta-raspberrypi repo
+  *   Custom distro that extends poky has a script rpi-cmdline.bbappend that appends script with the same name from meta-raspberrypi
+  *   Rpi-cmdline.bbappend is used to simply add 2 kernel commands to cmdline.txt
+  *   Rpi-cmdline.bbappend contains line on top with: COMPATIBLE_MACHINE = "^rpi$"
+
+When running the Qemu build, Bitbake will say that the default .bb file is not present for the rpi-cmdline.bbappend script, which of course is true, but I don't want to include the meta-raspberrypi repo in my sources for this build as well.
+It seems like the "COMPATIBLE_MACHINE = "^rpi$"" is only regarded after parsing the script, which still requires the default script to be present.
+
+I've searched the internet but have not found a way of achieving my goal so far, so my question is:
+Is there any way of having this .bbappend file present without the default .bb file there? Or maybe there is a better solution to add kernel command parameters to cmdline without using this rpi only script?
+
+Thanks in advance.
+
+Kind regards,
+Léon van de Beek
+
+
+[-- Attachment #2: Type: text/html, Size: 6653 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] Behaviour of .bbappend when default script is not present
+  2021-12-08  9:26 Behaviour of .bbappend when default script is not present Beek, Léon van de
+@ 2021-12-08  9:29 ` Konrad Weihmann
+  2021-12-08  9:49   ` tomzy
+  0 siblings, 1 reply; 3+ messages in thread
+From: Konrad Weihmann @ 2021-12-08  9:29 UTC (permalink / raw)
+  To: Beek, Léon van de, yocto
+
+You can either use BBMASK in your local.conf to remove the bbappend from 
+the parsing tree or set BB_DANGLINGAPPENDS_WARNONLY in your specific build.
+
+both can be added to your specific kas yaml without any issues
+
+[1] 
+https://docs.yoctoproject.org/ref-manual/variables.html#term-BB_DANGLINGAPPENDS_WARNONLY
+
+On 08.12.21 10:26, Beek, Léon van de wrote:
+> Dear all,
+> 
+> My situation is as follows:
+> 
+>   * Using Kas container to build and enable easy CI, I have 2 .yaml
+>     files creating my 2 builds for 2 different machines: RaspberryPi and
+>     Qemu.
+>   * Qemu yaml file does not contain meta-raspberrypi repo
+>   * Custom distro that extends poky has a script rpi-cmdline.bbappend
+>     that appends script with the same name from meta-raspberrypi
+>   * Rpi-cmdline.bbappend is used to simply add 2 kernel commands to
+>     cmdline.txt
+>   * Rpi-cmdline.bbappend contains line on top with: COMPATIBLE_MACHINE =
+>     "^rpi$"
+> 
+> When running the Qemu build, Bitbake will say that the default .bb file 
+> is not present for the rpi-cmdline.bbappend script, which of course is 
+> true, but I don’t want to include the meta-raspberrypi repo in my 
+> sources for this build as well.
+> 
+> It seems like the “COMPATIBLE_MACHINE = "^rpi$"” is only regarded after 
+> parsing the script, which still requires the default script to be present.
+> 
+> I’ve searched the internet but have not found a way of achieving my goal 
+> so far, so my question is:
+> 
+> Is there any way of having this .bbappend file present without the 
+> default .bb file there? Or maybe there is a better solution to add 
+> kernel command parameters to cmdline without using this rpi only script?
+> 
+> Thanks in advance.
+> 
+> Kind regards,
+> 
+> Léon van de Beek
+> 
+> 
+> 
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#55513): https://lists.yoctoproject.org/g/yocto/message/55513
+> Mute This Topic: https://lists.yoctoproject.org/mt/87584950/3647476
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [kweihmann@outlook.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+> 
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: Behaviour of .bbappend when default script is not present
+  2021-12-08  9:29 ` [yocto] " Konrad Weihmann
+@ 2021-12-08  9:49   ` tomzy
+  0 siblings, 0 replies; 3+ messages in thread
+From: tomzy @ 2021-12-08  9:49 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 950 bytes --]
+
+Hi,
+
+You could also consider using the `BBFILES_DYNAMIC`[1] variable, this way your bbappend
+would only apply when there is `meta-raspberrypi` in the build configuration. Your bbappend
+could be placed in custom layer under
+`dynamic-layers/raspberrypi/recipes-bsp/bootfiles/ rpi-cmdline.bbappend ` path and than in its
+layer.conf file add
+
+BBFILES_DYNAMIC += " \
+   raspberrypi :${ LAYERDIR }/ dynamic - layers / raspberrypi / recipes -*/*/*. bbappend \
+"
+
+Looks like the best option to add kernel command parameters is to use ` rpi-cmdline.bbappend`
+with dynamic-layers as mentioned above. You should add changes to CMDLINE[2] variable
+
+[1]https://docs.yoctoproject.org/ref-manual/variables.html#term-BBFILES_DYNAMIC
+[2]https://github.com/agherzan/meta-raspberrypi/blob/master/recipes-bsp/bootfiles/rpi-cmdline.bb#L39
+
+Regards
+--
+Tomasz Żyjewski
+Embedded Systems Engineer
+GPG: 5C495EA3EBEECA59
+https://3mdeb.com | @3mdeb_com
+
+[-- Attachment #2: Type: text/html, Size: 2775 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2021-12-08  9:49 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-12-08  9:26 Behaviour of .bbappend when default script is not present Beek, Léon van de
+2021-12-08  9:29 ` [yocto] " Konrad Weihmann
+2021-12-08  9:49   ` tomzy
+

@@ -1,0 +1,264 @@
+* Building recipes in multiple flavors for differing images
+@ 2022-04-28  9:09 Martin Weber
+  2022-04-28  9:17 ` [yocto] " Alexander Kanavin
+                   ` (2 more replies)
+  0 siblings, 3 replies; 4+ messages in thread
+From: Martin Weber @ 2022-04-28  9:09 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2997 bytes --]
+
+Hi everybody!
+
+
+
+We use yocto to build the system for some of our devices. Given we have multiple use-cases for differing partitions on the device (rescue system; main system in "release" flavor; main system in "development & debug" flavor), we use different custom distros for our build.
+
+
+
+With this mail we would like to ask the community what the best practice for our use case are, describe our current approach, and ask whether we can do things in a better way.
+
+
+
+The software we use (machine/bsp layer level; software level) in principal is the same (same upstream, internal or 3rd party), but we need to build them in different ways (e.g., one uses system V init, one uses systemd init; one uses optimized-non-logging versions of the software, another ships debug symbols and enables logging during buildtime; one installs and enables various systemd units, another doesn't, etc.).
+
+
+
+Our solution to this problem is that we have (three) different distros, and use distro overrides to enable/disable/patch/append/delete various bits and pieces throughout the otherwise shared recipes. The "problem" with this is that we need to use different build environments to build our three distros, i.e., we cannot re-use otherwise identical packages. We were wondering whether it would be possible to use three images instead, and build the recipes in differing ways depending on the image. The "cleanest" way we could think of to do this would be to use recipe.inc files for the basic setup of each recipe, and recipe-X.bb, recipe-Y.bb, recipe-Z.bb that customize the build for the various use cases. This works fine for recipes that we control, but we stumble over customizing re-used recipes from lower layers that way. For example take dropbear; we might want to enable or disable it by default depending on the use case; and build with or without systemd integration. We can't find a clean way to extend the recipe in the upper layer with, say, dropbear-sysv.bb, dropbear-systemd-disabled.bb, dropbear-systemd-enabled.bb because then we don't extend the underlying dropbear.bb; if we require/include the underlying recipe, we have a different $PN and now the FILES(EXTRA)PATH won't resolve properly (and all $PN overrides in dropbear.inc don't apply). If we force the original $PN, now we're building the "same" package three times..
+
+
+
+Once more, we do have a working solution for this (use different build directories and different distros) that enable re-use of the base recipes (we use .bbappends to customize lower-layer recipes with OVERRIDEs in that scenario) and were mostly wondering whether there's a /c?leaner/ approach with more (CPU-cycle, harddisk space and package DB) re-use.
+
+
+
+Thanks in advance for any input & Best regards,
+
+Martin Weber
+Research & Development - Embedded Software Engineer
+
+B&R Industrial Automation GmbH, B&R Straße 1, 5142 Eggelsberg, Austria, www.br-automation.com<http://www.br-automation.com/>
+Phone +43 7748 6586 - 0
+
+
+[-- Attachment #2: Type: text/html, Size: 8657 bytes --]
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] Building recipes in multiple flavors for differing images
+  2022-04-28  9:09 Building recipes in multiple flavors for differing images Martin Weber
+@ 2022-04-28  9:17 ` Alexander Kanavin
+  2022-04-28 12:13 ` Stefano Babic
+  2022-04-28 13:33 ` Mike Crowe
+  2 siblings, 0 replies; 4+ messages in thread
+From: Alexander Kanavin @ 2022-04-28  9:17 UTC (permalink / raw)
+  To: Martin Weber; +Cc: yocto
+
+I'm afraid the correct approach to this is indeed several distros.
+Yocto, by design, does not support building the same item several
+times in a single bitbake invocation.
+
+What you can do, is take a long hard look at the specific differences
+between the distros, and see what you can unify. There's probably a
+few decisions there that made sense before, but don't fulfil a need
+anymore. For example, do you really need the debug/release builds? Can
+you standardize on systemd everywhere? Can you make decisions about
+logging and other choices at runtime rather than at build time?
+
+And so on.
+
+Alex
+
+On Thu, 28 Apr 2022 at 11:09, Martin Weber
+<martin.weber@br-automation.com> wrote:
+>
+> Hi everybody!
+>
+>
+>
+> We use yocto to build the system for some of our devices. Given we have multiple use-cases for differing partitions on the device (rescue system; main system in “release” flavor; main system in “development & debug” flavor), we use different custom distros for our build.
+>
+>
+>
+> With this mail we would like to ask the community what the best practice for our use case are, describe our current approach, and ask whether we can do things in a better way.
+>
+>
+>
+> The software we use (machine/bsp layer level; software level) in principal is the same (same upstream, internal or 3rd party), but we need to build them in different ways (e.g., one uses system V init, one uses systemd init; one uses optimized-non-logging versions of the software, another ships debug symbols and enables logging during buildtime; one installs and enables various systemd units, another doesn’t, etc.).
+>
+>
+>
+> Our solution to this problem is that we have (three) different distros, and use distro overrides to enable/disable/patch/append/delete various bits and pieces throughout the otherwise shared recipes. The “problem” with this is that we need to use different build environments to build our three distros, i.e., we cannot re-use otherwise identical packages. We were wondering whether it would be possible to use three images instead, and build the recipes in differing ways depending on the image. The “cleanest” way we could think of to do this would be to use recipe.inc files for the basic setup of each recipe, and recipe-X.bb, recipe-Y.bb, recipe-Z.bb that customize the build for the various use cases. This works fine for recipes that we control, but we stumble over customizing re-used recipes from lower layers that way. For example take dropbear; we might want to enable or disable it by default depending on the use case; and build with or without systemd integration. We can’t find a clean way to extend the recipe in the upper layer with, say, dropbear-sysv.bb, dropbear-systemd-disabled.bb, dropbear-systemd-enabled.bb because then we don’t extend the underlying dropbear.bb; if we require/include the underlying recipe, we have a different $PN and now the FILES(EXTRA)PATH won’t resolve properly (and all $PN overrides in dropbear.inc don’t apply). If we force the original $PN, now we’re building the “same” package three times..
+>
+>
+>
+> Once more, we do have a working solution for this (use different build directories and different distros) that enable re-use of the base recipes (we use .bbappends to customize lower-layer recipes with OVERRIDEs in that scenario) and were mostly wondering whether there’s a /c?leaner/ approach with more (CPU-cycle, harddisk space and package DB) re-use.
+>
+>
+>
+> Thanks in advance for any input & Best regards,
+>
+>
+>
+> Martin Weber
+> Research & Development – Embedded Software Engineer
+>
+>
+>
+> B&R Industrial Automation GmbH, B&R Straße 1, 5142 Eggelsberg, Austria, www.br-automation.com
+> Phone +43 7748 6586 - 0
+>
+>
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#56927): https://lists.yoctoproject.org/g/yocto/message/56927
+> Mute This Topic: https://lists.yoctoproject.org/mt/90749157/1686489
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] Building recipes in multiple flavors for differing images
+  2022-04-28  9:09 Building recipes in multiple flavors for differing images Martin Weber
+  2022-04-28  9:17 ` [yocto] " Alexander Kanavin
+@ 2022-04-28 12:13 ` Stefano Babic
+  2022-04-28 13:33 ` Mike Crowe
+  2 siblings, 0 replies; 4+ messages in thread
+From: Stefano Babic @ 2022-04-28 12:13 UTC (permalink / raw)
+  To: Martin Weber, yocto
+
+Hi Martin,
+
+On 28.04.22 11:09, Martin Weber wrote:
+> Hi everybody!
+> 
+> We use yocto to build the system for some of our devices. Given we have 
+> multiple use-cases for differing partitions on the device (rescue 
+> system; main system in “release” flavor; main system in “development & 
+> debug” flavor), we use different custom distros for our build.
+> 
+> With this mail we would like to ask the community what the best practice 
+> for our use case are, describe our current approach, and ask whether we 
+> can do things in a better way.
+> 
+> The software we use (machine/bsp layer level; software level) in 
+> principal is the same (same upstream, internal or 3^rd party), but we 
+> need to build them in different ways (e.g., one uses system V init, one 
+> uses systemd init; one uses optimized-non-logging versions of the 
+> software, another ships debug symbols and enables logging during 
+> buildtime; one installs and enables various systemd units, another 
+> doesn’t, etc.).
+> 
+> Our solution to this problem is that we have (three) different distros, 
+> and use distro overrides to enable/disable/patch/append/delete various 
+> bits and pieces throughout the otherwise shared recipes. The “problem” 
+> with this is that we need to use different build environments to build 
+> our three distros, i.e., we cannot re-use otherwise identical packages. 
+
+
+I do not know if what I did on a couple of projects is cleaner, bu tit 
+is maybe useful to mention. I have often the same topic, and I build a 
+"rescue" and a "production" image, and some of the packages should be 
+different according to the image where they are installed, and I did not 
+want to add dirty trick via post process commands. dropbear, base, etc. 
+are good examples.
+
+What I did is to add variants of the packages, like a base-files-rescue 
+near the standard package, and each image file will select the variant 
+of the package it wants.
+
+To do this, I added a populate_packages:prepend() to a .bbappend of the 
+package, so that I can inject per package the changes I want to have. At 
+the end, it can have a dropbear-rescue and a dropbear packages, and it 
+is not required to have different DISTRO.
+
+I do not know how this can be considered a clean approach, but because 
+it was not yet mentioned, it is nice to have some opinions.
+
+Regards,
+Stefano
+
+
+-- 
+=====================================================================
+DENX Software Engineering GmbH,      Managing Director: Wolfgang Denk
+HRB 165235 Munich, Office: Kirchenstr.5, D-82194 Groebenzell, Germany
+Phone: +49-8142-66989-53 Fax: +49-8142-66989-80 Email: sbabic@denx.de
+=====================================================================
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] Building recipes in multiple flavors for differing images
+  2022-04-28  9:09 Building recipes in multiple flavors for differing images Martin Weber
+  2022-04-28  9:17 ` [yocto] " Alexander Kanavin
+  2022-04-28 12:13 ` Stefano Babic
+@ 2022-04-28 13:33 ` Mike Crowe
+  2 siblings, 0 replies; 4+ messages in thread
+From: Mike Crowe @ 2022-04-28 13:33 UTC (permalink / raw)
+  To: Martin Weber; +Cc: yocto
+
+On Thursday 28 April 2022 at 09:09:33 +0000, Martin Weber wrote:
+> The software we use (machine/bsp layer level; software level) in
+> principal is the same (same upstream, internal or 3rd party), but we need
+> to build them in different ways (e.g., one uses system V init, one uses
+> systemd init; one uses optimized-non-logging versions of the software,
+> another ships debug symbols and enables logging during buildtime; one
+> installs and enables various systemd units, another doesn't, etc.).
+
+We do switching between debug/release (and in the past one other similar
+configuration option) by changing PACKAGE_ARCH. We set OUR_DEBUG in the
+build environment, then have:
+
+ DISTROOVERRIDES = "${DISTRO}:${@['ourdebug0', 'ourdebug1'][d.getVar('OUR_DEBUG') == '1']}"
+ OUR_DEBUG_SUFFIX = "${@oe.utils.conditional('OUR_DEBUG', '1', '-debug', '', d)}"
+ MACHINE_ARCH_DEBUG = "${MACHINE_ARCH}${OUR_DEBUG_SUFFIX}"
+ PACKAGE_EXTRA_ARCHS_append_ourdebug1 = " ${MACHINE_ARCH_DEBUG}"
+
+and then in any recipes that behave differently between debug and release
+we have something like:
+
+ PACKAGE_ARCH = "${MACHINE_ARCH_DEBUG}"
+ RECIPE_SPECIFIC_VARIABLE_ourdebug1 = "-DENABLE_DEBUG_STUFF"
+ RECIPE_SPECIFIC_VARIABLE_ourdebug0 = "-DNDEBUG"
+
+(You may find that you need to create a parallel set of infrastructure
+using an equivalent TUNE_PKGARCH_DEBUG too if you have non-MACHINE-specific
+packages that conditionally enable debug.)
+
+This mostly works, and it works a lot better now than it did when we first
+started doing it about a decade ago. I still think there's a risk of
+getting the non-debug package in a "debug" rootfs if things go a bit wrong,
+but this isn't something we've seen for a long time. If it comes back then
+I'd try using a "-nodebug" alternative in OUR_DEBUG_SUFFIX too in order to
+avoid that possibility. (That way, a package would either have a
+PACKAGE_ARCH that matched ${MACHINE_ARCH} or ${MACHINE_ARCH_DEBUG}, but
+not both.)
+
+This method was originally created by Phil Blundell. I don't necessarily
+recommend doing it, but it does seem to have worked for us. We started with
+something simpler, and when we ran into problems I ended up learning a lot
+more about how Bitbake worked in order to solve them which was beneficial
+in the long run. :)
+
+In theory it ought to be possible to use multiconfig to build both debug
+and non-debug variants at the same time, but this isn't something we've
+tried.
+
+HTH.
+
+Mike.
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+end of thread, other threads:[~2022-04-28 13:33 UTC | newest]
+
+Thread overview: 4+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-04-28  9:09 Building recipes in multiple flavors for differing images Martin Weber
+2022-04-28  9:17 ` [yocto] " Alexander Kanavin
+2022-04-28 12:13 ` Stefano Babic
+2022-04-28 13:33 ` Mike Crowe
+

@@ -1,0 +1,139 @@
+* Manipulating users/groups in helper class with fakeroot/pseudo
+@ 2022-06-13 23:44 Sean
+  2023-04-28 17:06 ` [yocto] " Sean Nowlan
+  0 siblings, 1 reply; 2+ messages in thread
+From: Sean @ 2022-06-13 23:44 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2157 bytes --]
+
+I wrote a class, call it MYCLASS, whose purpose is to migrate certain files installed by standard recipes into a different directory and create symlinks to those files.
+
+The reason for this is to have a disk partition layout with a read-only, replaceable rootfs partition and a persistent storage partition. The idea is to move certain configuration files installed by a recipe into persistent storage and replace the rootfs version with a symlink.
+
+The user inherits this class in a .bbappend file in another layer and specifies the list of files that should have this treatment inside a MYCLASS_CONFFILES variable.
+
+I implemented this logic in a Python function and added it as a task as follows. I abstracted away some details and used "example.conf" as a hardcoded example configuration file being moved to a partition mounted at "/persistent".
+
+fakeroot python myclass_copy_and_symlink_conffiles() {
+...
+sysconfdir_absfile = os.path.join(d.getVar('D'), d.getVar('sysconfdir'), 'example.conf')
+destdir_absfile = os.path.join(d.getVar('D', 'persistent/example.conf')
+
+st = os.stat(sysconfdir_absfile)
+shutil.copy(sysconfdir_absfile, destdir_absfile)
+shutil.chown(destdir_absfile, user=st.st_uid, group=st.st_gid)
+
+# omitted: replace original file with symlink to copied file
+
+...
+
+}
+
+myclass_copy_and_symlink_conffiles[depends] += "virtual/fakeroot-native:do_populate_sysroot"
+
+do_install[postfuncs] += "${MYCLASSINSTALLFUNCS}"
+
+MYCLASSINSTALLFUNCS_class-target = "myclass_copy_and_symlink_conffiles"
+MYCLASSINSTALLFUNCS = ""
+
+The problem I'm having is that UID and GID don't seem to be available to the shutil.chown function or they're not read correctly from the pseudo database when os.stat is called. Using the function as shown above, MYCLASS doesn't preserve the UID/GID of the original file (as known to fakeroot/pseudo) and falls back to setting UID:GID=root:root on the copied file instead.
+
+Any hints on how I can improve this approach? Is the problem that the system calls made by shutil/os functions aren't handled by pseudo? Should I replace this Python function with a shell function that can use fakeroot?
+
+[-- Attachment #2: Type: text/html, Size: 2377 bytes --]
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+* Re: [yocto] Manipulating users/groups in helper class with fakeroot/pseudo
+  2022-06-13 23:44 Manipulating users/groups in helper class with fakeroot/pseudo Sean
+@ 2023-04-28 17:06 ` Sean Nowlan
+  0 siblings, 0 replies; 2+ messages in thread
+From: Sean Nowlan @ 2023-04-28 17:06 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 3115 bytes --]
+
+Can someone with knowledge of pseudo and fakeroot please shed some light on
+this issue? Is there a reason that system calls are not being intercepted
+correctly by pseudo/fakeroot to look up appropriate UIDs and GIDs to apply
+to the migrated files? Is this due to Python shutil.chown?
+
+On Mon, Jun 13, 2022 at 7:44 PM Sean via lists.yoctoproject.org <nowlans=
+ieee.org@lists.yoctoproject.org> wrote:
+
+> I wrote a class, call it MYCLASS, whose purpose is to migrate certain
+> files installed by standard recipes into a different directory and create
+> symlinks to those files.
+>
+> The reason for this is to have a disk partition layout with a read-only,
+> replaceable rootfs partition and a persistent storage partition. The idea
+> is to move certain configuration files installed by a recipe into
+> persistent storage and replace the rootfs version with a symlink.
+>
+> The user inherits this class in a .bbappend file in another layer and
+> specifies the list of files that should have this treatment inside a
+> MYCLASS_CONFFILES variable.
+>
+> I implemented this logic in a Python function and added it as a task as
+> follows. I abstracted away some details and used "example.conf" as a
+> hardcoded example configuration file being moved to a partition mounted at
+> "/persistent".
+>
+> fakeroot python myclass_copy_and_symlink_conffiles() {
+> ...
+>     sysconfdir_absfile = os.path.join(d.getVar('D'),
+> d.getVar('sysconfdir'), 'example.conf')
+>     destdir_absfile = os.path.join(d.getVar('D', 'persistent/example.conf')
+>
+>     st = os.stat(sysconfdir_absfile)
+>     shutil.copy(sysconfdir_absfile, destdir_absfile)
+>     shutil.chown(destdir_absfile, user=st.st_uid, group=st.st_gid)
+>
+>     # omitted: replace original file with symlink to copied file
+>
+> ...
+>
+> }
+>
+> myclass_copy_and_symlink_conffiles[depends] +=
+> "virtual/fakeroot-native:do_populate_sysroot"
+>
+> do_install[postfuncs] += "${MYCLASSINSTALLFUNCS}"
+>
+> MYCLASSINSTALLFUNCS_class-target = "myclass_copy_and_symlink_conffiles"
+> MYCLASSINSTALLFUNCS = ""
+>
+>
+> The problem I'm having is that UID and GID don't seem to be available to
+> the shutil.chown function or they're not read correctly from the pseudo
+> database when os.stat is called. Using the function as shown above, MYCLASS
+> doesn't preserve the UID/GID of the original file (as known to
+> fakeroot/pseudo) and falls back to setting UID:GID=root:root on the copied
+> file instead.
+>
+> Any hints on how I can improve this approach? Is the problem that the
+> system calls made by shutil/os functions aren't handled by pseudo? Should I
+> replace this Python function with a shell function that can use fakeroot?
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#57328):
+> https://lists.yoctoproject.org/g/yocto/message/57328
+> Mute This Topic: https://lists.yoctoproject.org/mt/91739241/5997375
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> nowlans@ieee.org]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 4017 bytes --]
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2023-04-28 17:06 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-06-13 23:44 Manipulating users/groups in helper class with fakeroot/pseudo Sean
+2023-04-28 17:06 ` [yocto] " Sean Nowlan
+

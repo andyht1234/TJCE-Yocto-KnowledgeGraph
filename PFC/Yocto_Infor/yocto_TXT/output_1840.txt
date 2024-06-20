@@ -1,0 +1,308 @@
+* [PATCH yocto-autobuilder-helper v14] Add a banner on the old documentation docs.
+@ 2022-05-11 16:20 Abongwa Bonalais Amahnui
+  2022-05-12  8:22 ` [yocto] " Quentin Schulz
+  0 siblings, 1 reply; 3+ messages in thread
+From: Abongwa Bonalais Amahnui @ 2022-05-11 16:20 UTC (permalink / raw)
+  To: yocto; +Cc: Abongwa Bonalais Amahnui
+
+Signed-off-by: Abongwa Bonalais Amahnui <abongwabonalais@gmail.com>
+---
+ scripts/docs_add_banner.py | 84 ++++++++++++++++++++++++++++++++++++++
+ scripts/run-docs-build     |  2 +
+ 2 files changed, 86 insertions(+)
+ create mode 100644 scripts/docs_add_banner.py
+
+diff --git a/scripts/docs_add_banner.py b/scripts/docs_add_banner.py
+new file mode 100644
+index 0000000..0de70d0
+--- /dev/null
++++ b/scripts/docs_add_banner.py
+@@ -0,0 +1,84 @@
++#!/usr/bin/env python3
++#
++# SPDX-License-Identifier: GPL-2.0-only
++#
++#Signed-off-by: Abongwa Bonalais Amahnui <abongwabonalais@gmail.com>
++#
++#
++# Script to add banners to the old docs and outdated dunfell docs
++#
++#
++
++
++import os
++
++
++
++
++
++html_content_dunfell = '''
++<div id="outdated-warning">This document is outdated, you should select the <a href="https://docs.yoctoproject.org/dunfell">latest release version</a> in this series.</div>
++<div xml:lang="en" class="body" lang="en">
++'''
++html_content = '''
++<div id="outdated-warning">This version of the project is now considered obsolete, please select and use a <a href="https://docs.yoctoproject.org">more recent version</a>.</div>
++<div xml:lang="en" class="body" lang="en">
++'''
++
++# the class body and the last_div are used to make sure any .body property existing in any css file is not overwritten
++last_div = '''
++</div>
++
++'''
++
++css_replacement_content = '''
++ 
++  font-family: Verdana, Sans, sans-serif;
++
++  width: 100%;
++  margin:  0;
++  padding: 0;
++  color: #333;
++  overflow-x: hidden;
++  }
++ 
++.body{
++margin:  0 auto;
++min-width: 640px;
++padding: 0 5em 5em 5em;
++}
++#outdated-warning{
++text-align: center;
++background-color: rgb(255, 186, 186); 
++color: rgb(106, 14, 14); 
++padding: 0.5em 0; 
++width: 100%;
++position: fixed;
++top: 0;
++
++
++'''
++
++
++def add_banner_old_docs(dir):
++    for root, dirs, filenames in os.walk(dir):
++        
++        if root.startswith('./3.1'):
++            html_replacement = html_content_dunfell
++        else:
++            html_replacement = html_content
++            
++        for filename in filenames:
++            if filename.endswith('.html'):
++                with open(os.path.join(root, filename), 'r', encoding="ISO-8859-1") as f:
++                    current_content = f.read()
++                with open(os.path.join(root, filename), 'w', encoding="ISO-8859-1") as f:
++                    f.write(current_content.replace('<body>', '<body>' + html_replacement))
++                    f.write(current_content.replace('</body>', last_div + '</body>'))
++            if filename.endswith('.css'):
++                with open(os.path.join(root, filename), 'r', encoding="ISO-8859-1") as f:
++                    css_content = f.read()
++                with open(os.path.join(root, filename), 'w', encoding="ISO-8859-1") as f:
++                    f.write(css_content.replace(css_content[css_content.find('body {'):css_content.find('}'[0])], 'body {' + css_replacement_content ))
++
++add_banner_old_docs('.')
+diff --git a/scripts/run-docs-build b/scripts/run-docs-build
+index ecc5332..307ac19 100755
+--- a/scripts/run-docs-build
++++ b/scripts/run-docs-build
+@@ -37,6 +37,8 @@ cd $outputdir
+ echo Extracing old content from archive
+ tar -xJf $docbookarchive
+ 
++$scriptdir/docs_fix_all_html_css.py
++
+ cd $bbdocs
+ mkdir $outputdir/bitbake
+ 
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 3+ messages in thread
+* Re: [yocto] [PATCH yocto-autobuilder-helper v14] Add a banner on the old documentation docs.
+  2022-05-11 16:20 [PATCH yocto-autobuilder-helper v14] Add a banner on the old documentation docs Abongwa Bonalais Amahnui
+@ 2022-05-12  8:22 ` Quentin Schulz
+  2022-05-12 11:13   ` Abongwa Amahnui Bonalais
+  0 siblings, 1 reply; 3+ messages in thread
+From: Quentin Schulz @ 2022-05-12  8:22 UTC (permalink / raw)
+  To: Abongwa Amahnui Bonalais, yocto
+
+Hi Amahnui,
+
+On 5/11/22 18:20, Abongwa Amahnui Bonalais wrote:
+> Signed-off-by: Abongwa Bonalais Amahnui <abongwabonalais@gmail.com>
+> ---
+>   scripts/docs_add_banner.py | 84 ++++++++++++++++++++++++++++++++++++++
+>   scripts/run-docs-build     |  2 +
+>   2 files changed, 86 insertions(+)
+>   create mode 100644 scripts/docs_add_banner.py
+> 
+> diff --git a/scripts/docs_add_banner.py b/scripts/docs_add_banner.py
+> new file mode 100644
+> index 0000000..0de70d0
+> --- /dev/null
+> +++ b/scripts/docs_add_banner.py
+> @@ -0,0 +1,84 @@
+> +#!/usr/bin/env python3
+> +#
+> +# SPDX-License-Identifier: GPL-2.0-only
+> +#
+> +#Signed-off-by: Abongwa Bonalais Amahnui <abongwabonalais@gmail.com>
+> +#
+> +#
+> +# Script to add banners to the old docs and outdated dunfell docs
+> +#
+> +#
+> +
+> +
+> +import os
+> +
+> +
+> +
+> +
+> +
+> +html_content_dunfell = '''
+> +<div id="outdated-warning">This document is outdated, you should select the <a href="https://urldefense.proofpoint.com/v2/url?u=https-3A__docs.yoctoproject.org_dunfell&amp;d=DwMDAg&amp;c=_sEr5x9kUWhuk4_nFwjJtA&amp;r=LYjLexDn7rXIzVmkNPvw5ymA1XTSqHGq8yBP6m6qZZ4njZguQhZhkI_-172IIy1t&amp;m=xspfpkyH63qFQQQp96oYOYMRmeCb2qN8EPL-Mg_2xWO8ezjLW-hM6CpF7qLR7kG_&amp;s=UBdsIAcJa2McGNBMMmKe6MhoYlnfQZ1-jHZeTYFTK3E&amp;e=">latest release version</a> in this series.</div>
+> +<div xml:lang="en" class="body" lang="en">
+> +'''
+> +html_content = '''
+> +<div id="outdated-warning">This version of the project is now considered obsolete, please select and use a <a href="https://urldefense.proofpoint.com/v2/url?u=https-3A__docs.yoctoproject.org&amp;d=DwMDAg&amp;c=_sEr5x9kUWhuk4_nFwjJtA&amp;r=LYjLexDn7rXIzVmkNPvw5ymA1XTSqHGq8yBP6m6qZZ4njZguQhZhkI_-172IIy1t&amp;m=xspfpkyH63qFQQQp96oYOYMRmeCb2qN8EPL-Mg_2xWO8ezjLW-hM6CpF7qLR7kG_&amp;s=beF_7R_KmlzLYmX333Fp0Gh2TY6lEFqk2Pg08I9XwOY&amp;e=">more recent version</a>.</div>
+> +<div xml:lang="en" class="body" lang="en">
+> +'''
+> +
+> +# the class body and the last_div are used to make sure any .body property existing in any css file is not overwritten
+
+Not quite happy with this comment as I still don't understand why this 
+was needed.
+
+What is the issue with "any .body property existing in any css file 
+[being] overwritten"?
+
+I am not going to fight it too much as we really need this banner and 
+the files it applies to won't change over time, so it shouldn't actually 
+be a maintenance burden. This obviously is a maintainer choice so I'll 
+let people with veto power decide on this :)
+
+> +last_div = '''
+> +</div>
+> +
+> +'''
+> +
+> +css_replacement_content = '''
+> +
+> +  font-family: Verdana, Sans, sans-serif;
+> +
+> +  width: 100%;
+> +  margin:  0;
+> +  padding: 0;
+> +  color: #333;
+> +  overflow-x: hidden;
+> +  }
+> +
+> +.body{
+> +margin:  0 auto;
+> +min-width: 640px;
+> +padding: 0 5em 5em 5em;
+> +}
+> +#outdated-warning{
+> +text-align: center;
+> +background-color: rgb(255, 186, 186);
+> +color: rgb(106, 14, 14);
+> +padding: 0.5em 0;
+> +width: 100%;
+> +position: fixed;
+> +top: 0;
+> +
+> +
+> +'''
+> +
+> +
+> +def add_banner_old_docs(dir):
+> +    for root, dirs, filenames in os.walk(dir):
+> +
+> +        if root.startswith('./3.1'):
+> +            html_replacement = html_content_dunfell
+> +        else:
+> +            html_replacement = html_content
+> +
+> +        for filename in filenames:
+> +            if filename.endswith('.html'):
+> +                with open(os.path.join(root, filename), 'r', encoding="ISO-8859-1") as f:
+> +                    current_content = f.read()
+> +                with open(os.path.join(root, filename), 'w', encoding="ISO-8859-1") as f:
+> +                    f.write(current_content.replace('<body>', '<body>' + html_replacement))
+> +                    f.write(current_content.replace('</body>', last_div + '</body>'))
+> +            if filename.endswith('.css'):
+> +                with open(os.path.join(root, filename), 'r', encoding="ISO-8859-1") as f:
+> +                    css_content = f.read()
+> +                with open(os.path.join(root, filename), 'w', encoding="ISO-8859-1") as f:
+> +                    f.write(css_content.replace(css_content[css_content.find('body {'):css_content.find('}'[0])], 'body {' + css_replacement_content ))
+> +
+> +add_banner_old_docs('.')
+> diff --git a/scripts/run-docs-build b/scripts/run-docs-build
+> index ecc5332..307ac19 100755
+> --- a/scripts/run-docs-build
+> +++ b/scripts/run-docs-build
+> @@ -37,6 +37,8 @@ cd $outputdir
+>   echo Extracing old content from archive
+>   tar -xJf $docbookarchive
+>   
+> +$scriptdir/docs_fix_all_html_css.py
+
+This is not the name of the script you just added above. Please run the 
+code with the patches before you send them :)
+
+Once this gets a v15, I think it's in a good enough shape to validate it 
+actually works as expected and then merge this.
+
+Almost there Amahnui :)
+
+Cheers,
+Quentin
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [PATCH yocto-autobuilder-helper v14] Add a banner on the old documentation docs.
+  2022-05-12  8:22 ` [yocto] " Quentin Schulz
+@ 2022-05-12 11:13   ` Abongwa Amahnui Bonalais
+  0 siblings, 0 replies; 3+ messages in thread
+From: Abongwa Amahnui Bonalais @ 2022-05-12 11:13 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1115 bytes --]
+
+On Thu, May 12, 2022 at 09:23 AM, Quentin Schulz wrote:
+
+> 
+> Not quite happy with this comment as I still don't understand why this was
+> needed.
+> 
+> What is the issue with "any .body property existing in any css file
+> [being] overwritten"?
+> 
+> I am not going to fight it too much as we really need this banner and the
+> files it applies to won't change over time, so it shouldn't actually be a
+> maintenance burden. This obviously is a maintainer choice so I'll let
+> people with veto power decide on this :)
+
+Hi Quentin,
+
+Thanks for reviewing,
+There are some html files whose main div wrapping all it's content are having different class names, So I created my own class name wrapping everything to overide the current class so it's properties can be accurately called from the css files.
+The reason I decided to do this is because I think in order for the banner to remain at the top, everything below it has to be given a property that shifts it downwards so as to prevent overlapping of the body content with the banner, including the logo.
+That is my line of thinking here.
+Thank You
+
+[-- Attachment #2: Type: text/html, Size: 1165 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2022-05-12 11:13 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-05-11 16:20 [PATCH yocto-autobuilder-helper v14] Add a banner on the old documentation docs Abongwa Bonalais Amahnui
+2022-05-12  8:22 ` [yocto] " Quentin Schulz
+2022-05-12 11:13   ` Abongwa Amahnui Bonalais
+

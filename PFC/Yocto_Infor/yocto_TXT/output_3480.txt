@@ -1,0 +1,124 @@
+* Re: [yocto] Hardknott - pseudo excluded from intercept_scripts
+       [not found] <167C0F53B19DFD83.28940@lists.yoctoproject.org>
+@ 2021-05-05  7:56 ` Chuck Wolber
+  2021-05-06 10:43   ` Richard Purdie
+  0 siblings, 1 reply; 2+ messages in thread
+From: Chuck Wolber @ 2021-05-05  7:56 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1621 bytes --]
+
+The following code is an effective workaround. It must be added after the
+core-image is inherited.
+
+python () {
+     pseudo_ignore_paths = d.getVar('PSEUDO_IGNORE_PATHS')
+     result = ','.join([x for x in pseudo_ignore_paths.split(',') if
+"intercept_scripts" not in x])
+     d.setVar('PSEUDO_IGNORE_PATHS', result)
+}
+
+..Ch:W..
+
+On Tue, May 4, 2021 at 8:53 PM Chuck Wolber via lists.yoctoproject.org
+<chuckwolber=gmail.com@lists.yoctoproject.org> wrote:
+
+>
+> I was attempting an image build with Yocto Hardknott, and I ran into a
+> chown problem during do_rootfs(). I traced it down to
+> ${WORKDIR}/intercept_scripts showing up in the PSEUDO_IGNORE_PATHS
+> environment variable.
+>
+> This commit made the change:
+>
+> https://git.openembedded.org/openembedded-core/commit/meta/classes/image.bbclass?id=9463be2292b942a1072eea88881b9644e55aadb9
+>
+> I continued down the rabbit hole until I got here:
+>
+> https://git.openembedded.org/openembedded-core/tree/meta/lib/oe/package_manager/__init__.py#n173
+>
+> Line 192 specifically is the smoking gun. The files are being copied from
+> poky/scripts/postinst-intercepts into the ${WORKDIR}/intercept_scripts
+> directory and immediately failing when the copyFile utility attempts to do
+> a chown.
+>
+> Is there any logical explanation for this? Is this a bug or am I doing
+> something wrong? Is there a workaround?
+>
+> ..Ch:W..
+>
+> --
+> *"Perfection must be reached by degrees; she requires the slow hand of
+> time." - Voltaire*
+>
+> 
+>
+>
+
+-- 
+*"Perfection must be reached by degrees; she requires the slow hand of
+time." - Voltaire*
+
+[-- Attachment #2: Type: text/html, Size: 2771 bytes --]
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+* Re: [yocto] Hardknott - pseudo excluded from intercept_scripts
+  2021-05-05  7:56 ` [yocto] Hardknott - pseudo excluded from intercept_scripts Chuck Wolber
+@ 2021-05-06 10:43   ` Richard Purdie
+  0 siblings, 0 replies; 2+ messages in thread
+From: Richard Purdie @ 2021-05-06 10:43 UTC (permalink / raw)
+  To: Chuck Wolber, yocto; +Cc: Steve Sakoman, Mittal, Anuj
+
+On Wed, 2021-05-05 at 00:56 -0700, Chuck Wolber wrote:
+> The following code is an effective workaround. It must be added after the core-image is inherited.
+> 
+> python () {
+>      pseudo_ignore_paths = d.getVar('PSEUDO_IGNORE_PATHS')
+>      result = ','.join([x for x in pseudo_ignore_paths.split(',') if "intercept_scripts" not in x])
+>      d.setVar('PSEUDO_IGNORE_PATHS', result)
+> }
+> 
+> ..Ch:W..
+> 
+> On Tue, May 4, 2021 at 8:53 PM Chuck Wolber via lists.yoctoproject.org < 
+> chuckwolber=gmail.com@lists.yoctoproject.org> wrote:
+> > 
+> > I was attempting an image build with Yocto Hardknott, and I ran into a chown problem during do_rootfs(). I
+> > traced it down to ${WORKDIR}/intercept_scripts showing up in the PSEUDO_IGNORE_PATHS environment variable.
+> > 
+> > This commit made the change:
+> > https://git.openembedded.org/openembedded-core/commit/meta/classes/image.bbclass?id=9463be2292b942a1072eea88881b9644e55aadb9
+> > 
+> > I continued down the rabbit hole until I got here:
+> > https://git.openembedded.org/openembedded-core/tree/meta/lib/oe/package_manager/__init__.py#n173
+> > 
+> > Line 192 specifically is the smoking gun. The files are being copied from poky/scripts/postinst-intercepts
+> > into the ${WORKDIR}/intercept_scripts directory and immediately failing when the copyFile utility attempts
+> > to do a chown.
+> > 
+> > Is there any logical explanation for this? Is this a bug or am I doing something wrong? Is there a
+> > workaround?
+
+This should be fixed in master, the issue was triggered by a checkout 
+owned by root/root:
+
+http://git.yoctoproject.org/cgit.cgi/poky/commit/?id=eff192abe2ee43ebf981bafbb7fca8602ebdcf0c
+
+Steve/Anuj: We'll likely want to backport that one.
+
+Cheers,
+
+Richard
+
+
+
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2021-05-06 10:43 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+     [not found] <167C0F53B19DFD83.28940@lists.yoctoproject.org>
+2021-05-05  7:56 ` [yocto] Hardknott - pseudo excluded from intercept_scripts Chuck Wolber
+2021-05-06 10:43   ` Richard Purdie
+

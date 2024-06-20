@@ -1,0 +1,290 @@
+* Issue with accessing network from a recipe
+@ 2022-12-19 13:02 Gärding Antti
+  2022-12-19 14:16 ` [yocto] " Martin Jansa
+  0 siblings, 1 reply; 4+ messages in thread
+From: Gärding Antti @ 2022-12-19 13:02 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1413 bytes --]
+
+Hi,
+
+I am having an issue with a recipe whose do_configure requires network connections and I wonder if this issue could be related to Yocto so that this list would be the correct place to ask for ideas.
+
+The problem appears when trying to build dotnet-hello-world which comes with meta-dotnet (https://github.com/jeremy-prater/meta-dotnet). I am not the only one having this issue, but many people, including the layer's author, also report having no problems. Googling gives a lot of suggestions, but as this is related to .NET, all of them are related to Windows / Visual Studio environment and I don't know how to apply them using Yocto.
+
+In short, do_configure for dotnet-hello-world invokes the .NET SDK's tool dotnet as a host tool to fetch what is needed to build and run the program. As a part of that, it uses NuGet, the package manager for .NET, which says "error NU1301: Unable to load the service index for source https://api.nuget.org/v3/index.json".
+
+If I modify the recipe so that it tries to curl that file, I get "Could not resolve host: api.nuget.org". If I do the same but use numeric address, I get "Couldn't connect to server".
+
+If I run the commands in the recipe manually in the same environment I use for Yocto builds, using .NET SDK I have installed manually, they work.
+
+My build environment is Ubuntu 20.04 run inside a Docker container.
+
+
+Best regards,
+Antti Gärding
+
+[-- Attachment #2: Type: text/html, Size: 4285 bytes --]
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] Issue with accessing network from a recipe
+  2022-12-19 13:02 Issue with accessing network from a recipe Gärding Antti
+@ 2022-12-19 14:16 ` Martin Jansa
+  2022-12-20  7:41   ` Gärding Antti
+  0 siblings, 1 reply; 4+ messages in thread
+From: Martin Jansa @ 2022-12-19 14:16 UTC (permalink / raw)
+  To: Antti.Garding; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2827 bytes --]
+
+Hi,
+
+that is intentional, recipes should fetch sources with bitbake fetcher
+(which respects MIRROR/PREMIRROR/DL_DIR etc) in do_fetch and network
+shouldn't be used in other tasks (unless explicitly enabled in well
+explained exceptions).
+
+bitbake can now restrict network access in various tasks based on "network"
+flag as implemented in:
+
+https://git.openembedded.org/bitbake/commit/?id=0746b6a2a32fec4c18bf1a52b1454ca4c04bf543
+
+https://git.openembedded.org/bitbake/commit/?id=9d6341df611a1725090444f6f8eb0244aed08213
+and oe now enables network mostly only in do_fetch and few special tasks as
+implemented in:
+
+https://git.openembedded.org/openembedded-core/commit/?id=7ce1e88a3ad85bbb925bb9f7167dc0a5fd1c27f4
+
+Regards,
+
+On Mon, Dec 19, 2022 at 2:02 PM Gärding Antti via lists.yoctoproject.org
+<Antti.Garding=etteplan.com@lists.yoctoproject.org> wrote:
+
+> Hi,
+>
+>
+>
+> I am having an issue with a recipe whose do_configure requires network
+> connections and I wonder if this issue could be related to Yocto so that
+> this list would be the correct place to ask for ideas.
+>
+>
+>
+> The problem appears when trying to build dotnet-hello-world which comes
+> with meta-dotnet (https://github.com/jeremy-prater/meta-dotnet). I am not
+> the only one having this issue, but many people, including the layer's
+> author, also report having no problems. Googling gives a lot of
+> suggestions, but as this is related to .NET, all of them are related to
+> Windows / Visual Studio environment and I don't know how to apply them
+> using Yocto.
+>
+>
+>
+> In short, do_configure for dotnet-hello-world invokes the .NET SDK's tool
+> dotnet as a host tool to fetch what is needed to build and run the program.
+> As a part of that, it uses NuGet, the package manager for .NET, which says
+> "error NU1301: Unable to load the service index for source
+> https://api.nuget.org/v3/index.json".
+>
+>
+>
+> If I modify the recipe so that it tries to curl that file, I get "Could
+> not resolve host: api.nuget.org". If I do the same but use numeric
+> address, I get "Couldn't connect to server".
+>
+>
+>
+> If I run the commands in the recipe manually in the same environment I use
+> for Yocto builds, using .NET SDK I have installed manually, they work.
+>
+>
+>
+> My build environment is Ubuntu 20.04 run inside a Docker container.
+>
+>
+>
+>
+>
+> Best regards,
+>
+> Antti Gärding
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#58831):
+> https://lists.yoctoproject.org/g/yocto/message/58831
+> Mute This Topic: https://lists.yoctoproject.org/mt/95764092/3617156
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> Martin.Jansa@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 5476 bytes --]
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] Issue with accessing network from a recipe
+  2022-12-19 14:16 ` [yocto] " Martin Jansa
+@ 2022-12-20  7:41   ` Gärding Antti
+  2022-12-20  8:37     ` Gärding Antti
+  0 siblings, 1 reply; 4+ messages in thread
+From: Gärding Antti @ 2022-12-20  7:41 UTC (permalink / raw)
+  To: Martin Jansa; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 7585 bytes --]
+
+Hi,
+
+Thanks! That helped my team find out a solution or at least a work-around: setting do_configure[network] and do_compile[network] to "1" in local.conf.
+
+I would have another related questions, though: Should the commands requiring network access work if they are invoked from do_fetch? I tried that and it didn't work.
+
+
+Best regards,
+Antti Gärding
+
+________________________________
+Kohteesta: Martin Jansa <martin.jansa@gmail.com>
+Lähetetty: maanantaina 19. joulukuuta 2022 klo 16.16
+Vastaanottaja: Gärding Antti <Antti.Garding@etteplan.com>
+Kopio: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+Aihe: Re: [yocto] Issue with accessing network from a recipe
+
+Hi,
+
+that is intentional, recipes should fetch sources with bitbake fetcher (which respects MIRROR/PREMIRROR/DL_DIR etc) in do_fetch and network shouldn't be used in other tasks (unless explicitly enabled in well explained exceptions).
+
+bitbake can now restrict network access in various tasks based on "network" flag as implemented in:
+  https://git.openembedded.org/bitbake/commit/?id=0746b6a2a32fec4c18bf1a52b1454ca4c04bf543<https://eur02.safelinks.protection.outlook.com/?url=https%3A%2F%2Fgit.openembedded.org%2Fbitbake%2Fcommit%2F%3Fid%3D0746b6a2a32fec4c18bf1a52b1454ca4c04bf543&data=05%7C01%7C%7C68bbc2a8d2a04566721208dae1cbac1e%7C1f23d6d3b1584e45b7e17631cf28c804%7C0%7C0%7C638070562123843657%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=nHr4o3NfePVtT9Qm5CtFxUyph%2BpIDsAPu0ga7hzqiLk%3D&reserved=0>
+  https://git.openembedded.org/bitbake/commit/?id=9d6341df611a1725090444f6f8eb0244aed08213<https://eur02.safelinks.protection.outlook.com/?url=https%3A%2F%2Fgit.openembedded.org%2Fbitbake%2Fcommit%2F%3Fid%3D9d6341df611a1725090444f6f8eb0244aed08213&data=05%7C01%7C%7C68bbc2a8d2a04566721208dae1cbac1e%7C1f23d6d3b1584e45b7e17631cf28c804%7C0%7C0%7C638070562123843657%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=wVgmBkoIzcgJ%2FxmB5CfM6HBWRzoyGAi%2BZi6to7k3veI%3D&reserved=0>
+and oe now enables network mostly only in do_fetch and few special tasks as implemented in:
+  https://git.openembedded.org/openembedded-core/commit/?id=7ce1e88a3ad85bbb925bb9f7167dc0a5fd1c27f4<https://eur02.safelinks.protection.outlook.com/?url=https%3A%2F%2Fgit.openembedded.org%2Fopenembedded-core%2Fcommit%2F%3Fid%3D7ce1e88a3ad85bbb925bb9f7167dc0a5fd1c27f4&data=05%7C01%7C%7C68bbc2a8d2a04566721208dae1cbac1e%7C1f23d6d3b1584e45b7e17631cf28c804%7C0%7C0%7C638070562123843657%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=n2d5TSsWPg%2BXptt7B8pX%2Bnoc5TPWUhXXb13lRjlXK9g%3D&reserved=0>
+
+Regards,
+
+On Mon, Dec 19, 2022 at 2:02 PM Gärding Antti via lists.yoctoproject.org<https://eur02.safelinks.protection.outlook.com/?url=http%3A%2F%2Flists.yoctoproject.org%2F&data=05%7C01%7C%7C68bbc2a8d2a04566721208dae1cbac1e%7C1f23d6d3b1584e45b7e17631cf28c804%7C0%7C0%7C638070562123843657%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=k0%2Fi49SgkdqHptYWr%2BvwituUCyBB2%2FP1kBfaH%2Bk84O8%3D&reserved=0> <Antti.Garding=etteplan.com@lists.yoctoproject.org<mailto:etteplan.com@lists.yoctoproject.org>> wrote:
+Hi,
+
+I am having an issue with a recipe whose do_configure requires network connections and I wonder if this issue could be related to Yocto so that this list would be the correct place to ask for ideas.
+
+The problem appears when trying to build dotnet-hello-world which comes with meta-dotnet (https://github.com/jeremy-prater/meta-dotnet<https://eur02.safelinks.protection.outlook.com/?url=https%3A%2F%2Fgithub.com%2Fjeremy-prater%2Fmeta-dotnet&data=05%7C01%7C%7C68bbc2a8d2a04566721208dae1cbac1e%7C1f23d6d3b1584e45b7e17631cf28c804%7C0%7C0%7C638070562123843657%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=nBS8Ja%2BxFCyOrVn8%2BV6Nr6z4oS8X5ShrXkAFBvNjDPM%3D&reserved=0>). I am not the only one having this issue, but many people, including the layer's author, also report having no problems. Googling gives a lot of suggestions, but as this is related to .NET, all of them are related to Windows / Visual Studio environment and I don't know how to apply them using Yocto.
+
+In short, do_configure for dotnet-hello-world invokes the .NET SDK's tool dotnet as a host tool to fetch what is needed to build and run the program. As a part of that, it uses NuGet, the package manager for .NET, which says "error NU1301: Unable to load the service index for source https://api.nuget.org/v3/index.json<https://eur02.safelinks.protection.outlook.com/?url=https%3A%2F%2Fapi.nuget.org%2Fv3%2Findex.json&data=05%7C01%7C%7C68bbc2a8d2a04566721208dae1cbac1e%7C1f23d6d3b1584e45b7e17631cf28c804%7C0%7C0%7C638070562123843657%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=AOKlXUv0ktrRXh1iK6own5zIyzq9OMwHkDweuOQQuRg%3D&reserved=0>".
+
+If I modify the recipe so that it tries to curl that file, I get "Could not resolve host: api.nuget.org<https://eur02.safelinks.protection.outlook.com/?url=http%3A%2F%2Fapi.nuget.org%2F&data=05%7C01%7C%7C68bbc2a8d2a04566721208dae1cbac1e%7C1f23d6d3b1584e45b7e17631cf28c804%7C0%7C0%7C638070562123843657%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=Upta%2F3f1sPoPAVhM7s3ABvgygraPXIwA14Da4cRYfL8%3D&reserved=0>". If I do the same but use numeric address, I get "Couldn't connect to server".
+
+If I run the commands in the recipe manually in the same environment I use for Yocto builds, using .NET SDK I have installed manually, they work.
+
+My build environment is Ubuntu 20.04 run inside a Docker container.
+
+
+Best regards,
+Antti Gärding
+
+-=-=-=-=-=-=-=-=-=-=-=-
+Links: You receive all messages sent to this group.
+View/Reply Online (#58831): https://lists.yoctoproject.org/g/yocto/message/58831<https://eur02.safelinks.protection.outlook.com/?url=https%3A%2F%2Flists.yoctoproject.org%2Fg%2Fyocto%2Fmessage%2F58831&data=05%7C01%7C%7C68bbc2a8d2a04566721208dae1cbac1e%7C1f23d6d3b1584e45b7e17631cf28c804%7C0%7C0%7C638070562123843657%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=ttNSefU3zhwKswk9E9lJhrTL7JND3pcIx0fRogerzUo%3D&reserved=0>
+Mute This Topic: https://lists.yoctoproject.org/mt/95764092/3617156<https://eur02.safelinks.protection.outlook.com/?url=https%3A%2F%2Flists.yoctoproject.org%2Fmt%2F95764092%2F3617156&data=05%7C01%7C%7C68bbc2a8d2a04566721208dae1cbac1e%7C1f23d6d3b1584e45b7e17631cf28c804%7C0%7C0%7C638070562123999877%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=Bu44bJUc881McFGixdgBk6h%2FKJUlyVbmNu6zeUQMrk0%3D&reserved=0>
+Group Owner: yocto+owner@lists.yoctoproject.org<mailto:yocto%2Bowner@lists.yoctoproject.org>
+Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub<https://eur02.safelinks.protection.outlook.com/?url=https%3A%2F%2Flists.yoctoproject.org%2Fg%2Fyocto%2Funsub&data=05%7C01%7C%7C68bbc2a8d2a04566721208dae1cbac1e%7C1f23d6d3b1584e45b7e17631cf28c804%7C0%7C0%7C638070562123999877%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=9jIeQariiOq1rKxR9MuvgeTLmYA5WxZav7Nsu2w5y20%3D&reserved=0> [Martin.Jansa@gmail.com<mailto:Martin.Jansa@gmail.com>]
+-=-=-=-=-=-=-=-=-=-=-=-
+
+
+
+[-- Attachment #2: Type: text/html, Size: 13602 bytes --]
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* RE: [yocto] Issue with accessing network from a recipe
+  2022-12-20  7:41   ` Gärding Antti
+@ 2022-12-20  8:37     ` Gärding Antti
+  0 siblings, 0 replies; 4+ messages in thread
+From: Gärding Antti @ 2022-12-20  8:37 UTC (permalink / raw)
+  To: Martin Jansa; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 8276 bytes --]
+
+Hi,
+
+I noticed that the another question was probably due to my own mistake: Accessing network from do_fetch seems to work, but I hadn't noticed that I had left commands requiring network into do_compile even though I had moved those of them that were in do_configure to do_fetch.
+
+
+Best regards,
+Antti Gärding
+
+From: Gärding Antti <Antti.Garding@etteplan.com>
+Sent: Tuesday, December 20, 2022 9:42
+To: Martin Jansa <martin.jansa@gmail.com>
+Cc: yocto@lists.yoctoproject.org
+Subject: Re: [yocto] Issue with accessing network from a recipe
+
+Hi,
+
+Thanks! That helped my team find out a solution or at least a work-around: setting do_configure[network] and do_compile[network] to "1" in local.conf.
+
+I would have another related questions, though: Should the commands requiring network access work if they are invoked from do_fetch? I tried that and it didn't work.
+
+
+Best regards,
+Antti Gärding
+
+________________________________
+Kohteesta: Martin Jansa <martin.jansa@gmail.com<mailto:martin.jansa@gmail.com>>
+Lähetetty: maanantaina 19. joulukuuta 2022 klo 16.16
+Vastaanottaja: Gärding Antti <Antti.Garding@etteplan.com<mailto:Antti.Garding@etteplan.com>>
+Kopio: yocto@lists.yoctoproject.org<mailto:yocto@lists.yoctoproject.org> <yocto@lists.yoctoproject.org<mailto:yocto@lists.yoctoproject.org>>
+Aihe: Re: [yocto] Issue with accessing network from a recipe
+
+Hi,
+
+that is intentional, recipes should fetch sources with bitbake fetcher (which respects MIRROR/PREMIRROR/DL_DIR etc) in do_fetch and network shouldn't be used in other tasks (unless explicitly enabled in well explained exceptions).
+
+bitbake can now restrict network access in various tasks based on "network" flag as implemented in:
+  https://git.openembedded.org/bitbake/commit/?id=0746b6a2a32fec4c18bf1a52b1454ca4c04bf543<https://eur02.safelinks.protection.outlook.com/?url=https%3A%2F%2Fgit.openembedded.org%2Fbitbake%2Fcommit%2F%3Fid%3D0746b6a2a32fec4c18bf1a52b1454ca4c04bf543&data=05%7C01%7C%7C68bbc2a8d2a04566721208dae1cbac1e%7C1f23d6d3b1584e45b7e17631cf28c804%7C0%7C0%7C638070562123843657%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=nHr4o3NfePVtT9Qm5CtFxUyph%2BpIDsAPu0ga7hzqiLk%3D&reserved=0>
+  https://git.openembedded.org/bitbake/commit/?id=9d6341df611a1725090444f6f8eb0244aed08213<https://eur02.safelinks.protection.outlook.com/?url=https%3A%2F%2Fgit.openembedded.org%2Fbitbake%2Fcommit%2F%3Fid%3D9d6341df611a1725090444f6f8eb0244aed08213&data=05%7C01%7C%7C68bbc2a8d2a04566721208dae1cbac1e%7C1f23d6d3b1584e45b7e17631cf28c804%7C0%7C0%7C638070562123843657%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=wVgmBkoIzcgJ%2FxmB5CfM6HBWRzoyGAi%2BZi6to7k3veI%3D&reserved=0>
+and oe now enables network mostly only in do_fetch and few special tasks as implemented in:
+  https://git.openembedded.org/openembedded-core/commit/?id=7ce1e88a3ad85bbb925bb9f7167dc0a5fd1c27f4<https://eur02.safelinks.protection.outlook.com/?url=https%3A%2F%2Fgit.openembedded.org%2Fopenembedded-core%2Fcommit%2F%3Fid%3D7ce1e88a3ad85bbb925bb9f7167dc0a5fd1c27f4&data=05%7C01%7C%7C68bbc2a8d2a04566721208dae1cbac1e%7C1f23d6d3b1584e45b7e17631cf28c804%7C0%7C0%7C638070562123843657%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=n2d5TSsWPg%2BXptt7B8pX%2Bnoc5TPWUhXXb13lRjlXK9g%3D&reserved=0>
+
+Regards,
+
+On Mon, Dec 19, 2022 at 2:02 PM Gärding Antti via lists.yoctoproject.org<https://eur02.safelinks.protection.outlook.com/?url=http%3A%2F%2Flists.yoctoproject.org%2F&data=05%7C01%7C%7C68bbc2a8d2a04566721208dae1cbac1e%7C1f23d6d3b1584e45b7e17631cf28c804%7C0%7C0%7C638070562123843657%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=k0%2Fi49SgkdqHptYWr%2BvwituUCyBB2%2FP1kBfaH%2Bk84O8%3D&reserved=0> <Antti.Garding=etteplan.com@lists.yoctoproject.org<mailto:etteplan.com@lists.yoctoproject.org>> wrote:
+Hi,
+
+I am having an issue with a recipe whose do_configure requires network connections and I wonder if this issue could be related to Yocto so that this list would be the correct place to ask for ideas.
+
+The problem appears when trying to build dotnet-hello-world which comes with meta-dotnet (https://github.com/jeremy-prater/meta-dotnet<https://eur02.safelinks.protection.outlook.com/?url=https%3A%2F%2Fgithub.com%2Fjeremy-prater%2Fmeta-dotnet&data=05%7C01%7C%7C68bbc2a8d2a04566721208dae1cbac1e%7C1f23d6d3b1584e45b7e17631cf28c804%7C0%7C0%7C638070562123843657%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=nBS8Ja%2BxFCyOrVn8%2BV6Nr6z4oS8X5ShrXkAFBvNjDPM%3D&reserved=0>). I am not the only one having this issue, but many people, including the layer's author, also report having no problems. Googling gives a lot of suggestions, but as this is related to .NET, all of them are related to Windows / Visual Studio environment and I don't know how to apply them using Yocto.
+
+In short, do_configure for dotnet-hello-world invokes the .NET SDK's tool dotnet as a host tool to fetch what is needed to build and run the program. As a part of that, it uses NuGet, the package manager for .NET, which says "error NU1301: Unable to load the service index for source https://api.nuget.org/v3/index.json<https://eur02.safelinks.protection.outlook.com/?url=https%3A%2F%2Fapi.nuget.org%2Fv3%2Findex.json&data=05%7C01%7C%7C68bbc2a8d2a04566721208dae1cbac1e%7C1f23d6d3b1584e45b7e17631cf28c804%7C0%7C0%7C638070562123843657%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=AOKlXUv0ktrRXh1iK6own5zIyzq9OMwHkDweuOQQuRg%3D&reserved=0>".
+
+If I modify the recipe so that it tries to curl that file, I get "Could not resolve host: api.nuget.org<https://eur02.safelinks.protection.outlook.com/?url=http%3A%2F%2Fapi.nuget.org%2F&data=05%7C01%7C%7C68bbc2a8d2a04566721208dae1cbac1e%7C1f23d6d3b1584e45b7e17631cf28c804%7C0%7C0%7C638070562123843657%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=Upta%2F3f1sPoPAVhM7s3ABvgygraPXIwA14Da4cRYfL8%3D&reserved=0>". If I do the same but use numeric address, I get "Couldn't connect to server".
+
+If I run the commands in the recipe manually in the same environment I use for Yocto builds, using .NET SDK I have installed manually, they work.
+
+My build environment is Ubuntu 20.04 run inside a Docker container.
+
+
+Best regards,
+Antti Gärding
+
+-=-=-=-=-=-=-=-=-=-=-=-
+Links: You receive all messages sent to this group.
+View/Reply Online (#58831): https://lists.yoctoproject.org/g/yocto/message/58831<https://eur02.safelinks.protection.outlook.com/?url=https%3A%2F%2Flists.yoctoproject.org%2Fg%2Fyocto%2Fmessage%2F58831&data=05%7C01%7C%7C68bbc2a8d2a04566721208dae1cbac1e%7C1f23d6d3b1584e45b7e17631cf28c804%7C0%7C0%7C638070562123843657%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=ttNSefU3zhwKswk9E9lJhrTL7JND3pcIx0fRogerzUo%3D&reserved=0>
+Mute This Topic: https://lists.yoctoproject.org/mt/95764092/3617156<https://eur02.safelinks.protection.outlook.com/?url=https%3A%2F%2Flists.yoctoproject.org%2Fmt%2F95764092%2F3617156&data=05%7C01%7C%7C68bbc2a8d2a04566721208dae1cbac1e%7C1f23d6d3b1584e45b7e17631cf28c804%7C0%7C0%7C638070562123999877%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=Bu44bJUc881McFGixdgBk6h%2FKJUlyVbmNu6zeUQMrk0%3D&reserved=0>
+Group Owner: yocto+owner@lists.yoctoproject.org<mailto:yocto%2Bowner@lists.yoctoproject.org>
+Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub<https://eur02.safelinks.protection.outlook.com/?url=https%3A%2F%2Flists.yoctoproject.org%2Fg%2Fyocto%2Funsub&data=05%7C01%7C%7C68bbc2a8d2a04566721208dae1cbac1e%7C1f23d6d3b1584e45b7e17631cf28c804%7C0%7C0%7C638070562123999877%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=9jIeQariiOq1rKxR9MuvgeTLmYA5WxZav7Nsu2w5y20%3D&reserved=0> [Martin.Jansa@gmail.com<mailto:Martin.Jansa@gmail.com>]
+-=-=-=-=-=-=-=-=-=-=-=-
+
+
+[-- Attachment #2: Type: text/html, Size: 15698 bytes --]
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+end of thread, other threads:[~2022-12-20  8:38 UTC | newest]
+
+Thread overview: 4+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-12-19 13:02 Issue with accessing network from a recipe Gärding Antti
+2022-12-19 14:16 ` [yocto] " Martin Jansa
+2022-12-20  7:41   ` Gärding Antti
+2022-12-20  8:37     ` Gärding Antti
+

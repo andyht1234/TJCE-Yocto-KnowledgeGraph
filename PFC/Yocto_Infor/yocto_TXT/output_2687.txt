@@ -1,0 +1,103 @@
+* [meta-security][PATCH] Parsec service. Update PACKAGECONFIG definitions and README.md
+@ 2021-10-22 12:44 Anton Antonov
+  0 siblings, 0 replies; only message in thread
+From: Anton Antonov @ 2021-10-22 12:44 UTC (permalink / raw)
+  To: yocto; +Cc: Anton.Antonov
+
+Signed-off-by: Anton Antonov <Anton.Antonov@arm.com>
+---
+ meta-parsec/README.md                         | 23 +++++++++++++++----
+ .../parsec-service/parsec-service_0.8.1.bb    | 10 ++++----
+ 2 files changed, 23 insertions(+), 10 deletions(-)
+
+diff --git a/meta-parsec/README.md b/meta-parsec/README.md
+index aeb48a6..c5635d3 100644
+--- a/meta-parsec/README.md
++++ b/meta-parsec/README.md
+@@ -1,8 +1,7 @@
+ meta-parsec layer
+ ==============
+ 
+-This layer contains recipes for the Parsec service with Mbed-Crypto,
+-Pkcs11 and TPM providers and parsec tools.
++This layer contains recipes for the Parsec service and parsec tools.
+ 
+ Dependencies
+ ============
+@@ -43,9 +42,16 @@ local.conf:
+ 
+     IMAGE_INSTALL:append = " parsec-service"
+ 
+-  The Parsec service will be deployed into the image built with all the supported
+-providers and with the default config file from the Parsec repository:
++  By default the Parsec service will be deployed into the image with
++TPM, PKCS11, MBED-CRYPTO and CRYPTOAUTHLIB providers build in
++and with the default config file from the Parsec repository:
+ https://github.com/parallaxsecond/parsec/blob/main/config.toml
++
++  You can use PACKAGECONFIG for Parsec servic recipe to define
++what providers should be built in. For example,
++
++    PACKAGECONFIG:pn-parsec-service = "TPM"
++
+   The default Parsec service config file contains the MbedCrypto provider
+ enabled. The config file needs to be updated to use the Parsec service
+ with other providers like TPM or PKCS11. The required procedures are
+@@ -80,12 +86,19 @@ manual testing of the Parsec service:
+ to test the Parsec service base functionality:
+ https://www.youtube.com/watch?v=ido0CyUdMHM&list=PLKjl7IFAwc4S7WQqqphCsyy6DPDxJ2Skg&index=4
+ 
++  The parsec-tool recipe also includes `parsec-cli-tests.sh` script
++which runs e2e tests against all providers enabled and configured
++in Parsec service.
++
+   You can use runqemu to start a VM with a built image file and run
+ manual tests with parsec-tool.
+ 
++Enabling Parsec providers for manual testing
++============================================
++
+ 1. MbedCrypto provider
+   The default Parsec service config file contains the MbedCrypto provider
+-enabled. No changes required for manual testing.
++enabled. No changes required.
+ 
+ 2. PKCS11 provider
+   The Software HSM can be used for manual testing of the provider by
+diff --git a/meta-parsec/recipes-parsec/parsec-service/parsec-service_0.8.1.bb b/meta-parsec/recipes-parsec/parsec-service/parsec-service_0.8.1.bb
+index b8bfa98..9161872 100644
+--- a/meta-parsec/recipes-parsec/parsec-service/parsec-service_0.8.1.bb
++++ b/meta-parsec/recipes-parsec/parsec-service/parsec-service_0.8.1.bb
+@@ -13,15 +13,15 @@ SRC_URI += "crate://crates.io/parsec-service/${PV} \
+ DEPENDS = "clang-native"
+ 
+ PACKAGECONFIG ??= "TPM PKCS11 MBED-CRYPTO CRYPTOAUTHLIB"
+-PACKAGECONFIG[ALL] = "all-providers,,tpm2-tss libts,libts"
+-PACKAGECONFIG[TPM] = "tpm-provider,,tpm2-tss"
+-PACKAGECONFIG[PKCS11] = "pkcs11-provider,"
++PACKAGECONFIG[ALL] = "all-providers cryptoki/generate-bindings tss-esapi/generate-bindings,,tpm2-tss libts,libts"
++PACKAGECONFIG[TPM] = "tpm-provider tss-esapi/generate-bindings,,tpm2-tss"
++PACKAGECONFIG[PKCS11] = "pkcs11-provider cryptoki/generate-bindings,"
+ PACKAGECONFIG[MBED-CRYPTO] = "mbed-crypto-provider,"
+ PACKAGECONFIG[CRYPTOAUTHLIB] = "cryptoauthlib-provider,"
+ PACKAGECONFIG[TS] = "trusted-service-provider,,libts,libts"
+ 
+-PARSEC_PROVIDERS = "${@d.getVar('PACKAGECONFIG_CONFARGS',True).replace(' ', ',')}"
+-CARGO_BUILD_FLAGS += " --features ${PARSEC_PROVIDERS},cryptoki/generate-bindings,tss-esapi/generate-bindings"
++PARSEC_FEATURES = "${@d.getVar('PACKAGECONFIG_CONFARGS',True).strip().replace(' ', ',')}"
++CARGO_BUILD_FLAGS += " --features ${PARSEC_FEATURES}"
+ 
+ inherit systemd
+ SYSTEMD_SERVICE:${PN} = "parsec.service"
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] only message in thread
+only message in thread, other threads:[~2021-10-22 12:45 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-10-22 12:44 [meta-security][PATCH] Parsec service. Update PACKAGECONFIG definitions and README.md Anton Antonov
+

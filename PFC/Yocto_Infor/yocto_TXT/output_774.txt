@@ -1,0 +1,342 @@
+* How to remove Rust (and other packages) from yocto build #bitbake
+@ 2023-04-05 10:46 Jesus.JimenezSanchez
+  2023-04-05 11:31 ` [yocto] " Josef Holzmayr
+  0 siblings, 1 reply; 6+ messages in thread
+From: Jesus.JimenezSanchez @ 2023-04-05 10:46 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1470 bytes --]
+
+I'm trying to remove a series of packages from my yocto build but what I've tried hasn't worked so far. This is what I have:
+
+```
+PACKAGE_EXCLUDE += "\
+avahi \
+apt \
+apt-native \
+cmake \
+cmake-native \
+cracklib \
+crda \
+cryptodev-linux \
+dpkg \
+dpkg-native \
+elfutils \
+elfutils-native \
+fftw \
+gawk \
+gcc-runtime \
+gnupg \
+hdparm \
+icu \
+kbd \
+libassuan \
+libatomic-ops \
+libavahi-client \
+libavahi-common \
+libavahi-core \
+libcap-ng \
+libdaemon \
+libgcc \
+libgcc-initial \
+libgcrypt \
+libgpg-error \
+libical \
+libidn2 \
+libksba \
+libmnl \
+libogg \
+libtirpc \
+libtool \
+libtool-cross \
+libubootenv \
+libunistring \
+libxcrypt \
+linux-libc-headers \
+lz4 \
+lzo \
+npth \
+pinentry \
+pulseaudio \
+qemuwrapper-cross \
+resize-helper \
+rust \
+rust-llvm \
+rust-llvm-native \
+rust-native \
+systemd \
+systemd-compat-units \
+systemd-conf \
+systemd-mount-partitions \
+tar \
+vala \
+xxhash \
+zstd \
+"
+```
+
+The main one I want to remove is Rust, but I still see it building in the log.
+
+I have also tried using `IMAGE_INSTALL:remove` (in fact, I have both at the same time at the moment in my `local.conf` file), but it doesn't seem to work either. I have also tried both options in my `bbappend` file with no success either.
+
+What am I doing wrong here? Is removing Rust even possible?
+
+Some other packages I'm trying to remove are also appearing in the build log, like `dpkg-native` or `cmake`.
+
+Thank you.
+
+[-- Attachment #2: Type: text/html, Size: 6176 bytes --]
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] How to remove Rust (and other packages) from yocto build #bitbake
+  2023-04-05 10:46 How to remove Rust (and other packages) from yocto build #bitbake Jesus.JimenezSanchez
+@ 2023-04-05 11:31 ` Josef Holzmayr
+  2023-04-05 12:49   ` Jesus.JimenezSanchez
+  0 siblings, 1 reply; 6+ messages in thread
+From: Josef Holzmayr @ 2023-04-05 11:31 UTC (permalink / raw)
+  To: Jesus.JimenezSanchez; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2924 bytes --]
+
+Randomly removing things just does not work (TM).
+
+Bitbake builds only what you tell it to anyways, so whatever you see in
+your build is directly (because it goes into the resulting image) or
+indirectly (because it is needed to build the resulting image) defined by
+your target. So the things you can do is:
+- looking at your image recipe, and remove things
+- looking at your machine and distro, if they add things, and remove there.
+Rust native is almost impossible to remove nowadays, because it is a build
+dependency of python3-cryptography.
+
+Greetz,
+Josef
+
+On Wed, Apr 5, 2023 at 12:46 PM Jesus.JimenezSanchez via
+lists.yoctoproject.org <Jesus.JimenezSanchez=
+verifone.com@lists.yoctoproject.org> wrote:
+
+> I'm trying to remove a series of packages from my yocto build but what
+> I've tried hasn't worked so far. This is what I have:
+>
+> ```
+> PACKAGE_EXCLUDE += "\
+> avahi \
+> apt \
+> apt-native \
+> cmake \
+> cmake-native \
+> cracklib \
+> crda \
+> cryptodev-linux \
+> dpkg \
+> dpkg-native \
+> elfutils \
+> elfutils-native \
+> fftw \
+> gawk \
+> gcc-runtime \
+> gnupg \
+> hdparm \
+> icu \
+> kbd \
+> libassuan \
+> libatomic-ops \
+> libavahi-client \
+> libavahi-common \
+> libavahi-core \
+> libcap-ng \
+> libdaemon \
+> libgcc \
+> libgcc-initial \
+> libgcrypt \
+> libgpg-error \
+> libical \
+> libidn2 \
+> libksba \
+> libmnl \
+> libogg \
+> libtirpc \
+> libtool \
+> libtool-cross \
+> libubootenv \
+> libunistring \
+> libxcrypt \
+> linux-libc-headers \
+> lz4 \
+> lzo \
+> npth \
+> pinentry \
+> pulseaudio \
+> qemuwrapper-cross \
+> resize-helper \
+> rust \
+> rust-llvm \
+> rust-llvm-native \
+> rust-native \
+> systemd \
+> systemd-compat-units \
+> systemd-conf \
+> systemd-mount-partitions \
+> tar \
+> vala \
+> xxhash \
+> zstd \
+> "
+> ```
+>
+> The main one I want to remove is Rust, but I still see it building in the
+> log.
+>
+> I have also tried using `IMAGE_INSTALL:remove` (in fact, I have both at
+> the same time at the moment in my `local.conf` file), but it doesn't seem
+> to work either. I have also tried both options in my `bbappend` file with
+> no success either.
+>
+> What am I doing wrong here? Is removing Rust even possible?
+>
+> Some other packages I'm trying to remove are also appearing in the build
+> log, like `dpkg-native` or `cmake`.
+>
+> Thank you.
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> You automatically follow any topics you start or reply to.
+> View/Reply Online (#59614):
+> https://lists.yoctoproject.org/g/yocto/message/59614
+> Mute This Topic: https://lists.yoctoproject.org/mt/98079587/4689568
+> Mute #bitbake:https://lists.yoctoproject.org/g/yocto/mutehashtag/bitbake
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> jester@theyoctojester.info]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 7206 bytes --]
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: How to remove Rust (and other packages) from yocto build #bitbake
+  2023-04-05 11:31 ` [yocto] " Josef Holzmayr
+@ 2023-04-05 12:49   ` Jesus.JimenezSanchez
+  2023-04-05 12:54     ` [yocto] " Martin Jansa
+  0 siblings, 1 reply; 6+ messages in thread
+From: Jesus.JimenezSanchez @ 2023-04-05 12:49 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 297 bytes --]
+
+Hello,
+
+Thank you for your response.
+
+I guess we'll keep building Rust (slowly).
+
+About the other packages I wanted to remove, does `PACKAGE_EXCLUDE` or `IMAGE_INSTALL:remove` not work in this case? Is my only option to dig through the recipes and remove them there directly?
+
+Thank you.
+
+[-- Attachment #2: Type: text/html, Size: 329 bytes --]
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] How to remove Rust (and other packages) from yocto build #bitbake
+  2023-04-05 12:49   ` Jesus.JimenezSanchez
+@ 2023-04-05 12:54     ` Martin Jansa
+  2023-04-06 14:01       ` Jesus.JimenezSanchez
+  0 siblings, 1 reply; 6+ messages in thread
+From: Martin Jansa @ 2023-04-05 12:54 UTC (permalink / raw)
+  To: Jesus.JimenezSanchez; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1105 bytes --]
+
+You can add SKIP_RECIPE[rust-native]  in your local.conf and bitbake will
+tell you all the other parts you need to avoid (e.g. librsvg, ...)
+
+On Wed, Apr 5, 2023 at 2:49 PM Jesus.JimenezSanchez via
+lists.yoctoproject.org <Jesus.JimenezSanchez=
+verifone.com@lists.yoctoproject.org> wrote:
+
+> Hello,
+>
+> Thank you for your response.
+>
+> I guess we'll keep building Rust (slowly).
+>
+> About the other packages I wanted to remove, does `PACKAGE_EXCLUDE` or
+> `IMAGE_INSTALL:remove` not work in this case? Is my only option to dig
+> through the recipes and remove them there directly?
+>
+> Thank you.
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#59617):
+> https://lists.yoctoproject.org/g/yocto/message/59617
+> Mute This Topic: https://lists.yoctoproject.org/mt/98079587/3617156
+> Mute #bitbake:https://lists.yoctoproject.org/g/yocto/mutehashtag/bitbake
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> Martin.Jansa@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 1982 bytes --]
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: How to remove Rust (and other packages) from yocto build #bitbake
+  2023-04-05 12:54     ` [yocto] " Martin Jansa
+@ 2023-04-06 14:01       ` Jesus.JimenezSanchez
+  2023-04-06 14:10         ` [yocto] " Dmitry Baryshkov
+  0 siblings, 1 reply; 6+ messages in thread
+From: Jesus.JimenezSanchez @ 2023-04-06 14:01 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 257 bytes --]
+
+Hello,
+
+Thank you, SKIP_RECIPE is what I was looking for. Unfortunately, it is a dependency for python3-cryptography, as was mentioned in another message, and the build fails instantly, so it doesn't look like we'll be removing it.
+
+Thank you anyways.
+
+[-- Attachment #2: Type: text/html, Size: 273 bytes --]
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] How to remove Rust (and other packages) from yocto build #bitbake
+  2023-04-06 14:01       ` Jesus.JimenezSanchez
+@ 2023-04-06 14:10         ` Dmitry Baryshkov
+  0 siblings, 0 replies; 6+ messages in thread
+From: Dmitry Baryshkov @ 2023-04-06 14:10 UTC (permalink / raw)
+  To: Jesus.JimenezSanchez; +Cc: yocto
+
+On Thu, 6 Apr 2023 at 17:01, Jesus.JimenezSanchez via
+lists.yoctoproject.org
+<Jesus.JimenezSanchez=verifone.com@lists.yoctoproject.org> wrote:
+>
+> Hello,
+>
+> Thank you, SKIP_RECIPE is what I was looking for. Unfortunately, it is a dependency for python3-cryptography, as was mentioned in another message, and the build fails instantly, so it doesn't look like we'll be removing it.
+
+
+Also in some of recipies your dependencies might be gated by
+PACKAGECONFIG flags. You might be able to gate them by disabling some
+of PACKAGECONFIG features.
+
+-- 
+With best wishes
+Dmitry
+
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+end of thread, other threads:[~2023-04-06 14:10 UTC | newest]
+
+Thread overview: 6+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-04-05 10:46 How to remove Rust (and other packages) from yocto build #bitbake Jesus.JimenezSanchez
+2023-04-05 11:31 ` [yocto] " Josef Holzmayr
+2023-04-05 12:49   ` Jesus.JimenezSanchez
+2023-04-05 12:54     ` [yocto] " Martin Jansa
+2023-04-06 14:01       ` Jesus.JimenezSanchez
+2023-04-06 14:10         ` [yocto] " Dmitry Baryshkov
+

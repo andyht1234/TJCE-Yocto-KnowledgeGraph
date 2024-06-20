@@ -1,0 +1,47 @@
+* Re: [yocto] Packages Missing from Deploy
+       [not found] <16CBE2CEE67BCA47.10162@lists.yoctoproject.org>
+@ 2022-01-23 15:01 ` Robert Joslyn
+  0 siblings, 0 replies; only message in thread
+From: Robert Joslyn @ 2022-01-23 15:01 UTC (permalink / raw)
+  To: yocto
+
+
+> On Jan 19, 2022, at 9:17 PM, Robert Joslyn <robert.joslyn@redrectangle.org> wrote:
+> 
+> I’m testing migrating one of my dunfell builds to master in anticipation of the upcoming LTS, and there is a difference in how packages are populated into deploy that is causing me problems. My builds use a package feed, and the way I’ve been generating my package feed is to create a packagegroup recipe that RDEPENDS on all of the top level packages I want pulled into my feed. Then I’ll generate the packagefeed index and copy the content of tmp/deploy/ipk to the web server.
+> 
+> On dunfell, if I build a recipe like my packagegroup, the packages from that recipe and all recursive dependencies are populated into tmp/deploy/ipk. On master, only the packages from the specific recipe I built are populated into tmp/deploy/ipk, but none of the RDEPENDS. I’m using ipk, but the same behavior holds for rpm and deb.
+> 
+> This can easily be seen with a simple poky checkout and build, for example on dunfell:
+> $ bitbake curl
+> $ find tmp/deploy/ipk -type f | wc -l
+> 4691
+> 
+> And on master:
+> $ bitbake curl
+> $ find tmp/deploy/ipk -type f | wc -l
+> 10
+> 
+> In this example of building curl, the only packages I get are from curl and ca-certificates. 
+> 
+> Is this expected behavior? Is there something I need to configure to get the same package generation as dunfell?
+
+After bisecting, I found that yes, this is now expected behavior: 
+https://git.yoctoproject.org/poky/commit/?id=568f62214bca3ac6d35eef8d9f4562596fb4c9ab
+
+Basically, that commit removes the recursive dependency on the packaging tasks. Using ‘bitbake --runall build ...’ as suggested in the commit does provide the behavior I want. For me, this is only an issue when building my package feeds. It seems that the documentation for the package feeds should be updated to reflect this change. Unless I missed something, if you follow the docs you end up with a broken feed that is missing a lot of needed packages.
+
+I can probably write something up if needed. I think just a paragraph explaining it in this section somewhere:
+https://docs.yoctoproject.org/singleindex.html#using-runtime-package-management
+
+Thanks,
+Robert
+
+^ permalink raw reply	[flat|nested] only message in thread
+only message in thread, other threads:[~2022-01-23 15:01 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+     [not found] <16CBE2CEE67BCA47.10162@lists.yoctoproject.org>
+2022-01-23 15:01 ` [yocto] Packages Missing from Deploy Robert Joslyn
+

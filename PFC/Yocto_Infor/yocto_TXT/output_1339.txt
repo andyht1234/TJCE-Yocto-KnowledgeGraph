@@ -1,0 +1,143 @@
+* [meta-cgl][PATCH 1/2] layer.conf: add langdale to LAYERSERIES_COMPAT
+@ 2022-10-02 13:53 Yi Zhao
+  2022-10-02 13:53 ` [meta-cgl][PATCH 2/2] resource-agents: set correct path of rm command in ldirectord.service Yi Zhao
+  2022-10-03  5:07 ` [meta-cgl][PATCH 1/2] layer.conf: add langdale to LAYERSERIES_COMPAT Jeremy Puhlman
+  0 siblings, 2 replies; 3+ messages in thread
+From: Yi Zhao @ 2022-10-02 13:53 UTC (permalink / raw)
+  To: yocto, jpuhlman
+
+Signed-off-by: Yi Zhao <yi.zhao@windriver.com>
+---
+ meta-cgl-common/conf/layer.conf | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/meta-cgl-common/conf/layer.conf b/meta-cgl-common/conf/layer.conf
+index 2e21879..865ed9f 100644
+--- a/meta-cgl-common/conf/layer.conf
++++ b/meta-cgl-common/conf/layer.conf
+@@ -11,6 +11,6 @@ BBFILE_PRIORITY_cgl-common = "7"
+ 
+ LAYERDEPENDS_cgl-common = "core openembedded-layer networking-layer perl-layer filesystems-layer security selinux"
+ 
+-LAYERSERIES_COMPAT_cgl-common = "honister kirkstone"
++LAYERSERIES_COMPAT_cgl-common = "honister kirkstone langdale"
+ 
+ require conf/distro/include/cgl_common_security_flags.inc
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 3+ messages in thread
+* [meta-cgl][PATCH 2/2] resource-agents: set correct path of rm command in ldirectord.service
+  2022-10-02 13:53 [meta-cgl][PATCH 1/2] layer.conf: add langdale to LAYERSERIES_COMPAT Yi Zhao
+@ 2022-10-02 13:53 ` Yi Zhao
+  2022-10-03  5:07 ` [meta-cgl][PATCH 1/2] layer.conf: add langdale to LAYERSERIES_COMPAT Jeremy Puhlman
+  1 sibling, 0 replies; 3+ messages in thread
+From: Yi Zhao @ 2022-10-02 13:53 UTC (permalink / raw)
+  To: yocto, jpuhlman
+
+Fix buildpaths warning:
+WARNING: resource-agents-4.5.0-r0 do_package_qa: QA Issue: File
+/lib/systemd/system/ldirectord.service in package ldirectord contains
+reference to TMPDIR [buildpaths]
+
+Signed-off-by: Yi Zhao <yi.zhao@windriver.com>
+---
+ ...ce.in-set-correct-path-of-rm-command.patch | 28 +++++++++++++++++++
+ .../resource-agents_4.5.0.bb                  |  1 +
+ 2 files changed, 29 insertions(+)
+ create mode 100644 meta-cgl-common/recipes-cgl/cluster-resource-agents/resource-agents/0001-ldirectord.service.in-set-correct-path-of-rm-command.patch
+
+diff --git a/meta-cgl-common/recipes-cgl/cluster-resource-agents/resource-agents/0001-ldirectord.service.in-set-correct-path-of-rm-command.patch b/meta-cgl-common/recipes-cgl/cluster-resource-agents/resource-agents/0001-ldirectord.service.in-set-correct-path-of-rm-command.patch
+new file mode 100644
+index 0000000..d53faea
+--- /dev/null
++++ b/meta-cgl-common/recipes-cgl/cluster-resource-agents/resource-agents/0001-ldirectord.service.in-set-correct-path-of-rm-command.patch
+@@ -0,0 +1,28 @@
++From d34c5d8611d084db9cb7169e3628f3f752618cc7 Mon Sep 17 00:00:00 2001
++From: Yi Zhao <yi.zhao@windriver.com>
++Date: Sun, 2 Oct 2022 21:08:34 +0800
++Subject: [PATCH] ldirectord.service.in: set correct path of rm command
++
++Upstream-Status: Inappropriate [embedded specific]
++
++Signed-off-by: Yi Zhao <yi.zhao@windriver.com>
++---
++ ldirectord/systemd/ldirectord.service.in | 2 +-
++ 1 file changed, 1 insertion(+), 1 deletion(-)
++
++diff --git a/ldirectord/systemd/ldirectord.service.in b/ldirectord/systemd/ldirectord.service.in
++index 7965b79fb..bb476cf5d 100644
++--- a/ldirectord/systemd/ldirectord.service.in
+++++ b/ldirectord/systemd/ldirectord.service.in
++@@ -6,7 +6,7 @@ Documentation=man:ldirectord(8)
++ ExecStart=@sbindir@/ldirectord start
++ ExecStartPost=/usr/bin/touch /var/lock/subsys/ldirectord
++ ExecStop=@sbindir@/ldirectord stop
++-ExecStopPost=@RM@ -f /var/lock/subsys/ldirectord
+++ExecStopPost=/bin/rm -f /var/lock/subsys/ldirectord
++ ExecReload=@sbindir@/ldirectord reload
++ PIDFile=/run/ldirectord.ldirectord.pid
++ Type=forking
++-- 
++2.25.1
++
+diff --git a/meta-cgl-common/recipes-cgl/cluster-resource-agents/resource-agents_4.5.0.bb b/meta-cgl-common/recipes-cgl/cluster-resource-agents/resource-agents_4.5.0.bb
+index 1da020e..764a1d2 100644
+--- a/meta-cgl-common/recipes-cgl/cluster-resource-agents/resource-agents_4.5.0.bb
++++ b/meta-cgl-common/recipes-cgl/cluster-resource-agents/resource-agents_4.5.0.bb
+@@ -20,6 +20,7 @@ SRC_URI = "git://github.com/ClusterLabs/resource-agents;branch=main;protocol=htt
+            file://03-fix-header-defs-lookup.patch \
+            file://fix-install-sh-not-found.patch \
+            file://0001-ldirectord.service.in-use-run-instead-of-var-run.patch \
++           file://0001-ldirectord.service.in-set-correct-path-of-rm-command.patch \
+           "
+ 
+ SRCREV = "fee181320547365d7f8c88cca2b32801412b933d" 
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 3+ messages in thread
+* Re: [meta-cgl][PATCH 1/2] layer.conf: add langdale to LAYERSERIES_COMPAT
+  2022-10-02 13:53 [meta-cgl][PATCH 1/2] layer.conf: add langdale to LAYERSERIES_COMPAT Yi Zhao
+  2022-10-02 13:53 ` [meta-cgl][PATCH 2/2] resource-agents: set correct path of rm command in ldirectord.service Yi Zhao
+@ 2022-10-03  5:07 ` Jeremy Puhlman
+  1 sibling, 0 replies; 3+ messages in thread
+From: Jeremy Puhlman @ 2022-10-03  5:07 UTC (permalink / raw)
+  To: Yi Zhao, yocto
+
+Merged.
+
+On 10/2/2022 6:53 AM, Yi Zhao wrote:
+> Signed-off-by: Yi Zhao <yi.zhao@windriver.com>
+> ---
+>   meta-cgl-common/conf/layer.conf | 2 +-
+>   1 file changed, 1 insertion(+), 1 deletion(-)
+>
+> diff --git a/meta-cgl-common/conf/layer.conf b/meta-cgl-common/conf/layer.conf
+> index 2e21879..865ed9f 100644
+> --- a/meta-cgl-common/conf/layer.conf
+> +++ b/meta-cgl-common/conf/layer.conf
+> @@ -11,6 +11,6 @@ BBFILE_PRIORITY_cgl-common = "7"
+>   
+>   LAYERDEPENDS_cgl-common = "core openembedded-layer networking-layer perl-layer filesystems-layer security selinux"
+>   
+> -LAYERSERIES_COMPAT_cgl-common = "honister kirkstone"
+> +LAYERSERIES_COMPAT_cgl-common = "honister kirkstone langdale"
+>   
+>   require conf/distro/include/cgl_common_security_flags.inc
+
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2022-10-03  5:08 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-10-02 13:53 [meta-cgl][PATCH 1/2] layer.conf: add langdale to LAYERSERIES_COMPAT Yi Zhao
+2022-10-02 13:53 ` [meta-cgl][PATCH 2/2] resource-agents: set correct path of rm command in ldirectord.service Yi Zhao
+2022-10-03  5:07 ` [meta-cgl][PATCH 1/2] layer.conf: add langdale to LAYERSERIES_COMPAT Jeremy Puhlman
+

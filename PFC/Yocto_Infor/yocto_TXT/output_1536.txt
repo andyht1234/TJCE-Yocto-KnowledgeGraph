@@ -1,0 +1,58 @@
+* [layerindex-web][PATCH] utils.py: Fix for is_commit_ancestor()
+@ 2022-08-05 10:38 Robert Yang
+  0 siblings, 0 replies; only message in thread
+From: Robert Yang @ 2022-08-05 10:38 UTC (permalink / raw)
+  To: yocto
+
+The runcmd() would print an "ERROR" when failed which caused confusions since
+the failed is expected on old branches, so subprocess.getstatusoutput to fix
+the problem.
+
+Signed-off-by: Robert Yang <liezhi.yang@windriver.com>
+---
+ layerindex/utils.py | 18 ++++++++++--------
+ 1 file changed, 10 insertions(+), 8 deletions(-)
+
+diff --git a/layerindex/utils.py b/layerindex/utils.py
+index efd18e4..6d73c9f 100644
+--- a/layerindex/utils.py
++++ b/layerindex/utils.py
+@@ -243,16 +243,18 @@ def is_commit_ancestor(repodir, commit, logger):
+         # check if commit is a sha1 hash
+         if re.match('[0-9a-f]{40}', commit):
+             # check if the commit is an ancestor
+-            contained = runcmd(['git', 'merge-base', '--is-ancestor', '%s' % commit, 'HEAD'], repodir, logger=logger)
+-            return True
+-        else:
+-            raise Exception('is_commit_ancestor: "commit" must be a SHA1 hash')
+-    except subprocess.CalledProcessError as e:
+-            if e.returncode == 1:
+-                # commit is not an ancestor
++            cmd = "GIT_DIR=%s/.git git merge-base --is-ancestor %s HEAD" % (repodir, commit)
++            logger.debug('Running "%s"' % cmd)
++            ret, output = subprocess.getstatusoutput(cmd)
++            if ret == 0:
++                return True
++            elif ret == 1:
++                logger.debug('output: %s' % output)
+                 return False
+             else:
+-                raise e
++                raise Exception('Failed to run command: %s: ret: %s, output: %s' % (cmd, ret, output))
++        else:
++            raise Exception('is_commit_ancestor: "commit" must be a SHA1 hash')
+     except Exception as esc:
+         logger.warn(esc)
+ 
+-- 
+2.37.0
+
+
+
+^ permalink raw reply related	[flat|nested] only message in thread
+only message in thread, other threads:[~2022-08-05 10:38 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-08-05 10:38 [layerindex-web][PATCH] utils.py: Fix for is_commit_ancestor() Robert Yang
+

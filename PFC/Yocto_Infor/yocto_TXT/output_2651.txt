@@ -1,0 +1,96 @@
+* [yocto-autobuilder2][PATCH] builders.py: subtract builder weight instead of add
+@ 2021-10-29 15:39 Trevor Gamblin
+  2021-10-30 12:38 ` [yocto] " Richard Purdie
+  0 siblings, 1 reply; 2+ messages in thread
+From: Trevor Gamblin @ 2021-10-29 15:39 UTC (permalink / raw)
+  To: yocto
+
+Signed-off-by: Trevor Gamblin <trevor.gamblin@windriver.com>
+---
+ builders.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/builders.py b/builders.py
+index f94d1dd..fc92e36 100644
+--- a/builders.py
++++ b/builders.py
+@@ -168,7 +168,7 @@ def prioritizeBuilders(master, builders):
+             time = max_time
+         else:
+             if bldr.name in builder_bonuses:
+-                time = time + builder_bonuses[bldr.name]
++                time = time - builder_bonuses[bldr.name]
+         defer.returnValue((time, bldr))
+ 
+     transformed = yield defer.gatherResults(
+-- 
+2.31.1
+
+
+
+^ permalink raw reply related	[flat|nested] 2+ messages in thread
+* Re: [yocto] [yocto-autobuilder2][PATCH] builders.py: subtract builder weight instead of add
+  2021-10-29 15:39 [yocto-autobuilder2][PATCH] builders.py: subtract builder weight instead of add Trevor Gamblin
+@ 2021-10-30 12:38 ` Richard Purdie
+  0 siblings, 0 replies; 2+ messages in thread
+From: Richard Purdie @ 2021-10-30 12:38 UTC (permalink / raw)
+  To: Trevor Gamblin, yocto
+
+On Fri, 2021-10-29 at 11:39 -0400, Trevor Gamblin wrote:
+> Signed-off-by: Trevor Gamblin <trevor.gamblin@windriver.com>
+> ---
+>  builders.py | 2 +-
+>  1 file changed, 1 insertion(+), 1 deletion(-)
+> 
+> diff --git a/builders.py b/builders.py
+> index f94d1dd..fc92e36 100644
+> --- a/builders.py
+> +++ b/builders.py
+> @@ -168,7 +168,7 @@ def prioritizeBuilders(master, builders):
+>              time = max_time
+>          else:
+>              if bldr.name in builder_bonuses:
+> -                time = time + builder_bonuses[bldr.name]
+> +                time = time - builder_bonuses[bldr.name]
+>          defer.returnValue((time, bldr))
+>  
+>      transformed = yield defer.gatherResults(
+
+This didn't work (and wasn't merged) although I still think it is probably the
+correct thing to do with that code.
+
+I did some digging and the issue is that when we trigger builds, it triggers
+them one at a time as part of a buildSet and the prioritisation function
+therefore sees each build by itself and therefore gives it priority.
+
+That raises the question of the order the triggers are run in. A list of builder
+names is passed which is translated to a list of builderids. I think the order
+is therefore determined by the database ID of the builders. I did wonder if
+sorting the builders list would help but it does not.
+
+There is code in schedulers/base.py which does:
+
+        builderids = list()
+        for bldr in (yield self.master.data.get(('builders', ))):
+            if bldr['name'] in builderNames:
+                builderids.append(bldr['builderid'])
+
+which I think is where the sorting comes from.
+
+I think we're going to have discuss this with upstream.
+
+Cheers,
+
+Richard
+
+
+
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2021-10-30 12:38 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-10-29 15:39 [yocto-autobuilder2][PATCH] builders.py: subtract builder weight instead of add Trevor Gamblin
+2021-10-30 12:38 ` [yocto] " Richard Purdie
+

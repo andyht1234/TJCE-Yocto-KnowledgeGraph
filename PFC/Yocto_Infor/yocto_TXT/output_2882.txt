@@ -1,0 +1,266 @@
+* [yocto-autobuilder2][PATCH] add prioritizeBuilders
+@ 2021-09-09 13:10 Trevor Gamblin
+  2021-09-11 13:07 ` [yocto] " Richard Purdie
+       [not found] ` <16A3C66D47A24401.21276@lists.yoctoproject.org>
+  0 siblings, 2 replies; 3+ messages in thread
+From: Trevor Gamblin @ 2021-09-09 13:10 UTC (permalink / raw)
+  To: yocto
+
+This prioritizeBuilders function sorts builders by the length of their
+associated worker lists, so that builders that can only be assigned to a
+small number of workers are assigned to those workers before other
+builds that don't have specific needs when resources are limited. An
+example might be when a slot is available on an Ubuntu-based worker, and
+"oe-selftest-ubuntu" and "genericx86-64" build requests exist in the
+queue. Since oe-selftest-ubuntu requires an Ubuntu-based worker and
+genericx86-64 does not, genericx86-64 will be assigned a higher value
+(lower priority) so that oe-selftest-ubuntu is assigned to that worker
+first.
+
+Signed-off-by: Trevor Gamblin <trevor.gamblin@windriver.com>
+---
+ builders.py | 13 +++++++++++++
+ master.cfg  |  6 ++++++
+ 2 files changed, 19 insertions(+)
+
+diff --git a/builders.py b/builders.py
+index 53c5f0e..94fb561 100644
+--- a/builders.py
++++ b/builders.py
+@@ -135,6 +135,19 @@ for builder in config.subbuilders:
+                                        workernames=workers, nextWorker=nextWorker, nextBuild=nextBuild,
+                                        factory=f, env=extra_env))
+ 
++# prioritize assigning builders to available workers based on the length
++# of the worker lists they are associated with. Builders that have fewer
++# valid worker options should always be assigned first
++def prioritizeBuilders(buildmaster, builders):
++    # re-use the builder_to_workers list
++    builder_to_workers = config.builder_to_workers
++
++    # sort builders by the length of their worker lists. Since not all 
++    # builders are explicitly listed in builder_to_workers, make sure to
++    # default to the len() of the "default" value
++    builders.sort(key=lambda b: len(builder_to_workers.get(b.name)) if b.name in builder_to_workers.keys() else len(builder_to_workers.get("default")))
++    return builders
++
+ def create_parent_builder_factory(buildername, waitname):
+     factory = util.BuildFactory()
+     # NOTE: Assumes that yocto-autobuilder repo has been cloned to home
+diff --git a/master.cfg b/master.cfg
+index a7c151f..4f7d74e 100644
+--- a/master.cfg
++++ b/master.cfg
+@@ -88,6 +88,12 @@ c['www'] = www.www
+ # These items are specific to an individual AB deployment
+ c['workers'] = workers.workers
+ 
++# This enables our prioritizeBuilders function from builders.py.
++# Builders such as buildperf-centos7, buildperf-ubuntu1604,
++# oe-selftest-*, and reproducible-* will be assigned (if possible)
++# before other builders since their possible worker lists are smaller
++c['prioritizeBuilders'] = builders.prioritizeBuilders
++
+ c['title'] = "Yocto Autobuilder"
+ c['titleURL'] = "https://autobuilder.yoctoproject.org/main/"
+ # visible location for internal web server
+-- 
+2.31.1
+
+
+^ permalink raw reply related	[flat|nested] 3+ messages in thread
+* Re: [yocto] [yocto-autobuilder2][PATCH] add prioritizeBuilders
+  2021-09-09 13:10 [yocto-autobuilder2][PATCH] add prioritizeBuilders Trevor Gamblin
+@ 2021-09-11 13:07 ` Richard Purdie
+       [not found] ` <16A3C66D47A24401.21276@lists.yoctoproject.org>
+  1 sibling, 0 replies; 3+ messages in thread
+From: Richard Purdie @ 2021-09-11 13:07 UTC (permalink / raw)
+  To: Trevor Gamblin, yocto; +Cc: Alexandre Belloni
+
+On Thu, 2021-09-09 at 09:10 -0400, Trevor Gamblin wrote:
+> This prioritizeBuilders function sorts builders by the length of their
+> associated worker lists, so that builders that can only be assigned to a
+> small number of workers are assigned to those workers before other
+> builds that don't have specific needs when resources are limited. An
+> example might be when a slot is available on an Ubuntu-based worker, and
+> "oe-selftest-ubuntu" and "genericx86-64" build requests exist in the
+> queue. Since oe-selftest-ubuntu requires an Ubuntu-based worker and
+> genericx86-64 does not, genericx86-64 will be assigned a higher value
+> (lower priority) so that oe-selftest-ubuntu is assigned to that worker
+> first.
+> 
+> Signed-off-by: Trevor Gamblin <trevor.gamblin@windriver.com>
+> ---
+>  builders.py | 13 +++++++++++++
+>  master.cfg  |  6 ++++++
+>  2 files changed, 19 insertions(+)
+> 
+
+We did merge and start using this. Unfortunately whilst I thought it would work,
+it has some unfortunate side effects and we'll probably have to disable it.
+
+If you have two build requests for say "a-full" builds, it will allocate oe-
+selftest-XXX and reproducible-XXX to the XXX workers, starving generic targets.
+You therefore end up with two builds running, both with half their builder
+targets and it will hurt completion.
+
+I did talk with upstream buildbot a little on irc about this challenge.
+
+The default prioritizeBuilders function (_defaultSorter in
+buildrequestdistributor.py) sorts by build request time.
+
+They were suggesting some things which are fairly invasive like adding a
+estimated completion time to the defaultSorter so we could weight slow builds.
+To be honest it's beyond my comfort level with twisted defereds trying to query
+and obtain the right data.
+
+I have started wondering if we can in fact cheat and tweak the order we trigger
+the builds in the a-full and a-quick targets. I think we could influence the
+order of builderNames in the Triggerable and that would then change the
+buildrequest timestamps so the default sorting method would work better for us
+again.
+
+I think that translates to adding your sorting method in this patch to
+builderNamesFromConfigQuick and builderNamesFromConfigFull. Probably worth a
+try?
+
+Cheers,
+
+Richard
+
+
+
+
+
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] [yocto-autobuilder2][PATCH] add prioritizeBuilders
+       [not found] ` <16A3C66D47A24401.21276@lists.yoctoproject.org>
+@ 2021-09-11 13:19   ` Richard Purdie
+  0 siblings, 0 replies; 3+ messages in thread
+From: Richard Purdie @ 2021-09-11 13:19 UTC (permalink / raw)
+  To: Trevor Gamblin, yocto; +Cc: Alexandre Belloni
+
+On Sat, 2021-09-11 at 14:07 +0100, Richard Purdie via lists.yoctoproject.org
+wrote:
+> On Thu, 2021-09-09 at 09:10 -0400, Trevor Gamblin wrote:
+> > This prioritizeBuilders function sorts builders by the length of their
+> > associated worker lists, so that builders that can only be assigned to a
+> > small number of workers are assigned to those workers before other
+> > builds that don't have specific needs when resources are limited. An
+> > example might be when a slot is available on an Ubuntu-based worker, and
+> > "oe-selftest-ubuntu" and "genericx86-64" build requests exist in the
+> > queue. Since oe-selftest-ubuntu requires an Ubuntu-based worker and
+> > genericx86-64 does not, genericx86-64 will be assigned a higher value
+> > (lower priority) so that oe-selftest-ubuntu is assigned to that worker
+> > first.
+> > 
+> > Signed-off-by: Trevor Gamblin <trevor.gamblin@windriver.com>
+> > ---
+> >  builders.py | 13 +++++++++++++
+> >  master.cfg  |  6 ++++++
+> >  2 files changed, 19 insertions(+)
+> > 
+> 
+> We did merge and start using this. Unfortunately whilst I thought it would work,
+> it has some unfortunate side effects and we'll probably have to disable it.
+> 
+> If you have two build requests for say "a-full" builds, it will allocate oe-
+> selftest-XXX and reproducible-XXX to the XXX workers, starving generic targets.
+> You therefore end up with two builds running, both with half their builder
+> targets and it will hurt completion.
+> 
+> I did talk with upstream buildbot a little on irc about this challenge.
+> 
+> The default prioritizeBuilders function (_defaultSorter in
+> buildrequestdistributor.py) sorts by build request time.
+> 
+> They were suggesting some things which are fairly invasive like adding a
+> estimated completion time to the defaultSorter so we could weight slow builds.
+> To be honest it's beyond my comfort level with twisted defereds trying to query
+> and obtain the right data.
+> 
+> I have started wondering if we can in fact cheat and tweak the order we trigger
+> the builds in the a-full and a-quick targets. I think we could influence the
+> order of builderNames in the Triggerable and that would then change the
+> buildrequest timestamps so the default sorting method would work better for us
+> again.
+> 
+> I think that translates to adding your sorting method in this patch to
+> builderNamesFromConfigQuick and builderNamesFromConfigFull. Probably worth a
+> try?
+
+Upstream gave this as an example which I think we can probably do something
+with:
+
+from datetime import datetime, timedelta
+
+from dateutil.tz import tzutc
+
+from twisted.internet import defer
+
+
+# this stores bonuses for builders, which takes in account longer build time
+builder_bonuses = {
+    'bldr1': timedelta(hours=1)
+}
+
+def BuilderSorter(master, builders):
+    # perform an asynchronous schwarzian transform, transforming None
+    # into a really big date, so that any
+    # date set to 'None' will appear at the
+    # end of the list during comparisons.
+    max_time = datetime.max
+    # Need to set the timezone on the date, in order
+    # to perform comparisons with other dates which
+    # have the time zone set.
+    max_time = max_time.replace(tzinfo=tzutc())
+
+    @defer.inlineCallbacks
+    def transform(bldr):
+        time = yield bldr.getOldestRequestTime()
+        if time is None:
+            time = max_time
+        else:
+            if bldr.name in builder_bonuses:
+                time = time + builder_bonuses[bldr.name]
+        defer.returnValue((time, bldr))
+
+    transformed = yield defer.gatherResults(
+        [transform(bldr) for bldr in builders])
+
+    # sort the transformed list synchronously, comparing None to the end of
+    # the list
+    def transformedKey(a):
+        (date, builder) = a
+        return (date, builder.name)
+
+    transformed.sort(key=transformedKey)
+
+    # and reverse the transform
+    rv = [xf[1] for xf in transformed]
+    return rv
+
+  c['prioritizeBuilders'] = BuilderSorter
+
+and then we're not relying on internal bebehaviours with the sorting. It was
+pointed out to me that the timestamps are only second accuracy so the global
+builders list sorting would probably have more effect.
+
+Cheers,
+
+Richard
+
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2021-09-11 13:19 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-09-09 13:10 [yocto-autobuilder2][PATCH] add prioritizeBuilders Trevor Gamblin
+2021-09-11 13:07 ` [yocto] " Richard Purdie
+     [not found] ` <16A3C66D47A24401.21276@lists.yoctoproject.org>
+2021-09-11 13:19   ` Richard Purdie
+

@@ -1,0 +1,1686 @@
+* libquadmath
+@ 2022-01-02 17:05 staticd
+  2022-01-02 17:17 ` [yocto] libquadmath Michael Ho
+  0 siblings, 1 reply; 11+ messages in thread
+From: staticd @ 2022-01-02 17:05 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 581 bytes --]
+
+okay...I think I have a more interesting question now...
+
+In the package I am building I have some Fortran code that requires
+`libquadmath`
+
+I see that `gcc-runtime` provides the library but I need the library
+present in `recipe-sysroot/lib` when my `do_compile` runs
+
+Is there a way for me to do that?
+
+My current approach is to build my image, copy the libraries/includes to my
+recipe and `install` them in `recipe-sysroot` before `do_compile`
+
+This doesn't seem like the correct approach but I am not sure how else to
+do it at this point
+
+Any help would be greatly appreciated.
+
+[-- Attachment #2: Type: text/html, Size: 647 bytes --]
+
+^ permalink raw reply	[flat|nested] 11+ messages in thread
+* Re: [yocto] libquadmath
+  2022-01-02 17:05 libquadmath staticd
+@ 2022-01-02 17:17 ` Michael Ho
+  2022-01-02 17:23   ` staticd
+  0 siblings, 1 reply; 11+ messages in thread
+From: Michael Ho @ 2022-01-02 17:17 UTC (permalink / raw)
+  To: staticd; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1508 bytes --]
+
+Not familiar with Fortran but maybe it helps to know that this is normally
+handled with the DEPENDS mechanism. When you add other recipes as
+dependencies to your recipe, the task do_prepare_recipe_sysroot (run before
+do_compile) will make hard links to the files from those dependency recipes
+into that recipe-sysroot directory.
+
+See:
+https://docs.yoctoproject.org/singleindex.html#do-prepare-recipe-sysroot
+
+Kind regards,
+Michael
+
+On Sun, 2 Jan 2022, 6:06 pm staticd, <staticd@gmail.com> wrote:
+
+> okay...I think I have a more interesting question now...
+>
+> In the package I am building I have some Fortran code that requires
+> `libquadmath`
+>
+> I see that `gcc-runtime` provides the library but I need the library
+> present in `recipe-sysroot/lib` when my `do_compile` runs
+>
+> Is there a way for me to do that?
+>
+> My current approach is to build my image, copy the libraries/includes to
+> my recipe and `install` them in `recipe-sysroot` before `do_compile`
+>
+> This doesn't seem like the correct approach but I am not sure how else to
+> do it at this point
+>
+> Any help would be greatly appreciated.
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#55700):
+> https://lists.yoctoproject.org/g/yocto/message/55700
+> Mute This Topic: https://lists.yoctoproject.org/mt/88095036/3618434
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> michael.ho@ieee.org]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 2544 bytes --]
+
+^ permalink raw reply	[flat|nested] 11+ messages in thread
+* Re: [yocto] libquadmath
+  2022-01-02 17:17 ` [yocto] libquadmath Michael Ho
+@ 2022-01-02 17:23   ` staticd
+  2022-01-02 17:31     ` staticd
+  0 siblings, 1 reply; 11+ messages in thread
+From: staticd @ 2022-01-02 17:23 UTC (permalink / raw)
+  To: Michael Ho; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2028 bytes --]
+
+Thank you, Michael.
+
+I have `DEPENDS = "virtual/arm-oe-linux-gnueabi-compilerlibs"`
+
+and `do_compile[depends] +=
+"virtual/arm-oe-linux-gnueabi-compilerlibs:do_check"`
+
+However, libquadmath.so is still not present in `recipe-sysroot/lib`
+
+I used the `do_check` task from gcc_runtime but that still isn't providing
+`libquadmath.so` in my $STAGING_LIBDIR, which is where I need it.
+
+Many thanks.
+
+On Sun, Jan 2, 2022 at 12:17 PM Michael Ho <michael.ho@ieee.org> wrote:
+
+> Not familiar with Fortran but maybe it helps to know that this is normally
+> handled with the DEPENDS mechanism. When you add other recipes as
+> dependencies to your recipe, the task do_prepare_recipe_sysroot (run before
+> do_compile) will make hard links to the files from those dependency recipes
+> into that recipe-sysroot directory.
+>
+> See:
+> https://docs.yoctoproject.org/singleindex.html#do-prepare-recipe-sysroot
+>
+> Kind regards,
+> Michael
+>
+> On Sun, 2 Jan 2022, 6:06 pm staticd, <staticd@gmail.com> wrote:
+>
+>> okay...I think I have a more interesting question now...
+>>
+>> In the package I am building I have some Fortran code that requires
+>> `libquadmath`
+>>
+>> I see that `gcc-runtime` provides the library but I need the library
+>> present in `recipe-sysroot/lib` when my `do_compile` runs
+>>
+>> Is there a way for me to do that?
+>>
+>> My current approach is to build my image, copy the libraries/includes to
+>> my recipe and `install` them in `recipe-sysroot` before `do_compile`
+>>
+>> This doesn't seem like the correct approach but I am not sure how else to
+>> do it at this point
+>>
+>> Any help would be greatly appreciated.
+>>
+>> -=-=-=-=-=-=-=-=-=-=-=-
+>> Links: You receive all messages sent to this group.
+>> View/Reply Online (#55700):
+>> https://lists.yoctoproject.org/g/yocto/message/55700
+>> Mute This Topic: https://lists.yoctoproject.org/mt/88095036/3618434
+>> Group Owner: yocto+owner@lists.yoctoproject.org
+>> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+>> michael.ho@ieee.org]
+>> -=-=-=-=-=-=-=-=-=-=-=-
+>>
+>>
+
+[-- Attachment #2: Type: text/html, Size: 3486 bytes --]
+
+^ permalink raw reply	[flat|nested] 11+ messages in thread
+* Re: [yocto] libquadmath
+  2022-01-02 17:23   ` staticd
+@ 2022-01-02 17:31     ` staticd
+  2022-01-02 17:46       ` Konrad Weihmann
+  2022-01-02 19:07       ` Konrad Weihmann
+  0 siblings, 2 replies; 11+ messages in thread
+From: staticd @ 2022-01-02 17:31 UTC (permalink / raw)
+  To: Michael Ho; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2620 bytes --]
+
+I think to clarify...what I need are these files:
+
+--- snipped from gcc-runtime.inc ---
+```
+FILES_libquadmath = "${libdir}/libquadmath*.so.*"
+SUMMARY_libquadmath = "GNU quad-precision math library"
+FILES_libquadmath-dev = "\
+    ${libdir}/${TARGET_SYS}/${BINV}/include/quadmath* \
+    ${libdir}/libquadmath*.so \
+    ${libdir}/libquadmath.la \
+"
+```
+---
+to be in my $STAGING_LIBDIR
+
+So far, I have been unable to figure out how to do that, unfortunately.
+
+On Sun, Jan 2, 2022 at 12:23 PM staticd <staticd@gmail.com> wrote:
+
+> Thank you, Michael.
+>
+> I have `DEPENDS = "virtual/arm-oe-linux-gnueabi-compilerlibs"`
+>
+> and `do_compile[depends] +=
+> "virtual/arm-oe-linux-gnueabi-compilerlibs:do_check"`
+>
+> However, libquadmath.so is still not present in `recipe-sysroot/lib`
+>
+> I used the `do_check` task from gcc_runtime but that still isn't providing
+> `libquadmath.so` in my $STAGING_LIBDIR, which is where I need it.
+>
+> Many thanks.
+>
+> On Sun, Jan 2, 2022 at 12:17 PM Michael Ho <michael.ho@ieee.org> wrote:
+>
+>> Not familiar with Fortran but maybe it helps to know that this is
+>> normally handled with the DEPENDS mechanism. When you add other recipes as
+>> dependencies to your recipe, the task do_prepare_recipe_sysroot (run before
+>> do_compile) will make hard links to the files from those dependency recipes
+>> into that recipe-sysroot directory.
+>>
+>> See:
+>> https://docs.yoctoproject.org/singleindex.html#do-prepare-recipe-sysroot
+>>
+>> Kind regards,
+>> Michael
+>>
+>> On Sun, 2 Jan 2022, 6:06 pm staticd, <staticd@gmail.com> wrote:
+>>
+>>> okay...I think I have a more interesting question now...
+>>>
+>>> In the package I am building I have some Fortran code that requires
+>>> `libquadmath`
+>>>
+>>> I see that `gcc-runtime` provides the library but I need the library
+>>> present in `recipe-sysroot/lib` when my `do_compile` runs
+>>>
+>>> Is there a way for me to do that?
+>>>
+>>> My current approach is to build my image, copy the libraries/includes to
+>>> my recipe and `install` them in `recipe-sysroot` before `do_compile`
+>>>
+>>> This doesn't seem like the correct approach but I am not sure how else
+>>> to do it at this point
+>>>
+>>> Any help would be greatly appreciated.
+>>>
+>>> -=-=-=-=-=-=-=-=-=-=-=-
+>>> Links: You receive all messages sent to this group.
+>>> View/Reply Online (#55700):
+>>> https://lists.yoctoproject.org/g/yocto/message/55700
+>>> Mute This Topic: https://lists.yoctoproject.org/mt/88095036/3618434
+>>> Group Owner: yocto+owner@lists.yoctoproject.org
+>>> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+>>> michael.ho@ieee.org]
+>>> -=-=-=-=-=-=-=-=-=-=-=-
+>>>
+>>>
+
+[-- Attachment #2: Type: text/html, Size: 4495 bytes --]
+
+^ permalink raw reply	[flat|nested] 11+ messages in thread
+* Re: [yocto] libquadmath
+  2022-01-02 17:31     ` staticd
+@ 2022-01-02 17:46       ` Konrad Weihmann
+  2022-01-02 19:07       ` Konrad Weihmann
+  1 sibling, 0 replies; 11+ messages in thread
+From: Konrad Weihmann @ 2022-01-02 17:46 UTC (permalink / raw)
+  To: staticd, Michael Ho; +Cc: yocto
+
+I think the reason of that is that fortran support isn't enabled in 
+default gcc-runtime recipe.
+
+from gcc-runtime.inc:
+
+RUNTIMETARGET = "${RUNTIMELIBSSP} libstdc++-v3 libgomp libatomic 
+${RUNTIMELIBITM} \
+     ${@bb.utils.contains_any('FORTRAN', [',fortran',',f77'], 
+'libquadmath', '', d)} \
+"
+
+activates the configuration of libquadmath if either ',fortran' or 
+',f77' is set in 'FORTRAN' variable.
+Unfortunately this variable seems to be set to "" since gcc version 9 update
+
+By just adding
+
+FORTRAN = ",fortran"
+
+to a gcc-runtime_%.bbappend I could create the needed files in the 
+sysroot-components directory
+
+gcc-runtime/usr/lib/libstdc++.so
+gcc-runtime/usr/lib/libitm.spec
+->> gcc-runtime/usr/lib/libquadmath.so.0.0.0
+gcc-runtime/usr/lib/libstdc++.so.6
+gcc-runtime/usr/lib/libitm.so.1.0.0
+gcc-runtime/usr/lib/libatomic.so.1
+gcc-runtime/usr/lib/libgomp.spec
+gcc-runtime/usr/lib/libitm.a
+
+now as you already have set `DEPENDS = 
+"virtual/arm-oe-linux-gnueabi-compilerlibs"` it should automatically 
+make the lib available to your recipe workspace.
+
+On 02.01.22 18:31, staticd wrote:
+> I think to clarify...what I need are these files:
+> 
+> --- snipped from gcc-runtime.inc ---
+> ```
+> FILES_libquadmath = "${libdir}/libquadmath*.so.*"
+> SUMMARY_libquadmath = "GNU quad-precision math library"
+> FILES_libquadmath-dev = "\
+>      ${libdir}/${TARGET_SYS}/${BINV}/include/quadmath* \
+>      ${libdir}/libquadmath*.so \
+>      ${libdir}/libquadmath.la <http://libquadmath.la> \
+> "
+> ```
+> ---
+> to be in my $STAGING_LIBDIR
+> 
+> So far, I have been unable to figure out how to do that, unfortunately.
+> 
+> On Sun, Jan 2, 2022 at 12:23 PM staticd <staticd@gmail.com 
+> <mailto:staticd@gmail.com>> wrote:
+> 
+>     Thank you, Michael.
+> 
+>     I have `DEPENDS = "virtual/arm-oe-linux-gnueabi-compilerlibs"`
+> 
+>     and `do_compile[depends] +=
+>     "virtual/arm-oe-linux-gnueabi-compilerlibs:do_check"`
+> 
+>     However, libquadmath.so is still not present in `recipe-sysroot/lib`
+> 
+>     I used the `do_check` task from gcc_runtime but that still isn't
+>     providing `libquadmath.so` in my $STAGING_LIBDIR, which is where I
+>     need it.
+> 
+>     Many thanks.
+> 
+>     On Sun, Jan 2, 2022 at 12:17 PM Michael Ho <michael.ho@ieee.org
+>     <mailto:michael.ho@ieee.org>> wrote:
+> 
+>         Not familiar with Fortran but maybe it helps to know that this
+>         is normally handled with the DEPENDS mechanism. When you add
+>         other recipes as dependencies to your recipe, the task
+>         do_prepare_recipe_sysroot (run before do_compile) will make hard
+>         links to the files from those dependency recipes into that
+>         recipe-sysroot directory.
+> 
+>         See:
+>         https://docs.yoctoproject.org/singleindex.html#do-prepare-recipe-sysroot
+>         <https://docs.yoctoproject.org/singleindex.html#do-prepare-recipe-sysroot>
+> 
+>         Kind regards,
+>         Michael
+> 
+>         On Sun, 2 Jan 2022, 6:06 pm staticd, <staticd@gmail.com
+>         <mailto:staticd@gmail.com>> wrote:
+> 
+>             okay...I think I have a more interesting question now...
+> 
+>             In the package I am building I have some Fortran code that
+>             requires `libquadmath`
+> 
+>             I see that `gcc-runtime` provides the library but I need the
+>             library present in `recipe-sysroot/lib` when my `do_compile`
+>             runs
+> 
+>             Is there a way for me to do that?
+> 
+>             My current approach is to build my image, copy the
+>             libraries/includes to my recipe and `install` them in
+>             `recipe-sysroot` before `do_compile`
+> 
+>             This doesn't seem like the correct approach but I am not
+>             sure how else to do it at this point
+> 
+>             Any help would be greatly appreciated.
+> 
+> 
+> 
+> 
+> 
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#55703): https://lists.yoctoproject.org/g/yocto/message/55703
+> Mute This Topic: https://lists.yoctoproject.org/mt/88095036/3647476
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [kweihmann@outlook.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+> 
+
+
+^ permalink raw reply	[flat|nested] 11+ messages in thread
+* Re: [yocto] libquadmath
+  2022-01-02 17:31     ` staticd
+  2022-01-02 17:46       ` Konrad Weihmann
+@ 2022-01-02 19:07       ` Konrad Weihmann
+  2022-01-02 19:17         ` staticd
+       [not found]         ` <16C68A3757A696DC.7129@lists.yoctoproject.org>
+  1 sibling, 2 replies; 11+ messages in thread
+From: Konrad Weihmann @ 2022-01-02 19:07 UTC (permalink / raw)
+  To: staticd; +Cc: yocto
+
+The following I just found in local.conf.sample.extended
+
+# Enabling FORTRAN
+# Note this is not officially supported and is just illustrated here to
+# show an example of how it can be done
+# You'll also need your fortran recipe to depend on libgfortran
+FORTRAN:forcevariable = ",fortran"
+
+guess that will solve your issue without the need for a bbappend.
+Just inject that line via distro or local.conf
+
+On 02.01.22 18:31, staticd wrote:
+> I think to clarify...what I need are these files:
+> 
+> --- snipped from gcc-runtime.inc ---
+> ```
+> FILES_libquadmath = "${libdir}/libquadmath*.so.*"
+> SUMMARY_libquadmath = "GNU quad-precision math library"
+> FILES_libquadmath-dev = "\
+>      ${libdir}/${TARGET_SYS}/${BINV}/include/quadmath* \
+>      ${libdir}/libquadmath*.so \
+>      ${libdir}/libquadmath.la <http://libquadmath.la> \
+> "
+> ```
+> ---
+> to be in my $STAGING_LIBDIR
+> 
+> So far, I have been unable to figure out how to do that, unfortunately.
+> 
+> On Sun, Jan 2, 2022 at 12:23 PM staticd <staticd@gmail.com 
+> <mailto:staticd@gmail.com>> wrote:
+> 
+>     Thank you, Michael.
+> 
+>     I have `DEPENDS = "virtual/arm-oe-linux-gnueabi-compilerlibs"`
+> 
+>     and `do_compile[depends] +=
+>     "virtual/arm-oe-linux-gnueabi-compilerlibs:do_check"`
+> 
+>     However, libquadmath.so is still not present in `recipe-sysroot/lib`
+> 
+>     I used the `do_check` task from gcc_runtime but that still isn't
+>     providing `libquadmath.so` in my $STAGING_LIBDIR, which is where I
+>     need it.
+> 
+>     Many thanks.
+> 
+>     On Sun, Jan 2, 2022 at 12:17 PM Michael Ho <michael.ho@ieee.org
+>     <mailto:michael.ho@ieee.org>> wrote:
+> 
+>         Not familiar with Fortran but maybe it helps to know that this
+>         is normally handled with the DEPENDS mechanism. When you add
+>         other recipes as dependencies to your recipe, the task
+>         do_prepare_recipe_sysroot (run before do_compile) will make hard
+>         links to the files from those dependency recipes into that
+>         recipe-sysroot directory.
+> 
+>         See:
+>         https://docs.yoctoproject.org/singleindex.html#do-prepare-recipe-sysroot
+>         <https://docs.yoctoproject.org/singleindex.html#do-prepare-recipe-sysroot>
+> 
+>         Kind regards,
+>         Michael
+> 
+>         On Sun, 2 Jan 2022, 6:06 pm staticd, <staticd@gmail.com
+>         <mailto:staticd@gmail.com>> wrote:
+> 
+>             okay...I think I have a more interesting question now...
+> 
+>             In the package I am building I have some Fortran code that
+>             requires `libquadmath`
+> 
+>             I see that `gcc-runtime` provides the library but I need the
+>             library present in `recipe-sysroot/lib` when my `do_compile`
+>             runs
+> 
+>             Is there a way for me to do that?
+> 
+>             My current approach is to build my image, copy the
+>             libraries/includes to my recipe and `install` them in
+>             `recipe-sysroot` before `do_compile`
+> 
+>             This doesn't seem like the correct approach but I am not
+>             sure how else to do it at this point
+> 
+>             Any help would be greatly appreciated.
+> 
+> 
+> 
+> 
+> 
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#55703): https://lists.yoctoproject.org/g/yocto/message/55703
+> Mute This Topic: https://lists.yoctoproject.org/mt/88095036/3647476
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [kweihmann@outlook.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+> 
+
+
+^ permalink raw reply	[flat|nested] 11+ messages in thread
+* Re: [yocto] libquadmath
+  2022-01-02 19:07       ` Konrad Weihmann
+@ 2022-01-02 19:17         ` staticd
+       [not found]         ` <16C68A3757A696DC.7129@lists.yoctoproject.org>
+  1 sibling, 0 replies; 11+ messages in thread
+From: staticd @ 2022-01-02 19:17 UTC (permalink / raw)
+  To: Konrad Weihmann; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 4472 bytes --]
+
+Thank you, Konrad.
+
+I have tried both of the approaches (local.conf and
+gcc-runtime_%.bbappend/gcc_%.bbappend), still `libquadmath.so` is not being
+built.
+
+I will keep fiddling but I think we are onto something.
+
+The interesting thing I found is that `libquadmath.so` IS being built for
+the nativesdk but NOT when I add `DEPENDS =
+"virtual/${TARGET_PREFIX}compillerlibs"` to my recipe.
+
+Perhaps, because `FORTRAN = ""` is in the gcc_%.bb, maybe that should be
+something less strict?
+
+I might be screwing up my bbappend too...
+
+My append is in `meta-mylayer/recipes-devtools/gcc/gcc-runtime_%.bbappend`
+
+Which is mapped correctly to $BBFILES n my layers `layer.conf`
+
+On Sun, Jan 2, 2022 at 2:07 PM Konrad Weihmann <kweihmann@outlook.com>
+wrote:
+
+> The following I just found in local.conf.sample.extended
+>
+> # Enabling FORTRAN
+> # Note this is not officially supported and is just illustrated here to
+> # show an example of how it can be done
+> # You'll also need your fortran recipe to depend on libgfortran
+> FORTRAN:forcevariable = ",fortran"
+>
+> guess that will solve your issue without the need for a bbappend.
+> Just inject that line via distro or local.conf
+>
+> On 02.01.22 18:31, staticd wrote:
+> > I think to clarify...what I need are these files:
+> >
+> > --- snipped from gcc-runtime.inc ---
+> > ```
+> > FILES_libquadmath = "${libdir}/libquadmath*.so.*"
+> > SUMMARY_libquadmath = "GNU quad-precision math library"
+> > FILES_libquadmath-dev = "\
+> >      ${libdir}/${TARGET_SYS}/${BINV}/include/quadmath* \
+> >      ${libdir}/libquadmath*.so \
+> >      ${libdir}/libquadmath.la <http://libquadmath.la> \
+> > "
+> > ```
+> > ---
+> > to be in my $STAGING_LIBDIR
+> >
+> > So far, I have been unable to figure out how to do that, unfortunately.
+> >
+> > On Sun, Jan 2, 2022 at 12:23 PM staticd <staticd@gmail.com
+> > <mailto:staticd@gmail.com>> wrote:
+> >
+> >     Thank you, Michael.
+> >
+> >     I have `DEPENDS = "virtual/arm-oe-linux-gnueabi-compilerlibs"`
+> >
+> >     and `do_compile[depends] +=
+> >     "virtual/arm-oe-linux-gnueabi-compilerlibs:do_check"`
+> >
+> >     However, libquadmath.so is still not present in `recipe-sysroot/lib`
+> >
+> >     I used the `do_check` task from gcc_runtime but that still isn't
+> >     providing `libquadmath.so` in my $STAGING_LIBDIR, which is where I
+> >     need it.
+> >
+> >     Many thanks.
+> >
+> >     On Sun, Jan 2, 2022 at 12:17 PM Michael Ho <michael.ho@ieee.org
+> >     <mailto:michael.ho@ieee.org>> wrote:
+> >
+> >         Not familiar with Fortran but maybe it helps to know that this
+> >         is normally handled with the DEPENDS mechanism. When you add
+> >         other recipes as dependencies to your recipe, the task
+> >         do_prepare_recipe_sysroot (run before do_compile) will make hard
+> >         links to the files from those dependency recipes into that
+> >         recipe-sysroot directory.
+> >
+> >         See:
+> >
+> https://docs.yoctoproject.org/singleindex.html#do-prepare-recipe-sysroot
+> >         <
+> https://docs.yoctoproject.org/singleindex.html#do-prepare-recipe-sysroot>
+> >
+> >         Kind regards,
+> >         Michael
+> >
+> >         On Sun, 2 Jan 2022, 6:06 pm staticd, <staticd@gmail.com
+> >         <mailto:staticd@gmail.com>> wrote:
+> >
+> >             okay...I think I have a more interesting question now...
+> >
+> >             In the package I am building I have some Fortran code that
+> >             requires `libquadmath`
+> >
+> >             I see that `gcc-runtime` provides the library but I need the
+> >             library present in `recipe-sysroot/lib` when my `do_compile`
+> >             runs
+> >
+> >             Is there a way for me to do that?
+> >
+> >             My current approach is to build my image, copy the
+> >             libraries/includes to my recipe and `install` them in
+> >             `recipe-sysroot` before `do_compile`
+> >
+> >             This doesn't seem like the correct approach but I am not
+> >             sure how else to do it at this point
+> >
+> >             Any help would be greatly appreciated.
+> >
+> >
+> >
+> >
+> >
+> > -=-=-=-=-=-=-=-=-=-=-=-
+> > Links: You receive all messages sent to this group.
+> > View/Reply Online (#55703):
+> https://lists.yoctoproject.org/g/yocto/message/55703
+> > Mute This Topic: https://lists.yoctoproject.org/mt/88095036/3647476
+> > Group Owner: yocto+owner@lists.yoctoproject.org
+> > Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> kweihmann@outlook.com]
+> > -=-=-=-=-=-=-=-=-=-=-=-
+> >
+>
+
+[-- Attachment #2: Type: text/html, Size: 6980 bytes --]
+
+^ permalink raw reply	[flat|nested] 11+ messages in thread
+* Re: [yocto] libquadmath
+       [not found]         ` <16C68A3757A696DC.7129@lists.yoctoproject.org>
+@ 2022-01-02 22:13           ` staticd
+       [not found]           ` <16C693CC9204E930.9481@lists.yoctoproject.org>
+  1 sibling, 0 replies; 11+ messages in thread
+From: staticd @ 2022-01-02 22:13 UTC (permalink / raw)
+  To: Static D; +Cc: Konrad Weihmann, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 5108 bytes --]
+
+So, I built the latest poky and created the example recipe with the
+`DEPENDS` from my recipe and indeed, I see `libquadmath.so` in
+`sysroots-components/`.
+
+I am really scratching my head now.  I must be missing something silly
+somewhere...
+
+My build environment is running `zeus`  and the latest `poky` I grabbed is
+`honister`  Perhaps something changed that I am just overlooking somehow.
+
+On Sun, Jan 2, 2022 at 2:18 PM staticd via lists.yoctoproject.org <staticd=
+gmail.com@lists.yoctoproject.org> wrote:
+
+> Thank you, Konrad.
+>
+> I have tried both of the approaches (local.conf and
+> gcc-runtime_%.bbappend/gcc_%.bbappend), still `libquadmath.so` is not being
+> built.
+>
+> I will keep fiddling but I think we are onto something.
+>
+> The interesting thing I found is that `libquadmath.so` IS being built for
+> the nativesdk but NOT when I add `DEPENDS =
+> "virtual/${TARGET_PREFIX}compillerlibs"` to my recipe.
+>
+> Perhaps, because `FORTRAN = ""` is in the gcc_%.bb, maybe that should be
+> something less strict?
+>
+> I might be screwing up my bbappend too...
+>
+> My append is in `meta-mylayer/recipes-devtools/gcc/gcc-runtime_%.bbappend`
+>
+> Which is mapped correctly to $BBFILES n my layers `layer.conf`
+>
+> On Sun, Jan 2, 2022 at 2:07 PM Konrad Weihmann <kweihmann@outlook.com>
+> wrote:
+>
+>> The following I just found in local.conf.sample.extended
+>>
+>> # Enabling FORTRAN
+>> # Note this is not officially supported and is just illustrated here to
+>> # show an example of how it can be done
+>> # You'll also need your fortran recipe to depend on libgfortran
+>> FORTRAN:forcevariable = ",fortran"
+>>
+>> guess that will solve your issue without the need for a bbappend.
+>> Just inject that line via distro or local.conf
+>>
+>> On 02.01.22 18:31, staticd wrote:
+>> > I think to clarify...what I need are these files:
+>> >
+>> > --- snipped from gcc-runtime.inc ---
+>> > ```
+>> > FILES_libquadmath = "${libdir}/libquadmath*.so.*"
+>> > SUMMARY_libquadmath = "GNU quad-precision math library"
+>> > FILES_libquadmath-dev = "\
+>> >      ${libdir}/${TARGET_SYS}/${BINV}/include/quadmath* \
+>> >      ${libdir}/libquadmath*.so \
+>> >      ${libdir}/libquadmath.la <http://libquadmath.la> \
+>> > "
+>> > ```
+>> > ---
+>> > to be in my $STAGING_LIBDIR
+>> >
+>> > So far, I have been unable to figure out how to do that, unfortunately.
+>> >
+>> > On Sun, Jan 2, 2022 at 12:23 PM staticd <staticd@gmail.com
+>> > <mailto:staticd@gmail.com>> wrote:
+>> >
+>> >     Thank you, Michael.
+>> >
+>> >     I have `DEPENDS = "virtual/arm-oe-linux-gnueabi-compilerlibs"`
+>> >
+>> >     and `do_compile[depends] +=
+>> >     "virtual/arm-oe-linux-gnueabi-compilerlibs:do_check"`
+>> >
+>> >     However, libquadmath.so is still not present in `recipe-sysroot/lib`
+>> >
+>> >     I used the `do_check` task from gcc_runtime but that still isn't
+>> >     providing `libquadmath.so` in my $STAGING_LIBDIR, which is where I
+>> >     need it.
+>> >
+>> >     Many thanks.
+>> >
+>> >     On Sun, Jan 2, 2022 at 12:17 PM Michael Ho <michael.ho@ieee.org
+>> >     <mailto:michael.ho@ieee.org>> wrote:
+>> >
+>> >         Not familiar with Fortran but maybe it helps to know that this
+>> >         is normally handled with the DEPENDS mechanism. When you add
+>> >         other recipes as dependencies to your recipe, the task
+>> >         do_prepare_recipe_sysroot (run before do_compile) will make hard
+>> >         links to the files from those dependency recipes into that
+>> >         recipe-sysroot directory.
+>> >
+>> >         See:
+>> >
+>> https://docs.yoctoproject.org/singleindex.html#do-prepare-recipe-sysroot
+>> >         <
+>> https://docs.yoctoproject.org/singleindex.html#do-prepare-recipe-sysroot>
+>> >
+>> >         Kind regards,
+>> >         Michael
+>> >
+>> >         On Sun, 2 Jan 2022, 6:06 pm staticd, <staticd@gmail.com
+>> >         <mailto:staticd@gmail.com>> wrote:
+>> >
+>> >             okay...I think I have a more interesting question now...
+>> >
+>> >             In the package I am building I have some Fortran code that
+>> >             requires `libquadmath`
+>> >
+>> >             I see that `gcc-runtime` provides the library but I need the
+>> >             library present in `recipe-sysroot/lib` when my `do_compile`
+>> >             runs
+>> >
+>> >             Is there a way for me to do that?
+>> >
+>> >             My current approach is to build my image, copy the
+>> >             libraries/includes to my recipe and `install` them in
+>> >             `recipe-sysroot` before `do_compile`
+>> >
+>> >             This doesn't seem like the correct approach but I am not
+>> >             sure how else to do it at this point
+>> >
+>> >             Any help would be greatly appreciated.
+>> >
+>> >
+>> >
+>> >
+>> >
+>> >
+>> >
+>>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#55706):
+> https://lists.yoctoproject.org/g/yocto/message/55706
+> Mute This Topic: https://lists.yoctoproject.org/mt/88095036/6660187
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> staticd@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 7872 bytes --]
+
+^ permalink raw reply	[flat|nested] 11+ messages in thread
+* Re: [yocto] libquadmath
+       [not found]           ` <16C693CC9204E930.9481@lists.yoctoproject.org>
+@ 2022-01-03 21:55             ` staticd
+  2022-01-04 15:00               ` staticd
+  0 siblings, 1 reply; 11+ messages in thread
+From: staticd @ 2022-01-03 21:55 UTC (permalink / raw)
+  To: Static D; +Cc: Konrad Weihmann, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 9590 bytes --]
+
+I made some progress...
+
+It turns out that libquadmath is failing to build.
+
+When I goto the
+`build/tmp/work/...../gcc-runtime/9.2.0-r0/gcc-9.2.0/build.arm-oe-linux-gnueabi.arm-oe-linux-gnueabi/arm-oe-linux-gnueabi/libquadmath`
+directory, the only files that are there are:
+```
+libquadmath  ] ls -l
+total 476
+-rw-r--r--. 1 2017 oe-builder   4433 Jan  3 16:17 config.h
+-rw-r--r--. 1 2017 oe-builder  69297 Jan  3 16:17 config.log
+-rwxr-xr-x. 1 2017 oe-builder  77122 Jan  3 16:17 config.status
+-rwxr-xr-x. 1 2017 oe-builder 267083 Jan  3 16:17 libtool
+-rw-r--r--. 1 2017 oe-builder  57241 Jan  3 16:17 Makefile
+-rw-r--r--. 1 2017 oe-builder     23 Jan  3 16:17 stamp-h1
+```
+In the config.log, there are errors, some of which are expected, but still:
+```
+libquadmath  ] grep -i error config.log
+arm-oe-linux-gnueabi-gcc: error: unrecognized command line option '-V'
+arm-oe-linux-gnueabi-gcc: fatal error: no input files
+arm-oe-linux-gnueabi-gcc: error: unrecognized command line option
+'-qversion'; did you mean '--version'?
+arm-oe-linux-gnueabi-gcc: fatal error: no input files
+conftest.c:11:10: fatal error: ac_nonexistent.h: No such file or directory
+arm-oe-linux-gnueabi-gcc: error: unrecognized command line option '-V'
+arm-oe-linux-gnueabi-gcc: fatal error: no input files
+arm-oe-linux-gnueabi-gcc: error: unrecognized command line option
+'-qversion'; did you mean '--version'?
+arm-oe-linux-gnueabi-gcc: fatal error: no input files
+conftest.c:28:10: fatal error: ac_nonexistent.h: No such file or directory
+configure:12551: arm-oe-linux-gnueabi-gcc  -mthumb -mfpu=neon
+-mfloat-abi=hard -mcpu=cortex-a9
+--sysroot=/home/oe-builder/build/tmp-glibc/work/cortexa9t2hf-neon-oe-linux-gnueabi/gcc-runtime/9.2.0-r0/recipe-sysroot
+-c  -O2 -pipe -g -feliminate-unused-debug-types
+-fdebug-prefix-map=/home/oe-builder/build/tmp-glibc/work/cortexa9t2hf-neon-oe-linux-gnueabi/gcc-runtime/9.2.0-r0/recipe-sysroot=
+
+ -fdebug-prefix-map=/home/oe-builder/build/tmp-glibc/work/cortexa9t2hf-neon-oe-linux-gnueabi/gcc-runtime/9.2.0-r0/recipe-sysroot-native=
+
+ -fdebug-prefix-map=/home/oe-builder/build/tmp-glibc/work-shared/gcc-9.2.0-r0/gcc-9.2.0=/usr/src/debug/gcc-runtime/9.2.0-r0
+
+ -fdebug-prefix-map=/home/oe-builder/build/tmp-glibc/work-shared/gcc-9.2.0-r0/gcc-9.2.0/include=/usr/src/debug/gcc-runtime/9.2.0-r0/libstdc++-v3/../include
+
+ -fdebug-prefix-map=/home/oe-builder/build/tmp-glibc/work-shared/gcc-9.2.0-r0/gcc-9.2.0/libiberty=/usr/src/debug/gcc-runtime/9.2.0-r0/libstdc++-v3/../libiberty
+
+ -fdebug-prefix-map=/home/oe-builder/build/tmp-glibc/work/cortexa9t2hf-neon-oe-linux-gnueabi/gcc-runtime/9.2.0-r0/gcc-9.2.0/build.arm-oe-linux-gnueabi.arm-oe-linux-gnueabi=/usr/src/debug/gcc-runtime/9.2.0-r0
+    -Werror  conftest.c >&5
+glibcxx_cv_system_error10=yes
+glibcxx_cv_system_error11=yes
+glibcxx_cv_system_error12=yes
+glibcxx_cv_system_error13=yes
+glibcxx_cv_system_error14=yes
+glibcxx_cv_system_error15=yes
+glibcxx_cv_system_error16=yes
+glibcxx_cv_system_error17=yes
+glibcxx_cv_system_error18=yes
+glibcxx_cv_system_error19=yes
+glibcxx_cv_system_error1=yes
+glibcxx_cv_system_error2=yes
+glibcxx_cv_system_error3=yes
+glibcxx_cv_system_error4=yes
+glibcxx_cv_system_error5=yes
+glibcxx_cv_system_error6=yes
+glibcxx_cv_system_error7=yes
+glibcxx_cv_system_error8=yes
+glibcxx_cv_system_error9=yes
+```
+If I check out another library that I expect to get, like, `libitm`, I see:
+```
+libquadmath  ] ls -trl ../libitm/
+total 2872
+-rwxr-xr-x. 1 2017 oe-builder  97435 Jan  3 16:17 config.status
+-rw-r--r--. 1 2017 oe-builder  47665 Jan  3 16:17 Makefile
+drwxr-xr-x. 2 2017 oe-builder     22 Jan  3 16:17 testsuite
+-rw-r--r--. 1 2017 oe-builder    162 Jan  3 16:17 libitm.spec
+-rw-r--r--. 1 2017 oe-builder   5251 Jan  3 16:17 config.h
+-rw-r--r--. 1 2017 oe-builder     23 Jan  3 16:17 stamp-h1
+-rwxr-xr-x. 1 2017 oe-builder 274850 Jan  3 16:17 libtool
+-rw-r--r--. 1 2017 oe-builder    868 Jan  3 16:17 gstdint.h
+-rw-r--r--. 1 2017 oe-builder 119521 Jan  3 16:17 config.log
+-rw-r--r--. 1 2017 oe-builder  50080 Jan  3 16:18 alloc_c.o
+...
+-rw-r--r--. 1 2017 oe-builder    931 Jan  3 16:18 libitm.la
+```
+
+Have you seen something like this before?  I am not sure how to fix this...
+
+Any help is greatly appreciated.
+
+On Sun, Jan 2, 2022 at 5:13 PM staticd via lists.yoctoproject.org <staticd=
+gmail.com@lists.yoctoproject.org> wrote:
+
+> So, I built the latest poky and created the example recipe with the
+> `DEPENDS` from my recipe and indeed, I see `libquadmath.so` in
+> `sysroots-components/`.
+>
+> I am really scratching my head now.  I must be missing something silly
+> somewhere...
+>
+> My build environment is running `zeus`  and the latest `poky` I grabbed is
+> `honister`  Perhaps something changed that I am just overlooking somehow.
+>
+> On Sun, Jan 2, 2022 at 2:18 PM staticd via lists.yoctoproject.org
+> <staticd=gmail.com@lists.yoctoproject.org> wrote:
+>
+>> Thank you, Konrad.
+>>
+>> I have tried both of the approaches (local.conf and
+>> gcc-runtime_%.bbappend/gcc_%.bbappend), still `libquadmath.so` is not being
+>> built.
+>>
+>> I will keep fiddling but I think we are onto something.
+>>
+>> The interesting thing I found is that `libquadmath.so` IS being built for
+>> the nativesdk but NOT when I add `DEPENDS =
+>> "virtual/${TARGET_PREFIX}compillerlibs"` to my recipe.
+>>
+>> Perhaps, because `FORTRAN = ""` is in the gcc_%.bb, maybe that should be
+>> something less strict?
+>>
+>> I might be screwing up my bbappend too...
+>>
+>> My append is in `meta-mylayer/recipes-devtools/gcc/gcc-runtime_%.bbappend`
+>>
+>> Which is mapped correctly to $BBFILES n my layers `layer.conf`
+>>
+>> On Sun, Jan 2, 2022 at 2:07 PM Konrad Weihmann <kweihmann@outlook.com>
+>> wrote:
+>>
+>>> The following I just found in local.conf.sample.extended
+>>>
+>>> # Enabling FORTRAN
+>>> # Note this is not officially supported and is just illustrated here to
+>>> # show an example of how it can be done
+>>> # You'll also need your fortran recipe to depend on libgfortran
+>>> FORTRAN:forcevariable = ",fortran"
+>>>
+>>> guess that will solve your issue without the need for a bbappend.
+>>> Just inject that line via distro or local.conf
+>>>
+>>> On 02.01.22 18:31, staticd wrote:
+>>> > I think to clarify...what I need are these files:
+>>> >
+>>> > --- snipped from gcc-runtime.inc ---
+>>> > ```
+>>> > FILES_libquadmath = "${libdir}/libquadmath*.so.*"
+>>> > SUMMARY_libquadmath = "GNU quad-precision math library"
+>>> > FILES_libquadmath-dev = "\
+>>> >      ${libdir}/${TARGET_SYS}/${BINV}/include/quadmath* \
+>>> >      ${libdir}/libquadmath*.so \
+>>> >      ${libdir}/libquadmath.la <http://libquadmath.la> \
+>>> > "
+>>> > ```
+>>> > ---
+>>> > to be in my $STAGING_LIBDIR
+>>> >
+>>> > So far, I have been unable to figure out how to do that, unfortunately.
+>>> >
+>>> > On Sun, Jan 2, 2022 at 12:23 PM staticd <staticd@gmail.com
+>>> > <mailto:staticd@gmail.com>> wrote:
+>>> >
+>>> >     Thank you, Michael.
+>>> >
+>>> >     I have `DEPENDS = "virtual/arm-oe-linux-gnueabi-compilerlibs"`
+>>> >
+>>> >     and `do_compile[depends] +=
+>>> >     "virtual/arm-oe-linux-gnueabi-compilerlibs:do_check"`
+>>> >
+>>> >     However, libquadmath.so is still not present in
+>>> `recipe-sysroot/lib`
+>>> >
+>>> >     I used the `do_check` task from gcc_runtime but that still isn't
+>>> >     providing `libquadmath.so` in my $STAGING_LIBDIR, which is where I
+>>> >     need it.
+>>> >
+>>> >     Many thanks.
+>>> >
+>>> >     On Sun, Jan 2, 2022 at 12:17 PM Michael Ho <michael.ho@ieee.org
+>>> >     <mailto:michael.ho@ieee.org>> wrote:
+>>> >
+>>> >         Not familiar with Fortran but maybe it helps to know that this
+>>> >         is normally handled with the DEPENDS mechanism. When you add
+>>> >         other recipes as dependencies to your recipe, the task
+>>> >         do_prepare_recipe_sysroot (run before do_compile) will make
+>>> hard
+>>> >         links to the files from those dependency recipes into that
+>>> >         recipe-sysroot directory.
+>>> >
+>>> >         See:
+>>> >
+>>> https://docs.yoctoproject.org/singleindex.html#do-prepare-recipe-sysroot
+>>> >         <
+>>> https://docs.yoctoproject.org/singleindex.html#do-prepare-recipe-sysroot
+>>> >
+>>> >
+>>> >         Kind regards,
+>>> >         Michael
+>>> >
+>>> >         On Sun, 2 Jan 2022, 6:06 pm staticd, <staticd@gmail.com
+>>> >         <mailto:staticd@gmail.com>> wrote:
+>>> >
+>>> >             okay...I think I have a more interesting question now...
+>>> >
+>>> >             In the package I am building I have some Fortran code that
+>>> >             requires `libquadmath`
+>>> >
+>>> >             I see that `gcc-runtime` provides the library but I need
+>>> the
+>>> >             library present in `recipe-sysroot/lib` when my
+>>> `do_compile`
+>>> >             runs
+>>> >
+>>> >             Is there a way for me to do that?
+>>> >
+>>> >             My current approach is to build my image, copy the
+>>> >             libraries/includes to my recipe and `install` them in
+>>> >             `recipe-sysroot` before `do_compile`
+>>> >
+>>> >             This doesn't seem like the correct approach but I am not
+>>> >             sure how else to do it at this point
+>>> >
+>>> >             Any help would be greatly appreciated.
+>>> >
+>>> >
+>>> >
+>>> >
+>>> >
+>>> >
+>>> >
+>>>
+>>
+>>
+>>
+>>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#55707):
+> https://lists.yoctoproject.org/g/yocto/message/55707
+> Mute This Topic: https://lists.yoctoproject.org/mt/88095036/6660187
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> staticd@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 13046 bytes --]
+
+^ permalink raw reply	[flat|nested] 11+ messages in thread
+* Re: [yocto] libquadmath
+  2022-01-03 21:55             ` staticd
+@ 2022-01-04 15:00               ` staticd
+  2022-01-28 21:12                 ` Randy MacLeod
+  0 siblings, 1 reply; 11+ messages in thread
+From: staticd @ 2022-01-04 15:00 UTC (permalink / raw)
+  To: Static D; +Cc: Konrad Weihmann, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 10421 bytes --]
+
+One final update for anyone who might run into this problem.
+
+With all of my fiddling/twiddling I failed to get libquadmath to build
+under the `zeus` branch.  Unfortunately, my other layer dependencies only
+support `zeus` so it seems I will have to wait until they support a branch
+that can build `libquadmath`.
+
+I am fairly certain there is just a simple mistake somewhere but, alas, I
+have been unable to find where that is.
+
+On Mon, Jan 3, 2022 at 4:55 PM staticd <staticd@gmail.com> wrote:
+
+> I made some progress...
+>
+> It turns out that libquadmath is failing to build.
+>
+> When I goto the
+> `build/tmp/work/...../gcc-runtime/9.2.0-r0/gcc-9.2.0/build.arm-oe-linux-gnueabi.arm-oe-linux-gnueabi/arm-oe-linux-gnueabi/libquadmath`
+> directory, the only files that are there are:
+> ```
+> libquadmath  ] ls -l
+> total 476
+> -rw-r--r--. 1 2017 oe-builder   4433 Jan  3 16:17 config.h
+> -rw-r--r--. 1 2017 oe-builder  69297 Jan  3 16:17 config.log
+> -rwxr-xr-x. 1 2017 oe-builder  77122 Jan  3 16:17 config.status
+> -rwxr-xr-x. 1 2017 oe-builder 267083 Jan  3 16:17 libtool
+> -rw-r--r--. 1 2017 oe-builder  57241 Jan  3 16:17 Makefile
+> -rw-r--r--. 1 2017 oe-builder     23 Jan  3 16:17 stamp-h1
+> ```
+> In the config.log, there are errors, some of which are expected, but still:
+> ```
+> libquadmath  ] grep -i error config.log
+> arm-oe-linux-gnueabi-gcc: error: unrecognized command line option '-V'
+> arm-oe-linux-gnueabi-gcc: fatal error: no input files
+> arm-oe-linux-gnueabi-gcc: error: unrecognized command line option
+> '-qversion'; did you mean '--version'?
+> arm-oe-linux-gnueabi-gcc: fatal error: no input files
+> conftest.c:11:10: fatal error: ac_nonexistent.h: No such file or directory
+> arm-oe-linux-gnueabi-gcc: error: unrecognized command line option '-V'
+> arm-oe-linux-gnueabi-gcc: fatal error: no input files
+> arm-oe-linux-gnueabi-gcc: error: unrecognized command line option
+> '-qversion'; did you mean '--version'?
+> arm-oe-linux-gnueabi-gcc: fatal error: no input files
+> conftest.c:28:10: fatal error: ac_nonexistent.h: No such file or directory
+> configure:12551: arm-oe-linux-gnueabi-gcc  -mthumb -mfpu=neon
+> -mfloat-abi=hard -mcpu=cortex-a9
+> --sysroot=/home/oe-builder/build/tmp-glibc/work/cortexa9t2hf-neon-oe-linux-gnueabi/gcc-runtime/9.2.0-r0/recipe-sysroot
+> -c  -O2 -pipe -g -feliminate-unused-debug-types
+> -fdebug-prefix-map=/home/oe-builder/build/tmp-glibc/work/cortexa9t2hf-neon-oe-linux-gnueabi/gcc-runtime/9.2.0-r0/recipe-sysroot=
+>
+>  -fdebug-prefix-map=/home/oe-builder/build/tmp-glibc/work/cortexa9t2hf-neon-oe-linux-gnueabi/gcc-runtime/9.2.0-r0/recipe-sysroot-native=
+>
+>  -fdebug-prefix-map=/home/oe-builder/build/tmp-glibc/work-shared/gcc-9.2.0-r0/gcc-9.2.0=/usr/src/debug/gcc-runtime/9.2.0-r0
+>
+>  -fdebug-prefix-map=/home/oe-builder/build/tmp-glibc/work-shared/gcc-9.2.0-r0/gcc-9.2.0/include=/usr/src/debug/gcc-runtime/9.2.0-r0/libstdc++-v3/../include
+>
+>  -fdebug-prefix-map=/home/oe-builder/build/tmp-glibc/work-shared/gcc-9.2.0-r0/gcc-9.2.0/libiberty=/usr/src/debug/gcc-runtime/9.2.0-r0/libstdc++-v3/../libiberty
+>
+>  -fdebug-prefix-map=/home/oe-builder/build/tmp-glibc/work/cortexa9t2hf-neon-oe-linux-gnueabi/gcc-runtime/9.2.0-r0/gcc-9.2.0/build.arm-oe-linux-gnueabi.arm-oe-linux-gnueabi=/usr/src/debug/gcc-runtime/9.2.0-r0
+>     -Werror  conftest.c >&5
+> glibcxx_cv_system_error10=yes
+> glibcxx_cv_system_error11=yes
+> glibcxx_cv_system_error12=yes
+> glibcxx_cv_system_error13=yes
+> glibcxx_cv_system_error14=yes
+> glibcxx_cv_system_error15=yes
+> glibcxx_cv_system_error16=yes
+> glibcxx_cv_system_error17=yes
+> glibcxx_cv_system_error18=yes
+> glibcxx_cv_system_error19=yes
+> glibcxx_cv_system_error1=yes
+> glibcxx_cv_system_error2=yes
+> glibcxx_cv_system_error3=yes
+> glibcxx_cv_system_error4=yes
+> glibcxx_cv_system_error5=yes
+> glibcxx_cv_system_error6=yes
+> glibcxx_cv_system_error7=yes
+> glibcxx_cv_system_error8=yes
+> glibcxx_cv_system_error9=yes
+> ```
+> If I check out another library that I expect to get, like, `libitm`, I see:
+> ```
+> libquadmath  ] ls -trl ../libitm/
+> total 2872
+> -rwxr-xr-x. 1 2017 oe-builder  97435 Jan  3 16:17 config.status
+> -rw-r--r--. 1 2017 oe-builder  47665 Jan  3 16:17 Makefile
+> drwxr-xr-x. 2 2017 oe-builder     22 Jan  3 16:17 testsuite
+> -rw-r--r--. 1 2017 oe-builder    162 Jan  3 16:17 libitm.spec
+> -rw-r--r--. 1 2017 oe-builder   5251 Jan  3 16:17 config.h
+> -rw-r--r--. 1 2017 oe-builder     23 Jan  3 16:17 stamp-h1
+> -rwxr-xr-x. 1 2017 oe-builder 274850 Jan  3 16:17 libtool
+> -rw-r--r--. 1 2017 oe-builder    868 Jan  3 16:17 gstdint.h
+> -rw-r--r--. 1 2017 oe-builder 119521 Jan  3 16:17 config.log
+> -rw-r--r--. 1 2017 oe-builder  50080 Jan  3 16:18 alloc_c.o
+> ...
+> -rw-r--r--. 1 2017 oe-builder    931 Jan  3 16:18 libitm.la
+> ```
+>
+> Have you seen something like this before?  I am not sure how to fix this...
+>
+> Any help is greatly appreciated.
+>
+> On Sun, Jan 2, 2022 at 5:13 PM staticd via lists.yoctoproject.org
+> <staticd=gmail.com@lists.yoctoproject.org> wrote:
+>
+>> So, I built the latest poky and created the example recipe with the
+>> `DEPENDS` from my recipe and indeed, I see `libquadmath.so` in
+>> `sysroots-components/`.
+>>
+>> I am really scratching my head now.  I must be missing something silly
+>> somewhere...
+>>
+>> My build environment is running `zeus`  and the latest `poky` I grabbed
+>> is `honister`  Perhaps something changed that I am just overlooking somehow.
+>>
+>> On Sun, Jan 2, 2022 at 2:18 PM staticd via lists.yoctoproject.org
+>> <staticd=gmail.com@lists.yoctoproject.org> wrote:
+>>
+>>> Thank you, Konrad.
+>>>
+>>> I have tried both of the approaches (local.conf and
+>>> gcc-runtime_%.bbappend/gcc_%.bbappend), still `libquadmath.so` is not being
+>>> built.
+>>>
+>>> I will keep fiddling but I think we are onto something.
+>>>
+>>> The interesting thing I found is that `libquadmath.so` IS being built
+>>> for the nativesdk but NOT when I add `DEPENDS =
+>>> "virtual/${TARGET_PREFIX}compillerlibs"` to my recipe.
+>>>
+>>> Perhaps, because `FORTRAN = ""` is in the gcc_%.bb, maybe that should be
+>>> something less strict?
+>>>
+>>> I might be screwing up my bbappend too...
+>>>
+>>> My append is in
+>>> `meta-mylayer/recipes-devtools/gcc/gcc-runtime_%.bbappend`
+>>>
+>>> Which is mapped correctly to $BBFILES n my layers `layer.conf`
+>>>
+>>> On Sun, Jan 2, 2022 at 2:07 PM Konrad Weihmann <kweihmann@outlook.com>
+>>> wrote:
+>>>
+>>>> The following I just found in local.conf.sample.extended
+>>>>
+>>>> # Enabling FORTRAN
+>>>> # Note this is not officially supported and is just illustrated here to
+>>>> # show an example of how it can be done
+>>>> # You'll also need your fortran recipe to depend on libgfortran
+>>>> FORTRAN:forcevariable = ",fortran"
+>>>>
+>>>> guess that will solve your issue without the need for a bbappend.
+>>>> Just inject that line via distro or local.conf
+>>>>
+>>>> On 02.01.22 18:31, staticd wrote:
+>>>> > I think to clarify...what I need are these files:
+>>>> >
+>>>> > --- snipped from gcc-runtime.inc ---
+>>>> > ```
+>>>> > FILES_libquadmath = "${libdir}/libquadmath*.so.*"
+>>>> > SUMMARY_libquadmath = "GNU quad-precision math library"
+>>>> > FILES_libquadmath-dev = "\
+>>>> >      ${libdir}/${TARGET_SYS}/${BINV}/include/quadmath* \
+>>>> >      ${libdir}/libquadmath*.so \
+>>>> >      ${libdir}/libquadmath.la <http://libquadmath.la> \
+>>>> > "
+>>>> > ```
+>>>> > ---
+>>>> > to be in my $STAGING_LIBDIR
+>>>> >
+>>>> > So far, I have been unable to figure out how to do that,
+>>>> unfortunately.
+>>>> >
+>>>> > On Sun, Jan 2, 2022 at 12:23 PM staticd <staticd@gmail.com
+>>>> > <mailto:staticd@gmail.com>> wrote:
+>>>> >
+>>>> >     Thank you, Michael.
+>>>> >
+>>>> >     I have `DEPENDS = "virtual/arm-oe-linux-gnueabi-compilerlibs"`
+>>>> >
+>>>> >     and `do_compile[depends] +=
+>>>> >     "virtual/arm-oe-linux-gnueabi-compilerlibs:do_check"`
+>>>> >
+>>>> >     However, libquadmath.so is still not present in
+>>>> `recipe-sysroot/lib`
+>>>> >
+>>>> >     I used the `do_check` task from gcc_runtime but that still isn't
+>>>> >     providing `libquadmath.so` in my $STAGING_LIBDIR, which is where I
+>>>> >     need it.
+>>>> >
+>>>> >     Many thanks.
+>>>> >
+>>>> >     On Sun, Jan 2, 2022 at 12:17 PM Michael Ho <michael.ho@ieee.org
+>>>> >     <mailto:michael.ho@ieee.org>> wrote:
+>>>> >
+>>>> >         Not familiar with Fortran but maybe it helps to know that this
+>>>> >         is normally handled with the DEPENDS mechanism. When you add
+>>>> >         other recipes as dependencies to your recipe, the task
+>>>> >         do_prepare_recipe_sysroot (run before do_compile) will make
+>>>> hard
+>>>> >         links to the files from those dependency recipes into that
+>>>> >         recipe-sysroot directory.
+>>>> >
+>>>> >         See:
+>>>> >
+>>>> https://docs.yoctoproject.org/singleindex.html#do-prepare-recipe-sysroot
+>>>> >         <
+>>>> https://docs.yoctoproject.org/singleindex.html#do-prepare-recipe-sysroot
+>>>> >
+>>>> >
+>>>> >         Kind regards,
+>>>> >         Michael
+>>>> >
+>>>> >         On Sun, 2 Jan 2022, 6:06 pm staticd, <staticd@gmail.com
+>>>> >         <mailto:staticd@gmail.com>> wrote:
+>>>> >
+>>>> >             okay...I think I have a more interesting question now...
+>>>> >
+>>>> >             In the package I am building I have some Fortran code that
+>>>> >             requires `libquadmath`
+>>>> >
+>>>> >             I see that `gcc-runtime` provides the library but I need
+>>>> the
+>>>> >             library present in `recipe-sysroot/lib` when my
+>>>> `do_compile`
+>>>> >             runs
+>>>> >
+>>>> >             Is there a way for me to do that?
+>>>> >
+>>>> >             My current approach is to build my image, copy the
+>>>> >             libraries/includes to my recipe and `install` them in
+>>>> >             `recipe-sysroot` before `do_compile`
+>>>> >
+>>>> >             This doesn't seem like the correct approach but I am not
+>>>> >             sure how else to do it at this point
+>>>> >
+>>>> >             Any help would be greatly appreciated.
+>>>> >
+>>>> >
+>>>> >
+>>>> >
+>>>> >
+>>>> >
+>>>> >
+>>>>
+>>>
+>>>
+>>>
+>>>
+>> -=-=-=-=-=-=-=-=-=-=-=-
+>> Links: You receive all messages sent to this group.
+>> View/Reply Online (#55707):
+>> https://lists.yoctoproject.org/g/yocto/message/55707
+>> Mute This Topic: https://lists.yoctoproject.org/mt/88095036/6660187
+>> Group Owner: yocto+owner@lists.yoctoproject.org
+>> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+>> staticd@gmail.com]
+>> -=-=-=-=-=-=-=-=-=-=-=-
+>>
+>>
+
+[-- Attachment #2: Type: text/html, Size: 13915 bytes --]
+
+^ permalink raw reply	[flat|nested] 11+ messages in thread
+* Re: [yocto] libquadmath
+  2022-01-04 15:00               ` staticd
+@ 2022-01-28 21:12                 ` Randy MacLeod
+  0 siblings, 0 replies; 11+ messages in thread
+From: Randy MacLeod @ 2022-01-28 21:12 UTC (permalink / raw)
+  To: staticd; +Cc: Konrad Weihmann, yocto
+
+On 2022-01-04 10:00, staticd wrote:
+> One final update for anyone who might run into this problem.
+> 
+> With all of my fiddling/twiddling I failed to get libquadmath to build 
+> under the `zeus` branch.  Unfortunately, my other layer dependencies 
+> only support `zeus` so it seems I will have to wait until they support a 
+> branch that can build `libquadmath`.
+> 
+> I am fairly certain there is just a simple mistake somewhere but, alas, 
+> I have been unable to find where that is.
+
+Hi,
+
+If you can come up with a reasonably simple reproducer and
+it fails on a supported branch:
+    https://wiki.yoctoproject.org/wiki/Releases
+
+then we'd appreciate if if you could report the bug in the YP Bugzilla:
+ 
+https://wiki.yoctoproject.org/wiki/Bugzilla_Configuration_and_Bug_Tracking
+
+Don't worry too much about getting every field right if you aren't familiar
+with the overall project.
+
+
+There's no guarantee that we'll get someone to work on it but
+at least it's tracked and we might get to it at some point.
+
+../Randy
+
+
+> 
+> On Mon, Jan 3, 2022 at 4:55 PM staticd <staticd@gmail.com 
+> <mailto:staticd@gmail.com>> wrote:
+> 
+>     I made some progress...
+> 
+>     It turns out that libquadmath is failing to build.
+> 
+>     When I goto the
+>     `build/tmp/work/...../gcc-runtime/9.2.0-r0/gcc-9.2.0/build.arm-oe-linux-gnueabi.arm-oe-linux-gnueabi/arm-oe-linux-gnueabi/libquadmath`
+>     directory, the only files that are there are:
+>     ```
+>     libquadmath  ] ls -l
+>     total 476
+>     -rw-r--r--. 1 2017 oe-builder   4433 Jan  3 16:17 config.h
+>     -rw-r--r--. 1 2017 oe-builder  69297 Jan  3 16:17 config.log
+>     -rwxr-xr-x. 1 2017 oe-builder  77122 Jan  3 16:17 config.status
+>     -rwxr-xr-x. 1 2017 oe-builder 267083 Jan  3 16:17 libtool
+>     -rw-r--r--. 1 2017 oe-builder  57241 Jan  3 16:17 Makefile
+>     -rw-r--r--. 1 2017 oe-builder     23 Jan  3 16:17 stamp-h1
+>     ```
+>     In the config.log, there are errors, some of which are expected, but
+>     still:
+>     ```
+>     libquadmath  ] grep -i error config.log
+>     arm-oe-linux-gnueabi-gcc: error: unrecognized command line option '-V'
+>     arm-oe-linux-gnueabi-gcc: fatal error: no input files
+>     arm-oe-linux-gnueabi-gcc: error: unrecognized command line option
+>     '-qversion'; did you mean '--version'?
+>     arm-oe-linux-gnueabi-gcc: fatal error: no input files
+>     conftest.c:11:10: fatal error: ac_nonexistent.h: No such file or
+>     directory
+>     arm-oe-linux-gnueabi-gcc: error: unrecognized command line option '-V'
+>     arm-oe-linux-gnueabi-gcc: fatal error: no input files
+>     arm-oe-linux-gnueabi-gcc: error: unrecognized command line option
+>     '-qversion'; did you mean '--version'?
+>     arm-oe-linux-gnueabi-gcc: fatal error: no input files
+>     conftest.c:28:10: fatal error: ac_nonexistent.h: No such file or
+>     directory
+>     configure:12551: arm-oe-linux-gnueabi-gcc  -mthumb -mfpu=neon
+>     -mfloat-abi=hard -mcpu=cortex-a9
+>     --sysroot=/home/oe-builder/build/tmp-glibc/work/cortexa9t2hf-neon-oe-linux-gnueabi/gcc-runtime/9.2.0-r0/recipe-sysroot
+>     -c  -O2 -pipe -g -feliminate-unused-debug-types    
+>     -fdebug-prefix-map=/home/oe-builder/build/tmp-glibc/work/cortexa9t2hf-neon-oe-linux-gnueabi/gcc-runtime/9.2.0-r0/recipe-sysroot=
+>       
+>       -fdebug-prefix-map=/home/oe-builder/build/tmp-glibc/work/cortexa9t2hf-neon-oe-linux-gnueabi/gcc-runtime/9.2.0-r0/recipe-sysroot-native=    -fdebug-prefix-map=/home/oe-builder/build/tmp-glibc/work-shared/gcc-9.2.0-r0/gcc-9.2.0=/usr/src/debug/gcc-runtime/9.2.0-r0    -fdebug-prefix-map=/home/oe-builder/build/tmp-glibc/work-shared/gcc-9.2.0-r0/gcc-9.2.0/include=/usr/src/debug/gcc-runtime/9.2.0-r0/libstdc++-v3/../include    -fdebug-prefix-map=/home/oe-builder/build/tmp-glibc/work-shared/gcc-9.2.0-r0/gcc-9.2.0/libiberty=/usr/src/debug/gcc-runtime/9.2.0-r0/libstdc++-v3/../libiberty    -fdebug-prefix-map=/home/oe-builder/build/tmp-glibc/work/cortexa9t2hf-neon-oe-linux-gnueabi/gcc-runtime/9.2.0-r0/gcc-9.2.0/build.arm-oe-linux-gnueabi.arm-oe-linux-gnueabi=/usr/src/debug/gcc-runtime/9.2.0-r0     -Werror  conftest.c >&5
+>     glibcxx_cv_system_error10=yes
+>     glibcxx_cv_system_error11=yes
+>     glibcxx_cv_system_error12=yes
+>     glibcxx_cv_system_error13=yes
+>     glibcxx_cv_system_error14=yes
+>     glibcxx_cv_system_error15=yes
+>     glibcxx_cv_system_error16=yes
+>     glibcxx_cv_system_error17=yes
+>     glibcxx_cv_system_error18=yes
+>     glibcxx_cv_system_error19=yes
+>     glibcxx_cv_system_error1=yes
+>     glibcxx_cv_system_error2=yes
+>     glibcxx_cv_system_error3=yes
+>     glibcxx_cv_system_error4=yes
+>     glibcxx_cv_system_error5=yes
+>     glibcxx_cv_system_error6=yes
+>     glibcxx_cv_system_error7=yes
+>     glibcxx_cv_system_error8=yes
+>     glibcxx_cv_system_error9=yes
+>     ```
+>     If I check out another library that I expect to get, like, `libitm`,
+>     I see:
+>     ```
+>     libquadmath  ] ls -trl ../libitm/
+>     total 2872
+>     -rwxr-xr-x. 1 2017 oe-builder  97435 Jan  3 16:17 config.status
+>     -rw-r--r--. 1 2017 oe-builder  47665 Jan  3 16:17 Makefile
+>     drwxr-xr-x. 2 2017 oe-builder     22 Jan  3 16:17 testsuite
+>     -rw-r--r--. 1 2017 oe-builder    162 Jan  3 16:17 libitm.spec
+>     -rw-r--r--. 1 2017 oe-builder   5251 Jan  3 16:17 config.h
+>     -rw-r--r--. 1 2017 oe-builder     23 Jan  3 16:17 stamp-h1
+>     -rwxr-xr-x. 1 2017 oe-builder 274850 Jan  3 16:17 libtool
+>     -rw-r--r--. 1 2017 oe-builder    868 Jan  3 16:17 gstdint.h
+>     -rw-r--r--. 1 2017 oe-builder 119521 Jan  3 16:17 config.log
+>     -rw-r--r--. 1 2017 oe-builder  50080 Jan  3 16:18 alloc_c.o
+>     ...
+>     -rw-r--r--. 1 2017 oe-builder    931 Jan  3 16:18 libitm.la
+>     <http://libitm.la>
+>     ```
+> 
+>     Have you seen something like this before?  I am not sure how to fix
+>     this...
+> 
+>     Any help is greatly appreciated.
+> 
+>     On Sun, Jan 2, 2022 at 5:13 PM staticd via lists.yoctoproject.org
+>     <http://lists.yoctoproject.org>
+>     <staticd=gmail.com@lists.yoctoproject.org
+>     <mailto:gmail.com@lists.yoctoproject.org>> wrote:
+> 
+>         So, I built the latest poky and created the example recipe with
+>         the `DEPENDS` from my recipe and indeed, I see `libquadmath.so
+>         <http://libquadmath.so>`
+>         in `sysroots-components/`.
+> 
+>         I am really scratching my head now.  I must be missing something
+>         silly somewhere...
+> 
+>         My build environment is running `zeus`  and the latest `poky` I
+>         grabbed is `honister`  Perhaps something changed that I am just
+>         overlooking somehow.
+> 
+>         On Sun, Jan 2, 2022 at 2:18 PM staticd via
+>         lists.yoctoproject.org
+>         <http://lists.yoctoproject.org>
+>         <staticd=gmail.com@lists.yoctoproject.org
+>         <mailto:gmail.com@lists.yoctoproject.org>> wrote:
+> 
+>             Thank you, Konrad.
+> 
+>             I have tried both of the approaches (local.conf and
+>             gcc-runtime_%.bbappend/gcc_%.bbappend), still
+>             `libquadmath.so
+>             <http://libquadmath.so>`
+>             is not being built.
+> 
+>             I will keep fiddling but I think we are onto something.
+> 
+>             The interesting thing I found is that `libquadmath.so
+>             <http://libquadmath.so>`
+>             IS being built for the nativesdk but NOT when I add `DEPENDS
+>             = "virtual/${TARGET_PREFIX}compillerlibs"` to my recipe.
+> 
+>             Perhaps, because `FORTRAN = ""` is in the gcc_%.bb, maybe
+>             that should be something less strict?
+> 
+>             I might be screwing up my bbappend too...
+> 
+>             My append is in
+>             `meta-mylayer/recipes-devtools/gcc/gcc-runtime_%.bbappend`
+> 
+>             Which is mapped correctly to $BBFILES n my layers `layer.conf`
+> 
+>             On Sun, Jan 2, 2022 at 2:07 PM Konrad Weihmann
+>             <kweihmann@outlook.com <mailto:kweihmann@outlook.com>> wrote:
+> 
+>                 The following I just found in local.conf.sample.extended
+> 
+>                 # Enabling FORTRAN
+>                 # Note this is not officially supported and is just
+>                 illustrated here to
+>                 # show an example of how it can be done
+>                 # You'll also need your fortran recipe to depend on
+>                 libgfortran
+>                 FORTRAN:forcevariable = ",fortran"
+> 
+>                 guess that will solve your issue without the need for a
+>                 bbappend.
+>                 Just inject that line via distro or local.conf
+> 
+>                 On 02.01.22 18:31, staticd wrote:
+>                  > I think to clarify...what I need are these files:
+>                  >
+>                  > --- snipped from gcc-runtime.inc ---
+>                  > ```
+>                  > FILES_libquadmath = "${libdir}/libquadmath*.so.*"
+>                  > SUMMARY_libquadmath = "GNU quad-precision math library"
+>                  > FILES_libquadmath-dev = "\
+>                  >      ${libdir}/${TARGET_SYS}/${BINV}/include/quadmath* \
+>                  >      ${libdir}/libquadmath*.so \
+>                  >      ${libdir}/libquadmath.la
+>                 <http://libquadmath.la>
+>                 <http://libquadmath.la
+>                 <http://libquadmath.la>>
+>                 \
+>                  > "
+>                  > ```
+>                  > ---
+>                  > to be in my $STAGING_LIBDIR
+>                  >
+>                  > So far, I have been unable to figure out how to do
+>                 that, unfortunately.
+>                  >
+>                  > On Sun, Jan 2, 2022 at 12:23 PM staticd
+>                 <staticd@gmail.com <mailto:staticd@gmail.com>
+>                  > <mailto:staticd@gmail.com
+>                 <mailto:staticd@gmail.com>>> wrote:
+>                  >
+>                  >     Thank you, Michael.
+>                  >
+>                  >     I have `DEPENDS =
+>                 "virtual/arm-oe-linux-gnueabi-compilerlibs"`
+>                  >
+>                  >     and `do_compile[depends] +=
+>                  >     "virtual/arm-oe-linux-gnueabi-compilerlibs:do_check"`
+>                  >
+>                  >     However, libquadmath.so
+>                 <http://libquadmath.so>
+>                 is still not present in `recipe-sysroot/lib`
+>                  >
+>                  >     I used the `do_check` task from gcc_runtime but
+>                 that still isn't
+>                  >     providing `libquadmath.so
+>                 <http://libquadmath.so>`
+>                 in my $STAGING_LIBDIR, which is where I
+>                  >     need it.
+>                  >
+>                  >     Many thanks.
+>                  >
+>                  >     On Sun, Jan 2, 2022 at 12:17 PM Michael Ho
+>                 <michael.ho@ieee.org <mailto:michael.ho@ieee.org>
+>                  >     <mailto:michael.ho@ieee.org
+>                 <mailto:michael.ho@ieee.org>>> wrote:
+>                  >
+>                  >         Not familiar with Fortran but maybe it helps
+>                 to know that this
+>                  >         is normally handled with the DEPENDS
+>                 mechanism. When you add
+>                  >         other recipes as dependencies to your recipe,
+>                 the task
+>                  >         do_prepare_recipe_sysroot (run before
+>                 do_compile) will make hard
+>                  >         links to the files from those dependency
+>                 recipes into that
+>                  >         recipe-sysroot directory.
+>                  >
+>                  >         See:
+>                  >
+>                 https://docs.yoctoproject.org/singleindex.html#do-prepare-recipe-sysroot
+>                 <https://docs.yoctoproject.org/singleindex.html#do-prepare-recipe-sysroot>
+>                  >       
+>                   <https://docs.yoctoproject.org/singleindex.html#do-prepare-recipe-sysroot <https://docs.yoctoproject.org/singleindex.html#do-prepare-recipe-sysroot>>
+>                  >
+>                  >         Kind regards,
+>                  >         Michael
+>                  >
+>                  >         On Sun, 2 Jan 2022, 6:06 pm staticd,
+>                 <staticd@gmail.com <mailto:staticd@gmail.com>
+>                  >         <mailto:staticd@gmail.com
+>                 <mailto:staticd@gmail.com>>> wrote:
+>                  >
+>                  >             okay...I think I have a more interesting
+>                 question now...
+>                  >
+>                  >             In the package I am building I have some
+>                 Fortran code that
+>                  >             requires `libquadmath`
+>                  >
+>                  >             I see that `gcc-runtime` provides the
+>                 library but I need the
+>                  >             library present in `recipe-sysroot/lib`
+>                 when my `do_compile`
+>                  >             runs
+>                  >
+>                  >             Is there a way for me to do that?
+>                  >
+>                  >             My current approach is to build my image,
+>                 copy the
+>                  >             libraries/includes to my recipe and
+>                 `install` them in
+>                  >             `recipe-sysroot` before `do_compile`
+>                  >
+>                  >             This doesn't seem like the correct
+>                 approach but I am not
+>                  >             sure how else to do it at this point
+>                  >
+>                  >             Any help would be greatly appreciated.
+>                  >
+>                  >
+>                  >
+>                  >
+>                  >
+>                  >
+>                  >
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#55722): https://lists.yoctoproject.org/g/yocto/message/55722
+> Mute This Topic: https://lists.yoctoproject.org/mt/88095036/3616765
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [randy.macleod@windriver.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+> 
+
+
+-- 
+# Randy MacLeod
+# Wind River Linux
+
+
+
+^ permalink raw reply	[flat|nested] 11+ messages in thread
+end of thread, other threads:[~2022-01-28 21:12 UTC | newest]
+
+Thread overview: 11+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-01-02 17:05 libquadmath staticd
+2022-01-02 17:17 ` [yocto] libquadmath Michael Ho
+2022-01-02 17:23   ` staticd
+2022-01-02 17:31     ` staticd
+2022-01-02 17:46       ` Konrad Weihmann
+2022-01-02 19:07       ` Konrad Weihmann
+2022-01-02 19:17         ` staticd
+     [not found]         ` <16C68A3757A696DC.7129@lists.yoctoproject.org>
+2022-01-02 22:13           ` staticd
+     [not found]           ` <16C693CC9204E930.9481@lists.yoctoproject.org>
+2022-01-03 21:55             ` staticd
+2022-01-04 15:00               ` staticd
+2022-01-28 21:12                 ` Randy MacLeod
+

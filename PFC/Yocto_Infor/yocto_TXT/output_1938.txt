@@ -1,0 +1,105 @@
+* NPM support on Dunfell
+@ 2022-04-12  2:18 Joel Winarske
+  2022-04-18 21:21 ` Joel Winarske
+  0 siblings, 1 reply; 2+ messages in thread
+From: Joel Winarske @ 2022-04-12  2:18 UTC (permalink / raw)
+  To: Yocto-mailing-list
+
+[-- Attachment #1: Type: text/plain, Size: 929 bytes --]
+
+I'm seeing some gaps and performance issues.
+
+Examples:
+1. Setting NPM_INSTALL_DEV = "1" I am rewarded with:
+
+169
+<https://github.com/meta-flutter/meta-flutter/runs/5982719348?check_suite_focus=true#step:10:169>npm
+ERR! Could not install from
+"../../__w/meta-flutter/rpi4-drm-dunfell-latest/raspberrypi4-64/tmp/work/aarch64-poky-linux/webthings-gateway/1.0.0+gitAUTOINC+4c600fc973-r0/git/node_modules/@babel/compat-data"
+as it does not contain a package.json file.
+170
+<https://github.com/meta-flutter/meta-flutter/runs/5982719348?check_suite_focus=true#step:10:170>
+
+The upstream build uses equivalent to:
+    npm --user root --cache "${NPM_CACHE}" ci
+    ./node_modules/.bin/webpack
+    npm --cache "${NPM_CACHE}" prune --production
+
+2. Running npm_do_configure is taking 48+ minutes.  Granted it's a large
+project, but basically the configure task is running uni-proc.
+
+Who is the POC supporting NPM on Dunfell?
+
+Thanks,
+Joel
+
+[-- Attachment #2: Type: text/html, Size: 2899 bytes --]
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+* Re: NPM support on Dunfell
+  2022-04-12  2:18 NPM support on Dunfell Joel Winarske
+@ 2022-04-18 21:21 ` Joel Winarske
+  0 siblings, 0 replies; 2+ messages in thread
+From: Joel Winarske @ 2022-04-18 21:21 UTC (permalink / raw)
+  To: Yocto-mailing-list
+
+[-- Attachment #1: Type: text/plain, Size: 1669 bytes --]
+
+The takeaways using inherit npm:
+
+1. Does not support 'scoped packages'
+
+2. fetching is not multi-threaded.  A NPM based recipe will run uni-proc
+with a considerable amount of overhead; each package is pulled and cached
+independently.  Whereas "npm install" or "npm ci" runs multi-threaded.
+
+For my use case I used base.bbclass, and implemented it all manually.  The
+downside with this approach is there is no long term support via DL_DIR.
+
+A reference for others that might hit this:
+https://github.com/meta-webthings/meta-webthings/blob/dunfell/recipes/webthings-gateway/webthings-gateway_git.bb
+
+Cheers,
+Joel
+
+
+On Mon, Apr 11, 2022 at 7:18 PM Joel Winarske <joel.winarske@gmail.com>
+wrote:
+
+> I'm seeing some gaps and performance issues.
+>
+> Examples:
+> 1. Setting NPM_INSTALL_DEV = "1" I am rewarded with:
+>
+> 169
+> <https://github.com/meta-flutter/meta-flutter/runs/5982719348?check_suite_focus=true#step:10:169>npm
+> ERR! Could not install from
+> "../../__w/meta-flutter/rpi4-drm-dunfell-latest/raspberrypi4-64/tmp/work/aarch64-poky-linux/webthings-gateway/1.0.0+gitAUTOINC+4c600fc973-r0/git/node_modules/@babel/compat-data"
+> as it does not contain a package.json file.
+> 170
+> <https://github.com/meta-flutter/meta-flutter/runs/5982719348?check_suite_focus=true#step:10:170>
+>
+> The upstream build uses equivalent to:
+>     npm --user root --cache "${NPM_CACHE}" ci
+>     ./node_modules/.bin/webpack
+>     npm --cache "${NPM_CACHE}" prune --production
+>
+> 2. Running npm_do_configure is taking 48+ minutes.  Granted it's a large
+> project, but basically the configure task is running uni-proc.
+>
+> Who is the POC supporting NPM on Dunfell?
+>
+> Thanks,
+> Joel
+>
+
+[-- Attachment #2: Type: text/html, Size: 3683 bytes --]
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2022-04-19  2:46 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-04-12  2:18 NPM support on Dunfell Joel Winarske
+2022-04-18 21:21 ` Joel Winarske
+

@@ -1,0 +1,343 @@
+* Re: [yocto] source-less python
+  2022-06-23 22:40 source-less python Aurum Nitrogen
+@ 2022-06-23 14:45 ` Alexander Kanavin
+  2022-06-23 16:10 ` Ross Burton
+  1 sibling, 0 replies; 5+ messages in thread
+From: Alexander Kanavin @ 2022-06-23 14:45 UTC (permalink / raw)
+  To: Aurum Nitrogen; +Cc: Yocto-mailing-list
+
+I don't remember any such discussion. If you want this to happen, you
+are welcome to develop the feature.
+
+Alex
+
+On Thu, 23 Jun 2022 at 16:39, Aurum Nitrogen <aurumnitrogen@gmail.com> wrote:
+>
+> Hi,
+> I was wondering if there has been talk about support for source-less python on an image. Installing py and pyc files doubles the size of python on the rootfs. I can imagine this being implemented as an image feature.
+> I know that in buildroot it is supported.
+> Was this discussed and decided against? Is this an open issue?
+>
+> Thanks,
+> John
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#57383): https://lists.yoctoproject.org/g/yocto/message/57383
+> Mute This Topic: https://lists.yoctoproject.org/mt/91944424/1686489
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] source-less python
+  2022-06-23 22:40 source-less python Aurum Nitrogen
+  2022-06-23 14:45 ` [yocto] " Alexander Kanavin
+@ 2022-06-23 16:10 ` Ross Burton
+  2022-07-11 15:00   ` Aurum Nitrogen
+  1 sibling, 1 reply; 5+ messages in thread
+From: Ross Burton @ 2022-06-23 16:10 UTC (permalink / raw)
+  To: aurumnitrogen; +Cc: yocto
+
+On 23 Jun 2022, at 23:40, Aurum Nitrogen via lists.yoctoproject.org <aurumnitrogen=gmail.com@lists.yoctoproject.org> wrote:
+>
+> Hi,
+> I was wondering if there has been talk about support for source-less python on an image. Installing py and pyc files doubles the size of python on the rootfs. I can imagine this being implemented as an image feature.
+> I know that in buildroot it is supported.
+> Was this discussed and decided against? Is this an open issue?
+
+
+There’s an open issue: https://bugzilla.yoctoproject.org/show_bug.cgi?id=6434
+
+The easiest implementation would be a rootfs-time postprocessing step where you compile every .py file, and then delete the .py.  Is this what buildroot does?
+
+This does break feeds, but the alternative (of changing how packaging is done) would be a lot more invasive.
+
+Ross
+IMPORTANT NOTICE: The contents of this email and any attachments are confidential and may also be privileged. If you are not the intended recipient, please notify the sender immediately and do not disclose the contents to any other person, use it for any purpose, or store or copy the information in any medium. Thank you.
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* source-less python
+@ 2022-06-23 22:40 Aurum Nitrogen
+  2022-06-23 14:45 ` [yocto] " Alexander Kanavin
+  2022-06-23 16:10 ` Ross Burton
+  0 siblings, 2 replies; 5+ messages in thread
+From: Aurum Nitrogen @ 2022-06-23 22:40 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 340 bytes --]
+
+Hi,
+I was wondering if there has been talk about support for source-less python
+on an image. Installing py and pyc files doubles the size of python on the
+rootfs. I can imagine this being implemented as an image feature.
+I know that in buildroot it is supported.
+Was this discussed and decided against? Is this an open issue?
+
+Thanks,
+John
+
+[-- Attachment #2: Type: text/html, Size: 536 bytes --]
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] source-less python
+  2022-06-23 16:10 ` Ross Burton
+@ 2022-07-11 15:00   ` Aurum Nitrogen
+  0 siblings, 0 replies; 5+ messages in thread
+From: Aurum Nitrogen @ 2022-07-11 15:00 UTC (permalink / raw)
+  To: Ross Burton; +Cc: yocto
+
+
+[-- Attachment #1.1: Type: text/plain, Size: 2288 bytes --]
+
+Hi,
+So after a little bit of research, I've implemented this feature in poky.
+The way buildroot works, is that it doesn't create any .pyc files during
+the build process of single packages but has a post rootfs hook that (If
+that's what the user has configured) compiles the .py files into .pyc files
+and removes the .py files.
+The compilation to .pyc files is done using a small script that uses
+python's py_compile module.
+
+I have attached the diff to poky for implementation of this feature and the
+pycompile.py script.
+I would love to get your input on this.
+
+Another thing I noticed while doing this research was that the python
+recipe has a variable called INCLUDE_PYCS that decides if to include the
+.pyc files in the package. This is nice but why not implement this in the
+rest of the python package recipes? It can be added to setuptools3.bbclass
+or something like that. What do you think?
+
+Thanks a lot,
+
+John
+
+‫בתאריך יום ה׳, 23 ביוני 2022 ב-19:10 מאת ‪Ross Burton‬‏ <‪
+Ross.Burton@arm.com‬‏>:‬
+
+> On 23 Jun 2022, at 23:40, Aurum Nitrogen via lists.yoctoproject.org
+> <aurumnitrogen=gmail.com@lists.yoctoproject.org> wrote:
+> >
+> > Hi,
+> > I was wondering if there has been talk about support for source-less
+> python on an image. Installing py and pyc files doubles the size of python
+> on the rootfs. I can imagine this being implemented as an image feature.
+> > I know that in buildroot it is supported.
+> > Was this discussed and decided against? Is this an open issue?
+>
+>
+> There’s an open issue:
+> https://bugzilla.yoctoproject.org/show_bug.cgi?id=6434
+>
+> The easiest implementation would be a rootfs-time postprocessing step
+> where you compile every .py file, and then delete the .py.  Is this what
+> buildroot does?
+>
+> This does break feeds, but the alternative (of changing how packaging is
+> done) would be a lot more invasive.
+>
+> Ross
+> IMPORTANT NOTICE: The contents of this email and any attachments are
+> confidential and may also be privileged. If you are not the intended
+> recipient, please notify the sender immediately and do not disclose the
+> contents to any other person, use it for any purpose, or store or copy the
+> information in any medium. Thank you.
+>
+
+[-- Attachment #1.2: Type: text/html, Size: 3109 bytes --]
+
+[-- Attachment #2: pycompile.py --]
+[-- Type: text/x-python, Size: 2902 bytes --]
+
+#!/usr/bin/env python3
+
+"""
+Byte compile all .py files from provided directories. This script is an
+alternative implementation of compileall.compile_dir written with
+cross-compilation in mind.
+"""
+
+import argparse
+import os
+import py_compile
+import re
+import sys
+
+
+def compile_one(host_path, strip_root=None, verbose=False):
+    """
+    Compile a .py file into a .pyc file located next to it.
+
+    :arg host_path:
+        Absolute path to the file to compile on the host running the build.
+    :arg strip_root:
+        Prefix to remove from the original source paths encoded in compiled
+        files.
+    :arg verbose:
+        Print compiled file paths.
+    """
+    if os.path.islink(host_path) or not os.path.isfile(host_path):
+        return  # only compile real files
+
+    if not re.match(r"^[_A-Za-z][_A-Za-z0-9]*\.py$",
+                    os.path.basename(host_path)):
+        return  # only compile "importable" python modules
+
+    if strip_root is not None:
+        # determine the runtime path of the file (i.e.: relative path to root
+        # dir prepended with "/").
+        runtime_path = os.path.join("/", os.path.relpath(host_path, strip_root))
+    else:
+        runtime_path = host_path
+
+    if verbose:
+        print("  PYC  {}".format(runtime_path))
+
+    # will raise an error if the file cannot be compiled
+    py_compile.compile(host_path, cfile=host_path + "c",
+                       dfile=runtime_path, doraise=True)
+
+
+def existing_dir_abs(arg):
+    """
+    argparse type callback that checks that argument is a directory and returns
+    its absolute path.
+    """
+    if not os.path.isdir(arg):
+        raise argparse.ArgumentTypeError('no such directory: {!r}'.format(arg))
+    return os.path.abspath(arg)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("dirs", metavar="DIR", nargs="+", type=existing_dir_abs,
+                        help="Directory to recursively scan and compile")
+    parser.add_argument("--strip-root", metavar="ROOT", type=existing_dir_abs,
+                        help="""
+                        Prefix to remove from the original source paths encoded
+                        in compiled files
+                        """)
+    parser.add_argument("--verbose", action="store_true",
+                        help="Print compiled files")
+
+    args = parser.parse_args()
+
+    try:
+        for d in args.dirs:
+            if args.strip_root and ".." in os.path.relpath(d, args.strip_root):
+                parser.error("DIR: not inside ROOT dir: {!r}".format(d))
+            for parent, _, files in os.walk(d):
+                for f in files:
+                    compile_one(os.path.join(parent, f), args.strip_root,
+                                args.verbose)
+
+    except Exception as e:
+        print("error: {}".format(e))
+        return 1
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
+
+[-- Attachment #3: diff.patch --]
+[-- Type: text/x-patch, Size: 2347 bytes --]
+
+diff --git a/meta/classes/image.bbclass b/meta/classes/image.bbclass
+index c2f3232027..f0a9fb11b8 100644
+--- a/meta/classes/image.bbclass
++++ b/meta/classes/image.bbclass
+@@ -33,7 +33,7 @@ INHIBIT_DEFAULT_DEPS = "1"
+ # IMAGE_FEATURES may contain any available package group
+ IMAGE_FEATURES ?= ""
+ IMAGE_FEATURES[type] = "list"
+-IMAGE_FEATURES[validitems] += "debug-tweaks read-only-rootfs read-only-rootfs-delayed-postinsts stateless-rootfs empty-root-password allow-empty-password allow-root-login post-install-logging"
++IMAGE_FEATURES[validitems] += "pyc-only debug-tweaks read-only-rootfs read-only-rootfs-delayed-postinsts stateless-rootfs empty-root-password allow-empty-password allow-root-login post-install-logging"
+ 
+ # Generate companion debugfs?
+ IMAGE_GEN_DEBUGFS ?= "0"
+diff --git a/meta/classes/rootfs-postcommands.bbclass b/meta/classes/rootfs-postcommands.bbclass
+index 2310e86cdf..c33c4d0aed 100644
+--- a/meta/classes/rootfs-postcommands.bbclass
++++ b/meta/classes/rootfs-postcommands.bbclass
+@@ -17,6 +17,9 @@ ROOTFS_POSTPROCESS_COMMAND += "rootfs_update_timestamp; "
+ # Tweak the mount options for rootfs in /etc/fstab if read-only-rootfs is enabled
+ ROOTFS_POSTPROCESS_COMMAND += '${@bb.utils.contains("IMAGE_FEATURES", "read-only-rootfs", "read_only_rootfs_hook; ", "",d)}'
+ 
++# Leave only pyc if pyc-only is enabled 
++ROOTFS_POSTPROCESS_COMMAND += '${@bb.utils.contains("IMAGE_FEATURES", "pyc-only", "pyc_only_hook; ", "",d)}'
++
+ # We also need to do the same for the kernel boot parameters,
+ # otherwise kernel or initramfs end up mounting the rootfs read/write
+ # (the default) if supported by the underlying storage.
+@@ -139,6 +142,30 @@ read_only_rootfs_hook () {
+ 	fi
+ }
+ 
++
++inherit python3native
++pyc_only_hook () {
++	# Create pyc files
++	bbwarn here
++	nativepython3 \
++		${COREBASE}/scripts/contrib/pycompile.py \
++		--verbose \
++		--strip-root ${IMAGE_ROOTFS} \
++		${IMAGE_ROOTFS}/usr/lib/python3.9
++
++	# Remove py files
++	bbwarn here2
++	find ${IMAGE_ROOTFS}/usr/lib/python3.9 -name '*.py' \
++		-print0 | \
++		xargs -0 --no-run-if-empty rm -f
++
++	# Remove pycache files
++	bbwarn here3
++	find ${IMAGE_ROOTFS}/usr/lib/python3.9 -name '__pycache__' \
++		-print0 | \
++		xargs -0 --no-run-if-empty rm -rf
++}
++
+ #
+ # This function is intended to disallow empty root password if 'debug-tweaks' is not in IMAGE_FEATURES.
+ #
+
+^ permalink raw reply related	[flat|nested] 5+ messages in thread
+* source-less python
+@ 2022-11-13 12:55 Yishai Jaffe
+  0 siblings, 0 replies; 5+ messages in thread
+From: Yishai Jaffe @ 2022-11-13 12:55 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 434 bytes --]
+
+Hi,
+I was wondering if there has been talk about support for source-less python
+on an image. Installing py and pyc files doubles the size of python on the
+rootfs. I can imagine this being implemented as an image feature.
+I know that in buildroot it is supported.
+Was this discussed and decided against? Is this an open issue?
+I have a working patch that implements this. I can submit it for review.
+
+Thanks,
+Yishai Jaffe
+Yishai Jaffe
+
+[-- Attachment #2: Type: text/html, Size: 716 bytes --]
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+end of thread, other threads:[~2022-11-13 12:55 UTC | newest]
+
+Thread overview: 5+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-06-23 22:40 source-less python Aurum Nitrogen
+2022-06-23 14:45 ` [yocto] " Alexander Kanavin
+2022-06-23 16:10 ` Ross Burton
+2022-07-11 15:00   ` Aurum Nitrogen
+2022-11-13 12:55 Yishai Jaffe
+

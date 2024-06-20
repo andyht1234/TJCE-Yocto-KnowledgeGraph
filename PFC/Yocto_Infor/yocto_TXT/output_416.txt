@@ -1,0 +1,308 @@
+* [meta-security][PATCH] layer: add more memory for Qemu machines
+@ 2023-06-28 12:56 Armin Kuster
+  2023-06-28 16:47 ` [yocto] " Richard Purdie
+  0 siblings, 1 reply; 7+ messages in thread
+From: Armin Kuster @ 2023-06-28 12:56 UTC (permalink / raw)
+  To: yocto
+
+Signed-off-by: Armin Kuster <akuster808@gmail.com>
+---
+ conf/layer.conf | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/conf/layer.conf b/conf/layer.conf
+index 334a945..5f289cb 100644
+--- a/conf/layer.conf
++++ b/conf/layer.conf
+@@ -28,4 +28,7 @@ INHERIT += "sanity-meta-security"
+ 
+ QB_KERNEL_CMDLINE_APPEND = " ${@bb.utils.contains('DISTRO_FEATURES', 'apparmor', 'apparmor=1 security=apparmor', '', d)}"
+ 
++# We need more mem to run many apps in this layer
++QB_MEM="-m 2048"
++
+ addpylib ${LAYERDIR}/lib oeqa
+-- 
+2.34.1
+
+
+
+^ permalink raw reply related	[flat|nested] 7+ messages in thread
+* Re: [yocto] [meta-security][PATCH] layer: add more memory for Qemu machines
+  2023-06-28 12:56 [meta-security][PATCH] layer: add more memory for Qemu machines Armin Kuster
+@ 2023-06-28 16:47 ` Richard Purdie
+  2023-06-28 18:18   ` akuster808
+                     ` (2 more replies)
+  0 siblings, 3 replies; 7+ messages in thread
+From: Richard Purdie @ 2023-06-28 16:47 UTC (permalink / raw)
+  To: Armin Kuster, yocto
+
+On Wed, 2023-06-28 at 08:56 -0400, Armin Kuster wrote:
+> Signed-off-by: Armin Kuster <akuster808@gmail.com>
+> ---
+>  conf/layer.conf | 3 +++
+>  1 file changed, 3 insertions(+)
+> 
+> diff --git a/conf/layer.conf b/conf/layer.conf
+> index 334a945..5f289cb 100644
+> --- a/conf/layer.conf
+> +++ b/conf/layer.conf
+> @@ -28,4 +28,7 @@ INHERIT += "sanity-meta-security"
+>  
+>  QB_KERNEL_CMDLINE_APPEND = " ${@bb.utils.contains('DISTRO_FEATURES', 'apparmor', 'apparmor=1 security=apparmor', '', d)}"
+>  
+> +# We need more mem to run many apps in this layer
+> +QB_MEM="-m 2048"
+> +
+>  addpylib ${LAYERDIR}/lib oeqa
+
+Putting that unconditionally in a layer.conf is a pretty poor thing to
+do for usability IMO as it effectively forces that decision on anyone
+including the layer. There has to be a better way to handle that, at
+least conditionally on some override?
+
+Cheers,
+
+Richard
+
+
+
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] [meta-security][PATCH] layer: add more memory for Qemu machines
+  2023-06-28 16:47 ` [yocto] " Richard Purdie
+@ 2023-06-28 18:18   ` akuster808
+  2023-06-29 10:45   ` Mikko Rapeli
+       [not found]   ` <176D1B62EFBE2E3C.12483@lists.yoctoproject.org>
+  2 siblings, 0 replies; 7+ messages in thread
+From: akuster808 @ 2023-06-28 18:18 UTC (permalink / raw)
+  To: Richard Purdie, yocto
+
+
+
+On 6/28/23 12:47 PM, Richard Purdie wrote:
+> On Wed, 2023-06-28 at 08:56 -0400, Armin Kuster wrote:
+>> Signed-off-by: Armin Kuster <akuster808@gmail.com>
+>> ---
+>>   conf/layer.conf | 3 +++
+>>   1 file changed, 3 insertions(+)
+>>
+>> diff --git a/conf/layer.conf b/conf/layer.conf
+>> index 334a945..5f289cb 100644
+>> --- a/conf/layer.conf
+>> +++ b/conf/layer.conf
+>> @@ -28,4 +28,7 @@ INHERIT += "sanity-meta-security"
+>>   
+>>   QB_KERNEL_CMDLINE_APPEND = " ${@bb.utils.contains('DISTRO_FEATURES', 'apparmor', 'apparmor=1 security=apparmor', '', d)}"
+>>   
+>> +# We need more mem to run many apps in this layer
+>> +QB_MEM="-m 2048"
+>> +
+>>   addpylib ${LAYERDIR}/lib oeqa
+> Putting that unconditionally in a layer.conf is a pretty poor thing to
+> do for usability IMO as it effectively forces that decision on anyone
+> including the layer. There has to be a better way to handle that, at
+> least conditionally on some override?
+
+Yep. I moved it and the other qemu params to the image instead. That 
+patch has not been sent.
+
+thanks,
+Armin
+>
+> Cheers,
+>
+> Richard
+>
+>
+
+
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] [meta-security][PATCH] layer: add more memory for Qemu machines
+  2023-06-28 16:47 ` [yocto] " Richard Purdie
+  2023-06-28 18:18   ` akuster808
+@ 2023-06-29 10:45   ` Mikko Rapeli
+  2023-06-29 10:48     ` Richard Purdie
+  2023-06-29 14:12     ` Ross Burton
+       [not found]   ` <176D1B62EFBE2E3C.12483@lists.yoctoproject.org>
+  2 siblings, 2 replies; 7+ messages in thread
+From: Mikko Rapeli @ 2023-06-29 10:45 UTC (permalink / raw)
+  To: Richard Purdie; +Cc: Armin Kuster, yocto
+
+Hi,
+
+On Wed, Jun 28, 2023 at 05:47:21PM +0100, Richard Purdie wrote:
+> On Wed, 2023-06-28 at 08:56 -0400, Armin Kuster wrote:
+> > Signed-off-by: Armin Kuster <akuster808@gmail.com>
+> > ---
+> >  conf/layer.conf | 3 +++
+> >  1 file changed, 3 insertions(+)
+> > 
+> > diff --git a/conf/layer.conf b/conf/layer.conf
+> > index 334a945..5f289cb 100644
+> > --- a/conf/layer.conf
+> > +++ b/conf/layer.conf
+> > @@ -28,4 +28,7 @@ INHERIT += "sanity-meta-security"
+> >  
+> >  QB_KERNEL_CMDLINE_APPEND = " ${@bb.utils.contains('DISTRO_FEATURES', 'apparmor', 'apparmor=1 security=apparmor', '', d)}"
+> >  
+> > +# We need more mem to run many apps in this layer
+> > +QB_MEM="-m 2048"
+> > +
+> >  addpylib ${LAYERDIR}/lib oeqa
+> 
+> Putting that unconditionally in a layer.conf is a pretty poor thing to
+> do for usability IMO as it effectively forces that decision on anyone
+> including the layer. There has to be a better way to handle that, at
+> least conditionally on some override?
+
+Currently these belong logically to machine config but what about generic
+machine targets. Could an image config define how much memory is needed
+to run the image on qemu?
+
+Cheers,
+
+-Mikko
+
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] [meta-security][PATCH] layer: add more memory for Qemu machines
+  2023-06-29 10:45   ` Mikko Rapeli
+@ 2023-06-29 10:48     ` Richard Purdie
+  2023-06-29 14:12     ` Ross Burton
+  1 sibling, 0 replies; 7+ messages in thread
+From: Richard Purdie @ 2023-06-29 10:48 UTC (permalink / raw)
+  To: Mikko Rapeli; +Cc: Armin Kuster, yocto
+
+On Thu, 2023-06-29 at 13:45 +0300, Mikko Rapeli wrote:
+> Hi,
+> 
+> On Wed, Jun 28, 2023 at 05:47:21PM +0100, Richard Purdie wrote:
+> > On Wed, 2023-06-28 at 08:56 -0400, Armin Kuster wrote:
+> > > Signed-off-by: Armin Kuster <akuster808@gmail.com>
+> > > ---
+> > >  conf/layer.conf | 3 +++
+> > >  1 file changed, 3 insertions(+)
+> > > 
+> > > diff --git a/conf/layer.conf b/conf/layer.conf
+> > > index 334a945..5f289cb 100644
+> > > --- a/conf/layer.conf
+> > > +++ b/conf/layer.conf
+> > > @@ -28,4 +28,7 @@ INHERIT += "sanity-meta-security"
+> > >  
+> > >  QB_KERNEL_CMDLINE_APPEND = " ${@bb.utils.contains('DISTRO_FEATURES', 'apparmor', 'apparmor=1 security=apparmor', '', d)}"
+> > >  
+> > > +# We need more mem to run many apps in this layer
+> > > +QB_MEM="-m 2048"
+> > > +
+> > >  addpylib ${LAYERDIR}/lib oeqa
+> > 
+> > Putting that unconditionally in a layer.conf is a pretty poor thing to
+> > do for usability IMO as it effectively forces that decision on anyone
+> > including the layer. There has to be a better way to handle that, at
+> > least conditionally on some override?
+> 
+> Currently these belong logically to machine config but what about generic
+> machine targets. Could an image config define how much memory is needed
+> to run the image on qemu?
+
+I believe Armin did move these to the image recipe which is what we do
+in core in some cases for this too. I think that makes more sense.
+
+Cheers,
+
+Richard
+
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] [meta-security][PATCH] layer: add more memory for Qemu machines
+       [not found]   ` <176D1B62EFBE2E3C.12483@lists.yoctoproject.org>
+@ 2023-06-29 10:48     ` Mikko Rapeli
+  0 siblings, 0 replies; 7+ messages in thread
+From: Mikko Rapeli @ 2023-06-29 10:48 UTC (permalink / raw)
+  To: Richard Purdie, Armin Kuster, yocto
+
+Hi,
+
+On Thu, Jun 29, 2023 at 01:45:41PM +0300, Mikko Rapeli via lists.yoctoproject.org wrote:
+> Currently these belong logically to machine config but what about generic
+> machine targets. Could an image config define how much memory is needed
+> to run the image on qemu?
+
+Done already in Message-Id: <20230628192752.3209428-1-akuster808@gmail.com>,
+sorry for the noise...
+
+Cheers,
+
+-Mikko
+
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] [meta-security][PATCH] layer: add more memory for Qemu machines
+  2023-06-29 10:45   ` Mikko Rapeli
+  2023-06-29 10:48     ` Richard Purdie
+@ 2023-06-29 14:12     ` Ross Burton
+  1 sibling, 0 replies; 7+ messages in thread
+From: Ross Burton @ 2023-06-29 14:12 UTC (permalink / raw)
+  To: mikko.rapeli; +Cc: Richard Purdie, Armin Kuster, yocto
+
+On 29 Jun 2023, at 12:45, Mikko Rapeli via lists.yoctoproject.org <mikko.rapeli=linaro.org@lists.yoctoproject.org> wrote:
+> On Wed, Jun 28, 2023 at 05:47:21PM +0100, Richard Purdie wrote:
+>> On Wed, 2023-06-28 at 08:56 -0400, Armin Kuster wrote:
+>>> Signed-off-by: Armin Kuster <akuster808@gmail.com>
+>>> ---
+>>> conf/layer.conf | 3 +++
+>>> 1 file changed, 3 insertions(+)
+>>> 
+>>> diff --git a/conf/layer.conf b/conf/layer.conf
+>>> index 334a945..5f289cb 100644
+>>> --- a/conf/layer.conf
+>>> +++ b/conf/layer.conf
+>>> @@ -28,4 +28,7 @@ INHERIT += "sanity-meta-security"
+>>> 
+>>> QB_KERNEL_CMDLINE_APPEND = " ${@bb.utils.contains('DISTRO_FEATURES', 'apparmor', 'apparmor=1 security=apparmor', '', d)}"
+>>> 
+>>> +# We need more mem to run many apps in this layer
+>>> +QB_MEM="-m 2048"
+>>> +
+>>> addpylib ${LAYERDIR}/lib oeqa
+>> 
+>> Putting that unconditionally in a layer.conf is a pretty poor thing to
+>> do for usability IMO as it effectively forces that decision on anyone
+>> including the layer. There has to be a better way to handle that, at
+>> least conditionally on some override?
+> 
+> Currently these belong logically to machine config but what about generic
+> machine targets. Could an image config define how much memory is needed
+> to run the image on qemu?
+
+$ git grep -l  QB_MEM
+classes-recipe/baremetal-image.bbclass
+classes-recipe/qemuboot.bbclass
+recipes-core/images/build-appliance-image_15.0.0.bb
+recipes-core/images/core-image-ptest.bb
+recipes-graphics/images/core-image-weston-sdk.bb
+recipes-graphics/images/core-image-weston.bb
+recipes-graphics/images/core-image-x11.bb
+recipes-sato/images/core-image-sato-sdk.bb
+recipes-sato/images/core-image-sato.bb
+
+Yes, you can set that in an image recipe.
+
+Ross
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+end of thread, other threads:[~2023-06-29 14:12 UTC | newest]
+
+Thread overview: 7+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-06-28 12:56 [meta-security][PATCH] layer: add more memory for Qemu machines Armin Kuster
+2023-06-28 16:47 ` [yocto] " Richard Purdie
+2023-06-28 18:18   ` akuster808
+2023-06-29 10:45   ` Mikko Rapeli
+2023-06-29 10:48     ` Richard Purdie
+2023-06-29 14:12     ` Ross Burton
+     [not found]   ` <176D1B62EFBE2E3C.12483@lists.yoctoproject.org>
+2023-06-29 10:48     ` Mikko Rapeli
+

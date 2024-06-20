@@ -1,0 +1,291 @@
+* Pick up ${PV} dynamically from environment or file or filename
+@ 2023-08-18 12:41 Konstantin Kletschke
+  2023-08-18 15:30 ` [yocto] " Alexander Kanavin
+  0 siblings, 1 reply; 7+ messages in thread
+From: Konstantin Kletschke @ 2023-08-18 12:41 UTC (permalink / raw)
+  To: yocto
+
+
+Dear community,
+I need to build a recipe which does not now, which actual version the
+source file(s) has.
+
+So is it possible, to pick up a version preliminary from either
+environment, the content of an existing auxiliary file or from the
+structure of the source file itself?
+
+Say, if theres is something like bla-1.23.jar I could look vor a jar
+beginning with bla, suffix .jar and construct 1.23 as ${PV} to use in
+the SRC_URI. Also possible is to provide a file with version info to be
+read or prepare the ENV.
+
+Kind Regards
+Konstantin
+
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] Pick up ${PV} dynamically from environment or file or filename
+  2023-08-18 12:41 Pick up ${PV} dynamically from environment or file or filename Konstantin Kletschke
+@ 2023-08-18 15:30 ` Alexander Kanavin
+  2023-08-18 20:33   ` Konstantin Kletschke
+  0 siblings, 1 reply; 7+ messages in thread
+From: Alexander Kanavin @ 2023-08-18 15:30 UTC (permalink / raw)
+  To: konstantin.kletschke; +Cc: yocto
+
+You probably need to explain the use case. Why do you want to do
+something like that?
+
+Generally, Yocto cares about build reproducibility, a lot. Thus,
+source must be stable, and verified against a checksum of some kind.
+
+Alex
+
+On Fri, 18 Aug 2023 at 14:41, Konstantin Kletschke via
+lists.yoctoproject.org
+<konstantin.kletschke=inside-m2m.de@lists.yoctoproject.org> wrote:
+>
+>
+> Dear community,
+> I need to build a recipe which does not now, which actual version the
+> source file(s) has.
+>
+> So is it possible, to pick up a version preliminary from either
+> environment, the content of an existing auxiliary file or from the
+> structure of the source file itself?
+>
+> Say, if theres is something like bla-1.23.jar I could look vor a jar
+> beginning with bla, suffix .jar and construct 1.23 as ${PV} to use in
+> the SRC_URI. Also possible is to provide a file with version info to be
+> read or prepare the ENV.
+>
+> Kind Regards
+> Konstantin
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#60823): https://lists.yoctoproject.org/g/yocto/message/60823
+> Mute This Topic: https://lists.yoctoproject.org/mt/100819403/1686489
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] Pick up ${PV} dynamically from environment or file or filename
+  2023-08-18 15:30 ` [yocto] " Alexander Kanavin
+@ 2023-08-18 20:33   ` Konstantin Kletschke
+  2023-08-18 20:48     ` Darcy Watkins
+  2023-08-19 10:07     ` Alexander Kanavin
+  0 siblings, 2 replies; 7+ messages in thread
+From: Konstantin Kletschke @ 2023-08-18 20:33 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: yocto
+
+On Fri, Aug 18, 2023 at 05:30:50PM +0200, Alexander Kanavin wrote:
+> You probably need to explain the use case. Why do you want to do
+> something like that?
+
+The yocto build is happening in a gitlab runner thingy.
+
+What happens before is that inedependently from the yocto build is that
+my colleauges are running a maven build which provides java jar files.
+
+And I do not know on my side what version they are doing. It could
+happen even that it alternates between X.Y.Z and X.Y.Z-SNAPSHOT.
+
+Then my yocto comes and is picking those jars up and integrates them into
+the rootfs to be started there by java. They are not processed or
+executed or compiled, they are copied into the rootfs, symlinkd and
+integrated into a systemd start.
+
+Colleauges maven build: Their git tree.
+Yocto build: My git tree.
+
+> Generally, Yocto cares about build reproducibility, a lot. Thus,
+> source must be stable, and verified against a checksum of some kind.
+
+I learned to love its build reliability because of such stuff too.
+
+Konsti
+
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] Pick up ${PV} dynamically from environment or file or filename
+  2023-08-18 20:33   ` Konstantin Kletschke
+@ 2023-08-18 20:48     ` Darcy Watkins
+  2023-08-23  8:55       ` Konstantin Kletschke
+  2023-08-19 10:07     ` Alexander Kanavin
+  1 sibling, 1 reply; 7+ messages in thread
+From: Darcy Watkins @ 2023-08-18 20:48 UTC (permalink / raw)
+  To: konstantin.kletschke, Alexander Kanavin; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2911 bytes --]
+
+Hi,
+
+I am not sure how well this would work for JARs (especially if they are large).
+
+But you may be able to drop the as-built JARs into a git repo and commit them.
+
+Then make use of the GIT AUTOREV facility to fetch from that GIT repo.
+
+Each time you build after your GIT repo changes, will be built on the newer rev.
+
+If your version info used to derive PV is in that GIT repo (rather than say date based) so that it stays the same after each rebuild of the same GIT rev (and only changes when the GIT rev is changed as part of new commits), you may still be able to satisfy the repeatable build (at least repeatable when rebuilt multiple times with your GIT repo at the same revision.
+
+I would suggest that for releases where you may want to tag your Yocto GIT repo, you set the SRCREV to a specific revision so that a rebuild of the release is based on the exact same JARs.  (i.e. just use the autorev while doing development).
+
+If this doesn’t work for GIT, you could always try with an alternate revision control system for which Yocto has autorev support.
+
+
+
+Regards,
+
+Darcy
+
+Darcy Watkins ::  Senior Staff Engineer, Firmware
+
+Semtech | Sierra Wireless
+Office  +1 604 231 1100
+13811 Wireless Way  :: Richmond, BC Canada V6V 3A4
+[M4]
+dwatkins@sierrawireless.com<mailto:dwatkins@sierrawireless.com> :: www.semtech.com<http://www.semtech.com>
+
+From: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org> on behalf of Konstantin Kletschke via lists.yoctoproject.org <konstantin.kletschke=inside-m2m.de@lists.yoctoproject.org>
+Date: Friday, August 18, 2023 at 1:33 PM
+To: Alexander Kanavin <alex.kanavin@gmail.com>
+Cc: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+Subject: Re: [yocto] Pick up ${PV} dynamically from environment or file or filename
+Caution: This email originated outside of Sierra Wireless.
+
+
+On Fri, Aug 18, 2023 at 05:30:50PM +0200, Alexander Kanavin wrote:
+> You probably need to explain the use case. Why do you want to do
+> something like that?
+
+The yocto build is happening in a gitlab runner thingy.
+
+What happens before is that inedependently from the yocto build is that
+my colleauges are running a maven build which provides java jar files.
+
+And I do not know on my side what version they are doing. It could
+happen even that it alternates between X.Y.Z and X.Y.Z-SNAPSHOT.
+
+Then my yocto comes and is picking those jars up and integrates them into
+the rootfs to be started there by java. They are not processed or
+executed or compiled, they are copied into the rootfs, symlinkd and
+integrated into a systemd start.
+
+Colleauges maven build: Their git tree.
+Yocto build: My git tree.
+
+> Generally, Yocto cares about build reproducibility, a lot. Thus,
+> source must be stable, and verified against a checksum of some kind.
+
+I learned to love its build reliability because of such stuff too.
+
+Konsti
+
+[-- Attachment #2: Type: text/html, Size: 7776 bytes --]
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] Pick up ${PV} dynamically from environment or file or filename
+  2023-08-18 20:33   ` Konstantin Kletschke
+  2023-08-18 20:48     ` Darcy Watkins
+@ 2023-08-19 10:07     ` Alexander Kanavin
+  2023-08-23  8:59       ` Konstantin Kletschke
+  1 sibling, 1 reply; 7+ messages in thread
+From: Alexander Kanavin @ 2023-08-19 10:07 UTC (permalink / raw)
+  To: konstantin.kletschke; +Cc: yocto
+
+On Fri, 18 Aug 2023 at 22:33, Konstantin Kletschke via
+lists.yoctoproject.org
+<konstantin.kletschke=inside-m2m.de@lists.yoctoproject.org> wrote:
+> What happens before is that inedependently from the yocto build is that
+> my colleauges are running a maven build which provides java jar files.
+>
+> And I do not know on my side what version they are doing. It could
+> happen even that it alternates between X.Y.Z and X.Y.Z-SNAPSHOT.
+>
+> Then my yocto comes and is picking those jars up and integrates them into
+> the rootfs to be started there by java. They are not processed or
+> executed or compiled, they are copied into the rootfs, symlinkd and
+> integrated into a systemd start.
+>
+> Colleauges maven build: Their git tree.
+> Yocto build: My git tree.
+
+I think the easiest would be to run a shell script prior to starting
+bitbake, which would check what jar needs to be used, and write the
+SRC_URI with the name and the checksum into a .inc file in the
+meta-layer. Then there's a static .bb file that would include the
+.inc, and do the installation/packaging. Changes to .inc would then be
+under version control and thus reproducible.
+
+Alex
+
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] Pick up ${PV} dynamically from environment or file or filename
+  2023-08-18 20:48     ` Darcy Watkins
+@ 2023-08-23  8:55       ` Konstantin Kletschke
+  0 siblings, 0 replies; 7+ messages in thread
+From: Konstantin Kletschke @ 2023-08-23  8:55 UTC (permalink / raw)
+  To: Darcy Watkins; +Cc: Alexander Kanavin, yocto
+
+On Fri, Aug 18, 2023 at 08:48:46PM +0000, Darcy Watkins wrote:
+
+> Then make use of the GIT AUTOREV facility to fetch from that GIT repo.
+
+Interesting idea which I will track in the future, thank you very much!
+
+Regards
+Konstantin
+
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] Pick up ${PV} dynamically from environment or file or filename
+  2023-08-19 10:07     ` Alexander Kanavin
+@ 2023-08-23  8:59       ` Konstantin Kletschke
+  0 siblings, 0 replies; 7+ messages in thread
+From: Konstantin Kletschke @ 2023-08-23  8:59 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: yocto
+
+On Sat, Aug 19, 2023 at 12:07:08PM +0200, Alexander Kanavin wrote:
+
+> I think the easiest would be to run a shell script prior to starting
+> bitbake, which would check what jar needs to be used, and write the
+> SRC_URI with the name and the checksum into a .inc file in the
+> meta-layer. Then there's a static .bb file that would include the
+> .inc, and do the installation/packaging. Changes to .inc would then be
+> under version control and thus reproducible.
+
+Thanks for this extermely helpful advice I did not think of.
+
+I made a shell script, inspecting the jar files and extracting the
+version with a regexp from the filename.
+
+This is injected as PV into a inc file the latter bb recipe require.
+This way the inc contains only PV, the bb recipe is fix.
+
+The shell script is invoked from the outer build brocess between maven
+and bitbake.
+
+Many thanks!
+Kind Regards
+Konstantin
+
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+end of thread, other threads:[~2023-08-23  8:59 UTC | newest]
+
+Thread overview: 7+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-08-18 12:41 Pick up ${PV} dynamically from environment or file or filename Konstantin Kletschke
+2023-08-18 15:30 ` [yocto] " Alexander Kanavin
+2023-08-18 20:33   ` Konstantin Kletschke
+2023-08-18 20:48     ` Darcy Watkins
+2023-08-23  8:55       ` Konstantin Kletschke
+2023-08-19 10:07     ` Alexander Kanavin
+2023-08-23  8:59       ` Konstantin Kletschke
+

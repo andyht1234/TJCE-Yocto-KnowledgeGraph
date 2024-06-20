@@ -1,0 +1,233 @@
+* [meta-security][PATCH] dm-verity-image-initramfs: Allow compressed image types
+@ 2023-06-19  6:57 Stephan Wurm
+  2023-06-21 23:16 ` [yocto] " akuster808
+  2023-07-21  8:44 ` Wurm, Stephan
+  0 siblings, 2 replies; 4+ messages in thread
+From: Stephan Wurm @ 2023-06-19  6:57 UTC (permalink / raw)
+  To: yocto; +Cc: Stephan Wurm
+
+Using <DM_VERITY_IMAGE_TYPE> in the depends variable does not work for
+compressed image types like squashfs-zst, as the resulting task
+dependency still contains the incompatible dash. Replacing the dash by
+an underscore resolves this issue.
+
+Signed-off-by: Stephan Wurm <stephan.wurm@a-eberle.de>
+---
+ recipes-core/images/dm-verity-image-initramfs.bb | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/recipes-core/images/dm-verity-image-initramfs.bb b/recipes-core/images/dm-verity-image-initramfs.bb
+index 187aeae..fc12ba0 100644
+--- a/recipes-core/images/dm-verity-image-initramfs.bb
++++ b/recipes-core/images/dm-verity-image-initramfs.bb
+@@ -19,7 +19,13 @@ IMAGE_FEATURES = ""
+ IMAGE_LINGUAS = ""
+ 
+ # Can we somehow inspect reverse dependencies to avoid these variables?
+-do_image[depends] += "${DM_VERITY_IMAGE}:do_image_${DM_VERITY_IMAGE_TYPE}"
++python __anonymous() {
++    verity_image = d.getVar('DM_VERITY_IMAGE')
++    verity_type = d.getVar('DM_VERITY_IMAGE_TYPE')
++
++    dep = ' %s:do_image_%s' % (verity_image, verity_type.replace('-', '_'))
++    d.appendVarFlag('do_image', 'depends', dep)
++}
+ 
+ # Ensure dm-verity.env is updated also when rebuilding DM_VERITY_IMAGE
+ do_image[nostamp] = "1"
+-- 
+2.34.1
+
+
+
+^ permalink raw reply related	[flat|nested] 4+ messages in thread
+* Re: [yocto] [meta-security][PATCH] dm-verity-image-initramfs: Allow compressed image types
+  2023-06-19  6:57 [meta-security][PATCH] dm-verity-image-initramfs: Allow compressed image types Stephan Wurm
+@ 2023-06-21 23:16 ` akuster808
+  2023-06-22  9:06   ` Wurm, Stephan
+  2023-07-21  8:44 ` Wurm, Stephan
+  1 sibling, 1 reply; 4+ messages in thread
+From: akuster808 @ 2023-06-21 23:16 UTC (permalink / raw)
+  To: Stephan Wurm, yocto
+
+this fails to build:
+
+The stack trace of python calls that resulted in this exception/failure was:
+File: '<code>', lineno: 24, function: <module>
+0020:__anon_70__home_akuster_oss_clean_poky_meta_classes_recipe_rootfs_postcommands_bbclass(d)
+0021:__anon_125__home_akuster_oss_clean_poky_meta_classes_recipe_image_bbclass(d)
+0022:__anon_181__home_akuster_oss_clean_poky_meta_classes_recipe_image_bbclass(d)
+0023:__anon_518__home_akuster_oss_clean_poky_meta_classes_recipe_image_bbclass(d)
+  *** 
+0024:__anon_28__home_akuster_oss_maint_meta_security_recipes_core_images_dm_verity_image_initramfs_bb(d)
+File: 
+'/home/akuster/oss/maint/meta-security/recipes-core/images/dm-verity-image-initramfs.bb', 
+lineno: 26, function: 
+__anon_28__home_akuster_oss_maint_meta_security_recipes_core_images_dm_verity_image_initramfs_bb
+      0022:python __anonymous() {
+      0023:    verity_image = d.getVar('DM_VERITY_IMAGE')
+      0024:    verity_type = d.getVar('DM_VERITY_IMAGE_TYPE')
+      0025:
+  *** 0026:    dep = ' %s:do_image_%s' % (verity_image, 
+verity_type.replace('-', '_'))
+      0027:    d.appendVarFlag('do_image', 'depends', dep)
+      0028:}
+      0029:
+      0030:# Ensure dm-verity.env is updated also when rebuilding 
+DM_VERITY_IMAGE
+Exception: AttributeError: 'NoneType' object has no attribute 'replace
+
+
+On 6/19/23 2:57 AM, Stephan Wurm wrote:
+> Using <DM_VERITY_IMAGE_TYPE> in the depends variable does not work for
+> compressed image types like squashfs-zst, as the resulting task
+> dependency still contains the incompatible dash. Replacing the dash by
+> an underscore resolves this issue.
+>
+> Signed-off-by: Stephan Wurm <stephan.wurm@a-eberle.de>
+> ---
+>   recipes-core/images/dm-verity-image-initramfs.bb | 8 +++++++-
+>   1 file changed, 7 insertions(+), 1 deletion(-)
+>
+> diff --git a/recipes-core/images/dm-verity-image-initramfs.bb b/recipes-core/images/dm-verity-image-initramfs.bb
+> index 187aeae..fc12ba0 100644
+> --- a/recipes-core/images/dm-verity-image-initramfs.bb
+> +++ b/recipes-core/images/dm-verity-image-initramfs.bb
+> @@ -19,7 +19,13 @@ IMAGE_FEATURES = ""
+>   IMAGE_LINGUAS = ""
+>   
+>   # Can we somehow inspect reverse dependencies to avoid these variables?
+> -do_image[depends] += "${DM_VERITY_IMAGE}:do_image_${DM_VERITY_IMAGE_TYPE}"
+> +python __anonymous() {
+> +    verity_image = d.getVar('DM_VERITY_IMAGE')
+> +    verity_type = d.getVar('DM_VERITY_IMAGE_TYPE')
+> +
+> +    dep = ' %s:do_image_%s' % (verity_image, verity_type.replace('-', '_'))
+> +    d.appendVarFlag('do_image', 'depends', dep)
+> +}
+>   
+>   # Ensure dm-verity.env is updated also when rebuilding DM_VERITY_IMAGE
+>   do_image[nostamp] = "1"
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#60337): https://lists.yoctoproject.org/g/yocto/message/60337
+> Mute This Topic: https://lists.yoctoproject.org/mt/99618767/3616698
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [akuster808@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] [meta-security][PATCH] dm-verity-image-initramfs: Allow compressed image types
+  2023-06-21 23:16 ` [yocto] " akuster808
+@ 2023-06-22  9:06   ` Wurm, Stephan
+  0 siblings, 0 replies; 4+ messages in thread
+From: Wurm, Stephan @ 2023-06-22  9:06 UTC (permalink / raw)
+  To: yocto, akuster808
+
+Hello akuster808,
+
+Am Mittwoch, dem 21.06.2023 um 19:16 -0400 schrieb akuster808:
+> this fails to build:
+> 
+> The stack trace of python calls that resulted in this
+> exception/failure was:
+> File: '<code>', lineno: 24, function: <module>
+> 0020:__anon_70__home_akuster_oss_clean_poky_meta_classes_recipe_rootf
+> s_postcommands_bbclass(d)
+> 0021:__anon_125__home_akuster_oss_clean_poky_meta_classes_recipe_imag
+> e_bbclass(d)
+> 0022:__anon_181__home_akuster_oss_clean_poky_meta_classes_recipe_imag
+> e_bbclass(d)
+> 0023:__anon_518__home_akuster_oss_clean_poky_meta_classes_recipe_imag
+> e_bbclass(d)
+>   *** 
+> 0024:__anon_28__home_akuster_oss_maint_meta_security_recipes_core_ima
+> ges_dm_verity_image_initramfs_bb(d)
+> File: 
+> '/home/akuster/oss/maint/meta-security/recipes-core/images/dm-verity-
+> image-initramfs.bb', 
+> lineno: 26, function: 
+> __anon_28__home_akuster_oss_maint_meta_security_recipes_core_images_d
+> m_verity_image_initramfs_bb
+>       0022:python __anonymous() {
+>       0023:    verity_image = d.getVar('DM_VERITY_IMAGE')
+>       0024:    verity_type = d.getVar('DM_VERITY_IMAGE_TYPE')
+>       0025:
+>   *** 0026:    dep = ' %s:do_image_%s' % (verity_image, 
+> verity_type.replace('-', '_'))
+>       0027:    d.appendVarFlag('do_image', 'depends', dep)
+>       0028:}
+>       0029:
+>       0030:# Ensure dm-verity.env is updated also when rebuilding 
+> DM_VERITY_IMAGE
+> Exception: AttributeError: 'NoneType' object has no attribute
+> 'replace
+this looks like `DM_VERITY_IMAGE_TYPE` was never set or is empty,
+hence the `replace` operation cannot work.
+
+I tested this on kirkstone with `DM_VERITY_IMAGE_TYPE` set to
+`squashfs` or `squashfs-zst`, while `DM_VERITY_IMAGE` was
+configured to reflect my normal rootfs image.
+
+
+Best regards
+Stephan
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* [meta-security][PATCH] dm-verity-image-initramfs: Allow compressed image types
+  2023-06-19  6:57 [meta-security][PATCH] dm-verity-image-initramfs: Allow compressed image types Stephan Wurm
+  2023-06-21 23:16 ` [yocto] " akuster808
+@ 2023-07-21  8:44 ` Wurm, Stephan
+  1 sibling, 0 replies; 4+ messages in thread
+From: Wurm, Stephan @ 2023-07-21  8:44 UTC (permalink / raw)
+  To: yocto; +Cc: akuster808, Wurm, Stephan
+
+Using <DM_VERITY_IMAGE_TYPE> in the depends variable does not work for
+compressed image types like squashfs-zst, as the resulting task
+dependency still contains the incompatible dash. Replacing the dash by
+an underscore resolves this issue.
+
+Signed-off-by: Stephan Wurm <stephan.wurm@a-eberle.de>
+---
+ recipes-core/images/dm-verity-image-initramfs.bb | 9 ++++++++-
+ 1 file changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/recipes-core/images/dm-verity-image-initramfs.bb b/recipes-core/images/dm-verity-image-initramfs.bb
+index 187aeae..78f7b49 100644
+--- a/recipes-core/images/dm-verity-image-initramfs.bb
++++ b/recipes-core/images/dm-verity-image-initramfs.bb
+@@ -19,7 +19,14 @@ IMAGE_FEATURES = ""
+ IMAGE_LINGUAS = ""
+ 
+ # Can we somehow inspect reverse dependencies to avoid these variables?
+-do_image[depends] += "${DM_VERITY_IMAGE}:do_image_${DM_VERITY_IMAGE_TYPE}"
++python __anonymous() {
++    verity_image = d.getVar('DM_VERITY_IMAGE')
++    verity_type = d.getVar('DM_VERITY_IMAGE_TYPE')
++
++    if verity_image and verity_type:
++        dep = ' %s:do_image_%s' % (verity_image, verity_type.replace('-', '_'))
++        d.appendVarFlag('do_image', 'depends', dep)
++}
+ 
+ # Ensure dm-verity.env is updated also when rebuilding DM_VERITY_IMAGE
+ do_image[nostamp] = "1"
+-- 
+2.34.1
+
+
+
+^ permalink raw reply related	[flat|nested] 4+ messages in thread
+end of thread, other threads:[~2023-07-21  8:44 UTC | newest]
+
+Thread overview: 4+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-06-19  6:57 [meta-security][PATCH] dm-verity-image-initramfs: Allow compressed image types Stephan Wurm
+2023-06-21 23:16 ` [yocto] " akuster808
+2023-06-22  9:06   ` Wurm, Stephan
+2023-07-21  8:44 ` Wurm, Stephan
+

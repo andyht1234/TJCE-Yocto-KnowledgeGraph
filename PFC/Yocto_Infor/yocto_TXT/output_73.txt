@@ -1,0 +1,1139 @@
+* [layerindex-web 00/10] Django 4.2 LTS Upgrade
+@ 2023-10-06 19:59 Tim Orling
+  2023-10-06 19:59 ` [layerindex-web 01/10] requirements.txt: upgrade Django 3.2 -> 4.2 Tim Orling
+                   ` (9 more replies)
+  0 siblings, 10 replies; 11+ messages in thread
+From: Tim Orling @ 2023-10-06 19:59 UTC (permalink / raw)
+  To: yocto
+
+This series upgrades to the current LTS for Django, 4.2.
+
+The two most obvious changes are:
+* django.utils.translation.ugettext() -> gettext
+* django.conf.urls.url() -> re_path()
+
+See:
+https://docs.djangoproject.com/en/4.2/releases/4.0/#features-removed-in-4-0
+https://docs.djangoproject.com/en/4.2/internals/deprecation/#deprecation-removed-in-4-0
+
+While we are at it, upgrade all components in requirements.txt and
+update to reflect missing dependencies.
+
+One casualty of this upgrade is django-bootstrap-pagination which
+is no longer maintained and incompatible with Django 4.2.
+
+One additional requirement for settings.py is setting CSRF_TRUSTED_ORIGINS to
+allow POST requests (ALLOWED_HOSTS is no longer sufficient).
+
+Tim Orling (10):
+  requirements.txt: upgrade Django 3.2 -> 4.2
+  docker-compose.yml: bump mariadb from 10.3 to 10.4
+  Drop django-bootstrap-pagination: incompatible
+  bootstrap_pagination: disable via comment
+  Refactor usage of django.conf.urls
+  Dockerfile: drop python3-pil
+  requirements.txt: upgrade all to latest
+  requirements.txt: update dependencies
+  password_validation.py: fix deprecated ugettext
+  docker/settings.py: add CSRF_TRUSTED_ORIGINS
+
+ Dockerfile                                 |   1 -
+ docker-compose.yml                         |   2 +-
+ docker/settings.py                         |   2 +-
+ layerindex/urls.py                         | 108 ++++++++++-----------
+ layerindex/urls_branch.py                  |  25 +++--
+ password_validation.py                     |   2 +-
+ requirements.txt                           |  47 +++++----
+ rrs/urls.py                                |  16 +--
+ settings.py                                |   1 -
+ templates/layerindex/bulkchangesearch.html |   2 +
+ templates/layerindex/classes.html          |   2 +
+ templates/layerindex/classicrecipes.html   |   2 +
+ templates/layerindex/distros.html          |   2 +
+ templates/layerindex/history.html          |   2 +
+ templates/layerindex/layers.html           |   2 +
+ templates/layerindex/machines.html         |   2 +
+ templates/layerindex/recipes.html          |   2 +
+ templates/layerindex/reviewlist.html       |   2 +
+ templates/layerindex/updatelist.html       |   2 +
+ urls.py                                    |  31 +++---
+ 20 files changed, 140 insertions(+), 115 deletions(-)
+
+-- 
+2.34.1
+
+
+
+^ permalink raw reply	[flat|nested] 11+ messages in thread
+* [layerindex-web 01/10] requirements.txt: upgrade Django 3.2 -> 4.2
+  2023-10-06 19:59 [layerindex-web 00/10] Django 4.2 LTS Upgrade Tim Orling
+@ 2023-10-06 19:59 ` Tim Orling
+  2023-10-06 19:59 ` [layerindex-web 02/10] docker-compose.yml: bump mariadb from 10.3 to 10.4 Tim Orling
+                   ` (8 subsequent siblings)
+  9 siblings, 0 replies; 11+ messages in thread
+From: Tim Orling @ 2023-10-06 19:59 UTC (permalink / raw)
+  To: yocto
+
+Update to 4.2 LTS release
+
+https://docs.djangoproject.com/en/4.2/releases/4.2/
+https://docs.djangoproject.com/en/4.1/releases/4.1/
+https://docs.djangoproject.com/en/4.0/releases/4.0/
+
+Signed-off-by: Tim Orling <tim.orling@konsulko.com>
+---
+ requirements.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/requirements.txt b/requirements.txt
+index 18835b7..072c2f1 100644
+--- a/requirements.txt
++++ b/requirements.txt
+@@ -3,7 +3,7 @@ beautifulsoup4==4.10.0
+ billiard==3.6.4.0
+ celery==5.2.3
+ confusable-homoglyphs==3.2.0
+-Django>=3.2,<3.3
++Django>=4.2,<4.3
+ django-appconf==1.0.5
+ django-axes==5.31.0
+ django-bootstrap-pagination==1.7.1
+-- 
+2.34.1
+
+
+
+^ permalink raw reply related	[flat|nested] 11+ messages in thread
+* [layerindex-web 02/10] docker-compose.yml: bump mariadb from 10.3 to 10.4
+  2023-10-06 19:59 [layerindex-web 00/10] Django 4.2 LTS Upgrade Tim Orling
+  2023-10-06 19:59 ` [layerindex-web 01/10] requirements.txt: upgrade Django 3.2 -> 4.2 Tim Orling
+@ 2023-10-06 19:59 ` Tim Orling
+  2023-10-06 19:59 ` [layerindex-web 03/10] Drop django-bootstrap-pagination: incompatible Tim Orling
+                   ` (7 subsequent siblings)
+  9 siblings, 0 replies; 11+ messages in thread
+From: Tim Orling @ 2023-10-06 19:59 UTC (permalink / raw)
+  To: yocto
+
+Django 4.2 requires a minimum of 10.4
+
+https://docs.djangoproject.com/en/4.2/releases/4.2/#dropped-support-for-mariadb-10-3
+
+Signed-off-by: Tim Orling <tim.orling@konsulko.com>
+---
+ docker-compose.yml | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/docker-compose.yml b/docker-compose.yml
+index 2dfff41..e57f59d 100644
+--- a/docker-compose.yml
++++ b/docker-compose.yml
+@@ -1,7 +1,7 @@
+ version: '3'
+ services:
+   layersdb:
+-    image: mariadb:10.3
++    image: mariadb:10.4
+     command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --wait_timeout=28800 --max_allowed_packet=128M
+     environment:
+      - "MYSQL_DATABASE=layersdb"
+-- 
+2.34.1
+
+
+
+^ permalink raw reply related	[flat|nested] 11+ messages in thread
+* [layerindex-web 03/10] Drop django-bootstrap-pagination: incompatible
+  2023-10-06 19:59 [layerindex-web 00/10] Django 4.2 LTS Upgrade Tim Orling
+  2023-10-06 19:59 ` [layerindex-web 01/10] requirements.txt: upgrade Django 3.2 -> 4.2 Tim Orling
+  2023-10-06 19:59 ` [layerindex-web 02/10] docker-compose.yml: bump mariadb from 10.3 to 10.4 Tim Orling
+@ 2023-10-06 19:59 ` Tim Orling
+  2023-10-06 19:59 ` [layerindex-web 04/10] bootstrap_pagination: disable via comment Tim Orling
+                   ` (6 subsequent siblings)
+  9 siblings, 0 replies; 11+ messages in thread
+From: Tim Orling @ 2023-10-06 19:59 UTC (permalink / raw)
+  To: yocto
+
+Upstream django-bootstrap-pagination is no longer maintained and is
+incompatible with Django 4.x.
+
+https://github.com/staticdev/django-pagination-bootstrap was archived on June 26, 2023.
+
+ugettext was removed in Django 4.0:
+https://docs.djangoproject.com/en/4.2/releases/4.0/#features-removed-in-4-0
+
+Signed-off-by: Tim Orling <tim.orling@konsulko.com>
+---
+ docker/settings.py | 1 -
+ requirements.txt   | 1 -
+ settings.py        | 1 -
+ 3 files changed, 3 deletions(-)
+
+diff --git a/docker/settings.py b/docker/settings.py
+index a3f007d..a73178c 100644
+--- a/docker/settings.py
++++ b/docker/settings.py
+@@ -161,7 +161,6 @@ INSTALLED_APPS = (
+     'axes',
+     'rest_framework',
+     'corsheaders',
+-    'bootstrap_pagination',
+ )
+ 
+ AUTHENTICATION_BACKENDS = [
+diff --git a/requirements.txt b/requirements.txt
+index 072c2f1..40f696c 100644
+--- a/requirements.txt
++++ b/requirements.txt
+@@ -6,7 +6,6 @@ confusable-homoglyphs==3.2.0
+ Django>=4.2,<4.3
+ django-appconf==1.0.5
+ django-axes==5.31.0
+-django-bootstrap-pagination==1.7.1
+ django-cors-headers==3.11.0
+ django-ipware==4.0.2
+ django-ranged-response==0.2.0
+diff --git a/settings.py b/settings.py
+index a69eb53..fa303b1 100644
+--- a/settings.py
++++ b/settings.py
+@@ -161,7 +161,6 @@ INSTALLED_APPS = (
+     'axes',
+     'rest_framework',
+     'corsheaders',
+-    'bootstrap_pagination',
+ )
+ 
+ AUTHENTICATION_BACKENDS = [
+-- 
+2.34.1
+
+
+
+^ permalink raw reply related	[flat|nested] 11+ messages in thread
+* [layerindex-web 04/10] bootstrap_pagination: disable via comment
+  2023-10-06 19:59 [layerindex-web 00/10] Django 4.2 LTS Upgrade Tim Orling
+                   ` (2 preceding siblings ...)
+  2023-10-06 19:59 ` [layerindex-web 03/10] Drop django-bootstrap-pagination: incompatible Tim Orling
+@ 2023-10-06 19:59 ` Tim Orling
+  2023-10-06 19:59 ` [layerindex-web 05/10] Refactor usage of django.conf.urls Tim Orling
+                   ` (5 subsequent siblings)
+  9 siblings, 0 replies; 11+ messages in thread
+From: Tim Orling @ 2023-10-06 19:59 UTC (permalink / raw)
+  To: yocto
+
+Wrap the is_pagination usage of bootstrap_pagination with comment/endcomment
+to avoid incompatible module.
+
+We will need to re-write the pagination code.
+
+Signed-off-by: Tim Orling <tim.orling@konsulko.com>
+---
+ templates/layerindex/bulkchangesearch.html | 2 ++
+ templates/layerindex/classes.html          | 2 ++
+ templates/layerindex/classicrecipes.html   | 2 ++
+ templates/layerindex/distros.html          | 2 ++
+ templates/layerindex/history.html          | 2 ++
+ templates/layerindex/layers.html           | 2 ++
+ templates/layerindex/machines.html         | 2 ++
+ templates/layerindex/recipes.html          | 2 ++
+ templates/layerindex/reviewlist.html       | 2 ++
+ templates/layerindex/updatelist.html       | 2 ++
+ 10 files changed, 20 insertions(+)
+
+diff --git a/templates/layerindex/bulkchangesearch.html b/templates/layerindex/bulkchangesearch.html
+index 7f6b8c9..e8d6bd8 100644
+--- a/templates/layerindex/bulkchangesearch.html
++++ b/templates/layerindex/bulkchangesearch.html
+@@ -90,10 +90,12 @@
+                     <input type="submit" class="btn btn-default" name="add_all" value="Add all"></input>
+ 
+     {% if is_paginated %}
++    {% comment %}
+         {% load bootstrap_pagination %}
+         <div class="text-center">
+         {% bootstrap_paginate page_obj range=10 show_prev_next="false" show_first_last="true" %}
+         </div>
++    {% endcomment %}
+     {% endif %}
+ {% else %}
+     {% if searched %}
+diff --git a/templates/layerindex/classes.html b/templates/layerindex/classes.html
+index bd3b67d..bc3d0ac 100644
+--- a/templates/layerindex/classes.html
++++ b/templates/layerindex/classes.html
+@@ -62,10 +62,12 @@
+                 </table>
+ 
+     {% if is_paginated %}
++    {% comment %}
+         {% load bootstrap_pagination %}
+         <div class="text-center">
+         {% bootstrap_paginate page_obj range=10 show_prev_next="false" show_first_last="true" %}
+         </div>
++    {% endcomment %}
+     {% endif %}
+ {% else %}
+     {% if search_keyword %}
+diff --git a/templates/layerindex/classicrecipes.html b/templates/layerindex/classicrecipes.html
+index deedbbb..cf911a5 100644
+--- a/templates/layerindex/classicrecipes.html
++++ b/templates/layerindex/classicrecipes.html
+@@ -287,10 +287,12 @@
+                 </table>
+ 
+     {% if is_paginated %}
++    {% comment %}
+         {% load bootstrap_pagination %}
+         <div class="text-center">
+         {% bootstrap_paginate page_obj range=10 show_prev_next="false" show_first_last="true" %}
+         </div>
++    {% endcomment %}
+     {% endif %}
+ {% else %}
+     {% if searched %}
+diff --git a/templates/layerindex/distros.html b/templates/layerindex/distros.html
+index 549257b..0c1b276 100644
+--- a/templates/layerindex/distros.html
++++ b/templates/layerindex/distros.html
+@@ -65,10 +65,12 @@
+                 </table>
+ 
+     {% if is_paginated %}
++    {% comment %}
+         {% load bootstrap_pagination %}
+         <div class="text-center">
+         {% bootstrap_paginate page_obj range=10 show_prev_next="false" show_first_last="true" %}
+         </div>
++    {% endcomment %}
+     {% endif %}
+ {% else %}
+     {% if search_keyword %}
+diff --git a/templates/layerindex/history.html b/templates/layerindex/history.html
+index 3c80d92..9ae4431 100644
+--- a/templates/layerindex/history.html
++++ b/templates/layerindex/history.html
+@@ -60,10 +60,12 @@
+ </table>
+ 
+     {% if is_paginated %}
++    {% comment %}
+         {% load bootstrap_pagination %}
+         <div class="text-center">
+         {% bootstrap_paginate page_obj range=10 show_prev_next="false" show_first_last="true" %}
+         </div>
++    {% endcomment %}
+     {% endif %}
+ 
+ 
+diff --git a/templates/layerindex/layers.html b/templates/layerindex/layers.html
+index 3e6a4b3..ae9befb 100644
+--- a/templates/layerindex/layers.html
++++ b/templates/layerindex/layers.html
+@@ -105,10 +105,12 @@
+             </table>
+ 
+     {% if is_paginated %}
++    {% comment %}
+         {% load bootstrap_pagination %}
+         <div class="text-center">
+         {% bootstrap_paginate page_obj range=10 show_prev_next="false" show_first_last="true" %}
+         </div>
++    {% endcomment %}
+     {% endif %}
+ {% else %}
+     <p>No matching layers in database.</p>
+diff --git a/templates/layerindex/machines.html b/templates/layerindex/machines.html
+index ebbc158..685506d 100644
+--- a/templates/layerindex/machines.html
++++ b/templates/layerindex/machines.html
+@@ -64,10 +64,12 @@
+                 </table>
+ 
+     {% if is_paginated %}
++    {% comment %}
+         {% load bootstrap_pagination %}
+         <div class="text-center">
+         {% bootstrap_paginate page_obj range=10 show_prev_next="false" show_first_last="true" %}
+         </div>
++    {% endcomment %}
+     {% endif %}
+ {% else %}
+     {% if search_keyword %}
+diff --git a/templates/layerindex/recipes.html b/templates/layerindex/recipes.html
+index a1878fa..9c15e6c 100644
+--- a/templates/layerindex/recipes.html
++++ b/templates/layerindex/recipes.html
+@@ -90,10 +90,12 @@
+                 </table>
+ 
+     {% if is_paginated %}
++    {% comment %}
+         {% load bootstrap_pagination %}
+         <div class="text-center">
+         {% bootstrap_paginate page_obj range=10 show_prev_next="false" show_first_last="true" %}
+         </div>
++    {% endcomment %}
+     {% endif %}
+ {% else %}
+     {% if search_keyword %}
+diff --git a/templates/layerindex/reviewlist.html b/templates/layerindex/reviewlist.html
+index f72787a..18e0d78 100644
+--- a/templates/layerindex/reviewlist.html
++++ b/templates/layerindex/reviewlist.html
+@@ -69,10 +69,12 @@
+     </div>
+ 
+     {% if is_paginated %}
++    {% comment %}
+         {% load bootstrap_pagination %}
+         <div class="text-center">
+         {% bootstrap_paginate page_obj range=10 show_prev_next="false" show_first_last="true" %}
+         </div>
++    {% endcomment %}
+     {% endif %}
+ {% else %}
+     <p>No unpublished layers to review.</p>
+diff --git a/templates/layerindex/updatelist.html b/templates/layerindex/updatelist.html
+index f4f786a..b68a860 100644
+--- a/templates/layerindex/updatelist.html
++++ b/templates/layerindex/updatelist.html
+@@ -54,10 +54,12 @@
+ </div>
+ 
+ {% if is_paginated %}
++{% comment %}
+     {% load bootstrap_pagination %}
+     <div class="text-center">
+     {% bootstrap_paginate page_obj range=10 show_prev_next="false" show_first_last="true" %}
+     </div>
++{% endcomment %}
+ {% endif %}
+ 
+ {% endautoescape %}
+-- 
+2.34.1
+
+
+
+^ permalink raw reply related	[flat|nested] 11+ messages in thread
+* [layerindex-web 05/10] Refactor usage of django.conf.urls
+  2023-10-06 19:59 [layerindex-web 00/10] Django 4.2 LTS Upgrade Tim Orling
+                   ` (3 preceding siblings ...)
+  2023-10-06 19:59 ` [layerindex-web 04/10] bootstrap_pagination: disable via comment Tim Orling
+@ 2023-10-06 19:59 ` Tim Orling
+  2023-10-06 19:59 ` [layerindex-web 06/10] Dockerfile: drop python3-pil Tim Orling
+                   ` (4 subsequent siblings)
+  9 siblings, 0 replies; 11+ messages in thread
+From: Tim Orling @ 2023-10-06 19:59 UTC (permalink / raw)
+  To: yocto
+
+django.conf.urls.url() was removed in Django 4.0:
+https://docs.djangoproject.com/en/4.2/releases/4.0/#features-removed-in-4-0
+
+Replace all usage with django.urls.re_path()
+Replace all django.conf.urls imports with equivalent django.urls modules
+
+Signed-off-by: Tim Orling <tim.orling@konsulko.com>
+---
+ layerindex/urls.py        | 108 +++++++++++++++++++-------------------
+ layerindex/urls_branch.py |  25 +++++----
+ rrs/urls.py               |  16 +++---
+ urls.py                   |  31 ++++++-----
+ 4 files changed, 88 insertions(+), 92 deletions(-)
+
+diff --git a/layerindex/urls.py b/layerindex/urls.py
+index 82af699..cee3d2a 100644
+--- a/layerindex/urls.py
++++ b/layerindex/urls.py
+@@ -6,10 +6,9 @@
+ #
+ # SPDX-License-Identifier: MIT
+ 
+-from django.conf.urls import *
+ from django.views.generic import TemplateView, DetailView, ListView, RedirectView
+ from django.views.defaults import page_not_found
+-from django.urls import reverse_lazy
++from django.urls import include, re_path, reverse_lazy
+ from layerindex.views import LayerListView, LayerReviewListView, LayerReviewDetailView, RecipeSearchView, \
+     MachineSearchView, LayerDetailView, edit_layer_view, delete_layer_view, edit_layernote_view, delete_layernote_view, \
+     HistoryListView, EditProfileFormView, AdvancedRecipeSearchView, BulkChangeView, BulkChangeSearchView, \
+@@ -21,7 +20,6 @@ from layerindex.views import LayerListView, LayerReviewListView, LayerReviewDeta
+ from layerindex.models import LayerItem, Recipe, RecipeChangeset
+ from rest_framework import routers
+ from . import restviews
+-from django.conf.urls import include
+ 
+ router = routers.DefaultRouter()
+ router.register(r'branches', restviews.BranchViewSet)
+@@ -40,174 +38,174 @@ router.register(r'appends', restviews.AppendViewSet)
+ router.register(r'incFiles', restviews.IncFileViewSet)
+ 
+ urlpatterns = [
+-    url(r'^$',
++    re_path(r'^$',
+         RedirectView.as_view(url=reverse_lazy('layer_list', args=('master',)), permanent=False),
+         name='frontpage'),
+ 
+-    url(r'^api/', include(router.urls)),
++    re_path(r'^api/', include(router.urls)),
+ 
+-    url(r'^layers/$',
++    re_path(r'^layers/$',
+         RedirectView.as_view(url=reverse_lazy('layer_list', args=('master',)), permanent=False)),
+-    url(r'^layer/(?P<slug>[-\w]+)/$',
++    re_path(r'^layer/(?P<slug>[-\w]+)/$',
+         RedirectParamsView.as_view(permanent=False), {'redirect_name': 'layer_item', 'branch': 'master'}),
+-    url(r'^recipes/$',
++    re_path(r'^recipes/$',
+         RedirectView.as_view(url=reverse_lazy('recipe_search', args=('master',)), permanent=False)),
+-    url(r'^machines/$',
++    re_path(r'^machines/$',
+         RedirectView.as_view(url=reverse_lazy('machine_search', args=('master',)), permanent=False)),
+-    url(r'^distros/$',
++    re_path(r'^distros/$',
+         RedirectView.as_view(url=reverse_lazy('distro_search', args=('master',)), permanent=False)),
+-    url(r'^classes/$',
++    re_path(r'^classes/$',
+         RedirectView.as_view(url=reverse_lazy('class_search', args=('master',)), permanent=False)),
+-    url(r'^submit/$', edit_layer_view, {'template_name': 'layerindex/submitlayer.html'}, name="submit_layer"),
+-    url(r'^submit/thanks/$',
++    re_path(r'^submit/$', edit_layer_view, {'template_name': 'layerindex/submitlayer.html'}, name="submit_layer"),
++    re_path(r'^submit/thanks/$',
+         TemplateView.as_view(
+             template_name='layerindex/submitthanks.html'),
+         name="submit_layer_thanks"),
+-    url(r'^review/$',
++    re_path(r'^review/$',
+         LayerReviewListView.as_view(
+             template_name='layerindex/reviewlist.html'),
+         name='layer_list_review'),
+-    url(r'^review/(?P<slug>[-\w]+)/$',
++    re_path(r'^review/(?P<slug>[-\w]+)/$',
+         LayerReviewDetailView.as_view(
+             template_name='layerindex/reviewdetail.html'),
+         name='layer_review'),
+-    url(r'^layer/(?P<slug>[-\w]+)/addnote/$',
++    re_path(r'^layer/(?P<slug>[-\w]+)/addnote/$',
+         edit_layernote_view, {'template_name': 'layerindex/editlayernote.html'}, name="add_layernote"),
+-    url(r'^layer/(?P<slug>[-\w]+)/editnote/(?P<pk>[-\w]+)/$',
++    re_path(r'^layer/(?P<slug>[-\w]+)/editnote/(?P<pk>[-\w]+)/$',
+         edit_layernote_view, {'template_name': 'layerindex/editlayernote.html'}, name="edit_layernote"),
+-    url(r'^layer/(?P<slug>[-\w]+)/deletenote/(?P<pk>[-\w]+)/$',
++    re_path(r'^layer/(?P<slug>[-\w]+)/deletenote/(?P<pk>[-\w]+)/$',
+         delete_layernote_view, {'template_name': 'layerindex/deleteconfirm.html'}, name="delete_layernote"),
+-    url(r'^layer/(?P<slug>[-\w]+)/delete/$',
++    re_path(r'^layer/(?P<slug>[-\w]+)/delete/$',
+         delete_layer_view, {'template_name': 'layerindex/deleteconfirm.html'}, name="delete_layer"),
+-    url(r'^recipe/(?P<pk>[-\w]+)/$',
++    re_path(r'^recipe/(?P<pk>[-\w]+)/$',
+         RecipeDetailView.as_view(
+             template_name='layerindex/recipedetail.html'),
+         name='recipe'),
+-    url(r'^layer/(?P<name>[-\w]+)/publish/$', publish_view, name="publish"),
+-    url(r'^layerupdate/(?P<pk>[-\w]+)/$',
++    re_path(r'^layer/(?P<name>[-\w]+)/publish/$', publish_view, name="publish"),
++    re_path(r'^layerupdate/(?P<pk>[-\w]+)/$',
+         LayerUpdateDetailView.as_view(
+             template_name='layerindex/layerupdate.html'),
+         name='layerupdate'),
+-    url(r'^bulkchange/$',
++    re_path(r'^bulkchange/$',
+         BulkChangeView.as_view(
+             template_name='layerindex/bulkchange.html'),
+         name="bulk_change"),
+-    url(r'^bulkchange/(?P<pk>\d+)/search/$',
++    re_path(r'^bulkchange/(?P<pk>\d+)/search/$',
+         BulkChangeSearchView.as_view(
+             template_name='layerindex/bulkchangesearch.html'),
+         name="bulk_change_search"),
+-    url(r'^bulkchange/(?P<pk>\d+)/edit/$',
++    re_path(r'^bulkchange/(?P<pk>\d+)/edit/$',
+         bulk_change_edit_view, {'template_name': 'layerindex/bulkchangeedit.html'}, name="bulk_change_edit"),
+-    url(r'^bulkchange/(?P<pk>\d+)/review/$',
++    re_path(r'^bulkchange/(?P<pk>\d+)/review/$',
+         DetailView.as_view(
+             model=RecipeChangeset,
+             context_object_name='changeset',
+             template_name='layerindex/bulkchangereview.html'),
+         name="bulk_change_review"),
+-    url(r'^bulkchange/(?P<pk>\d+)/patches/$',
++    re_path(r'^bulkchange/(?P<pk>\d+)/patches/$',
+         bulk_change_patch_view, name="bulk_change_patches"),
+-    url(r'^bulkchange/(?P<pk>\d+)/delete/$',
++    re_path(r'^bulkchange/(?P<pk>\d+)/delete/$',
+         BulkChangeDeleteView.as_view(
+             template_name='layerindex/deleteconfirm.html'),
+         name="bulk_change_delete"),
+-    url(r'^branch/(?P<branch>[-.\w]+)/',
++    re_path(r'^branch/(?P<branch>[-.\w]+)/',
+         include('layerindex.urls_branch')),
+-    url(r'^updates/$',
++    re_path(r'^updates/$',
+         UpdateListView.as_view(
+             template_name='layerindex/updatelist.html'),
+         name='update_list'),
+-    url(r'^updates/(?P<pk>[-\w]+)/$',
++    re_path(r'^updates/(?P<pk>[-\w]+)/$',
+         UpdateDetailView.as_view(
+             template_name='layerindex/updatedetail.html'),
+         name='update'),
+-    url(r'^history/$',
++    re_path(r'^history/$',
+         HistoryListView.as_view(
+             template_name='layerindex/history.html'),
+         name='history_list'),
+-    url(r'^profile/$',
++    re_path(r'^profile/$',
+         EditProfileFormView.as_view(
+             template_name='layerindex/profile.html'),
+         name="profile"),
+-    url(r'^about/$',
++    re_path(r'^about/$',
+         TemplateView.as_view(
+             template_name='layerindex/about.html'),
+         name="about"),
+-    url(r'^stats/$',
++    re_path(r'^stats/$',
+         StatsView.as_view(
+             template_name='layerindex/stats.html'),
+         name='stats'),
+-    url(r'^oe-classic/$',
++    re_path(r'^oe-classic/$',
+         RedirectView.as_view(url=reverse_lazy('classic_recipe_search'), permanent=False),
+         name='classic'),
+-    url(r'^oe-classic/recipes/$',
++    re_path(r'^oe-classic/recipes/$',
+         RedirectView.as_view(url=reverse_lazy('comparison_recipe_search', kwargs={'branch': 'oe-classic'}), permanent=False),
+         name='classic_recipe_search'),
+-    url(r'^oe-classic/stats/$',
++    re_path(r'^oe-classic/stats/$',
+         RedirectView.as_view(url=reverse_lazy('comparison_recipe_stats', kwargs={'branch': 'oe-classic'}), permanent=False),
+         name='classic_recipe_stats'),
+-    url(r'^oe-classic/recipe/(?P<pk>[-\w]+)/$',
++    re_path(r'^oe-classic/recipe/(?P<pk>[-\w]+)/$',
+         ClassicRecipeDetailView.as_view(
+             template_name='layerindex/classicrecipedetail.html'),
+         name='classic_recipe'),
+-    url(r'^comparison/recipes/(?P<branch>[-.\w]+)/$',
++    re_path(r'^comparison/recipes/(?P<branch>[-.\w]+)/$',
+         ClassicRecipeSearchView.as_view(
+             template_name='layerindex/classicrecipes.html'),
+         name='comparison_recipe_search'),
+-    url(r'^comparison/search-csv/(?P<branch>[-.\w]+)/$',
++    re_path(r'^comparison/search-csv/(?P<branch>[-.\w]+)/$',
+         ClassicRecipeSearchView.as_view(
+             template_name='layerindex/classicrecipes_csv.txt',
+             paginate_by=0,
+             content_type='text/csv; charset=utf-8'),
+         name='comparison_recipe_search_csv'),
+-    url(r'^comparison/stats/(?P<branch>[-.\w]+)/$',
++    re_path(r'^comparison/stats/(?P<branch>[-.\w]+)/$',
+         ClassicRecipeStatsView.as_view(
+             template_name='layerindex/classicstats.html'),
+         name='comparison_recipe_stats'),
+-    url(r'^comparison/recipe/(?P<pk>[-\w]+)/$',
++    re_path(r'^comparison/recipe/(?P<pk>[-\w]+)/$',
+         ClassicRecipeDetailView.as_view(
+             template_name='layerindex/classicrecipedetail.html'),
+         name='comparison_recipe'),
+-    url(r'^comparison/select/(?P<pk>[-\w]+)/$',
++    re_path(r'^comparison/select/(?P<pk>[-\w]+)/$',
+         ComparisonRecipeSelectView.as_view(
+             template_name='layerindex/comparisonrecipeselect.html'),
+         name='comparison_select'),
+-    url(r'^comparison/selectdetail/(?P<selectfor>[-\w]+)/(?P<pk>[-\w]+)/$',
++    re_path(r'^comparison/selectdetail/(?P<selectfor>[-\w]+)/(?P<pk>[-\w]+)/$',
+         ComparisonRecipeSelectDetailView.as_view(
+             template_name='layerindex/comparisonrecipeselectdetail.html'),
+         name='comparison_select_detail'),
+-    url(r'^email_test/$',
++    re_path(r'^email_test/$',
+         email_test_view,
+         name='email_test'),
+-    url(r'^task/(?P<task_id>[-\w]+)/$',
++    re_path(r'^task/(?P<task_id>[-\w]+)/$',
+         TaskStatusView.as_view(
+             template_name='layerindex/task.html'),
+         name='task_status'),
+-    url(r'^tasklog/(?P<task_id>[-\w]+)/$',
++    re_path(r'^tasklog/(?P<task_id>[-\w]+)/$',
+         task_log_view,
+         name='task_log'),
+-    url(r'^stoptask/(?P<task_id>[-\w]+)/$',
++    re_path(r'^stoptask/(?P<task_id>[-\w]+)/$',
+         task_stop_view,
+         name='task_stop'),
+-    url(r'^branch_comparison/$',
++    re_path(r'^branch_comparison/$',
+         BranchCompareView.as_view(
+             template_name='layerindex/branchcompare.html'),
+         name='branch_comparison'),
+-    url(r'^branch_comparison_plain/$',
++    re_path(r'^branch_comparison_plain/$',
+         BranchCompareView.as_view(
+             content_type='text/plain; charset=utf-8',
+             template_name='layerindex/branchcompare_plain.txt'),
+         name='branch_comparison_plain'),
+-    url(r'^recipe_deps/$',
++    re_path(r'^recipe_deps/$',
+         RecipeDependenciesView.as_view(
+             template_name='layerindex/recipedeps.html'),
+         name='recipe_deps'),
+-    url(r'^ajax/layerchecklist/(?P<branch>[-.\w]+)/$',
++    re_path(r'^ajax/layerchecklist/(?P<branch>[-.\w]+)/$',
+         LayerCheckListView.as_view(
+             template_name='layerindex/layerchecklist.html'),
+         name='layer_checklist'),
+-    url(r'^ajax/classchecklist/(?P<branch>[-.\w]+)/$',
++    re_path(r'^ajax/classchecklist/(?P<branch>[-.\w]+)/$',
+         BBClassCheckListView.as_view(
+             template_name='layerindex/classchecklist.html'),
+         name='class_checklist'),
+-    url(r'.*', page_not_found, kwargs={'exception': Exception("Page not Found")})
++    re_path(r'.*', page_not_found, kwargs={'exception': Exception("Page not Found")})
+ ]
+diff --git a/layerindex/urls_branch.py b/layerindex/urls_branch.py
+index 86b8b77..6736f32 100644
+--- a/layerindex/urls_branch.py
++++ b/layerindex/urls_branch.py
+@@ -6,47 +6,46 @@
+ #
+ # SPDX-License-Identifier: MIT
+ 
+-from django.conf.urls import *
+ from django.views.defaults import page_not_found
+-from django.urls import reverse_lazy
++from django.urls import include, re_path, reverse_lazy
+ from layerindex.views import LayerListView, RecipeSearchView, MachineSearchView, DistroSearchView, ClassSearchView, LayerDetailView, edit_layer_view, delete_layer_view, edit_layernote_view, delete_layernote_view, RedirectParamsView, DuplicatesView, LayerUpdateDetailView, layer_export_recipes_csv_view, comparison_update_view
+ 
+ urlpatterns = [
+-    url(r'^$', 
++    re_path(r'^$',
+         RedirectParamsView.as_view(permanent=False), {'redirect_name': 'layer_list'}),
+-    url(r'^layers/$',
++    re_path(r'^layers/$',
+         LayerListView.as_view(
+             template_name='layerindex/layers.html'),
+             name='layer_list'),
+-    url(r'^layer/(?P<slug>[-\w]+)/$',
++    re_path(r'^layer/(?P<slug>[-\w]+)/$',
+         LayerDetailView.as_view(
+             template_name='layerindex/detail.html'),
+             name='layer_item'),
+-    url(r'^layer/(?P<slug>[-\w]+)/recipes/csv/$',
++    re_path(r'^layer/(?P<slug>[-\w]+)/recipes/csv/$',
+         layer_export_recipes_csv_view,
+         name='layer_export_recipes_csv'),
+-    url(r'^recipes/$',
++    re_path(r'^recipes/$',
+         RecipeSearchView.as_view(
+             template_name='layerindex/recipes.html'),
+             name='recipe_search'),
+-    url(r'^machines/$',
++    re_path(r'^machines/$',
+         MachineSearchView.as_view(
+             template_name='layerindex/machines.html'),
+             name='machine_search'),
+-    url(r'^distros/$',
++    re_path(r'^distros/$',
+         DistroSearchView.as_view(
+             template_name='layerindex/distros.html'),
+             name='distro_search'),
+-    url(r'^classes/$',
++    re_path(r'^classes/$',
+         ClassSearchView.as_view(
+             template_name='layerindex/classes.html'),
+             name='class_search'),
+-    url(r'^edit/(?P<slug>[-\w]+)/$', edit_layer_view, {'template_name': 'layerindex/editlayer.html'}, name="edit_layer"),
+-    url(r'^duplicates/$',
++    re_path(r'^edit/(?P<slug>[-\w]+)/$', edit_layer_view, {'template_name': 'layerindex/editlayer.html'}, name="edit_layer"),
++    re_path(r'^duplicates/$',
+         DuplicatesView.as_view(
+             template_name='layerindex/duplicates.html'),
+             name='duplicates'),
+-    url(r'^comparison_update/$',
++    re_path(r'^comparison_update/$',
+         comparison_update_view,
+         name='comparison_update'),
+ ]
+diff --git a/rrs/urls.py b/rrs/urls.py
+index 63426a9..2adacce 100644
+--- a/rrs/urls.py
++++ b/rrs/urls.py
+@@ -6,7 +6,7 @@
+ #
+ # SPDX-License-Identifier: MIT
+ 
+-from django.conf.urls import include, url
++from django.urls import include, re_path
+ 
+ from rrs.models import Release, Milestone
+ from rrs.views import RecipeListView, recipes_report, RecipeDetailView, \
+@@ -14,27 +14,27 @@ from rrs.views import RecipeListView, recipes_report, RecipeDetailView, \
+     MaintenanceStatsView
+ 
+ urlpatterns = [
+-    url(r'^$', FrontPageRedirect.as_view(),
++    re_path(r'^$', FrontPageRedirect.as_view(),
+         name='rrs_frontpage'),
+-    url(r'^maintplan/(?P<maintplan_name>.*)/$',
++    re_path(r'^maintplan/(?P<maintplan_name>.*)/$',
+         MaintenancePlanRedirect.as_view(),
+         name='rrs_maintplan'),
+-    url(r'^recipes/(?P<maintplan_name>.*)/(?P<release_name>.*)/(?P<milestone_name>.*)/$',
++    re_path(r'^recipes/(?P<maintplan_name>.*)/(?P<release_name>.*)/(?P<milestone_name>.*)/$',
+         RecipeListView.as_view(
+             template_name='rrs/recipes.html'),
+         name='rrs_recipes'),
+-    url(r'^recipesreport/(?P<maintplan_name>.*)/(?P<release_name>.*)/(?P<milestone_name>.*)/$',
++    re_path(r'^recipesreport/(?P<maintplan_name>.*)/(?P<release_name>.*)/(?P<milestone_name>.*)/$',
+         recipes_report,
+         name="rrs_recipesreport"),
+-    url(r'^recipedetail/(?P<maintplan_name>.*)/(?P<pk>\d+)/$',
++    re_path(r'^recipedetail/(?P<maintplan_name>.*)/(?P<pk>\d+)/$',
+         RecipeDetailView.as_view(
+             template_name='rrs/recipedetail.html'),
+         name='rrs_recipedetail'),
+-    url(r'^maintainers/(?P<maintplan_name>.*)/(?P<release_name>.*)/(?P<milestone_name>.*)/$',
++    re_path(r'^maintainers/(?P<maintplan_name>.*)/(?P<release_name>.*)/(?P<milestone_name>.*)/$',
+         MaintainerListView.as_view(
+         template_name='rrs/maintainers.html'),
+         name="rrs_maintainers"),
+-    url(r'^stats/(?P<maintplan_name>.*)/(?P<release_name>.*)/(?P<milestone_name>.*)/$',
++    re_path(r'^stats/(?P<maintplan_name>.*)/(?P<release_name>.*)/(?P<milestone_name>.*)/$',
+         MaintenanceStatsView.as_view(
+         template_name='rrs/rrs_stats.html'),
+         name="rrs_stats"),
+diff --git a/urls.py b/urls.py
+index 76f2f73..db94959 100644
+--- a/urls.py
++++ b/urls.py
+@@ -7,8 +7,7 @@
+ #
+ # SPDX-License-Identifier: MIT
+ 
+-from django.conf.urls import include, url
+-from django.urls import reverse_lazy
++from django.urls import include, re_path, reverse_lazy
+ from django.views.generic import RedirectView, TemplateView
+ from layerindex.auth_views import CaptchaRegistrationView, CaptchaPasswordResetView, delete_account_view, \
+     PasswordResetSecurityQuestions
+@@ -18,40 +17,40 @@ admin.autodiscover()
+ import settings
+ 
+ urlpatterns = [
+-    url(r'^layerindex/', include('layerindex.urls')),
+-    url(r'^admin/', admin.site.urls),
+-    url(r'^accounts/password_reset/$',
++    re_path(r'^layerindex/', include('layerindex.urls')),
++    re_path(r'^admin/', admin.site.urls),
++    re_path(r'^accounts/password_reset/$',
+         CaptchaPasswordResetView.as_view(
+             email_template_name='registration/password_reset_email.txt',
+             success_url=reverse_lazy('password_reset_done')),
+         name='password_reset'),
+-    url(r'^accounts/register/$', CaptchaRegistrationView.as_view(),
++    re_path(r'^accounts/register/$', CaptchaRegistrationView.as_view(),
+         name='django_registration_register'),
+-    url(r'^accounts/delete/$', delete_account_view,
++    re_path(r'^accounts/delete/$', delete_account_view,
+         {'template_name': 'layerindex/deleteaccount.html'},
+         name='delete_account'),
+-    url(r'^accounts/reregister/$', TemplateView.as_view(
++    re_path(r'^accounts/reregister/$', TemplateView.as_view(
+         template_name='registration/reregister.html'),
+         name='reregister'),
+-    url(r'^accounts/reset/(?P<uidb64>[0-9A-Za-z_\-]+)/(?P<token>[0-9A-Za-z]{1,3}-[0-9A-Za-z]{1,20})/$',
++    re_path(r'^accounts/reset/(?P<uidb64>[0-9A-Za-z_\-]+)/(?P<token>[0-9A-Za-z]{1,3}-[0-9A-Za-z]{1,20})/$',
+         PasswordResetSecurityQuestions.as_view(),
+         name='password_reset_confirm',
+         ),
+-    url(r'^accounts/reset/fail/$', TemplateView.as_view(
++    re_path(r'^accounts/reset/fail/$', TemplateView.as_view(
+         template_name='registration/password_reset_fail.html'),
+         name='password_reset_fail'),
+-    url(r'^accounts/lockout/$', TemplateView.as_view(
++    re_path(r'^accounts/lockout/$', TemplateView.as_view(
+         template_name='registration/account_lockout.html'),
+         name='account_lockout'),
+-    url(r'^accounts/', include('django_registration.backends.activation.urls')),
+-    url(r'^accounts/', include('django.contrib.auth.urls')),
+-    url(r'^captcha/', include('captcha.urls')),
++    re_path(r'^accounts/', include('django_registration.backends.activation.urls')),
++    re_path(r'^accounts/', include('django.contrib.auth.urls')),
++    re_path(r'^captcha/', include('captcha.urls')),
+ ]
+ if 'rrs' in settings.INSTALLED_APPS:
+     urlpatterns += [
+-        url(r'^rrs/', include('rrs.urls')),
++        re_path(r'^rrs/', include('rrs.urls')),
+     ]
+ 
+ urlpatterns += [
+-    url(r'.*', RedirectView.as_view(url='/layerindex/', permanent=False)),
++    re_path(r'.*', RedirectView.as_view(url='/layerindex/', permanent=False)),
+ ]
+-- 
+2.34.1
+
+
+
+^ permalink raw reply related	[flat|nested] 11+ messages in thread
+* [layerindex-web 06/10] Dockerfile: drop python3-pil
+  2023-10-06 19:59 [layerindex-web 00/10] Django 4.2 LTS Upgrade Tim Orling
+                   ` (4 preceding siblings ...)
+  2023-10-06 19:59 ` [layerindex-web 05/10] Refactor usage of django.conf.urls Tim Orling
+@ 2023-10-06 19:59 ` Tim Orling
+  2023-10-06 19:59 ` [layerindex-web 07/10] requirements.txt: upgrade all to latest Tim Orling
+                   ` (3 subsequent siblings)
+  9 siblings, 0 replies; 11+ messages in thread
+From: Tim Orling @ 2023-10-06 19:59 UTC (permalink / raw)
+  To: yocto
+
+This prevents upgrading Pillow in requirements.txt
+
+Signed-off-by: Tim Orling <tim.orling@konsulko.com>
+---
+ Dockerfile | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/Dockerfile b/Dockerfile
+index d8c38e1..02948b6 100644
+--- a/Dockerfile
++++ b/Dockerfile
+@@ -30,7 +30,6 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update \
+ 	python3-pip \
+ 	python3-mysqldb \
+ 	python3-dev \
+-	python3-pil \
+ 	python3-wheel \
+ 	zlib1g-dev \
+ 	libfreetype6-dev \
+-- 
+2.34.1
+
+
+
+^ permalink raw reply related	[flat|nested] 11+ messages in thread
+* [layerindex-web 07/10] requirements.txt: upgrade all to latest
+  2023-10-06 19:59 [layerindex-web 00/10] Django 4.2 LTS Upgrade Tim Orling
+                   ` (5 preceding siblings ...)
+  2023-10-06 19:59 ` [layerindex-web 06/10] Dockerfile: drop python3-pil Tim Orling
+@ 2023-10-06 19:59 ` Tim Orling
+  2023-10-06 19:59 ` [layerindex-web 08/10] requirements.txt: update dependencies Tim Orling
+                   ` (2 subsequent siblings)
+  9 siblings, 0 replies; 11+ messages in thread
+From: Tim Orling @ 2023-10-06 19:59 UTC (permalink / raw)
+  To: yocto
+
+Signed-off-by: Tim Orling <tim.orling@konsulko.com>
+---
+ requirements.txt | 32 ++++++++++++++++----------------
+ 1 file changed, 16 insertions(+), 16 deletions(-)
+
+diff --git a/requirements.txt b/requirements.txt
+index 40f696c..612e9cc 100644
+--- a/requirements.txt
++++ b/requirements.txt
+@@ -1,26 +1,26 @@
+-amqp==5.0.9
+-beautifulsoup4==4.10.0
+-billiard==3.6.4.0
+-celery==5.2.3
++amqp==5.1.1
++beautifulsoup4==4.12.2
++billiard==4.1.0
++celery==5.3.4
+ confusable-homoglyphs==3.2.0
+ Django>=4.2,<4.3
+ django-appconf==1.0.5
+-django-axes==5.31.0
+-django-cors-headers==3.11.0
+-django-ipware==4.0.2
++django-axes==6.1.0
++django-cors-headers==4.2.0
++django-ipware==5.0.0
+ django-ranged-response==0.2.0
+-django-registration==3.2
+-django-reversion==4.0.1
+-django-reversion-compare==0.14.1
++django-registration==3.4
++django-reversion==5.0.4
++django-reversion-compare==0.16.2
+ django-simple-captcha==0.5.20
+-djangorestframework==3.13.1
+-gitdb==4.0.9
++djangorestframework==3.14.0
++gitdb==4.0.10
+ GitPython==3.1.37
+-kombu==5.2.3
+-mysqlclient==2.1.0
++kombu==5.3.2
++mysqlclient==2.1.1
+ Pillow==10.0.1
+-pytz==2021.3
++pytz==2023.3
+ six==1.16.0
+ smmap==5.0.0
+-soupsieve==2.3.1
++soupsieve==2.4.1
+ vine==5.0.0
+-- 
+2.34.1
+
+
+
+^ permalink raw reply related	[flat|nested] 11+ messages in thread
+* [layerindex-web 08/10] requirements.txt: update dependencies
+  2023-10-06 19:59 [layerindex-web 00/10] Django 4.2 LTS Upgrade Tim Orling
+                   ` (6 preceding siblings ...)
+  2023-10-06 19:59 ` [layerindex-web 07/10] requirements.txt: upgrade all to latest Tim Orling
+@ 2023-10-06 19:59 ` Tim Orling
+  2023-10-06 19:59 ` [layerindex-web 09/10] password_validation.py: fix deprecated ugettext Tim Orling
+  2023-10-06 19:59 ` [layerindex-web 10/10] docker/settings.py: add CSRF_TRUSTED_ORIGINS Tim Orling
+  9 siblings, 0 replies; 11+ messages in thread
+From: Tim Orling @ 2023-10-06 19:59 UTC (permalink / raw)
+  To: yocto
+
+Use results of:
+pipenv install
+pipenv update
+pip freeze > requirements-freeze.txt
+
+Signed-off-by: Tim Orling <tim.orling@konsulko.com>
+---
+ requirements.txt | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/requirements.txt b/requirements.txt
+index 612e9cc..62b3f7b 100644
+--- a/requirements.txt
++++ b/requirements.txt
+@@ -1,8 +1,14 @@
+ amqp==5.1.1
++asgiref==3.7.2
+ beautifulsoup4==4.12.2
+ billiard==4.1.0
+ celery==5.3.4
++click==8.1.7
++click-didyoumean==0.3.0
++click-plugins==1.1.1
++click-repl==0.3.0
+ confusable-homoglyphs==3.2.0
++diff-match-patch==20230430
+ Django>=4.2,<4.3
+ django-appconf==1.0.5
+ django-axes==6.1.0
+@@ -19,8 +25,14 @@ GitPython==3.1.37
+ kombu==5.3.2
+ mysqlclient==2.1.1
+ Pillow==10.0.1
++prompt-toolkit==3.0.39
++python-dateutil==2.8.2
+ pytz==2023.3
+ six==1.16.0
+ smmap==5.0.0
+ soupsieve==2.4.1
++sqlparse==0.4.4
++typing_extensions==4.8.0
++tzdata==2023.3
+ vine==5.0.0
++wcwidth==0.2.8
+-- 
+2.34.1
+
+
+
+^ permalink raw reply related	[flat|nested] 11+ messages in thread
+* [layerindex-web 09/10] password_validation.py: fix deprecated ugettext
+  2023-10-06 19:59 [layerindex-web 00/10] Django 4.2 LTS Upgrade Tim Orling
+                   ` (7 preceding siblings ...)
+  2023-10-06 19:59 ` [layerindex-web 08/10] requirements.txt: update dependencies Tim Orling
+@ 2023-10-06 19:59 ` Tim Orling
+  2023-10-06 19:59 ` [layerindex-web 10/10] docker/settings.py: add CSRF_TRUSTED_ORIGINS Tim Orling
+  9 siblings, 0 replies; 11+ messages in thread
+From: Tim Orling @ 2023-10-06 19:59 UTC (permalink / raw)
+  To: yocto
+
+Use django.utils.translation.gettext instead
+
+Signed-off-by: Tim Orling <tim.orling@konsulko.com>
+---
+ password_validation.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/password_validation.py b/password_validation.py
+index 6e15b40..5702a79 100644
+--- a/password_validation.py
++++ b/password_validation.py
+@@ -1,7 +1,7 @@
+ # SPDX-License-Identifier: MIT
+ 
+ from django.core.exceptions import ValidationError
+-from django.utils.translation import ugettext as _
++from django.utils.translation import gettext as _
+ 
+ import re
+ 
+-- 
+2.34.1
+
+
+
+^ permalink raw reply related	[flat|nested] 11+ messages in thread
+* [layerindex-web 10/10] docker/settings.py: add CSRF_TRUSTED_ORIGINS
+  2023-10-06 19:59 [layerindex-web 00/10] Django 4.2 LTS Upgrade Tim Orling
+                   ` (8 preceding siblings ...)
+  2023-10-06 19:59 ` [layerindex-web 09/10] password_validation.py: fix deprecated ugettext Tim Orling
+@ 2023-10-06 19:59 ` Tim Orling
+  9 siblings, 0 replies; 11+ messages in thread
+From: Tim Orling @ 2023-10-06 19:59 UTC (permalink / raw)
+  To: yocto
+
+In addition to ALLOWED_HOSTS, we now must have CSRF_TRUSTED_ORIGINS defined.
+This variable requires the scheme (http:// or https://).
+
+Like ALLOWED_HOSTS, CSRF_TRUSTED_ORIGINS is a list of strings, with one
+entry for each host which is trusted for POST requests.
+
+https://docs.djangoproject.com/en/4.2/ref/settings/#csrf-trusted-origins
+
+Signed-off-by: Tim Orling <tim.orling@konsulko.com>
+---
+ docker/settings.py | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/docker/settings.py b/docker/settings.py
+index a73178c..33ab332 100644
+--- a/docker/settings.py
++++ b/docker/settings.py
+@@ -307,6 +307,7 @@ TOOLS_LOG_DIR = ""
+ 
+ USE_X_FORWARDED_HOST = True
+ ALLOWED_HOSTS = [os.getenv('HOSTNAME', 'layers.test')]
++CSRF_TRUSTED_ORIGINS = ['https://' + os.getenv('HOSTNAME', 'layers.test')]
+ SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+ SECURE_BROWSER_XSS_FILTER = True
+ SECURE_CONTENT_TYPE_NOSNIFF = True
+-- 
+2.34.1
+
+
+
+^ permalink raw reply related	[flat|nested] 11+ messages in thread
+end of thread, other threads:[~2023-10-06 19:59 UTC | newest]
+
+Thread overview: 11+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-10-06 19:59 [layerindex-web 00/10] Django 4.2 LTS Upgrade Tim Orling
+2023-10-06 19:59 ` [layerindex-web 01/10] requirements.txt: upgrade Django 3.2 -> 4.2 Tim Orling
+2023-10-06 19:59 ` [layerindex-web 02/10] docker-compose.yml: bump mariadb from 10.3 to 10.4 Tim Orling
+2023-10-06 19:59 ` [layerindex-web 03/10] Drop django-bootstrap-pagination: incompatible Tim Orling
+2023-10-06 19:59 ` [layerindex-web 04/10] bootstrap_pagination: disable via comment Tim Orling
+2023-10-06 19:59 ` [layerindex-web 05/10] Refactor usage of django.conf.urls Tim Orling
+2023-10-06 19:59 ` [layerindex-web 06/10] Dockerfile: drop python3-pil Tim Orling
+2023-10-06 19:59 ` [layerindex-web 07/10] requirements.txt: upgrade all to latest Tim Orling
+2023-10-06 19:59 ` [layerindex-web 08/10] requirements.txt: update dependencies Tim Orling
+2023-10-06 19:59 ` [layerindex-web 09/10] password_validation.py: fix deprecated ugettext Tim Orling
+2023-10-06 19:59 ` [layerindex-web 10/10] docker/settings.py: add CSRF_TRUSTED_ORIGINS Tim Orling
+

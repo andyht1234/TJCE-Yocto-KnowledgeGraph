@@ -1,0 +1,512 @@
+* How to enable graphics acceleration on qemux86-64?
+@ 2021-10-08  8:26 Manuel Wagesreither
+  2021-10-08  9:00 ` [yocto] " Alexander Kanavin
+  0 siblings, 1 reply; 10+ messages in thread
+From: Manuel Wagesreither @ 2021-10-08  8:26 UTC (permalink / raw)
+  To: yocto
+
+Hello all,
+
+How can I enable graphics acceleration on qemux86-64? My image is using wayland with weston and the GUI is not exactly fast.
+
+* When I do `runqemu slirp kvm gtk`, it throws the following error: `runqemu - ERROR - Failed to run qemu: qemu-system-x86_64: Display 'gtk' is not available.`
+* `runqemu slirp kvm sdl` works, but the weston GUI does not seem to be accelerated.
+* `runqemu slirp kvm sdl gl` emits the following: `runqemu - ERROR - Failed to run qemu: qemu-system-x86_64: OpenGL support is disabled`
+
+Below I'm posting a snippet of `poky/scripts/runqemu` to have at hand the qemu options enabled by the runqemu options mentioned above:
+```
+            elif arg == 'sdl':
+                if 'gl' in sys.argv[1:]:
+                    self.qemu_opt_script += ' -vga virtio -display sdl,gl=on'
+                elif 'gl-es' in sys.argv[1:]:
+                    self.qemu_opt_script += ' -vga virtio -display sdl,gl=es'
+                else:
+                    self.qemu_opt_script += ' -display sdl'
+            elif arg == 'gtk':
+                if 'gl' in sys.argv[1:]:
+                    self.qemu_opt_script += ' -vga virtio -display gtk,gl=on'
+                elif 'gl-es' in sys.argv[1:]:
+                    self.qemu_opt_script += ' -vga virtio -display gtk,gl=es'
+                else:
+                    self.qemu_opt_script += ' -display gtk'
+```
+
+Kind regards,
+Manuel
+
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+* Re: [yocto] How to enable graphics acceleration on qemux86-64?
+  2021-10-08  8:26 How to enable graphics acceleration on qemux86-64? Manuel Wagesreither
+@ 2021-10-08  9:00 ` Alexander Kanavin
+  2021-10-13 19:20   ` Manuel Wagesreither
+  0 siblings, 1 reply; 10+ messages in thread
+From: Alexander Kanavin @ 2021-10-08  9:00 UTC (permalink / raw)
+  To: Manuel Wagesreither; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2474 bytes --]
+
+Something in your custom setup disables opengl in qemu-system-native.
+
+Can you try core-image-weston with plain poky only?
+
+This is the test we use to ensure it does work, it lists all the settings
+that have to be in place
+(but in poky they are enabled by default, except the gtk frontend):
+http://git.yoctoproject.org/cgit.cgi/poky/tree/meta/lib/oeqa/selftest/cases/runtime_test.py?h=master-next#n165
+http://git.yoctoproject.org/cgit.cgi/poky/tree/meta/lib/oeqa/selftest/cases/runtime_test.py?h=master-next#n206
+
+Alex
+
+
+On Fri, 8 Oct 2021 at 10:26, Manuel Wagesreither <ManWag@fastmail.fm> wrote:
+
+> Hello all,
+>
+> How can I enable graphics acceleration on qemux86-64? My image is using
+> wayland with weston and the GUI is not exactly fast.
+>
+> * When I do `runqemu slirp kvm gtk`, it throws the following error:
+> `runqemu - ERROR - Failed to run qemu: qemu-system-x86_64: Display 'gtk' is
+> not available.`
+> * `runqemu slirp kvm sdl` works, but the weston GUI does not seem to be
+> accelerated.
+> * `runqemu slirp kvm sdl gl` emits the following: `runqemu - ERROR -
+> Failed to run qemu: qemu-system-x86_64: OpenGL support is disabled`
+>
+> Below I'm posting a snippet of `poky/scripts/runqemu` to have at hand the
+> qemu options enabled by the runqemu options mentioned above:
+> ```
+>             elif arg == 'sdl':
+>                 if 'gl' in sys.argv[1:]:
+>                     self.qemu_opt_script += ' -vga virtio -display
+> sdl,gl=on'
+>                 elif 'gl-es' in sys.argv[1:]:
+>                     self.qemu_opt_script += ' -vga virtio -display
+> sdl,gl=es'
+>                 else:
+>                     self.qemu_opt_script += ' -display sdl'
+>             elif arg == 'gtk':
+>                 if 'gl' in sys.argv[1:]:
+>                     self.qemu_opt_script += ' -vga virtio -display
+> gtk,gl=on'
+>                 elif 'gl-es' in sys.argv[1:]:
+>                     self.qemu_opt_script += ' -vga virtio -display
+> gtk,gl=es'
+>                 else:
+>                     self.qemu_opt_script += ' -display gtk'
+> ```
+>
+> Kind regards,
+> Manuel
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#54992):
+> https://lists.yoctoproject.org/g/yocto/message/54992
+> Mute This Topic: https://lists.yoctoproject.org/mt/86165780/1686489
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> alex.kanavin@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 3876 bytes --]
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+* Re: [yocto] How to enable graphics acceleration on qemux86-64?
+  2021-10-08  9:00 ` [yocto] " Alexander Kanavin
+@ 2021-10-13 19:20   ` Manuel Wagesreither
+  2021-10-13 19:31     ` Alexander Kanavin
+  0 siblings, 1 reply; 10+ messages in thread
+From: Manuel Wagesreither @ 2021-10-13 19:20 UTC (permalink / raw)
+  To: yocto@lists.yoctoproject.org,, Alexander Kanavin
+
+[-- Attachment #1: Type: text/plain, Size: 1419 bytes --]
+
+Hi Alex,
+
+Am Fr, 8. Okt 2021, um 11:00, schrieb Alexander Kanavin:
+> Something in your custom setup disables opengl in qemu-system-native. 
+> 
+> Can you try core-image-weston with plain poky only?
+> 
+> This is the test we use to ensure it does work, it lists all the settings that have to be in place
+> (but in poky they are enabled by default, except the gtk frontend):
+> http://git.yoctoproject.org/cgit.cgi/poky/tree/meta/lib/oeqa/selftest/cases/runtime_test.py?h=master-next#n165
+> http://git.yoctoproject.org/cgit.cgi/poky/tree/meta/lib/oeqa/selftest/cases/runtime_test.py?h=master-next#n206
+
+Interesting. Things don't work on both my Debian Buster machines.
+
+How does opengl get set in qemu-system-native? Am Yocto novice and don't speak Python.
+
+Am using poky repo on tag dunfell-23.0.10 = 2a848e9507.
+
+Here's my complete test results:
+
+* `runqemu kvm slirp core-image-weston` fails with `Failed to run qemu: Could not initialize SDL(x11 not available) - exiting`
+* `runqemu kvm slirp sdl core-image-minimal` fails with `Failed to run qemu: Could not initialize SDL(x11 not available) - exiting`
+* `runqemu kvm slirp sdl gl core-image-minimal` fails with `Failed to run qemu: qemu-system-x86_64: OpenGL support is disabled`
+* `runqemu kvm slirp gtk core-image-minimal` fails with `Failed to run qemu: qemu-system-x86_64: Display 'gtk' is not available.`
+
+How would I enable gtk frontend in poky?
+
+Thanks, Manuel
+
+[-- Attachment #2: Type: text/html, Size: 2326 bytes --]
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+* Re: [yocto] How to enable graphics acceleration on qemux86-64?
+  2021-10-13 19:20   ` Manuel Wagesreither
+@ 2021-10-13 19:31     ` Alexander Kanavin
+  2021-10-13 20:09       ` Manuel Wagesreither
+  0 siblings, 1 reply; 10+ messages in thread
+From: Alexander Kanavin @ 2021-10-13 19:31 UTC (permalink / raw)
+  To: Manuel Wagesreither; +Cc: yocto@lists.yoctoproject.org,
+
+[-- Attachment #1: Type: text/plain, Size: 1807 bytes --]
+
+Can you check with current master (instead of dunfell) please?
+
+You also need to run runqemu inside an X session (e.g. DISPLAY environment
+variable should be set to a valid X server).
+
+If sdl does not work, enabling gtk is not going to work either.
+
+Alex
+
+On Wed, 13 Oct 2021 at 21:21, Manuel Wagesreither <ManWag@fastmail.fm>
+wrote:
+
+> Hi Alex,
+>
+> Am Fr, 8. Okt 2021, um 11:00, schrieb Alexander Kanavin:
+>
+> Something in your custom setup disables opengl in qemu-system-native.
+>
+> Can you try core-image-weston with plain poky only?
+>
+> This is the test we use to ensure it does work, it lists all the settings
+> that have to be in place
+> (but in poky they are enabled by default, except the gtk frontend):
+>
+> http://git.yoctoproject.org/cgit.cgi/poky/tree/meta/lib/oeqa/selftest/cases/runtime_test.py?h=master-next#n165
+>
+> http://git.yoctoproject.org/cgit.cgi/poky/tree/meta/lib/oeqa/selftest/cases/runtime_test.py?h=master-next#n206
+>
+>
+> Interesting. Things don't work on both my Debian Buster machines.
+>
+> How does opengl get set in qemu-system-native? Am Yocto novice and don't
+> speak Python.
+>
+> Am using poky repo on tag dunfell-23.0.10 = 2a848e9507.
+>
+> Here's my complete test results:
+>
+> * `runqemu kvm slirp core-image-weston` fails with `Failed to run qemu:
+> Could not initialize SDL(x11 not available) - exiting`
+> * `runqemu kvm slirp sdl core-image-minimal` fails with `Failed to run
+> qemu: Could not initialize SDL(x11 not available) - exiting`
+> * `runqemu kvm slirp sdl gl core-image-minimal` fails with `Failed to run
+> qemu: qemu-system-x86_64: OpenGL support is disabled`
+> * `runqemu kvm slirp gtk core-image-minimal` fails with `Failed to run
+> qemu: qemu-system-x86_64: Display 'gtk' is not available.`
+>
+> How would I enable gtk frontend in poky?
+>
+> Thanks, Manuel
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 2936 bytes --]
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+* Re: [yocto] How to enable graphics acceleration on qemux86-64?
+  2021-10-13 19:31     ` Alexander Kanavin
+@ 2021-10-13 20:09       ` Manuel Wagesreither
+  2021-10-13 20:56         ` Alexander Kanavin
+  0 siblings, 1 reply; 10+ messages in thread
+From: Manuel Wagesreither @ 2021-10-13 20:09 UTC (permalink / raw)
+  To: Alexander Kanavin, yocto@lists.yoctoproject.org,
+
+[-- Attachment #1: Type: text/plain, Size: 674 bytes --]
+
+`export DISPLAY=:0` did the trick.
+
+The following shows when still on poky dunfell:
+
+* I can now boot `runqmu kvm slirp sdl core-image-weston`. But gui is still slow. I cannot even type `systemctl poweroff` in weston-terminal, it inevitably becomes `wweesssttooo[...]`.
+* `runqemu kvm slirp sdl gl core-image-weston` still fails with `Failed to run qemu: qemu-system-x86_64: OpenGL support is disabled`.
+
+Updated to current poky master, but got this: `ERROR: ParseError in configuration INHERITs: Could not inherit file classes/image-mklibs.bbclass`.
+
+Switched to hardknott-3.3.3 which is four weeks old and perhaps a little riper. It's currently building.
+
+Regards,
+Manuel
+
+[-- Attachment #2: Type: text/html, Size: 1014 bytes --]
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+* Re: [yocto] How to enable graphics acceleration on qemux86-64?
+  2021-10-13 20:09       ` Manuel Wagesreither
+@ 2021-10-13 20:56         ` Alexander Kanavin
+  2021-10-16 12:08           ` Manuel Wagesreither
+  0 siblings, 1 reply; 10+ messages in thread
+From: Alexander Kanavin @ 2021-10-13 20:56 UTC (permalink / raw)
+  To: Manuel Wagesreither; +Cc: yocto@lists.yoctoproject.org,
+
+[-- Attachment #1: Type: text/plain, Size: 899 bytes --]
+
+If you switch to master, it's best if you make a new build directory and
+dont reuse the one you have.
+
+Alex
+
+On Wed, 13 Oct 2021 at 22:09, Manuel Wagesreither <ManWag@fastmail.fm>
+wrote:
+
+> `export DISPLAY=:0` did the trick.
+>
+> The following shows when still on poky dunfell:
+>
+> * I can now boot `runqmu kvm slirp sdl core-image-weston`. But gui is
+> still slow. I cannot even type `systemctl poweroff` in weston-terminal, it
+> inevitably becomes `wweesssttooo[...]`.
+> * `runqemu kvm slirp sdl gl core-image-weston` still fails with `Failed to
+> run qemu: qemu-system-x86_64: OpenGL support is disabled`.
+>
+> Updated to current poky master, but got this: `ERROR: ParseError in
+> configuration INHERITs: Could not inherit file
+> classes/image-mklibs.bbclass`.
+>
+> Switched to hardknott-3.3.3 which is four weeks old and perhaps a little
+> riper. It's currently building.
+>
+> Regards,
+> Manuel
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 1409 bytes --]
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+* Re: [yocto] How to enable graphics acceleration on qemux86-64?
+  2021-10-13 20:56         ` Alexander Kanavin
+@ 2021-10-16 12:08           ` Manuel Wagesreither
+  2021-10-17 11:32             ` Alexander Kanavin
+  0 siblings, 1 reply; 10+ messages in thread
+From: Manuel Wagesreither @ 2021-10-16 12:08 UTC (permalink / raw)
+  To: Alexander Kanavin, yocto@lists.yoctoproject.org,
+
+[-- Attachment #1: Type: text/plain, Size: 2254 bytes --]
+
+Am Mi, 13. Okt 2021, um 22:56, schrieb Alexander Kanavin:
+> If you switch to master, it's best if you make a new build directory and dont reuse the one you have.
+> 
+> Alex
+> 
+> On Wed, 13 Oct 2021 at 22:09, Manuel Wagesreither <ManWag@fastmail.fm> wrote:
+>> __
+>> `export DISPLAY=:0` did the trick.
+>> 
+>> The following shows when still on poky dunfell:
+>> 
+>> * I can now boot `runqmu kvm slirp sdl core-image-weston`. But gui is still slow. I cannot even type `systemctl poweroff` in weston-terminal, it inevitably becomes `wweesssttooo[...]`.
+>> * `runqemu kvm slirp sdl gl core-image-weston` still fails with `Failed to run qemu: qemu-system-x86_64: OpenGL support is disabled`.
+>> 
+>> Updated to current poky master, but got this: `ERROR: ParseError in configuration INHERITs: Could not inherit file classes/image-mklibs.bbclass`.
+>> 
+>> Switched to hardknott-3.3.3 which is four weeks old and perhaps a little riper. It's currently building.
+>> 
+>> Regards,
+>> Manuel
+>> 
+>> 
+> 
+
+Here are some updates:
+
+Building core-image-weston on hardknott succeeded. Couldn't `runqmu kvm slirp sdl core-image-weston` first because I got an error message about 'dri.pc' being missing. Debian package search told me it's part of 'mesa-commond-dev', so I installed it on my host machine and indeed, that runqemu command above got working again. Not just that, now even OpenGL acceleration with `runqmu kvm slirp sdl gl core-image-weston` worked, altough I didn't change anything OpenGL-wise. core-image-weston feels really snappy now. Great!
+
+I got curious and reverted back to dunfell to check if the now-installed dri.pc made a difference, but no, it didn't. `runqemu` with `sdl` started (like it did before), and with `sdl gl` it still said "OpenGL support is disabled".
+
+Ok, so then I moved on to get my own image which is on hardknott now working.
+
+I `runqemu`d my image with 'sdl' and 'gl' and it started up fine. Weston did no longer start automatically so I did manually. Ran `DISPLAY=:0 glxgears` but it told me "couldn't open display :0". Installed 'weston-xwayland' so I'd get "/usr/lib/libweston-9/xwayland.so" but that didn't change anything.
+
+Can't yet say if `DISPLAY=:0 glxgears` works on core-image-weston as it's still building.
+
+Regards, Manuel
+
+[-- Attachment #2: Type: text/html, Size: 3338 bytes --]
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+* Re: [yocto] How to enable graphics acceleration on qemux86-64?
+  2021-10-16 12:08           ` Manuel Wagesreither
+@ 2021-10-17 11:32             ` Alexander Kanavin
+  2021-10-24 21:28               ` Manuel Wagesreither
+  0 siblings, 1 reply; 10+ messages in thread
+From: Alexander Kanavin @ 2021-10-17 11:32 UTC (permalink / raw)
+  To: Manuel Wagesreither; +Cc: yocto@lists.yoctoproject.org,
+
+[-- Attachment #1: Type: text/plain, Size: 1805 bytes --]
+
+On Sat, 16 Oct 2021 at 14:08, Manuel Wagesreither <ManWag@fastmail.fm>
+wrote:
+
+> Here are some updates:
+>
+> Building core-image-weston on hardknott succeeded. Couldn't `runqmu kvm
+> slirp sdl core-image-weston` first because I got an error message about
+> 'dri.pc' being missing. Debian package search told me it's part of
+> 'mesa-commond-dev', so I installed it on my host machine and indeed, that
+> runqemu command above got working again. Not just that, now even OpenGL
+> acceleration with `runqmu kvm slirp sdl gl core-image-weston` worked,
+> altough I didn't change anything OpenGL-wise. core-image-weston feels
+> really snappy now. Great!
+>
+> I got curious and reverted back to dunfell to check if the now-installed
+> dri.pc made a difference, but no, it didn't. `runqemu` with `sdl` started
+> (like it did before), and with `sdl gl` it still said "OpenGL support is
+> disabled".
+>
+
+You need to replicate the settings from oe-selftest (link provided
+previously). I think on dunfell it's not enabled out of the box, and needs
+to be configured explicitly.
+http://git.yoctoproject.org/cgit.cgi/poky/tree/meta/lib/oeqa/selftest/cases/runtime_test.py?h=dunfell#n167
+
+
+> Ok, so then I moved on to get my own image which is on hardknott now
+> working.
+>
+> I `runqemu`d my image with 'sdl' and 'gl' and it started up fine. Weston
+> did no longer start automatically so I did manually. Ran `DISPLAY=:0
+> glxgears` but it told me "couldn't open display :0". Installed
+> 'weston-xwayland' so I'd get "/usr/lib/libweston-9/xwayland.so" but that
+> didn't change anything.
+>
+> Can't yet say if `DISPLAY=:0 glxgears` works on core-image-weston as it's
+> still building.
+>
+
+DISPLAY is a setting for the host, so qemu can display the sdl or gtk
+window. On the qemu guest you need to get weston to start first.
+
+Alex
+
+[-- Attachment #2: Type: text/html, Size: 2650 bytes --]
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+* Re: [yocto] How to enable graphics acceleration on qemux86-64?
+  2021-10-17 11:32             ` Alexander Kanavin
+@ 2021-10-24 21:28               ` Manuel Wagesreither
+  2021-10-25  7:16                 ` Alexander Kanavin
+  0 siblings, 1 reply; 10+ messages in thread
+From: Manuel Wagesreither @ 2021-10-24 21:28 UTC (permalink / raw)
+  To: Alexander Kanavin, yocto@lists.yoctoproject.org,
+
+[-- Attachment #1: Type: text/plain, Size: 3178 bytes --]
+
+Hi all,
+hi Alexander,
+
+I solved my problems. Things work fine now. Below I'm summing things up as documentation for myself and also others in case this pops up in someones search query.
+
+Am So, 17. Okt 2021, um 13:32, schrieb Alexander Kanavin:
+> On Sat, 16 Oct 2021 at 14:08, Manuel Wagesreither <ManWag@fastmail.fm> wrote:
+>> __
+>> Here are some updates:
+>> 
+>> Building core-image-weston on hardknott succeeded. Couldn't `runqmu kvm slirp sdl core-image-weston` first because I got an error message about 'dri.pc' being missing. Debian package search told me it's part of 'mesa-commond-dev', so I installed it on my host machine and indeed, that runqemu command above got working again. Not just that, now even OpenGL acceleration with `runqmu kvm slirp sdl gl core-image-weston` worked, altough I didn't change anything OpenGL-wise. core-image-weston feels really snappy now. Great!
+>> 
+>> I got curious and reverted back to dunfell to check if the now-installed dri.pc made a difference, but no, it didn't. `runqemu` with `sdl` started (like it did before), and with `sdl gl` it still said "OpenGL support is disabled".
+> 
+> You need to replicate the settings from oe-selftest (link provided previously). I think on dunfell it's not enabled out of the box, and needs to be configured explicitly.
+> http://git.yoctoproject.org/cgit.cgi/poky/tree/meta/lib/oeqa/selftest/cases/runtime_test.py?h=dunfell#n167 
+
+You were are right. In hindsight, your initial post contained everything necessary. The 'PACKAGECONFIG_append_pn-<package-name>' variables tell everything necessary. I couldn't make sense of what I was reading at the beginning.
+
+DUNFELL:
+=========
+Summing things up, here's what I need on Dunfell for `runqemu kvm slirp sdl gl`.
+
+* DISTRO_FEATURES opengl
+* 'weston-xwayland' in IMAGE_INSTALL.
+* 'PACKAGECONFIG:append:pn-qemu-system-native = " sdl gtk+ virglrenderer glx"'. (Having opengl in DISTRO_FEATURES puts opengl in libsdl2-native PACKAGECONFIG automatically.)
+
+It's interesting the gtk+ part was necessary even for `runqemu kvm slirp sdl gl`. Thought gtk+ and sdl are different solutions for the same problem. Without gtk+, it would fail with
+```
+qemu-system-x86_64: ../libepoxy-1.5.4/src/dispatch_common.c:863: epoxy_get_proc_address: Assertion `0 && "Couldn't find current GLX or EGL context.\n"'
+```
+Can't make sense of that and won't investigate any further.
+
+HARDKNOTT:
+============
+Here's what I need on Hardknott:
+
+As Alexander wrote, with Hardknott explicit configuration is no longer necessary if DISTRO_FEATURES has opengl. Think it's due to following patch: http://git.yoctoproject.org/cgit/cgit.cgi/poky/commit/?id=7561eb32a01f7990ad4a4606ac97ebe2a659e029
+
+Hence I need:
+* DISTRO_FEATURES opengl
+* 'PACKAGECONFIG:append:pn-qemu-system-native = " sdl".
+* 'weston-xwayland' in IMAGE_INSTALL.
+* /etc/systemd/system/default.target is a symlink to multi-user.target and shadows /lib/systemd/system/default.target which is a symlink to graphical.target. Hence, one must start graphical.target manually.
+* Need to adapt weston.service to start weston with --modules=xwayland.so.
+
+Perhaps this helps anyone.
+
+Thanks again for your help, Alexander.
+
+Manuel
+
+[-- Attachment #2: Type: text/html, Size: 4694 bytes --]
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+* Re: [yocto] How to enable graphics acceleration on qemux86-64?
+  2021-10-24 21:28               ` Manuel Wagesreither
+@ 2021-10-25  7:16                 ` Alexander Kanavin
+  0 siblings, 0 replies; 10+ messages in thread
+From: Alexander Kanavin @ 2021-10-25  7:16 UTC (permalink / raw)
+  To: Manuel Wagesreither; +Cc: yocto@lists.yoctoproject.org,
+
+[-- Attachment #1: Type: text/plain, Size: 451 bytes --]
+
+On Sun, 24 Oct 2021 at 23:29, Manuel Wagesreither <ManWag@fastmail.fm>
+wrote:
+
+> Hi all,
+> hi Alexander,
+>
+> I solved my problems. Things work fine now. Below I'm summing things up as
+> documentation for myself and also others in case this pops up in someones
+> search query.
+>
+
+Cheers :) you should also try this on bleeding edge master, it should work
+the same as hardknott, but if there are issues, you can make and send
+patches to fix them.
+
+Alex
+
+[-- Attachment #2: Type: text/html, Size: 844 bytes --]
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+end of thread, other threads:[~2021-10-25  7:16 UTC | newest]
+
+Thread overview: 10+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-10-08  8:26 How to enable graphics acceleration on qemux86-64? Manuel Wagesreither
+2021-10-08  9:00 ` [yocto] " Alexander Kanavin
+2021-10-13 19:20   ` Manuel Wagesreither
+2021-10-13 19:31     ` Alexander Kanavin
+2021-10-13 20:09       ` Manuel Wagesreither
+2021-10-13 20:56         ` Alexander Kanavin
+2021-10-16 12:08           ` Manuel Wagesreither
+2021-10-17 11:32             ` Alexander Kanavin
+2021-10-24 21:28               ` Manuel Wagesreither
+2021-10-25  7:16                 ` Alexander Kanavin
+

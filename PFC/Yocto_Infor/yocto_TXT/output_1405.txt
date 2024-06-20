@@ -1,0 +1,239 @@
+* [meta-oe][PATCH] externalsrc:git submodule--helper list unsupported
+@ 2022-09-15 18:43 jebr
+  2022-09-16  8:16 ` [yocto] " Quentin Schulz
+  0 siblings, 1 reply; 3+ messages in thread
+From: jebr @ 2022-09-15 18:43 UTC (permalink / raw)
+  To: yocto; +Cc: clabrado, edtanous, emilyshaffer, John Edward Broadbent
+
+From: John Edward Broadbent <jebr@google.com>
+
+Git has removed support for "git submodule--helper list".
+https://github.com/git/git/commit/31955475d1c283120d5d84247eb3fd55d9f5fdd9
+
+This change provides an alternate method for gathering the submodules
+information.
+
+Tested:
+Build recipes with and without submodules
+
+Signed-off-by: Carson Labrado <clabrado@google.com>
+Signed-off-by: John Edward Broadbent <jebr@google.com>
+---
+ meta/classes-recipe/externalsrc.bbclass | 19 ++++++++++---------
+ 1 file changed, 10 insertions(+), 9 deletions(-)
+
+diff --git a/meta/classes-recipe/externalsrc.bbclass b/meta/classes-recipe/externalsrc.bbclass
+index ce753fce76..06a9548a20 100644
+--- a/meta/classes-recipe/externalsrc.bbclass
++++ b/meta/classes-recipe/externalsrc.bbclass
+@@ -230,15 +230,16 @@ def srctree_hash_files(d, srcdir=None):
+             env['GIT_INDEX_FILE'] = tmp_index.name
+             subprocess.check_output(['git', 'add', '-A', '.'], cwd=s_dir, env=env)
+             git_sha1 = subprocess.check_output(['git', 'write-tree'], cwd=s_dir, env=env).decode("utf-8")
+-            submodule_helper = subprocess.check_output(['git', 'submodule--helper', 'list'], cwd=s_dir, env=env).decode("utf-8")
+-            for line in submodule_helper.splitlines():
+-                module_dir = os.path.join(s_dir, line.rsplit(maxsplit=1)[1])
+-                if os.path.isdir(module_dir):
+-                    proc = subprocess.Popen(['git', 'add', '-A', '.'], cwd=module_dir, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+-                    proc.communicate()
+-                    proc = subprocess.Popen(['git', 'write-tree'], cwd=module_dir, env=env, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+-                    stdout, _ = proc.communicate()
+-                    git_sha1 += stdout.decode("utf-8")
++            if os.path.exists(".gitmodules"):
++                submodule_helper = subprocess.check_output(["git", "config", "--file", ".gitmodules", "--get-regexp", "path"], cwd=s_dir, env=env).decode("utf-8")
++                for line in submodule_helper.splitlines():
++                    module_dir = os.path.join(s_dir, line.rsplit(maxsplit=1)[1])
++                    if os.path.isdir(module_dir):
++                        proc = subprocess.Popen(['git', 'add', '-A', '.'], cwd=module_dir, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
++                        proc.communicate()
++                        proc = subprocess.Popen(['git', 'write-tree'], cwd=module_dir, env=env, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
++                        stdout, _ = proc.communicate()
++                        git_sha1 += stdout.decode("utf-8")
+             sha1 = hashlib.sha1(git_sha1.encode("utf-8")).hexdigest()
+         with open(oe_hash_file, 'w') as fobj:
+             fobj.write(sha1)
+-- 
+2.37.3.968.ga6b4b080e4-goog
+
+
+
+^ permalink raw reply related	[flat|nested] 3+ messages in thread
+* Re: [yocto] [meta-oe][PATCH] externalsrc:git submodule--helper list unsupported
+  2022-09-15 18:43 [meta-oe][PATCH] externalsrc:git submodule--helper list unsupported jebr
+@ 2022-09-16  8:16 ` Quentin Schulz
+  2022-09-16 22:40   ` John Broadbent
+  0 siblings, 1 reply; 3+ messages in thread
+From: Quentin Schulz @ 2022-09-16  8:16 UTC (permalink / raw)
+  To: jebr, yocto; +Cc: clabrado, edtanous, emilyshaffer
+
+Hi John,
+
+On 9/15/22 20:43, John Broadbent via lists.yoctoproject.org wrote:
+> From: John Edward Broadbent <jebr@google.com>
+> 
+> Git has removed support for "git submodule--helper list".
+> https://urldefense.proofpoint.com/v2/url?u=https-3A__github.com_git_git_commit_31955475d1c283120d5d84247eb3fd55d9f5fdd9&d=DwIBaQ&c=_sEr5x9kUWhuk4_nFwjJtA&r=LYjLexDn7rXIzVmkNPvw5ymA1XTSqHGq8yBP6m6qZZ4njZguQhZhkI_-172IIy1t&m=dPWGp0K5l_YXiJ9CQ0xgD9h8jzFwJf2ZGppZSv2ZZUvg_DVFfKt3g2SwAJdk6ATE&s=rTfHjnsYf5vusiYA_lI3L24FBLE9jU_hmbGFPELpuAg&e=
+> 
+> This change provides an alternate method for gathering the submodules
+> information.
+> 
+> Tested:
+> Build recipes with and without submodules
+> 
+> Signed-off-by: Carson Labrado <clabrado@google.com>
+> Signed-off-by: John Edward Broadbent <jebr@google.com>
+> ---
+>   meta/classes-recipe/externalsrc.bbclass | 19 ++++++++++---------
+
+meta layer is part of openembedded-core, so please re-send to the 
+correct mailing list following the docs here 
+https://www.openembedded.org/wiki/How_to_submit_a_patch_to_OpenEmbedded
+
+>   1 file changed, 10 insertions(+), 9 deletions(-)
+> 
+> diff --git a/meta/classes-recipe/externalsrc.bbclass b/meta/classes-recipe/externalsrc.bbclass
+> index ce753fce76..06a9548a20 100644
+> --- a/meta/classes-recipe/externalsrc.bbclass
+> +++ b/meta/classes-recipe/externalsrc.bbclass
+> @@ -230,15 +230,16 @@ def srctree_hash_files(d, srcdir=None):
+>               env['GIT_INDEX_FILE'] = tmp_index.name
+>               subprocess.check_output(['git', 'add', '-A', '.'], cwd=s_dir, env=env)
+>               git_sha1 = subprocess.check_output(['git', 'write-tree'], cwd=s_dir, env=env).decode("utf-8")
+> -            submodule_helper = subprocess.check_output(['git', 'submodule--helper', 'list'], cwd=s_dir, env=env).decode("utf-8")
+> -            for line in submodule_helper.splitlines():
+> -                module_dir = os.path.join(s_dir, line.rsplit(maxsplit=1)[1])
+> -                if os.path.isdir(module_dir):
+> -                    proc = subprocess.Popen(['git', 'add', '-A', '.'], cwd=module_dir, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+> -                    proc.communicate()
+> -                    proc = subprocess.Popen(['git', 'write-tree'], cwd=module_dir, env=env, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+> -                    stdout, _ = proc.communicate()
+> -                    git_sha1 += stdout.decode("utf-8")
+> +            if os.path.exists(".gitmodules"):
+> +                submodule_helper = subprocess.check_output(["git", "config", "--file", ".gitmodules", "--get-regexp", "path"], cwd=s_dir, env=env).decode("utf-8")
+> +                for line in submodule_helper.splitlines():
+> +                    module_dir = os.path.join(s_dir, line.rsplit(maxsplit=1)[1])
+> +                    if os.path.isdir(module_dir):
+> +                        proc = subprocess.Popen(['git', 'add', '-A', '.'], cwd=module_dir, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+> +                        proc.communicate()
+> +                        proc = subprocess.Popen(['git', 'write-tree'], cwd=module_dir, env=env, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+> +                        stdout, _ = proc.communicate()
+> +                        git_sha1 += stdout.decode("utf-8")
+
+Are those git commands supported in 1.8.3.1 version of git? I'm asking 
+because this is the minimal version of git we currently advertise as 
+supported. If it is not, then we need to bump this requirement in the 
+docs and check that all currently supported distributions have this new 
+minimal version in their package feed or remove them from the list 
+(which will also impact whether dunfell and kirkstone can receive this 
+patch).
+
+Cheers,
+Quentin
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] [meta-oe][PATCH] externalsrc:git submodule--helper list unsupported
+  2022-09-16  8:16 ` [yocto] " Quentin Schulz
+@ 2022-09-16 22:40   ` John Broadbent
+  0 siblings, 0 replies; 3+ messages in thread
+From: John Broadbent @ 2022-09-16 22:40 UTC (permalink / raw)
+  To: Quentin Schulz
+  Cc: Yocto-mailing-list, Carson Labrado, Ed Tanous, Emily Shaffer
+
+On Fri, Sep 16, 2022 at 1:16 AM Quentin Schulz
+<quentin.schulz@theobroma-systems.com> wrote:
+>
+> Hi John,
+>
+> On 9/15/22 20:43, John Broadbent via lists.yoctoproject.org wrote:
+> > From: John Edward Broadbent <jebr@google.com>
+> >
+> > Git has removed support for "git submodule--helper list".
+> > https://urldefense.proofpoint.com/v2/url?u=https-3A__github.com_git_git_commit_31955475d1c283120d5d84247eb3fd55d9f5fdd9&d=DwIBaQ&c=_sEr5x9kUWhuk4_nFwjJtA&r=LYjLexDn7rXIzVmkNPvw5ymA1XTSqHGq8yBP6m6qZZ4njZguQhZhkI_-172IIy1t&m=dPWGp0K5l_YXiJ9CQ0xgD9h8jzFwJf2ZGppZSv2ZZUvg_DVFfKt3g2SwAJdk6ATE&s=rTfHjnsYf5vusiYA_lI3L24FBLE9jU_hmbGFPELpuAg&e=
+> >
+> > This change provides an alternate method for gathering the submodules
+> > information.
+> >
+> > Tested:
+> > Build recipes with and without submodules
+> >
+> > Signed-off-by: Carson Labrado <clabrado@google.com>
+> > Signed-off-by: John Edward Broadbent <jebr@google.com>
+> > ---
+> >   meta/classes-recipe/externalsrc.bbclass | 19 ++++++++++---------
+>
+> meta layer is part of openembedded-core, so please re-send to the
+> correct mailing list following the docs here
+> https://www.openembedded.org/wiki/How_to_submit_a_patch_to_OpenEmbedded
+>
+> >   1 file changed, 10 insertions(+), 9 deletions(-)
+> >
+> > diff --git a/meta/classes-recipe/externalsrc.bbclass b/meta/classes-recipe/externalsrc.bbclass
+> > index ce753fce76..06a9548a20 100644
+> > --- a/meta/classes-recipe/externalsrc.bbclass
+> > +++ b/meta/classes-recipe/externalsrc.bbclass
+> > @@ -230,15 +230,16 @@ def srctree_hash_files(d, srcdir=None):
+> >               env['GIT_INDEX_FILE'] = tmp_index.name
+> >               subprocess.check_output(['git', 'add', '-A', '.'], cwd=s_dir, env=env)
+> >               git_sha1 = subprocess.check_output(['git', 'write-tree'], cwd=s_dir, env=env).decode("utf-8")
+> > -            submodule_helper = subprocess.check_output(['git', 'submodule--helper', 'list'], cwd=s_dir, env=env).decode("utf-8")
+> > -            for line in submodule_helper.splitlines():
+> > -                module_dir = os.path.join(s_dir, line.rsplit(maxsplit=1)[1])
+> > -                if os.path.isdir(module_dir):
+> > -                    proc = subprocess.Popen(['git', 'add', '-A', '.'], cwd=module_dir, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+> > -                    proc.communicate()
+> > -                    proc = subprocess.Popen(['git', 'write-tree'], cwd=module_dir, env=env, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+> > -                    stdout, _ = proc.communicate()
+> > -                    git_sha1 += stdout.decode("utf-8")
+> > +            if os.path.exists(".gitmodules"):
+> > +                submodule_helper = subprocess.check_output(["git", "config", "--file", ".gitmodules", "--get-regexp", "path"], cwd=s_dir, env=env).decode("utf-8")
+> > +                for line in submodule_helper.splitlines():
+> > +                    module_dir = os.path.join(s_dir, line.rsplit(maxsplit=1)[1])
+> > +                    if os.path.isdir(module_dir):
+> > +                        proc = subprocess.Popen(['git', 'add', '-A', '.'], cwd=module_dir, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+> > +                        proc.communicate()
+> > +                        proc = subprocess.Popen(['git', 'write-tree'], cwd=module_dir, env=env, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+> > +                        stdout, _ = proc.communicate()
+> > +                        git_sha1 += stdout.decode("utf-8")
+>
+> Are those git commands supported in 1.8.3.1 version of git? I'm asking
+> because this is the minimal version of git we currently advertise as
+> supported. If it is not, then we need to bump this requirement in the
+> docs and check that all currently supported distributions have this new
+> minimal version in their package feed or remove them from the list
+> (which will also impact whether dunfell and kirkstone can receive this
+> patch).
+>
+> Cheers,
+> Quentin
+
+
+Thanks for looking over this change.
+
+> Are those git commands supported in 1.8.3.1 version of git?
+
+They appear to be:
+config is defined here
+https://github.com/git/git/blob/362de916c06521205276acb7f51c99f47db94727/git.c#L331
+and get-regexp is also defined here
+https://github.com/git/git/blob/36f8e7ed7d72d2ac73743c3c2226cceb29b32156/builtin/config.c#L789
+
+I was not able to build and test the behavior of 1.8.3.1, without changing my
+openssl headers.
+
+Thanks
+
+
+
+> which will also impact whether dunfell and kirkstone can receive this patch
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2022-09-16 22:40 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-09-15 18:43 [meta-oe][PATCH] externalsrc:git submodule--helper list unsupported jebr
+2022-09-16  8:16 ` [yocto] " Quentin Schulz
+2022-09-16 22:40   ` John Broadbent
+

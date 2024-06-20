@@ -1,0 +1,154 @@
+* Re: [yocto] Questions on multiconfig
+       [not found] <17775879C46AA70D.29484@lists.yoctoproject.org>
+@ 2023-08-05 14:04 ` Stéphane Veyret
+  2023-08-05 15:54   ` Richard Purdie
+  0 siblings, 1 reply; 2+ messages in thread
+From: Stéphane Veyret @ 2023-08-05 14:04 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 3421 bytes --]
+
+Hello,
+
+I’m answering to myself in case some other people have the same error.
+My problem mostly came from my distro, which was the same for main image
+and initramfs, and which was using systemd. Because systemd depends on the
+kernel, and the kernel needs the embedded initramfs, there was a circular
+dependency.
+The correction was to create a specific distro for initramfs, using busybox
+as init manager. And of course, configuring this distro in the
+multiconfig/initramfs.conf file.
+
+So, I can now answer to some of my questions:
+
+Le mar. 1 août 2023 à 21:17, Stéphane Veyret via lists.yoctoproject.org
+<sveyret=gmail.com@lists.yoctoproject.org> a écrit :
+
+> First, I created a multiconfig/initramfs.conf file in my private layer
+> containing:
+>
+> TMPDIR = "${TOPDIR}/tmp-initramfs"
+> BUSYBOX_MY_INITRAMFS_CONFIG = "-initramfs"
+>
+> Then, I created a busybox_%.bbappend with this content:
+>
+> SRC_URI += "file://fragment.cfg;subdir=busybox-${PV}"
+> BUSYBOX_MY_INITRAMFS_CONFIG ?= ""
+> FILESEXTRAPATHS:prepend :=
+> "${THISDIR}/${BPN}${BUSYBOX_MY_INITRAMFS_CONFIG}:"
+>
+> First question: is this the right way to create and use a custom variable?
+> I want the recipe to choose the good fragment depending on
+> BUSYBOX_MY_INITRAMFS_CONFIG, but I’m not sure it is really working.
+>
+
+Yes, the BUSYBOX_MY_INITRAMFS_CONFIG is used correctly, giving me 2
+different busybox configuration, one for the initramfs and one for the main
+image.
+
+
+> After that, I added the following line in distro.conf:
+>
+> BBMULTICONFIG = "initramfs"
+>
+> Second question: documents state that this variable should be in
+> local.conf, but it seems to also work in distro.conf; am I correct or is it
+> creating unwanted side effects?
+>
+
+I didn’t notice any side effect. Note that I’m actually using an appending
+syntax (+=) so that it is still possible to define additionnal multiconfig
+if the build directory.
+
+
+> First of all, I am spammed with messages like:
+>
+> NOTE: Deferred task
+> mc:initramfs:/home/stephane/Developpements/yocto/sources/poky/meta/recipes-devtools/qemu/qemuwrapper-cross_1.0.bb:do_package_qa
+> now buildable
+> NOTE: Deferred task
+> mc:initramfs:virtual:native:/home/stephane/Developpements/yocto/sources/poky/meta/recipes-devtools/opkg/opkg_0.6.1.bb:do_populate_sysroot
+> now buildable
+>
+
+I am still spammed by all these messages. I’d like to understand why. And
+if possible, I’d also like to mute the messages I’ve seen and decided they
+are not important. It doesn’t seem possible, so I may send a patch in the
+future for that case.
+
+
+> Other point, it seems to build a full image in the initramfs
+> configuration, while I expected that it would only build the initramfs
+> image. My first attempt (when the tmp-initramfs directory was empty) took
+> ages to build and I saw it tried to build the Linux kernel in it.
+>
+
+No, it took ages because it was using systemd which is rather big, and
+which has a dependency on the kernel.
+
+
+> And on top of that, it fails because when building the kernel for
+> initramfs configuration, it cannot find the initramfs image. Which sounds
+> logical, because it is currently building the initramfs. So there seem to
+> be a kind of circular dependencies…
+>
+
+The circular dependency was due to systemd. It has now disappeared…
+
+-- 
+Bien cordialement, / Plej kore,
+
+Stéphane Veyret
+
+[-- Attachment #2: Type: text/html, Size: 4928 bytes --]
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+* Re: [yocto] Questions on multiconfig
+  2023-08-05 14:04 ` [yocto] Questions on multiconfig Stéphane Veyret
+@ 2023-08-05 15:54   ` Richard Purdie
+  0 siblings, 0 replies; 2+ messages in thread
+From: Richard Purdie @ 2023-08-05 15:54 UTC (permalink / raw)
+  To: Stéphane Veyret, yocto
+
+On Sat, 2023-08-05 at 16:04 +0200, Stéphane Veyret wrote:
+> > First of all, I am spammed with messages like:
+> > 
+> > NOTE: Deferred task
+> > mc:initramfs:/home/stephane/Developpements/yocto/sources/poky/meta/
+> > recipes-devtools/qemu/qemuwrapper-cross_1.0.bb:do_package_qa now
+> > buildable
+> > NOTE: Deferred task
+> > mc:initramfs:virtual:native:/home/stephane/Developpements/yocto/sou
+> > rces/poky/meta/recipes-
+> > devtools/opkg/opkg_0.6.1.bb:do_populate_sysroot now buildable
+> > 
+> 
+> 
+> I am still spammed by all these messages. I’d like to understand why.
+> And if possible, I’d also like to mute the messages I’ve seen and
+> decided they are not important. It doesn’t seem possible, so I may
+> send a patch in the future for that case.
+
+https://git.yoctoproject.org/poky/commit/bitbake?id=ebb8b39463cef3c3d0f90f054c433b2f5256cb1a
+
+It is also possible to write specific log configuration files to
+control the different messages.
+
+That said, see the discussion on the bitbake-devel list about this
+patch and why merging it will probably prevent us debugging some kinds
+of build issues in future :/.
+
+Cheers,
+
+Richard
+
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2023-08-05 15:54 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+     [not found] <17775879C46AA70D.29484@lists.yoctoproject.org>
+2023-08-05 14:04 ` [yocto] Questions on multiconfig Stéphane Veyret
+2023-08-05 15:54   ` Richard Purdie
+

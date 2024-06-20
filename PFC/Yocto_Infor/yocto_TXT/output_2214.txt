@@ -1,0 +1,77 @@
+* gpsd bbappend adding new file causing QA errors even with FILES_${PN}:append set
+@ 2022-02-15 21:16 mattwood2000
+  0 siblings, 0 replies; only message in thread
+From: mattwood2000 @ 2022-02-15 21:16 UTC (permalink / raw)
+  To: Yocto-mailing-list
+
+Hi,
+
+I've seen many questions about this with proposed answers but I cannot
+seem to get this to work for my bbappend to gpsd.
+
+I'm simply trying to add an additional systemd service file I created
+for the gpspipe client.
+
+What is strange is that I'm already appending the
+${systemd_system_unitdir} in this bbappend to replace gpsd.socket with
+no error.
+
+I'm confused why adding one additional file to a directory that is
+already being appended could cause the QA error:
+ERROR: gpsd-3.23.1-r0 do_package: QA Issue: gpsd: Files/directories
+were installed but not shipped in any package:
+  /lib/systemd/system/gpspipe.service
+
+The recipe is below - I've commented out the three lines that cause
+the error.  Anyone have any ideas why this is happening?
+
+Thanks, Matt.
+
+gpsd_%.bbappend:
+
+FILESEXTRAPATHS:prepend := "${THISDIR}/files:"
+
+SRC_URI += "\
+        file://gpsd.default \
+        file://gpsd.socket \
+        file://gpspipe.service \
+    "
+
+inherit systemd
+SYSTEMD_PACKAGES = "${PN}"
+SYSTEMD_AUTO_ENABLE = "enable"
+SYSTEMD_SERVICE_${PN}:append = " gpsd.service gpsd.socket gpspipe.service "
+
+do_install:append () {
+    install -d ${D}${sysconfdir}/default/
+    install -d ${D}${sysconfdir}/systemd/system/multi-user.target.wants/
+    install -d ${D}${sysconfdir}/systemd/system/sockets.target.wants/
+
+    install -D -m 600 ${WORKDIR}/gpsd.default ${D}${sysconfdir}/default/
+    install -D -m 600 ${WORKDIR}/gpsd.socket ${D}${systemd_system_unitdir}
+#    install -D -m 600 ${WORKDIR}/gpspipe.service ${D}${systemd_system_unitdir}
+
+    ln -s ${systemd_unitdir}/system/gpsd.service
+${D}${sysconfdir}/systemd/system/multi-user.target.wants/gpsd.service
+    ln -s ${systemd_unitdir}/system/gpsd.socket
+${D}${sysconfdir}/systemd/system/sockets.target.wants/gpsd.socket
+#    ln -s ${systemd_unitdir}/system/gpspipe.service
+${D}${sysconfdir}/systemd/system/multi-user.target.wants/gpspipe.service
+}
+
+FILES_${PN}:append = " \
+            ${sysconfdir}/systemd/system/multi-user.target.wants \
+            ${sysconfdir}/systemd/system/sockets.target.wants \
+            ${sysconfdir}/default/gpsd.default \
+            ${systemd_system_unitdir}/gpsd.socket \
+#            ${systemd_system_unitdir}/gpspipe.service \
+        "
+
+
+^ permalink raw reply	[flat|nested] only message in thread
+only message in thread, other threads:[~2022-02-15 21:16 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-02-15 21:16 gpsd bbappend adding new file causing QA errors even with FILES_${PN}:append set mattwood2000
+

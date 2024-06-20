@@ -1,0 +1,239 @@
+* secure boot w/ Mender bzImage fails validation  #dunfell
+@ 2022-04-09 14:38 Ballentine, Casey
+  2022-04-09 22:17 ` [yocto] " léo sartre
+  0 siblings, 1 reply; 5+ messages in thread
+From: Ballentine, Casey @ 2022-04-09 14:38 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 816 bytes --]
+
+Hello,
+
+We have an Intel Elkhart Lake device that we are trying to get Secure Boot (via meta-secure-core/meta-efi-secure-boot SELoader) working on using the Dunfell release. This device uses Mender for updates via USB. We have Secure Boot working successfully on a similar device, but that device does not employ Mender.
+
+On the HDD image, /boot/bzImage and /boot/bzImage.p7b (the detached digital signature) are present, as are the set of GRUB artifacts in /boot/efi/BOOT/EFI. As a side note, we do not use an initramfs.
+
+Grub and grub.cfg validate on boot, but /boot/bzImage does not.
+
+I've read that SELoader can't access anything outside of the /efi partition. If that's correct, how do we work around this issue?
+
+Thanks for any help, and let me know if you need further information.
+
+Best,
+Casey
+
+[-- Attachment #2: Type: text/html, Size: 868 bytes --]
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] secure boot w/ Mender bzImage fails validation #dunfell
+  2022-04-09 14:38 secure boot w/ Mender bzImage fails validation #dunfell Ballentine, Casey
+@ 2022-04-09 22:17 ` léo sartre
+  2022-04-21 14:13   ` Ballentine, Casey
+  0 siblings, 1 reply; 5+ messages in thread
+From: léo sartre @ 2022-04-09 22:17 UTC (permalink / raw)
+  To: casey.ballentine; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 3078 bytes --]
+
+Hi Casey,
+
+I've recently had to activate secureboot on some uefi target.
+I was trying to use meta-secure-core/meta-efi-secure-boot aft first, but
+after digging a bit more into meta-intel, I've discovered that the
+implementation of meta-intel is cleaner and simpler than in
+meta-secure-core.
+If you are not interested about using microsoft certificates and the
+complicated shim + grub combo and that would plan to provision your own
+certificate in the firmware (which was what I wanted), I think meta-intel
+is a beter approach.
+Meta-intel leverate what they call "comboapp":
+https://git.yoctoproject.org/meta-intel/tree/classes/uefi-comboapp.bbclass
+It is a bundle of systemd-boot (a minimal uefi osloader implementation from
+systemd, previously gummiboot) with the kernel, cmdline and optionally a
+initramfs, furthermore it provide some clean and simple class to only sign
+an uefi binary:
+https://git.yoctoproject.org/meta-intel/tree/classes/uefi-sign.bbclass, if
+the uefi kernel stub is enough for your use case (which was my case)
+I do not know if you really need to keep grub, but if you can replace it
+with systemd boot and this uefi combo app from meta-intel layer (or more
+simply only use uefi kernel stub with a bundled initramfs), I think it
+could simplify a lot your boot process thus it will be simpler to implement
+an OTA solution with Mender.
+This is something that I will eventually try to achieve in the near future,
+so I will keep you posted about my progress if you are interested.
+
+Hope this will help you.
+Regards,
+--
+Léo
+
+Le sam. 9 avr. 2022 à 16:38, Ballentine, Casey via lists.yoctoproject.org
+<casey.ballentine=essvote.com@lists.yoctoproject.org> a écrit :
+
+> Hello,
+>
+> We have an Intel Elkhart Lake device that we are trying to get Secure Boot
+> (via meta-secure-core/meta-efi-secure-boot SELoader) working on using the
+> Dunfell release. This device uses Mender for updates via USB. We have
+> Secure Boot working successfully on a similar device, but that device does
+> not employ Mender.
+>
+> On the HDD image, /boot/bzImage and /boot/bzImage.p7b (the detached
+> digital signature) are present, as are the set of GRUB artifacts in
+> /boot/efi/BOOT/EFI. As a side note, we do not use an initramfs.
+>
+> Grub and grub.cfg validate on boot, but /boot/bzImage does not.
+>
+> I've read that SELoader can't access anything outside of the /efi
+> partition. If that's correct, how do we work around this issue?
+>
+> Thanks for any help, and let me know if you need further information.
+>
+> Best,
+> Casey
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#56701):
+> https://lists.yoctoproject.org/g/yocto/message/56701
+> Mute This Topic: https://lists.yoctoproject.org/mt/90356869/3617608
+> Mute #dunfell:https://lists.yoctoproject.org/g/yocto/mutehashtag/dunfell
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> sartre.leo@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+-- 
+Léo
+
+[-- Attachment #2: Type: text/html, Size: 4334 bytes --]
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: secure boot w/ Mender bzImage fails validation #dunfell
+  2022-04-09 22:17 ` [yocto] " léo sartre
+@ 2022-04-21 14:13   ` Ballentine, Casey
+  2022-04-21 15:53     ` [yocto] " léo sartre
+  0 siblings, 1 reply; 5+ messages in thread
+From: Ballentine, Casey @ 2022-04-21 14:13 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 435 bytes --]
+
+Unfortunately, the uefi-comboapp requires systemd-boot, which Mender doesn't currently support with mender-partuuid which our system requires for software updates over USB. Our devices aren't connected to the internet so OTA updates aren't an option for us. I've started a discussion on Mender.io to see if someone there can help us solve this issue, but in the meantime, any thoughts/suggestions are certainly appreciated!
+
+-Casey
+
+[-- Attachment #2: Type: text/html, Size: 443 bytes --]
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] secure boot w/ Mender bzImage fails validation #dunfell
+  2022-04-21 14:13   ` Ballentine, Casey
+@ 2022-04-21 15:53     ` léo sartre
+  2022-04-21 17:56       ` Gmail
+  0 siblings, 1 reply; 5+ messages in thread
+From: léo sartre @ 2022-04-21 15:53 UTC (permalink / raw)
+  To: Ballentine, Casey; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1308 bytes --]
+
+Hi Casey,
+
+Please have a look at
+https://git.yoctoproject.org/meta-intel/tree/classes/uefi-sign.bbclass,
+with this class you can sign a bzimage compiled with the kernel efi stub.
+
+Regards
+--
+Léo
+
+Le jeu. 21 avr. 2022 à 16:13, Ballentine, Casey via lists.yoctoproject.org
+<casey.ballentine=essvote.com@lists.yoctoproject.org> a écrit :
+
+> Unfortunately, the uefi-comboapp requires systemd-boot, which Mender
+> doesn't currently support with mender-partuuid which our system requires
+> for software updates over USB. Our devices aren't connected to the internet
+> so OTA updates aren't an option for us. I've started a discussion on
+> Mender.io to see if someone there can help us solve this issue, but in the
+> meantime, any thoughts/suggestions are certainly appreciated!
+>
+> -Casey
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#56828):
+> https://lists.yoctoproject.org/g/yocto/message/56828
+> Mute This Topic: https://lists.yoctoproject.org/mt/90356869/3617608
+> Mute #dunfell:https://lists.yoctoproject.org/g/yocto/mutehashtag/dunfell
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> sartre.leo@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+-- 
+Léo
+
+[-- Attachment #2: Type: text/html, Size: 2426 bytes --]
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] secure boot w/ Mender bzImage fails validation #dunfell
+  2022-04-21 15:53     ` [yocto] " léo sartre
+@ 2022-04-21 17:56       ` Gmail
+  0 siblings, 0 replies; 5+ messages in thread
+From: Gmail @ 2022-04-21 17:56 UTC (permalink / raw)
+  To: Leo; +Cc: Ballentine, Casey, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1502 bytes --]
+
+Hi
+
+If OTA updates is not an option maybe RAUC can be an option for you?
+
+/Jonas Andersson
+
+> 21 apr. 2022 kl. 17:54 skrev Leo <sartre.leo@gmail.com>:
+> 
+> ﻿
+> Hi Casey,
+> 
+> Please have a look at https://git.yoctoproject.org/meta-intel/tree/classes/uefi-sign.bbclass, with this class you can sign a bzimage compiled with the kernel efi stub.
+> 
+> Regards
+> --
+> Léo
+> 
+>> Le jeu. 21 avr. 2022 à 16:13, Ballentine, Casey via lists.yoctoproject.org <casey.ballentine=essvote.com@lists.yoctoproject.org> a écrit :
+>> Unfortunately, the uefi-comboapp requires systemd-boot, which Mender doesn't currently support with mender-partuuid which our system requires for software updates over USB. Our devices aren't connected to the internet so OTA updates aren't an option for us. I've started a discussion on Mender.io to see if someone there can help us solve this issue, but in the meantime, any thoughts/suggestions are certainly appreciated!
+>> 
+>> -Casey 
+>> 
+>> 
+> 
+> 
+> -- 
+> Léo
+> 
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#56831): https://lists.yoctoproject.org/g/yocto/message/56831
+> Mute This Topic: https://lists.yoctoproject.org/mt/90356869/3618328
+> Mute #dunfell:https://lists.yoctoproject.org/g/yocto/mutehashtag/dunfell
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [jonaskgandersson@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+> 
+
+[-- Attachment #2: Type: text/html, Size: 2486 bytes --]
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+end of thread, other threads:[~2022-04-21 19:59 UTC | newest]
+
+Thread overview: 5+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-04-09 14:38 secure boot w/ Mender bzImage fails validation #dunfell Ballentine, Casey
+2022-04-09 22:17 ` [yocto] " léo sartre
+2022-04-21 14:13   ` Ballentine, Casey
+2022-04-21 15:53     ` [yocto] " léo sartre
+2022-04-21 17:56       ` Gmail
+

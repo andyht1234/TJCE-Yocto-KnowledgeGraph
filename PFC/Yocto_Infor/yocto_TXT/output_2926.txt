@@ -1,0 +1,114 @@
+* editing Makefile after configure stage to disable -Werror
+@ 2021-08-31  6:41 Ivan Riabtsov
+  2021-08-31 11:55 ` [yocto] " Markus Volk
+  0 siblings, 1 reply; 2+ messages in thread
+From: Ivan Riabtsov @ 2021-08-31  6:41 UTC (permalink / raw)
+  To: Yocto-mailing-list
+
+Hello, I have the following error:
+
+../../elfutils-0.166/libelf/libelfP.h:53:30: error: ‘__elf64_msize’
+specifies less restrictive attribute than its target ‘elf64_fsize’:
+‘const’ [-Werror=missing-attributes]
+
+i try to solve this by patch:
+
+diff -Naur elfutils-0.166_orig/libelf/libelfP.h elfutils-0.166/libelf/libelfP.h
+--- elfutils-0.166_orig/libelf/libelfP.h 2016-01-12 15:49:19.000000000 +0300
++++ elfutils-0.166/libelf/libelfP.h 2021-08-30 19:38:44.866175082 +0300
+@@ -48,6 +48,8 @@
+
+
+ /* Helper Macros to write 32 bit and 64 bit functions.  */
++#pragma GCC diagnostic push
++#pragma GCC diagnostic ignored "-Wmissing-attributes"
+ #define __elfw2_(Bits, Name) __elf##Bits##_##Name
+ #define elfw2_(Bits, Name) elf##Bits##_##Name
+ #define ElfW2_(Bits, Name) Elf##Bits##_##Name
+@@ -632,4 +634,5 @@
+ #define INVALID_NDX(ndx, type, data) \
+   unlikely ((data)->d_size / sizeof (type) <= (unsigned int) (ndx))
+
++#pragma GCC diagnostic pop
+ #endif  /* libelfP.h */
+
+
+But the patch does  not work, error appears again.
+
+
+i try to add --disable-werror to configure flags, but i have follows warning:
+
+configure: WARNING: unrecognized options: --disable-werror.
+
+
+The only solution to the problem I could think of is editing the
+Makefile after configuration, please tell me how this can be done?
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+* Re: [yocto] editing Makefile after configure stage to disable -Werror
+  2021-08-31  6:41 editing Makefile after configure stage to disable -Werror Ivan Riabtsov
+@ 2021-08-31 11:55 ` Markus Volk
+  0 siblings, 0 replies; 2+ messages in thread
+From: Markus Volk @ 2021-08-31 11:55 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1576 bytes --]
+
+you could try to add a line like this to your recipe:
+
+CFLAGS:append = " -Wno-error=missing-attributes"
+
+
+Am 31.08.21 um 08:41 schrieb Ivan Riabtsov:
+> Hello, I have the following error:
+>
+> ../../elfutils-0.166/libelf/libelfP.h:53:30: error: ‘__elf64_msize’
+> specifies less restrictive attribute than its target ‘elf64_fsize’:
+> ‘const’ [-Werror=missing-attributes]
+>
+> i try to solve this by patch:
+>
+> diff -Naur elfutils-0.166_orig/libelf/libelfP.h elfutils-0.166/libelf/libelfP.h
+> --- elfutils-0.166_orig/libelf/libelfP.h 2016-01-12 15:49:19.000000000 +0300
+> +++ elfutils-0.166/libelf/libelfP.h 2021-08-30 19:38:44.866175082 +0300
+> @@ -48,6 +48,8 @@
+>
+>
+>   /* Helper Macros to write 32 bit and 64 bit functions.  */
+> +#pragma GCC diagnostic push
+> +#pragma GCC diagnostic ignored "-Wmissing-attributes"
+>   #define __elfw2_(Bits, Name) __elf##Bits##_##Name
+>   #define elfw2_(Bits, Name) elf##Bits##_##Name
+>   #define ElfW2_(Bits, Name) Elf##Bits##_##Name
+> @@ -632,4 +634,5 @@
+>   #define INVALID_NDX(ndx, type, data) \
+>     unlikely ((data)->d_size / sizeof (type) <= (unsigned int) (ndx))
+>
+> +#pragma GCC diagnostic pop
+>   #endif  /* libelfP.h */
+>
+>
+> But the patch does  not work, error appears again.
+>
+>
+> i try to add --disable-werror to configure flags, but i have follows warning:
+>
+> configure: WARNING: unrecognized options: --disable-werror.
+>
+>
+> The only solution to the problem I could think of is editing the
+> Makefile after configuration, please tell me how this can be done?
+>
+> 
+>
+
+[-- Attachment #2: Type: text/html, Size: 2018 bytes --]
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2021-08-31 11:55 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-08-31  6:41 editing Makefile after configure stage to disable -Werror Ivan Riabtsov
+2021-08-31 11:55 ` [yocto] " Markus Volk
+

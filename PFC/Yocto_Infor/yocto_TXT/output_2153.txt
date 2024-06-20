@@ -1,0 +1,72 @@
+* [meta-security][PATCH 1/2] layer.conf: enable apparmor for qemu machine
+@ 2022-02-28 16:12 Armin Kuster
+  2022-02-28 16:12 ` [meta-security][PATCH 2/2] parsec-service: Only enable TPM is layer and DISTRO_FEATURE is defined Armin Kuster
+  0 siblings, 1 reply; 2+ messages in thread
+From: Armin Kuster @ 2022-02-28 16:12 UTC (permalink / raw)
+  To: yocto
+
+Signed-off-by: Armin Kuster <akuster808@gmail.com>
+---
+ conf/layer.conf | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/conf/layer.conf b/conf/layer.conf
+index 1f83593..21f03d1 100644
+--- a/conf/layer.conf
++++ b/conf/layer.conf
+@@ -16,3 +16,6 @@ LAYERDEPENDS_security = "core openembedded-layer perl-layer networking-layer met
+ # Sanity check for meta-security layer.
+ # Setting SKIP_META_SECURITY_SANITY_CHECK to "1" would skip the bbappend files check.
+ INHERIT += "sanity-meta-security"
++
++QB_KERNEL_CMDLINE_APPEND = " ${@bb.utils.contains('DISTRO_FEATURES', 'apparmor', 'apparmor=1 security=apparmor', '', d)}"
++
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 2+ messages in thread
+* [meta-security][PATCH 2/2] parsec-service: Only enable TPM is layer and DISTRO_FEATURE is defined.
+  2022-02-28 16:12 [meta-security][PATCH 1/2] layer.conf: enable apparmor for qemu machine Armin Kuster
+@ 2022-02-28 16:12 ` Armin Kuster
+  0 siblings, 0 replies; 2+ messages in thread
+From: Armin Kuster @ 2022-02-28 16:12 UTC (permalink / raw)
+  To: yocto
+
+Signed-off-by: Armin Kuster <akuster808@gmail.com>
+---
+ .../recipes-parsec/parsec-service/parsec-service_0.8.1.bb  | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/meta-parsec/recipes-parsec/parsec-service/parsec-service_0.8.1.bb b/meta-parsec/recipes-parsec/parsec-service/parsec-service_0.8.1.bb
+index 1cbf2bd..3f12139 100644
+--- a/meta-parsec/recipes-parsec/parsec-service/parsec-service_0.8.1.bb
++++ b/meta-parsec/recipes-parsec/parsec-service/parsec-service_0.8.1.bb
+@@ -12,7 +12,12 @@ SRC_URI += "crate://crates.io/parsec-service/${PV} \
+ 
+ DEPENDS = "clang-native"
+ 
+-PACKAGECONFIG ??= "TPM PKCS11 MBED-CRYPTO CRYPTOAUTHLIB"
++PACKAGECONFIG ??= "PKCS11 MBED-CRYPTO CRYPTOAUTHLIB"
++
++have_TPM = "${@bb.utils.contains('DISTRO_FEATURES', 'tpm2', 'TPM', '', d)}"
++PACKAGECONFIG:append = " ${@bb.utils.contains('BBFILE_COLLECTIONS', 'tpm-layer', '${have_TPM}', '', d)}"
++
++
+ PACKAGECONFIG[ALL] = "all-providers cryptoki/generate-bindings tss-esapi/generate-bindings,,tpm2-tss libts,libts"
+ PACKAGECONFIG[TPM] = "tpm-provider tss-esapi/generate-bindings,,tpm2-tss"
+ PACKAGECONFIG[PKCS11] = "pkcs11-provider cryptoki/generate-bindings,"
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2022-02-28 16:12 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-02-28 16:12 [meta-security][PATCH 1/2] layer.conf: enable apparmor for qemu machine Armin Kuster
+2022-02-28 16:12 ` [meta-security][PATCH 2/2] parsec-service: Only enable TPM is layer and DISTRO_FEATURE is defined Armin Kuster
+

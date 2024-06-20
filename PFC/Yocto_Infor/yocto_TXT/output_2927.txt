@@ -1,0 +1,1785 @@
+* downgrade openssl libraryes
+@ 2021-08-30 13:32 Ivan Riabtsov
+  2021-08-30 13:50 ` [yocto] " Alexander Kanavin
+  0 siblings, 1 reply; 4+ messages in thread
+From: Ivan Riabtsov @ 2021-08-30 13:32 UTC (permalink / raw)
+  To: yocto
+
+hello i am trying to rollback openssl version from 1.1.1i to 1.0.2j.
+Copied the recipe openssl_1.1.1i.bb to openssl_1.0.2j.bb, saved the
+openssl_1.1.1i.bb version with the name openssl_1.1.1i.bb.backup
+
+Отредактировал новый файл, вот разница в файлах:
+
+diff -Nau ./openssl_1.1.1i.bb.backup ./openssl_1.0.2j.bb
+--- ./openssl_1.1.1i.bb.backup 2021-08-27 14:46:07.085808702 +0300
++++ ./openssl_1.0.2j.bb 2021-08-27 16:12:14.216430734 +0300
+@@ -7,23 +7,19 @@
+ # "openssl" here actually means both OpenSSL and SSLeay licenses apply
+ # (see meta/files/common-licenses/OpenSSL to which "openssl" is
+SPDXLICENSEMAPped)
+ LICENSE = "openssl"
+-LIC_FILES_CHKSUM = "file://LICENSE;md5=d343e62fc9c833710bbbed25f27364c8"
++LIC_FILES_CHKSUM = "file://LICENSE;md5=27ffa5d74bb5a337056c14b2ef93fbf6"
+
+ DEPENDS = "hostperl-runtime-native"
+
+ SRC_URI = "http://www.openssl.org/source/openssl-${PV}.tar.gz \
+            file://run-ptest \
+-           file://0001-skip-test_symbol_presence.patch \
+-           file://0001-buildinfo-strip-sysroot-and-debug-prefix-map-from-co.patch
+\
+-           file://afalg.patch \
+-           file://reproducible.patch \
+            "
+
+ SRC_URI_append_class-nativesdk = " \
+            file://environment.d-openssl.sh \
+            "
+
+-SRC_URI[sha256sum] =
+"e8be6a35fe41d10603c3cc635e93289ed00bf34b79671a3a4de64fcee00d5242"
++SRC_URI[sha256sum] =
+"e7aff292be21c259c6af26469c7a9b3ba26e9abaaffd325e3dccc9785256c431"
+
+ inherit lib_package multilib_header multilib_script ptest
+ MULTILIB_SCRIPTS = "${PN}-bin:${bindir}/c_rehash"
+@@ -122,7 +118,7 @@
+  # WARNING: do not set compiler/linker flags (-I/-D etc.) in
+EXTRA_OECONF, as they will fully replace the
+  # environment variables set by bitbake. Adjust the environment
+variables instead.
+  HASHBANGPERL="/usr/bin/env perl" PERL=perl
+PERL5LIB="${S}/external/perl/Text-Template-1.46/lib/" \
+- perl ${S}/Configure ${EXTRA_OECONF} ${PACKAGECONFIG_CONFARGS}
+--prefix=$useprefix --openssldir=${libdir}/ssl-1.1 --libdir=${libdir}
+$target
++ perl ${S}/Configure ${EXTRA_OECONF} ${PACKAGECONFIG_CONFARGS}
+--prefix=$useprefix --openssldir=${libdir}/ssl-1.0 --libdir=${libdir}
+$target
+  perl ${B}/configdata.pm --dump
+ }
+
+@@ -134,30 +130,30 @@
+  # Create SSL structure for packages such as ca-certificates which
+  # contain hard-coded paths to /etc/ssl. Debian does the same.
+  install -d ${D}${sysconfdir}/ssl
+- mv ${D}${libdir}/ssl-1.1/certs \
+-    ${D}${libdir}/ssl-1.1/private \
+-    ${D}${libdir}/ssl-1.1/openssl.cnf \
++ mv ${D}${libdir}/ssl-1.0/certs \
++    ${D}${libdir}/ssl-1.0/private \
++    ${D}${libdir}/ssl-1.0/openssl.cnf \
+     ${D}${sysconfdir}/ssl/
+
+  # Although absolute symlinks would be OK for the target, they become
+  # invalid if native or nativesdk are relocated from sstate.
+- ln -sf ${@oe.path.relative('${libdir}/ssl-1.1',
+'${sysconfdir}/ssl/certs')} ${D}${libdir}/ssl-1.1/certs
+- ln -sf ${@oe.path.relative('${libdir}/ssl-1.1',
+'${sysconfdir}/ssl/private')} ${D}${libdir}/ssl-1.1/private
+- ln -sf ${@oe.path.relative('${libdir}/ssl-1.1',
+'${sysconfdir}/ssl/openssl.cnf')} ${D}${libdir}/ssl-1.1/openssl.cnf
++ ln -sf ${@oe.path.relative('${libdir}/ssl-1.0',
+'${sysconfdir}/ssl/certs')} ${D}${libdir}/ssl-1.0/certs
++ ln -sf ${@oe.path.relative('${libdir}/ssl-1.0',
+'${sysconfdir}/ssl/private')} ${D}${libdir}/ssl-1.0/private
++ ln -sf ${@oe.path.relative('${libdir}/ssl-1.0',
+'${sysconfdir}/ssl/openssl.cnf')} ${D}${libdir}/ssl-1.0/openssl.cnf
+ }
+
+ do_install_append_class-native () {
+  create_wrapper ${D}${bindir}/openssl \
+-     OPENSSL_CONF=${libdir}/ssl-1.1/openssl.cnf \
+-     SSL_CERT_DIR=${libdir}/ssl-1.1/certs \
+-     SSL_CERT_FILE=${libdir}/ssl-1.1/cert.pem \
+-     OPENSSL_ENGINES=${libdir}/engines-1.1
++     OPENSSL_CONF=${libdir}/ssl-1.0/openssl.cnf \
++     SSL_CERT_DIR=${libdir}/ssl-1.0/certs \
++     SSL_CERT_FILE=${libdir}/ssl-1.0/cert.pem \
++     OPENSSL_ENGINES=${libdir}/engines-1.0
+ }
+
+ do_install_append_class-nativesdk () {
+  mkdir -p ${D}${SDKPATHNATIVE}/environment-setup.d
+  install -m 644 ${WORKDIR}/environment.d-openssl.sh
+${D}${SDKPATHNATIVE}/environment-setup.d/openssl.sh
+- sed 's|/usr/lib/ssl/|/usr/lib/ssl-1.1/|g' -i
+${D}${SDKPATHNATIVE}/environment-setup.d/openssl.sh
++ sed 's|/usr/lib/ssl/|/usr/lib/ssl-1.0/|g' -i
+${D}${SDKPATHNATIVE}/environment-setup.d/openssl.sh
+ }
+
+ PTEST_BUILD_HOST_FILES += "configdata.pm"
+@@ -170,8 +166,8 @@
+  cp -r ${S}/external ${B}/test ${S}/test ${B}/fuzz ${S}/util
+${B}/util ${D}${PTEST_PATH}
+
+  # For test_shlibload
+- ln -s ${libdir}/libcrypto.so.1.1 ${D}${PTEST_PATH}/
+- ln -s ${libdir}/libssl.so.1.1 ${D}${PTEST_PATH}/
++ ln -s ${libdir}/libcrypto.so.1.0 ${D}${PTEST_PATH}/
++ ln -s ${libdir}/libssl.so.1.0 ${D}${PTEST_PATH}/
+
+  install -d ${D}${PTEST_PATH}/apps
+  ln -s ${bindir}/openssl ${D}${PTEST_PATH}/apps
+@@ -192,11 +188,11 @@
+ FILES_libcrypto = "${libdir}/libcrypto${SOLIBS}"
+ FILES_libssl = "${libdir}/libssl${SOLIBS}"
+ FILES_openssl-conf = "${sysconfdir}/ssl/openssl.cnf \
+-                      ${libdir}/ssl-1.1/openssl.cnf* \
++                      ${libdir}/ssl-1.0/openssl.cnf* \
+                       "
+-FILES_${PN}-engines = "${libdir}/engines-1.1"
+-FILES_${PN}-misc = "${libdir}/ssl-1.1/misc"
+-FILES_${PN} =+ "${libdir}/ssl-1.1/*"
++FILES_${PN}-engines = "${libdir}/engines-1.0"
++FILES_${PN}-misc = "${libdir}/ssl-1.0/misc"
++FILES_${PN} =+ "${libdir}/ssl-1.0/*"
+ FILES_${PN}_append_class-nativesdk = "
+${SDKPATHNATIVE}/environment-setup.d/openssl.sh"
+
+ CONFFILES_openssl-conf = "${sysconfdir}/ssl/openssl.cnf"
+
+
+вот новый получившийся файл:
+
+
+cat openssl_1.0.2j.bb
+SUMMARY = "Secure Socket Layer"
+DESCRIPTION = "Secure Socket Layer (SSL) binary and related
+cryptographic tools."
+HOMEPAGE = "http://www.openssl.org/"
+BUGTRACKER = "http://www.openssl.org/news/vulnerabilities.html"
+SECTION = "libs/network"
+
+# "openssl" here actually means both OpenSSL and SSLeay licenses apply
+# (see meta/files/common-licenses/OpenSSL to which "openssl" is
+SPDXLICENSEMAPped)
+LICENSE = "openssl"
+LIC_FILES_CHKSUM = "file://LICENSE;md5=27ffa5d74bb5a337056c14b2ef93fbf6"
+
+DEPENDS = "hostperl-runtime-native"
+
+SRC_URI = "http://www.openssl.org/source/openssl-${PV}.tar.gz \
+           file://run-ptest \
+           "
+
+SRC_URI_append_class-nativesdk = " \
+           file://environment.d-openssl.sh \
+           "
+
+SRC_URI[sha256sum] =
+"e7aff292be21c259c6af26469c7a9b3ba26e9abaaffd325e3dccc9785256c431"
+
+inherit lib_package multilib_header multilib_script ptest
+MULTILIB_SCRIPTS = "${PN}-bin:${bindir}/c_rehash"
+
+PACKAGECONFIG ?= ""
+PACKAGECONFIG_class-native = ""
+PACKAGECONFIG_class-nativesdk = ""
+
+PACKAGECONFIG[cryptodev-linux] =
+"enable-devcryptoeng,disable-devcryptoeng,cryptodev-linux,,cryptodev-module"
+
+B = "${WORKDIR}/build"
+do_configure[cleandirs] = "${B}"
+
+#| ./libcrypto.so: undefined reference to `getcontext'
+#| ./libcrypto.so: undefined reference to `setcontext'
+#| ./libcrypto.so: undefined reference to `makecontext'
+EXTRA_OECONF_append_libc-musl = " no-async"
+EXTRA_OECONF_append_libc-musl_powerpc64 = " no-asm"
+
+# adding devrandom prevents openssl from using getrandom() which is
+not available on older glibc versions
+# (native versions can be built with newer glibc, but then relocated
+onto a system with older glibc)
+EXTRA_OECONF_class-native = "--with-rand-seed=os,devrandom"
+EXTRA_OECONF_class-nativesdk = "--with-rand-seed=os,devrandom"
+
+# Relying on hardcoded built-in paths causes openssl-native to not be
+relocateable from sstate.
+CFLAGS_append_class-native = " -DOPENSSLDIR=/not/builtin
+-DENGINESDIR=/not/builtin"
+CFLAGS_append_class-nativesdk = " -DOPENSSLDIR=/not/builtin
+-DENGINESDIR=/not/builtin"
+
+do_configure () {
+os=${HOST_OS}
+case $os in
+linux-gnueabi |\
+linux-gnuspe |\
+linux-musleabi |\
+linux-muslspe |\
+linux-musl )
+os=linux
+;;
+*)
+;;
+esac
+target="$os-${HOST_ARCH}"
+case $target in
+linux-arm*)
+target=linux-armv4
+;;
+linux-aarch64*)
+target=linux-aarch64
+;;
+linux-i?86 | linux-viac3)
+target=linux-x86
+;;
+linux-gnux32-x86_64 | linux-muslx32-x86_64 )
+target=linux-x32
+;;
+linux-gnu64-x86_64)
+target=linux-x86_64
+;;
+linux-mips | linux-mipsel)
+# specifying TARGET_CC_ARCH prevents openssl from (incorrectly) adding
+target architecture flags
+target="linux-mips32 ${TARGET_CC_ARCH}"
+;;
+linux-gnun32-mips*)
+target=linux-mips64
+;;
+linux-*-mips64 | linux-mips64 | linux-*-mips64el | linux-mips64el)
+target=linux64-mips64
+;;
+linux-microblaze* | linux-nios2* | linux-sh3 | linux-sh4 | linux-arc*)
+target=linux-generic32
+;;
+linux-powerpc)
+target=linux-ppc
+;;
+linux-powerpc64)
+target=linux-ppc64
+;;
+linux-powerpc64le)
+target=linux-ppc64le
+;;
+linux-riscv32)
+target=linux-generic32
+;;
+linux-riscv64)
+target=linux-generic64
+;;
+linux-sparc | linux-supersparc)
+target=linux-sparcv9
+;;
+esac
+
+useprefix=${prefix}
+if [ "x$useprefix" = "x" ]; then
+useprefix=/
+fi
+# WARNING: do not set compiler/linker flags (-I/-D etc.) in
+EXTRA_OECONF, as they will fully replace the
+# environment variables set by bitbake. Adjust the environment
+variables instead.
+HASHBANGPERL="/usr/bin/env perl" PERL=perl
+PERL5LIB="${S}/external/perl/Text-Template-1.46/lib/" \
+perl ${S}/Configure ${EXTRA_OECONF} ${PACKAGECONFIG_CONFARGS}
+--prefix=$useprefix --openssldir=${libdir}/ssl-1.0 --libdir=${libdir}
+$target
+perl ${B}/configdata.pm --dump
+}
+
+do_install () {
+oe_runmake DESTDIR="${D}" MANDIR="${mandir}" MANSUFFIX=ssl install
+
+oe_multilib_header openssl/opensslconf.h
+
+# Create SSL structure for packages such as ca-certificates which
+# contain hard-coded paths to /etc/ssl. Debian does the same.
+install -d ${D}${sysconfdir}/ssl
+mv ${D}${libdir}/ssl-1.0/certs \
+   ${D}${libdir}/ssl-1.0/private \
+   ${D}${libdir}/ssl-1.0/openssl.cnf \
+   ${D}${sysconfdir}/ssl/
+
+# Although absolute symlinks would be OK for the target, they become
+# invalid if native or nativesdk are relocated from sstate.
+ln -sf ${@oe.path.relative('${libdir}/ssl-1.0',
+'${sysconfdir}/ssl/certs')} ${D}${libdir}/ssl-1.0/certs
+ln -sf ${@oe.path.relative('${libdir}/ssl-1.0',
+'${sysconfdir}/ssl/private')} ${D}${libdir}/ssl-1.0/private
+ln -sf ${@oe.path.relative('${libdir}/ssl-1.0',
+'${sysconfdir}/ssl/openssl.cnf')} ${D}${libdir}/ssl-1.0/openssl.cnf
+}
+
+do_install_append_class-native () {
+create_wrapper ${D}${bindir}/openssl \
+    OPENSSL_CONF=${libdir}/ssl-1.0/openssl.cnf \
+    SSL_CERT_DIR=${libdir}/ssl-1.0/certs \
+    SSL_CERT_FILE=${libdir}/ssl-1.0/cert.pem \
+    OPENSSL_ENGINES=${libdir}/engines-1.0
+}
+
+do_install_append_class-nativesdk () {
+mkdir -p ${D}${SDKPATHNATIVE}/environment-setup.d
+install -m 644 ${WORKDIR}/environment.d-openssl.sh
+${D}${SDKPATHNATIVE}/environment-setup.d/openssl.sh
+sed 's|/usr/lib/ssl/|/usr/lib/ssl-1.0/|g' -i
+${D}${SDKPATHNATIVE}/environment-setup.d/openssl.sh
+}
+
+PTEST_BUILD_HOST_FILES += "configdata.pm"
+PTEST_BUILD_HOST_PATTERN = "perl_version ="
+do_install_ptest () {
+# Prune the build tree
+rm -f ${B}/fuzz/*.* ${B}/test/*.*
+
+cp ${S}/Configure ${B}/configdata.pm ${D}${PTEST_PATH}
+cp -r ${S}/external ${B}/test ${S}/test ${B}/fuzz ${S}/util ${B}/util
+${D}${PTEST_PATH}
+
+# For test_shlibload
+ln -s ${libdir}/libcrypto.so.1.0 ${D}${PTEST_PATH}/
+ln -s ${libdir}/libssl.so.1.0 ${D}${PTEST_PATH}/
+
+install -d ${D}${PTEST_PATH}/apps
+ln -s ${bindir}/openssl ${D}${PTEST_PATH}/apps
+install -m644 ${S}/apps/*.pem ${S}/apps/*.srl ${S}/apps/openssl.cnf
+${D}${PTEST_PATH}/apps
+install -m755 ${B}/apps/CA.pl ${D}${PTEST_PATH}/apps
+
+install -d ${D}${PTEST_PATH}/engines
+install -m755 ${B}/engines/ossltest.so ${D}${PTEST_PATH}/engines
+}
+
+# Add the openssl.cnf file to the openssl-conf package. Make the libcrypto
+# package RRECOMMENDS on this package. This will enable the configuration
+# file to be installed for both the openssl-bin package and the libcrypto
+# package since the openssl-bin package depends on the libcrypto package.
+
+PACKAGES =+ "libcrypto libssl openssl-conf ${PN}-engines ${PN}-misc"
+
+FILES_libcrypto = "${libdir}/libcrypto${SOLIBS}"
+FILES_libssl = "${libdir}/libssl${SOLIBS}"
+FILES_openssl-conf = "${sysconfdir}/ssl/openssl.cnf \
+                      ${libdir}/ssl-1.0/openssl.cnf* \
+                      "
+FILES_${PN}-engines = "${libdir}/engines-1.0"
+FILES_${PN}-misc = "${libdir}/ssl-1.0/misc"
+FILES_${PN} =+ "${libdir}/ssl-1.0/*"
+FILES_${PN}_append_class-nativesdk = "
+${SDKPATHNATIVE}/environment-setup.d/openssl.sh"
+
+CONFFILES_openssl-conf = "${sysconfdir}/ssl/openssl.cnf"
+
+RRECOMMENDS_libcrypto += "openssl-conf"
+RDEPENDS_${PN}-ptest += "openssl-bin perl perl-modules bash"
+
+RDEPENDS_${PN}-bin += "openssl-conf"
+
+BBCLASSEXTEND = "native nativesdk"
+
+CVE_PRODUCT = "openssl:openssl"
+
+# Only affects OpenSSL >= 1.1.1 in combination with Apache < 2.4.37
+# Apache in meta-webserver is already recent enough
+CVE_CHECK_WHITELIST += "CVE-2019-0190"
+
+
+I understand that I need to figure out the configs yourself, but I get
+this error when executing the
+
+bitbake openssl-native
+
+ERROR: Execution of
+'/home/ivr/work/yocto_orig/build/tmp/work/x86_64-linux/openssl-native/1.0.2j-r0/temp/run.do_configure.1071458'
+failed with exit code 2:
+| unable to read opensslv.h:No such file or directory
+| Configuring for linux-x86_64
+|     no-devcryptoeng [option]   OPENSSL_NO_DEVCRYPTOENG (skip dir)
+|     no-ec_nistp_64_gcc_128 [default]  OPENSSL_NO_EC_NISTP_64_GCC_128
+(skip dir)
+|     no-gmp          [default]  OPENSSL_NO_GMP (skip dir)
+|     no-jpake        [experimental] OPENSSL_NO_JPAKE (skip dir)
+|     no-krb5         [krb5-flavor not specified] OPENSSL_NO_KRB5
+|     no-libunbound   [experimental] OPENSSL_NO_LIBUNBOUND (skip dir)
+|     no-md2          [default]  OPENSSL_NO_MD2 (skip dir)
+|     no-rc5          [default]  OPENSSL_NO_RC5 (skip dir)
+|     no-rfc3779      [default]  OPENSSL_NO_RFC3779 (skip dir)
+|     no-sctp         [default]  OPENSSL_NO_SCTP (skip dir)
+|     no-shared       [default]
+|     no-ssl-trace    [default]  OPENSSL_NO_SSL_TRACE (skip dir)
+|     no-ssl2         [default]  OPENSSL_NO_SSL2 (skip dir)
+|     no-store        [experimental] OPENSSL_NO_STORE (skip dir)
+|     no-unit-test    [default]  OPENSSL_NO_UNIT_TEST (skip dir)
+|     no-weak-ssl-ciphers [default]  OPENSSL_NO_WEAK_SSL_CIPHERS (skip dir)
+|     no-zlib         [default]
+|     no-zlib-dynamic [default]
+| IsMK1MF=0
+| WARNING: exit code 2 from a shell command.
+|
+
+As far as I can understand, the opensslv.h file is generated just at
+the configuration stage, why does the configuration stage give an
+error of the absence of this file?
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] downgrade openssl libraryes
+  2021-08-30 13:32 downgrade openssl libraryes Ivan Riabtsov
+@ 2021-08-30 13:50 ` Alexander Kanavin
+  2021-08-30 14:56   ` Ivan Riabtsov
+  0 siblings, 1 reply; 4+ messages in thread
+From: Alexander Kanavin @ 2021-08-30 13:50 UTC (permalink / raw)
+  To: Ivan Riabtsov; +Cc: Yocto-mailing-list
+
+[-- Attachment #1: Type: text/plain, Size: 15750 bytes --]
+
+openssl 1.0.2 went out of support at the end of 2019 and you should not be
+using it. What is the problem you need to solve?
+
+Alex
+
+On Mon, 30 Aug 2021 at 15:33, Ivan Riabtsov <ivriabtsov@gmail.com> wrote:
+
+> hello i am trying to rollback openssl version from 1.1.1i to 1.0.2j.
+> Copied the recipe openssl_1.1.1i.bb to openssl_1.0.2j.bb, saved the
+> openssl_1.1.1i.bb version with the name openssl_1.1.1i.bb.backup
+>
+> Отредактировал новый файл, вот разница в файлах:
+>
+> diff -Nau ./openssl_1.1.1i.bb.backup ./openssl_1.0.2j.bb
+> --- ./openssl_1.1.1i.bb.backup 2021-08-27 14:46:07.085808702 +0300
+> +++ ./openssl_1.0.2j.bb 2021-08-27 16:12:14.216430734 +0300
+> @@ -7,23 +7,19 @@
+>  # "openssl" here actually means both OpenSSL and SSLeay licenses apply
+>  # (see meta/files/common-licenses/OpenSSL to which "openssl" is
+> SPDXLICENSEMAPped)
+>  LICENSE = "openssl"
+> -LIC_FILES_CHKSUM = "file://LICENSE;md5=d343e62fc9c833710bbbed25f27364c8"
+> +LIC_FILES_CHKSUM = "file://LICENSE;md5=27ffa5d74bb5a337056c14b2ef93fbf6"
+>
+>  DEPENDS = "hostperl-runtime-native"
+>
+>  SRC_URI = "http://www.openssl.org/source/openssl-${PV}.tar.gz \
+>             file://run-ptest \
+> -           file://0001-skip-test_symbol_presence.patch \
+> -
+>  file://0001-buildinfo-strip-sysroot-and-debug-prefix-map-from-co.patch
+> \
+> -           file://afalg.patch \
+> -           file://reproducible.patch \
+>             "
+>
+>  SRC_URI_append_class-nativesdk = " \
+>             file://environment.d-openssl.sh \
+>             "
+>
+> -SRC_URI[sha256sum] =
+> "e8be6a35fe41d10603c3cc635e93289ed00bf34b79671a3a4de64fcee00d5242"
+> +SRC_URI[sha256sum] =
+> "e7aff292be21c259c6af26469c7a9b3ba26e9abaaffd325e3dccc9785256c431"
+>
+>  inherit lib_package multilib_header multilib_script ptest
+>  MULTILIB_SCRIPTS = "${PN}-bin:${bindir}/c_rehash"
+> @@ -122,7 +118,7 @@
+>   # WARNING: do not set compiler/linker flags (-I/-D etc.) in
+> EXTRA_OECONF, as they will fully replace the
+>   # environment variables set by bitbake. Adjust the environment
+> variables instead.
+>   HASHBANGPERL="/usr/bin/env perl" PERL=perl
+> PERL5LIB="${S}/external/perl/Text-Template-1.46/lib/" \
+> - perl ${S}/Configure ${EXTRA_OECONF} ${PACKAGECONFIG_CONFARGS}
+> --prefix=$useprefix --openssldir=${libdir}/ssl-1.1 --libdir=${libdir}
+> $target
+> + perl ${S}/Configure ${EXTRA_OECONF} ${PACKAGECONFIG_CONFARGS}
+> --prefix=$useprefix --openssldir=${libdir}/ssl-1.0 --libdir=${libdir}
+> $target
+>   perl ${B}/configdata.pm --dump
+>  }
+>
+> @@ -134,30 +130,30 @@
+>   # Create SSL structure for packages such as ca-certificates which
+>   # contain hard-coded paths to /etc/ssl. Debian does the same.
+>   install -d ${D}${sysconfdir}/ssl
+> - mv ${D}${libdir}/ssl-1.1/certs \
+> -    ${D}${libdir}/ssl-1.1/private \
+> -    ${D}${libdir}/ssl-1.1/openssl.cnf \
+> + mv ${D}${libdir}/ssl-1.0/certs \
+> +    ${D}${libdir}/ssl-1.0/private \
+> +    ${D}${libdir}/ssl-1.0/openssl.cnf \
+>      ${D}${sysconfdir}/ssl/
+>
+>   # Although absolute symlinks would be OK for the target, they become
+>   # invalid if native or nativesdk are relocated from sstate.
+> - ln -sf ${@oe.path.relative('${libdir}/ssl-1.1',
+> '${sysconfdir}/ssl/certs')} ${D}${libdir}/ssl-1.1/certs
+> - ln -sf ${@oe.path.relative('${libdir}/ssl-1.1',
+> '${sysconfdir}/ssl/private')} ${D}${libdir}/ssl-1.1/private
+> - ln -sf ${@oe.path.relative('${libdir}/ssl-1.1',
+> '${sysconfdir}/ssl/openssl.cnf')} ${D}${libdir}/ssl-1.1/openssl.cnf
+> + ln -sf ${@oe.path.relative('${libdir}/ssl-1.0',
+> '${sysconfdir}/ssl/certs')} ${D}${libdir}/ssl-1.0/certs
+> + ln -sf ${@oe.path.relative('${libdir}/ssl-1.0',
+> '${sysconfdir}/ssl/private')} ${D}${libdir}/ssl-1.0/private
+> + ln -sf ${@oe.path.relative('${libdir}/ssl-1.0',
+> '${sysconfdir}/ssl/openssl.cnf')} ${D}${libdir}/ssl-1.0/openssl.cnf
+>  }
+>
+>  do_install_append_class-native () {
+>   create_wrapper ${D}${bindir}/openssl \
+> -     OPENSSL_CONF=${libdir}/ssl-1.1/openssl.cnf \
+> -     SSL_CERT_DIR=${libdir}/ssl-1.1/certs \
+> -     SSL_CERT_FILE=${libdir}/ssl-1.1/cert.pem \
+> -     OPENSSL_ENGINES=${libdir}/engines-1.1
+> +     OPENSSL_CONF=${libdir}/ssl-1.0/openssl.cnf \
+> +     SSL_CERT_DIR=${libdir}/ssl-1.0/certs \
+> +     SSL_CERT_FILE=${libdir}/ssl-1.0/cert.pem \
+> +     OPENSSL_ENGINES=${libdir}/engines-1.0
+>  }
+>
+>  do_install_append_class-nativesdk () {
+>   mkdir -p ${D}${SDKPATHNATIVE}/environment-setup.d
+>   install -m 644 ${WORKDIR}/environment.d-openssl.sh
+> ${D}${SDKPATHNATIVE}/environment-setup.d/openssl.sh
+> - sed 's|/usr/lib/ssl/|/usr/lib/ssl-1.1/|g' -i
+> ${D}${SDKPATHNATIVE}/environment-setup.d/openssl.sh
+> + sed 's|/usr/lib/ssl/|/usr/lib/ssl-1.0/|g' -i
+> ${D}${SDKPATHNATIVE}/environment-setup.d/openssl.sh
+>  }
+>
+>  PTEST_BUILD_HOST_FILES += "configdata.pm"
+> @@ -170,8 +166,8 @@
+>   cp -r ${S}/external ${B}/test ${S}/test ${B}/fuzz ${S}/util
+> ${B}/util ${D}${PTEST_PATH}
+>
+>   # For test_shlibload
+> - ln -s ${libdir}/libcrypto.so.1.1 ${D}${PTEST_PATH}/
+> - ln -s ${libdir}/libssl.so.1.1 ${D}${PTEST_PATH}/
+> + ln -s ${libdir}/libcrypto.so.1.0 ${D}${PTEST_PATH}/
+> + ln -s ${libdir}/libssl.so.1.0 ${D}${PTEST_PATH}/
+>
+>   install -d ${D}${PTEST_PATH}/apps
+>   ln -s ${bindir}/openssl ${D}${PTEST_PATH}/apps
+> @@ -192,11 +188,11 @@
+>  FILES_libcrypto = "${libdir}/libcrypto${SOLIBS}"
+>  FILES_libssl = "${libdir}/libssl${SOLIBS}"
+>  FILES_openssl-conf = "${sysconfdir}/ssl/openssl.cnf \
+> -                      ${libdir}/ssl-1.1/openssl.cnf* \
+> +                      ${libdir}/ssl-1.0/openssl.cnf* \
+>                        "
+> -FILES_${PN}-engines = "${libdir}/engines-1.1"
+> -FILES_${PN}-misc = "${libdir}/ssl-1.1/misc"
+> -FILES_${PN} =+ "${libdir}/ssl-1.1/*"
+> +FILES_${PN}-engines = "${libdir}/engines-1.0"
+> +FILES_${PN}-misc = "${libdir}/ssl-1.0/misc"
+> +FILES_${PN} =+ "${libdir}/ssl-1.0/*"
+>  FILES_${PN}_append_class-nativesdk = "
+> ${SDKPATHNATIVE}/environment-setup.d/openssl.sh"
+>
+>  CONFFILES_openssl-conf = "${sysconfdir}/ssl/openssl.cnf"
+>
+>
+> вот новый получившийся файл:
+>
+>
+> cat openssl_1.0.2j.bb
+> SUMMARY = "Secure Socket Layer"
+> DESCRIPTION = "Secure Socket Layer (SSL) binary and related
+> cryptographic tools."
+> HOMEPAGE = "http://www.openssl.org/"
+> BUGTRACKER = "http://www.openssl.org/news/vulnerabilities.html"
+> SECTION = "libs/network"
+>
+> # "openssl" here actually means both OpenSSL and SSLeay licenses apply
+> # (see meta/files/common-licenses/OpenSSL to which "openssl" is
+> SPDXLICENSEMAPped)
+> LICENSE = "openssl"
+> LIC_FILES_CHKSUM = "file://LICENSE;md5=27ffa5d74bb5a337056c14b2ef93fbf6"
+>
+> DEPENDS = "hostperl-runtime-native"
+>
+> SRC_URI = "http://www.openssl.org/source/openssl-${PV}.tar.gz \
+>            file://run-ptest \
+>            "
+>
+> SRC_URI_append_class-nativesdk = " \
+>            file://environment.d-openssl.sh \
+>            "
+>
+> SRC_URI[sha256sum] =
+> "e7aff292be21c259c6af26469c7a9b3ba26e9abaaffd325e3dccc9785256c431"
+>
+> inherit lib_package multilib_header multilib_script ptest
+> MULTILIB_SCRIPTS = "${PN}-bin:${bindir}/c_rehash"
+>
+> PACKAGECONFIG ?= ""
+> PACKAGECONFIG_class-native = ""
+> PACKAGECONFIG_class-nativesdk = ""
+>
+> PACKAGECONFIG[cryptodev-linux] =
+>
+> "enable-devcryptoeng,disable-devcryptoeng,cryptodev-linux,,cryptodev-module"
+>
+> B = "${WORKDIR}/build"
+> do_configure[cleandirs] = "${B}"
+>
+> #| ./libcrypto.so: undefined reference to `getcontext'
+> #| ./libcrypto.so: undefined reference to `setcontext'
+> #| ./libcrypto.so: undefined reference to `makecontext'
+> EXTRA_OECONF_append_libc-musl = " no-async"
+> EXTRA_OECONF_append_libc-musl_powerpc64 = " no-asm"
+>
+> # adding devrandom prevents openssl from using getrandom() which is
+> not available on older glibc versions
+> # (native versions can be built with newer glibc, but then relocated
+> onto a system with older glibc)
+> EXTRA_OECONF_class-native = "--with-rand-seed=os,devrandom"
+> EXTRA_OECONF_class-nativesdk = "--with-rand-seed=os,devrandom"
+>
+> # Relying on hardcoded built-in paths causes openssl-native to not be
+> relocateable from sstate.
+> CFLAGS_append_class-native = " -DOPENSSLDIR=/not/builtin
+> -DENGINESDIR=/not/builtin"
+> CFLAGS_append_class-nativesdk = " -DOPENSSLDIR=/not/builtin
+> -DENGINESDIR=/not/builtin"
+>
+> do_configure () {
+> os=${HOST_OS}
+> case $os in
+> linux-gnueabi |\
+> linux-gnuspe |\
+> linux-musleabi |\
+> linux-muslspe |\
+> linux-musl )
+> os=linux
+> ;;
+> *)
+> ;;
+> esac
+> target="$os-${HOST_ARCH}"
+> case $target in
+> linux-arm*)
+> target=linux-armv4
+> ;;
+> linux-aarch64*)
+> target=linux-aarch64
+> ;;
+> linux-i?86 | linux-viac3)
+> target=linux-x86
+> ;;
+> linux-gnux32-x86_64 | linux-muslx32-x86_64 )
+> target=linux-x32
+> ;;
+> linux-gnu64-x86_64)
+> target=linux-x86_64
+> ;;
+> linux-mips | linux-mipsel)
+> # specifying TARGET_CC_ARCH prevents openssl from (incorrectly) adding
+> target architecture flags
+> target="linux-mips32 ${TARGET_CC_ARCH}"
+> ;;
+> linux-gnun32-mips*)
+> target=linux-mips64
+> ;;
+> linux-*-mips64 | linux-mips64 | linux-*-mips64el | linux-mips64el)
+> target=linux64-mips64
+> ;;
+> linux-microblaze* | linux-nios2* | linux-sh3 | linux-sh4 | linux-arc*)
+> target=linux-generic32
+> ;;
+> linux-powerpc)
+> target=linux-ppc
+> ;;
+> linux-powerpc64)
+> target=linux-ppc64
+> ;;
+> linux-powerpc64le)
+> target=linux-ppc64le
+> ;;
+> linux-riscv32)
+> target=linux-generic32
+> ;;
+> linux-riscv64)
+> target=linux-generic64
+> ;;
+> linux-sparc | linux-supersparc)
+> target=linux-sparcv9
+> ;;
+> esac
+>
+> useprefix=${prefix}
+> if [ "x$useprefix" = "x" ]; then
+> useprefix=/
+> fi
+> # WARNING: do not set compiler/linker flags (-I/-D etc.) in
+> EXTRA_OECONF, as they will fully replace the
+> # environment variables set by bitbake. Adjust the environment
+> variables instead.
+> HASHBANGPERL="/usr/bin/env perl" PERL=perl
+> PERL5LIB="${S}/external/perl/Text-Template-1.46/lib/" \
+> perl ${S}/Configure ${EXTRA_OECONF} ${PACKAGECONFIG_CONFARGS}
+> --prefix=$useprefix --openssldir=${libdir}/ssl-1.0 --libdir=${libdir}
+> $target
+> perl ${B}/configdata.pm --dump
+> }
+>
+> do_install () {
+> oe_runmake DESTDIR="${D}" MANDIR="${mandir}" MANSUFFIX=ssl install
+>
+> oe_multilib_header openssl/opensslconf.h
+>
+> # Create SSL structure for packages such as ca-certificates which
+> # contain hard-coded paths to /etc/ssl. Debian does the same.
+> install -d ${D}${sysconfdir}/ssl
+> mv ${D}${libdir}/ssl-1.0/certs \
+>    ${D}${libdir}/ssl-1.0/private \
+>    ${D}${libdir}/ssl-1.0/openssl.cnf \
+>    ${D}${sysconfdir}/ssl/
+>
+> # Although absolute symlinks would be OK for the target, they become
+> # invalid if native or nativesdk are relocated from sstate.
+> ln -sf ${@oe.path.relative('${libdir}/ssl-1.0',
+> '${sysconfdir}/ssl/certs')} ${D}${libdir}/ssl-1.0/certs
+> ln -sf ${@oe.path.relative('${libdir}/ssl-1.0',
+> '${sysconfdir}/ssl/private')} ${D}${libdir}/ssl-1.0/private
+> ln -sf ${@oe.path.relative('${libdir}/ssl-1.0',
+> '${sysconfdir}/ssl/openssl.cnf')} ${D}${libdir}/ssl-1.0/openssl.cnf
+> }
+>
+> do_install_append_class-native () {
+> create_wrapper ${D}${bindir}/openssl \
+>     OPENSSL_CONF=${libdir}/ssl-1.0/openssl.cnf \
+>     SSL_CERT_DIR=${libdir}/ssl-1.0/certs \
+>     SSL_CERT_FILE=${libdir}/ssl-1.0/cert.pem \
+>     OPENSSL_ENGINES=${libdir}/engines-1.0
+> }
+>
+> do_install_append_class-nativesdk () {
+> mkdir -p ${D}${SDKPATHNATIVE}/environment-setup.d
+> install -m 644 ${WORKDIR}/environment.d-openssl.sh
+> ${D}${SDKPATHNATIVE}/environment-setup.d/openssl.sh
+> sed 's|/usr/lib/ssl/|/usr/lib/ssl-1.0/|g' -i
+> ${D}${SDKPATHNATIVE}/environment-setup.d/openssl.sh
+> }
+>
+> PTEST_BUILD_HOST_FILES += "configdata.pm"
+> PTEST_BUILD_HOST_PATTERN = "perl_version ="
+> do_install_ptest () {
+> # Prune the build tree
+> rm -f ${B}/fuzz/*.* ${B}/test/*.*
+>
+> cp ${S}/Configure ${B}/configdata.pm ${D}${PTEST_PATH}
+> cp -r ${S}/external ${B}/test ${S}/test ${B}/fuzz ${S}/util ${B}/util
+> ${D}${PTEST_PATH}
+>
+> # For test_shlibload
+> ln -s ${libdir}/libcrypto.so.1.0 ${D}${PTEST_PATH}/
+> ln -s ${libdir}/libssl.so.1.0 ${D}${PTEST_PATH}/
+>
+> install -d ${D}${PTEST_PATH}/apps
+> ln -s ${bindir}/openssl ${D}${PTEST_PATH}/apps
+> install -m644 ${S}/apps/*.pem ${S}/apps/*.srl ${S}/apps/openssl.cnf
+> ${D}${PTEST_PATH}/apps
+> install -m755 ${B}/apps/CA.pl ${D}${PTEST_PATH}/apps
+>
+> install -d ${D}${PTEST_PATH}/engines
+> install -m755 ${B}/engines/ossltest.so ${D}${PTEST_PATH}/engines
+> }
+>
+> # Add the openssl.cnf file to the openssl-conf package. Make the libcrypto
+> # package RRECOMMENDS on this package. This will enable the configuration
+> # file to be installed for both the openssl-bin package and the libcrypto
+> # package since the openssl-bin package depends on the libcrypto package.
+>
+> PACKAGES =+ "libcrypto libssl openssl-conf ${PN}-engines ${PN}-misc"
+>
+> FILES_libcrypto = "${libdir}/libcrypto${SOLIBS}"
+> FILES_libssl = "${libdir}/libssl${SOLIBS}"
+> FILES_openssl-conf = "${sysconfdir}/ssl/openssl.cnf \
+>                       ${libdir}/ssl-1.0/openssl.cnf* \
+>                       "
+> FILES_${PN}-engines = "${libdir}/engines-1.0"
+> FILES_${PN}-misc = "${libdir}/ssl-1.0/misc"
+> FILES_${PN} =+ "${libdir}/ssl-1.0/*"
+> FILES_${PN}_append_class-nativesdk = "
+> ${SDKPATHNATIVE}/environment-setup.d/openssl.sh"
+>
+> CONFFILES_openssl-conf = "${sysconfdir}/ssl/openssl.cnf"
+>
+> RRECOMMENDS_libcrypto += "openssl-conf"
+> RDEPENDS_${PN}-ptest += "openssl-bin perl perl-modules bash"
+>
+> RDEPENDS_${PN}-bin += "openssl-conf"
+>
+> BBCLASSEXTEND = "native nativesdk"
+>
+> CVE_PRODUCT = "openssl:openssl"
+>
+> # Only affects OpenSSL >= 1.1.1 in combination with Apache < 2.4.37
+> # Apache in meta-webserver is already recent enough
+> CVE_CHECK_WHITELIST += "CVE-2019-0190"
+>
+>
+> I understand that I need to figure out the configs yourself, but I get
+> this error when executing the
+>
+> bitbake openssl-native
+>
+> ERROR: Execution of
+>
+> '/home/ivr/work/yocto_orig/build/tmp/work/x86_64-linux/openssl-native/1.0.2j-r0/temp/run.do_configure.1071458'
+> failed with exit code 2:
+> | unable to read opensslv.h:No such file or directory
+> | Configuring for linux-x86_64
+> |     no-devcryptoeng [option]   OPENSSL_NO_DEVCRYPTOENG (skip dir)
+> |     no-ec_nistp_64_gcc_128 [default]  OPENSSL_NO_EC_NISTP_64_GCC_128
+> (skip dir)
+> |     no-gmp          [default]  OPENSSL_NO_GMP (skip dir)
+> |     no-jpake        [experimental] OPENSSL_NO_JPAKE (skip dir)
+> |     no-krb5         [krb5-flavor not specified] OPENSSL_NO_KRB5
+> |     no-libunbound   [experimental] OPENSSL_NO_LIBUNBOUND (skip dir)
+> |     no-md2          [default]  OPENSSL_NO_MD2 (skip dir)
+> |     no-rc5          [default]  OPENSSL_NO_RC5 (skip dir)
+> |     no-rfc3779      [default]  OPENSSL_NO_RFC3779 (skip dir)
+> |     no-sctp         [default]  OPENSSL_NO_SCTP (skip dir)
+> |     no-shared       [default]
+> |     no-ssl-trace    [default]  OPENSSL_NO_SSL_TRACE (skip dir)
+> |     no-ssl2         [default]  OPENSSL_NO_SSL2 (skip dir)
+> |     no-store        [experimental] OPENSSL_NO_STORE (skip dir)
+> |     no-unit-test    [default]  OPENSSL_NO_UNIT_TEST (skip dir)
+> |     no-weak-ssl-ciphers [default]  OPENSSL_NO_WEAK_SSL_CIPHERS (skip dir)
+> |     no-zlib         [default]
+> |     no-zlib-dynamic [default]
+> | IsMK1MF=0
+> | WARNING: exit code 2 from a shell command.
+> |
+>
+> As far as I can understand, the opensslv.h file is generated just at
+> the configuration stage, why does the configuration stage give an
+> error of the absence of this file?
+>
+> 
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 19699 bytes --]
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] downgrade openssl libraryes
+  2021-08-30 13:50 ` [yocto] " Alexander Kanavin
+@ 2021-08-30 14:56   ` Ivan Riabtsov
+  2021-08-31 10:26     ` Bas Mevissen
+  0 siblings, 1 reply; 4+ messages in thread
+From: Ivan Riabtsov @ 2021-08-30 14:56 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: Yocto-mailing-list
+
+I have phytec imx6ul board with a preinstalled os. On this os opessl
+version is 1.0.2j i need to build nginx for this board, but i can't
+build yocto same version as i have on board, so I grabbed a newer
+version of yocto from phytec site, rolled back glibc and try to roll
+back openssl. I do not want to flash the device, as I'm afraid to get
+brick
+
+пн, 30 авг. 2021 г. в 16:51, Alexander Kanavin <alex.kanavin@gmail.com>:
+>
+> openssl 1.0.2 went out of support at the end of 2019 and you should not be using it. What is the problem you need to solve?
+>
+> Alex
+>
+> On Mon, 30 Aug 2021 at 15:33, Ivan Riabtsov <ivriabtsov@gmail.com> wrote:
+>>
+>> hello i am trying to rollback openssl version from 1.1.1i to 1.0.2j.
+>> Copied the recipe openssl_1.1.1i.bb to openssl_1.0.2j.bb, saved the
+>> openssl_1.1.1i.bb version with the name openssl_1.1.1i.bb.backup
+>>
+>> Отредактировал новый файл, вот разница в файлах:
+>>
+>> diff -Nau ./openssl_1.1.1i.bb.backup ./openssl_1.0.2j.bb
+>> --- ./openssl_1.1.1i.bb.backup 2021-08-27 14:46:07.085808702 +0300
+>> +++ ./openssl_1.0.2j.bb 2021-08-27 16:12:14.216430734 +0300
+>> @@ -7,23 +7,19 @@
+>>  # "openssl" here actually means both OpenSSL and SSLeay licenses apply
+>>  # (see meta/files/common-licenses/OpenSSL to which "openssl" is
+>> SPDXLICENSEMAPped)
+>>  LICENSE = "openssl"
+>> -LIC_FILES_CHKSUM = "file://LICENSE;md5=d343e62fc9c833710bbbed25f27364c8"
+>> +LIC_FILES_CHKSUM = "file://LICENSE;md5=27ffa5d74bb5a337056c14b2ef93fbf6"
+>>
+>>  DEPENDS = "hostperl-runtime-native"
+>>
+>>  SRC_URI = "http://www.openssl.org/source/openssl-${PV}.tar.gz \
+>>             file://run-ptest \
+>> -           file://0001-skip-test_symbol_presence.patch \
+>> -           file://0001-buildinfo-strip-sysroot-and-debug-prefix-map-from-co.patch
+>> \
+>> -           file://afalg.patch \
+>> -           file://reproducible.patch \
+>>             "
+>>
+>>  SRC_URI_append_class-nativesdk = " \
+>>             file://environment.d-openssl.sh \
+>>             "
+>>
+>> -SRC_URI[sha256sum] =
+>> "e8be6a35fe41d10603c3cc635e93289ed00bf34b79671a3a4de64fcee00d5242"
+>> +SRC_URI[sha256sum] =
+>> "e7aff292be21c259c6af26469c7a9b3ba26e9abaaffd325e3dccc9785256c431"
+>>
+>>  inherit lib_package multilib_header multilib_script ptest
+>>  MULTILIB_SCRIPTS = "${PN}-bin:${bindir}/c_rehash"
+>> @@ -122,7 +118,7 @@
+>>   # WARNING: do not set compiler/linker flags (-I/-D etc.) in
+>> EXTRA_OECONF, as they will fully replace the
+>>   # environment variables set by bitbake. Adjust the environment
+>> variables instead.
+>>   HASHBANGPERL="/usr/bin/env perl" PERL=perl
+>> PERL5LIB="${S}/external/perl/Text-Template-1.46/lib/" \
+>> - perl ${S}/Configure ${EXTRA_OECONF} ${PACKAGECONFIG_CONFARGS}
+>> --prefix=$useprefix --openssldir=${libdir}/ssl-1.1 --libdir=${libdir}
+>> $target
+>> + perl ${S}/Configure ${EXTRA_OECONF} ${PACKAGECONFIG_CONFARGS}
+>> --prefix=$useprefix --openssldir=${libdir}/ssl-1.0 --libdir=${libdir}
+>> $target
+>>   perl ${B}/configdata.pm --dump
+>>  }
+>>
+>> @@ -134,30 +130,30 @@
+>>   # Create SSL structure for packages such as ca-certificates which
+>>   # contain hard-coded paths to /etc/ssl. Debian does the same.
+>>   install -d ${D}${sysconfdir}/ssl
+>> - mv ${D}${libdir}/ssl-1.1/certs \
+>> -    ${D}${libdir}/ssl-1.1/private \
+>> -    ${D}${libdir}/ssl-1.1/openssl.cnf \
+>> + mv ${D}${libdir}/ssl-1.0/certs \
+>> +    ${D}${libdir}/ssl-1.0/private \
+>> +    ${D}${libdir}/ssl-1.0/openssl.cnf \
+>>      ${D}${sysconfdir}/ssl/
+>>
+>>   # Although absolute symlinks would be OK for the target, they become
+>>   # invalid if native or nativesdk are relocated from sstate.
+>> - ln -sf ${@oe.path.relative('${libdir}/ssl-1.1',
+>> '${sysconfdir}/ssl/certs')} ${D}${libdir}/ssl-1.1/certs
+>> - ln -sf ${@oe.path.relative('${libdir}/ssl-1.1',
+>> '${sysconfdir}/ssl/private')} ${D}${libdir}/ssl-1.1/private
+>> - ln -sf ${@oe.path.relative('${libdir}/ssl-1.1',
+>> '${sysconfdir}/ssl/openssl.cnf')} ${D}${libdir}/ssl-1.1/openssl.cnf
+>> + ln -sf ${@oe.path.relative('${libdir}/ssl-1.0',
+>> '${sysconfdir}/ssl/certs')} ${D}${libdir}/ssl-1.0/certs
+>> + ln -sf ${@oe.path.relative('${libdir}/ssl-1.0',
+>> '${sysconfdir}/ssl/private')} ${D}${libdir}/ssl-1.0/private
+>> + ln -sf ${@oe.path.relative('${libdir}/ssl-1.0',
+>> '${sysconfdir}/ssl/openssl.cnf')} ${D}${libdir}/ssl-1.0/openssl.cnf
+>>  }
+>>
+>>  do_install_append_class-native () {
+>>   create_wrapper ${D}${bindir}/openssl \
+>> -     OPENSSL_CONF=${libdir}/ssl-1.1/openssl.cnf \
+>> -     SSL_CERT_DIR=${libdir}/ssl-1.1/certs \
+>> -     SSL_CERT_FILE=${libdir}/ssl-1.1/cert.pem \
+>> -     OPENSSL_ENGINES=${libdir}/engines-1.1
+>> +     OPENSSL_CONF=${libdir}/ssl-1.0/openssl.cnf \
+>> +     SSL_CERT_DIR=${libdir}/ssl-1.0/certs \
+>> +     SSL_CERT_FILE=${libdir}/ssl-1.0/cert.pem \
+>> +     OPENSSL_ENGINES=${libdir}/engines-1.0
+>>  }
+>>
+>>  do_install_append_class-nativesdk () {
+>>   mkdir -p ${D}${SDKPATHNATIVE}/environment-setup.d
+>>   install -m 644 ${WORKDIR}/environment.d-openssl.sh
+>> ${D}${SDKPATHNATIVE}/environment-setup.d/openssl.sh
+>> - sed 's|/usr/lib/ssl/|/usr/lib/ssl-1.1/|g' -i
+>> ${D}${SDKPATHNATIVE}/environment-setup.d/openssl.sh
+>> + sed 's|/usr/lib/ssl/|/usr/lib/ssl-1.0/|g' -i
+>> ${D}${SDKPATHNATIVE}/environment-setup.d/openssl.sh
+>>  }
+>>
+>>  PTEST_BUILD_HOST_FILES += "configdata.pm"
+>> @@ -170,8 +166,8 @@
+>>   cp -r ${S}/external ${B}/test ${S}/test ${B}/fuzz ${S}/util
+>> ${B}/util ${D}${PTEST_PATH}
+>>
+>>   # For test_shlibload
+>> - ln -s ${libdir}/libcrypto.so.1.1 ${D}${PTEST_PATH}/
+>> - ln -s ${libdir}/libssl.so.1.1 ${D}${PTEST_PATH}/
+>> + ln -s ${libdir}/libcrypto.so.1.0 ${D}${PTEST_PATH}/
+>> + ln -s ${libdir}/libssl.so.1.0 ${D}${PTEST_PATH}/
+>>
+>>   install -d ${D}${PTEST_PATH}/apps
+>>   ln -s ${bindir}/openssl ${D}${PTEST_PATH}/apps
+>> @@ -192,11 +188,11 @@
+>>  FILES_libcrypto = "${libdir}/libcrypto${SOLIBS}"
+>>  FILES_libssl = "${libdir}/libssl${SOLIBS}"
+>>  FILES_openssl-conf = "${sysconfdir}/ssl/openssl.cnf \
+>> -                      ${libdir}/ssl-1.1/openssl.cnf* \
+>> +                      ${libdir}/ssl-1.0/openssl.cnf* \
+>>                        "
+>> -FILES_${PN}-engines = "${libdir}/engines-1.1"
+>> -FILES_${PN}-misc = "${libdir}/ssl-1.1/misc"
+>> -FILES_${PN} =+ "${libdir}/ssl-1.1/*"
+>> +FILES_${PN}-engines = "${libdir}/engines-1.0"
+>> +FILES_${PN}-misc = "${libdir}/ssl-1.0/misc"
+>> +FILES_${PN} =+ "${libdir}/ssl-1.0/*"
+>>  FILES_${PN}_append_class-nativesdk = "
+>> ${SDKPATHNATIVE}/environment-setup.d/openssl.sh"
+>>
+>>  CONFFILES_openssl-conf = "${sysconfdir}/ssl/openssl.cnf"
+>>
+>>
+>> вот новый получившийся файл:
+>>
+>>
+>> cat openssl_1.0.2j.bb
+>> SUMMARY = "Secure Socket Layer"
+>> DESCRIPTION = "Secure Socket Layer (SSL) binary and related
+>> cryptographic tools."
+>> HOMEPAGE = "http://www.openssl.org/"
+>> BUGTRACKER = "http://www.openssl.org/news/vulnerabilities.html"
+>> SECTION = "libs/network"
+>>
+>> # "openssl" here actually means both OpenSSL and SSLeay licenses apply
+>> # (see meta/files/common-licenses/OpenSSL to which "openssl" is
+>> SPDXLICENSEMAPped)
+>> LICENSE = "openssl"
+>> LIC_FILES_CHKSUM = "file://LICENSE;md5=27ffa5d74bb5a337056c14b2ef93fbf6"
+>>
+>> DEPENDS = "hostperl-runtime-native"
+>>
+>> SRC_URI = "http://www.openssl.org/source/openssl-${PV}.tar.gz \
+>>            file://run-ptest \
+>>            "
+>>
+>> SRC_URI_append_class-nativesdk = " \
+>>            file://environment.d-openssl.sh \
+>>            "
+>>
+>> SRC_URI[sha256sum] =
+>> "e7aff292be21c259c6af26469c7a9b3ba26e9abaaffd325e3dccc9785256c431"
+>>
+>> inherit lib_package multilib_header multilib_script ptest
+>> MULTILIB_SCRIPTS = "${PN}-bin:${bindir}/c_rehash"
+>>
+>> PACKAGECONFIG ?= ""
+>> PACKAGECONFIG_class-native = ""
+>> PACKAGECONFIG_class-nativesdk = ""
+>>
+>> PACKAGECONFIG[cryptodev-linux] =
+>> "enable-devcryptoeng,disable-devcryptoeng,cryptodev-linux,,cryptodev-module"
+>>
+>> B = "${WORKDIR}/build"
+>> do_configure[cleandirs] = "${B}"
+>>
+>> #| ./libcrypto.so: undefined reference to `getcontext'
+>> #| ./libcrypto.so: undefined reference to `setcontext'
+>> #| ./libcrypto.so: undefined reference to `makecontext'
+>> EXTRA_OECONF_append_libc-musl = " no-async"
+>> EXTRA_OECONF_append_libc-musl_powerpc64 = " no-asm"
+>>
+>> # adding devrandom prevents openssl from using getrandom() which is
+>> not available on older glibc versions
+>> # (native versions can be built with newer glibc, but then relocated
+>> onto a system with older glibc)
+>> EXTRA_OECONF_class-native = "--with-rand-seed=os,devrandom"
+>> EXTRA_OECONF_class-nativesdk = "--with-rand-seed=os,devrandom"
+>>
+>> # Relying on hardcoded built-in paths causes openssl-native to not be
+>> relocateable from sstate.
+>> CFLAGS_append_class-native = " -DOPENSSLDIR=/not/builtin
+>> -DENGINESDIR=/not/builtin"
+>> CFLAGS_append_class-nativesdk = " -DOPENSSLDIR=/not/builtin
+>> -DENGINESDIR=/not/builtin"
+>>
+>> do_configure () {
+>> os=${HOST_OS}
+>> case $os in
+>> linux-gnueabi |\
+>> linux-gnuspe |\
+>> linux-musleabi |\
+>> linux-muslspe |\
+>> linux-musl )
+>> os=linux
+>> ;;
+>> *)
+>> ;;
+>> esac
+>> target="$os-${HOST_ARCH}"
+>> case $target in
+>> linux-arm*)
+>> target=linux-armv4
+>> ;;
+>> linux-aarch64*)
+>> target=linux-aarch64
+>> ;;
+>> linux-i?86 | linux-viac3)
+>> target=linux-x86
+>> ;;
+>> linux-gnux32-x86_64 | linux-muslx32-x86_64 )
+>> target=linux-x32
+>> ;;
+>> linux-gnu64-x86_64)
+>> target=linux-x86_64
+>> ;;
+>> linux-mips | linux-mipsel)
+>> # specifying TARGET_CC_ARCH prevents openssl from (incorrectly) adding
+>> target architecture flags
+>> target="linux-mips32 ${TARGET_CC_ARCH}"
+>> ;;
+>> linux-gnun32-mips*)
+>> target=linux-mips64
+>> ;;
+>> linux-*-mips64 | linux-mips64 | linux-*-mips64el | linux-mips64el)
+>> target=linux64-mips64
+>> ;;
+>> linux-microblaze* | linux-nios2* | linux-sh3 | linux-sh4 | linux-arc*)
+>> target=linux-generic32
+>> ;;
+>> linux-powerpc)
+>> target=linux-ppc
+>> ;;
+>> linux-powerpc64)
+>> target=linux-ppc64
+>> ;;
+>> linux-powerpc64le)
+>> target=linux-ppc64le
+>> ;;
+>> linux-riscv32)
+>> target=linux-generic32
+>> ;;
+>> linux-riscv64)
+>> target=linux-generic64
+>> ;;
+>> linux-sparc | linux-supersparc)
+>> target=linux-sparcv9
+>> ;;
+>> esac
+>>
+>> useprefix=${prefix}
+>> if [ "x$useprefix" = "x" ]; then
+>> useprefix=/
+>> fi
+>> # WARNING: do not set compiler/linker flags (-I/-D etc.) in
+>> EXTRA_OECONF, as they will fully replace the
+>> # environment variables set by bitbake. Adjust the environment
+>> variables instead.
+>> HASHBANGPERL="/usr/bin/env perl" PERL=perl
+>> PERL5LIB="${S}/external/perl/Text-Template-1.46/lib/" \
+>> perl ${S}/Configure ${EXTRA_OECONF} ${PACKAGECONFIG_CONFARGS}
+>> --prefix=$useprefix --openssldir=${libdir}/ssl-1.0 --libdir=${libdir}
+>> $target
+>> perl ${B}/configdata.pm --dump
+>> }
+>>
+>> do_install () {
+>> oe_runmake DESTDIR="${D}" MANDIR="${mandir}" MANSUFFIX=ssl install
+>>
+>> oe_multilib_header openssl/opensslconf.h
+>>
+>> # Create SSL structure for packages such as ca-certificates which
+>> # contain hard-coded paths to /etc/ssl. Debian does the same.
+>> install -d ${D}${sysconfdir}/ssl
+>> mv ${D}${libdir}/ssl-1.0/certs \
+>>    ${D}${libdir}/ssl-1.0/private \
+>>    ${D}${libdir}/ssl-1.0/openssl.cnf \
+>>    ${D}${sysconfdir}/ssl/
+>>
+>> # Although absolute symlinks would be OK for the target, they become
+>> # invalid if native or nativesdk are relocated from sstate.
+>> ln -sf ${@oe.path.relative('${libdir}/ssl-1.0',
+>> '${sysconfdir}/ssl/certs')} ${D}${libdir}/ssl-1.0/certs
+>> ln -sf ${@oe.path.relative('${libdir}/ssl-1.0',
+>> '${sysconfdir}/ssl/private')} ${D}${libdir}/ssl-1.0/private
+>> ln -sf ${@oe.path.relative('${libdir}/ssl-1.0',
+>> '${sysconfdir}/ssl/openssl.cnf')} ${D}${libdir}/ssl-1.0/openssl.cnf
+>> }
+>>
+>> do_install_append_class-native () {
+>> create_wrapper ${D}${bindir}/openssl \
+>>     OPENSSL_CONF=${libdir}/ssl-1.0/openssl.cnf \
+>>     SSL_CERT_DIR=${libdir}/ssl-1.0/certs \
+>>     SSL_CERT_FILE=${libdir}/ssl-1.0/cert.pem \
+>>     OPENSSL_ENGINES=${libdir}/engines-1.0
+>> }
+>>
+>> do_install_append_class-nativesdk () {
+>> mkdir -p ${D}${SDKPATHNATIVE}/environment-setup.d
+>> install -m 644 ${WORKDIR}/environment.d-openssl.sh
+>> ${D}${SDKPATHNATIVE}/environment-setup.d/openssl.sh
+>> sed 's|/usr/lib/ssl/|/usr/lib/ssl-1.0/|g' -i
+>> ${D}${SDKPATHNATIVE}/environment-setup.d/openssl.sh
+>> }
+>>
+>> PTEST_BUILD_HOST_FILES += "configdata.pm"
+>> PTEST_BUILD_HOST_PATTERN = "perl_version ="
+>> do_install_ptest () {
+>> # Prune the build tree
+>> rm -f ${B}/fuzz/*.* ${B}/test/*.*
+>>
+>> cp ${S}/Configure ${B}/configdata.pm ${D}${PTEST_PATH}
+>> cp -r ${S}/external ${B}/test ${S}/test ${B}/fuzz ${S}/util ${B}/util
+>> ${D}${PTEST_PATH}
+>>
+>> # For test_shlibload
+>> ln -s ${libdir}/libcrypto.so.1.0 ${D}${PTEST_PATH}/
+>> ln -s ${libdir}/libssl.so.1.0 ${D}${PTEST_PATH}/
+>>
+>> install -d ${D}${PTEST_PATH}/apps
+>> ln -s ${bindir}/openssl ${D}${PTEST_PATH}/apps
+>> install -m644 ${S}/apps/*.pem ${S}/apps/*.srl ${S}/apps/openssl.cnf
+>> ${D}${PTEST_PATH}/apps
+>> install -m755 ${B}/apps/CA.pl ${D}${PTEST_PATH}/apps
+>>
+>> install -d ${D}${PTEST_PATH}/engines
+>> install -m755 ${B}/engines/ossltest.so ${D}${PTEST_PATH}/engines
+>> }
+>>
+>> # Add the openssl.cnf file to the openssl-conf package. Make the libcrypto
+>> # package RRECOMMENDS on this package. This will enable the configuration
+>> # file to be installed for both the openssl-bin package and the libcrypto
+>> # package since the openssl-bin package depends on the libcrypto package.
+>>
+>> PACKAGES =+ "libcrypto libssl openssl-conf ${PN}-engines ${PN}-misc"
+>>
+>> FILES_libcrypto = "${libdir}/libcrypto${SOLIBS}"
+>> FILES_libssl = "${libdir}/libssl${SOLIBS}"
+>> FILES_openssl-conf = "${sysconfdir}/ssl/openssl.cnf \
+>>                       ${libdir}/ssl-1.0/openssl.cnf* \
+>>                       "
+>> FILES_${PN}-engines = "${libdir}/engines-1.0"
+>> FILES_${PN}-misc = "${libdir}/ssl-1.0/misc"
+>> FILES_${PN} =+ "${libdir}/ssl-1.0/*"
+>> FILES_${PN}_append_class-nativesdk = "
+>> ${SDKPATHNATIVE}/environment-setup.d/openssl.sh"
+>>
+>> CONFFILES_openssl-conf = "${sysconfdir}/ssl/openssl.cnf"
+>>
+>> RRECOMMENDS_libcrypto += "openssl-conf"
+>> RDEPENDS_${PN}-ptest += "openssl-bin perl perl-modules bash"
+>>
+>> RDEPENDS_${PN}-bin += "openssl-conf"
+>>
+>> BBCLASSEXTEND = "native nativesdk"
+>>
+>> CVE_PRODUCT = "openssl:openssl"
+>>
+>> # Only affects OpenSSL >= 1.1.1 in combination with Apache < 2.4.37
+>> # Apache in meta-webserver is already recent enough
+>> CVE_CHECK_WHITELIST += "CVE-2019-0190"
+>>
+>>
+>> I understand that I need to figure out the configs yourself, but I get
+>> this error when executing the
+>>
+>> bitbake openssl-native
+>>
+>> ERROR: Execution of
+>> '/home/ivr/work/yocto_orig/build/tmp/work/x86_64-linux/openssl-native/1.0.2j-r0/temp/run.do_configure.1071458'
+>> failed with exit code 2:
+>> | unable to read opensslv.h:No such file or directory
+>> | Configuring for linux-x86_64
+>> |     no-devcryptoeng [option]   OPENSSL_NO_DEVCRYPTOENG (skip dir)
+>> |     no-ec_nistp_64_gcc_128 [default]  OPENSSL_NO_EC_NISTP_64_GCC_128
+>> (skip dir)
+>> |     no-gmp          [default]  OPENSSL_NO_GMP (skip dir)
+>> |     no-jpake        [experimental] OPENSSL_NO_JPAKE (skip dir)
+>> |     no-krb5         [krb5-flavor not specified] OPENSSL_NO_KRB5
+>> |     no-libunbound   [experimental] OPENSSL_NO_LIBUNBOUND (skip dir)
+>> |     no-md2          [default]  OPENSSL_NO_MD2 (skip dir)
+>> |     no-rc5          [default]  OPENSSL_NO_RC5 (skip dir)
+>> |     no-rfc3779      [default]  OPENSSL_NO_RFC3779 (skip dir)
+>> |     no-sctp         [default]  OPENSSL_NO_SCTP (skip dir)
+>> |     no-shared       [default]
+>> |     no-ssl-trace    [default]  OPENSSL_NO_SSL_TRACE (skip dir)
+>> |     no-ssl2         [default]  OPENSSL_NO_SSL2 (skip dir)
+>> |     no-store        [experimental] OPENSSL_NO_STORE (skip dir)
+>> |     no-unit-test    [default]  OPENSSL_NO_UNIT_TEST (skip dir)
+>> |     no-weak-ssl-ciphers [default]  OPENSSL_NO_WEAK_SSL_CIPHERS (skip dir)
+>> |     no-zlib         [default]
+>> |     no-zlib-dynamic [default]
+>> | IsMK1MF=0
+>> | WARNING: exit code 2 from a shell command.
+>> |
+>>
+>> As far as I can understand, the opensslv.h file is generated just at
+>> the configuration stage, why does the configuration stage give an
+>> error of the absence of this file?
+>>
+>> 
+>>
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] downgrade openssl libraryes
+  2021-08-30 14:56   ` Ivan Riabtsov
+@ 2021-08-31 10:26     ` Bas Mevissen
+  0 siblings, 0 replies; 4+ messages in thread
+From: Bas Mevissen @ 2021-08-31 10:26 UTC (permalink / raw)
+  To: Ivan Riabtsov; +Cc: Alexander Kanavin, Yocto-mailing-list
+
+On 2021-08-30 16:56, Ivan Riabtsov wrote:
+> I have phytec imx6ul board with a preinstalled os. On this os opessl
+> version is 1.0.2j i need to build nginx for this board, but i can't
+> build yocto same version as i have on board, so I grabbed a newer
+> version of yocto from phytec site, rolled back glibc and try to roll
+> back openssl. I do not want to flash the device, as I'm afraid to get
+> brick
+> 
+
+Why are you afraid to brick the device? You can use mfgtool to reflash 
+the device from scratch, including u-boot. It works with a special boot 
+mode pin setting and uses an USB port. Depending on the board, one might 
+need to buy or create a custom cable.
+
+Bas.
+
+> пн, 30 авг. 2021 г. в 16:51, Alexander Kanavin 
+> <alex.kanavin@gmail.com>:
+>> 
+>> openssl 1.0.2 went out of support at the end of 2019 and you should 
+>> not be using it. What is the problem you need to solve?
+>> 
+>> Alex
+>> 
+>> On Mon, 30 Aug 2021 at 15:33, Ivan Riabtsov <ivriabtsov@gmail.com> 
+>> wrote:
+>>> 
+>>> hello i am trying to rollback openssl version from 1.1.1i to 1.0.2j.
+>>> Copied the recipe openssl_1.1.1i.bb to openssl_1.0.2j.bb, saved the
+>>> openssl_1.1.1i.bb version with the name openssl_1.1.1i.bb.backup
+>>> 
+>>> Отредактировал новый файл, вот разница в файлах:
+>>> 
+>>> diff -Nau ./openssl_1.1.1i.bb.backup ./openssl_1.0.2j.bb
+>>> --- ./openssl_1.1.1i.bb.backup 2021-08-27 14:46:07.085808702 +0300
+>>> +++ ./openssl_1.0.2j.bb 2021-08-27 16:12:14.216430734 +0300
+>>> @@ -7,23 +7,19 @@
+>>>  # "openssl" here actually means both OpenSSL and SSLeay licenses 
+>>> apply
+>>>  # (see meta/files/common-licenses/OpenSSL to which "openssl" is
+>>> SPDXLICENSEMAPped)
+>>>  LICENSE = "openssl"
+>>> -LIC_FILES_CHKSUM = 
+>>> "file://LICENSE;md5=d343e62fc9c833710bbbed25f27364c8"
+>>> +LIC_FILES_CHKSUM = 
+>>> "file://LICENSE;md5=27ffa5d74bb5a337056c14b2ef93fbf6"
+>>> 
+>>>  DEPENDS = "hostperl-runtime-native"
+>>> 
+>>>  SRC_URI = "http://www.openssl.org/source/openssl-${PV}.tar.gz \
+>>>             file://run-ptest \
+>>> -           file://0001-skip-test_symbol_presence.patch \
+>>> -           
+>>> file://0001-buildinfo-strip-sysroot-and-debug-prefix-map-from-co.patch
+>>> \
+>>> -           file://afalg.patch \
+>>> -           file://reproducible.patch \
+>>>             "
+>>> 
+>>>  SRC_URI_append_class-nativesdk = " \
+>>>             file://environment.d-openssl.sh \
+>>>             "
+>>> 
+>>> -SRC_URI[sha256sum] =
+>>> "e8be6a35fe41d10603c3cc635e93289ed00bf34b79671a3a4de64fcee00d5242"
+>>> +SRC_URI[sha256sum] =
+>>> "e7aff292be21c259c6af26469c7a9b3ba26e9abaaffd325e3dccc9785256c431"
+>>> 
+>>>  inherit lib_package multilib_header multilib_script ptest
+>>>  MULTILIB_SCRIPTS = "${PN}-bin:${bindir}/c_rehash"
+>>> @@ -122,7 +118,7 @@
+>>>   # WARNING: do not set compiler/linker flags (-I/-D etc.) in
+>>> EXTRA_OECONF, as they will fully replace the
+>>>   # environment variables set by bitbake. Adjust the environment
+>>> variables instead.
+>>>   HASHBANGPERL="/usr/bin/env perl" PERL=perl
+>>> PERL5LIB="${S}/external/perl/Text-Template-1.46/lib/" \
+>>> - perl ${S}/Configure ${EXTRA_OECONF} ${PACKAGECONFIG_CONFARGS}
+>>> --prefix=$useprefix --openssldir=${libdir}/ssl-1.1 --libdir=${libdir}
+>>> $target
+>>> + perl ${S}/Configure ${EXTRA_OECONF} ${PACKAGECONFIG_CONFARGS}
+>>> --prefix=$useprefix --openssldir=${libdir}/ssl-1.0 --libdir=${libdir}
+>>> $target
+>>>   perl ${B}/configdata.pm --dump
+>>>  }
+>>> 
+>>> @@ -134,30 +130,30 @@
+>>>   # Create SSL structure for packages such as ca-certificates which
+>>>   # contain hard-coded paths to /etc/ssl. Debian does the same.
+>>>   install -d ${D}${sysconfdir}/ssl
+>>> - mv ${D}${libdir}/ssl-1.1/certs \
+>>> -    ${D}${libdir}/ssl-1.1/private \
+>>> -    ${D}${libdir}/ssl-1.1/openssl.cnf \
+>>> + mv ${D}${libdir}/ssl-1.0/certs \
+>>> +    ${D}${libdir}/ssl-1.0/private \
+>>> +    ${D}${libdir}/ssl-1.0/openssl.cnf \
+>>>      ${D}${sysconfdir}/ssl/
+>>> 
+>>>   # Although absolute symlinks would be OK for the target, they 
+>>> become
+>>>   # invalid if native or nativesdk are relocated from sstate.
+>>> - ln -sf ${@oe.path.relative('${libdir}/ssl-1.1',
+>>> '${sysconfdir}/ssl/certs')} ${D}${libdir}/ssl-1.1/certs
+>>> - ln -sf ${@oe.path.relative('${libdir}/ssl-1.1',
+>>> '${sysconfdir}/ssl/private')} ${D}${libdir}/ssl-1.1/private
+>>> - ln -sf ${@oe.path.relative('${libdir}/ssl-1.1',
+>>> '${sysconfdir}/ssl/openssl.cnf')} ${D}${libdir}/ssl-1.1/openssl.cnf
+>>> + ln -sf ${@oe.path.relative('${libdir}/ssl-1.0',
+>>> '${sysconfdir}/ssl/certs')} ${D}${libdir}/ssl-1.0/certs
+>>> + ln -sf ${@oe.path.relative('${libdir}/ssl-1.0',
+>>> '${sysconfdir}/ssl/private')} ${D}${libdir}/ssl-1.0/private
+>>> + ln -sf ${@oe.path.relative('${libdir}/ssl-1.0',
+>>> '${sysconfdir}/ssl/openssl.cnf')} ${D}${libdir}/ssl-1.0/openssl.cnf
+>>>  }
+>>> 
+>>>  do_install_append_class-native () {
+>>>   create_wrapper ${D}${bindir}/openssl \
+>>> -     OPENSSL_CONF=${libdir}/ssl-1.1/openssl.cnf \
+>>> -     SSL_CERT_DIR=${libdir}/ssl-1.1/certs \
+>>> -     SSL_CERT_FILE=${libdir}/ssl-1.1/cert.pem \
+>>> -     OPENSSL_ENGINES=${libdir}/engines-1.1
+>>> +     OPENSSL_CONF=${libdir}/ssl-1.0/openssl.cnf \
+>>> +     SSL_CERT_DIR=${libdir}/ssl-1.0/certs \
+>>> +     SSL_CERT_FILE=${libdir}/ssl-1.0/cert.pem \
+>>> +     OPENSSL_ENGINES=${libdir}/engines-1.0
+>>>  }
+>>> 
+>>>  do_install_append_class-nativesdk () {
+>>>   mkdir -p ${D}${SDKPATHNATIVE}/environment-setup.d
+>>>   install -m 644 ${WORKDIR}/environment.d-openssl.sh
+>>> ${D}${SDKPATHNATIVE}/environment-setup.d/openssl.sh
+>>> - sed 's|/usr/lib/ssl/|/usr/lib/ssl-1.1/|g' -i
+>>> ${D}${SDKPATHNATIVE}/environment-setup.d/openssl.sh
+>>> + sed 's|/usr/lib/ssl/|/usr/lib/ssl-1.0/|g' -i
+>>> ${D}${SDKPATHNATIVE}/environment-setup.d/openssl.sh
+>>>  }
+>>> 
+>>>  PTEST_BUILD_HOST_FILES += "configdata.pm"
+>>> @@ -170,8 +166,8 @@
+>>>   cp -r ${S}/external ${B}/test ${S}/test ${B}/fuzz ${S}/util
+>>> ${B}/util ${D}${PTEST_PATH}
+>>> 
+>>>   # For test_shlibload
+>>> - ln -s ${libdir}/libcrypto.so.1.1 ${D}${PTEST_PATH}/
+>>> - ln -s ${libdir}/libssl.so.1.1 ${D}${PTEST_PATH}/
+>>> + ln -s ${libdir}/libcrypto.so.1.0 ${D}${PTEST_PATH}/
+>>> + ln -s ${libdir}/libssl.so.1.0 ${D}${PTEST_PATH}/
+>>> 
+>>>   install -d ${D}${PTEST_PATH}/apps
+>>>   ln -s ${bindir}/openssl ${D}${PTEST_PATH}/apps
+>>> @@ -192,11 +188,11 @@
+>>>  FILES_libcrypto = "${libdir}/libcrypto${SOLIBS}"
+>>>  FILES_libssl = "${libdir}/libssl${SOLIBS}"
+>>>  FILES_openssl-conf = "${sysconfdir}/ssl/openssl.cnf \
+>>> -                      ${libdir}/ssl-1.1/openssl.cnf* \
+>>> +                      ${libdir}/ssl-1.0/openssl.cnf* \
+>>>                        "
+>>> -FILES_${PN}-engines = "${libdir}/engines-1.1"
+>>> -FILES_${PN}-misc = "${libdir}/ssl-1.1/misc"
+>>> -FILES_${PN} =+ "${libdir}/ssl-1.1/*"
+>>> +FILES_${PN}-engines = "${libdir}/engines-1.0"
+>>> +FILES_${PN}-misc = "${libdir}/ssl-1.0/misc"
+>>> +FILES_${PN} =+ "${libdir}/ssl-1.0/*"
+>>>  FILES_${PN}_append_class-nativesdk = "
+>>> ${SDKPATHNATIVE}/environment-setup.d/openssl.sh"
+>>> 
+>>>  CONFFILES_openssl-conf = "${sysconfdir}/ssl/openssl.cnf"
+>>> 
+>>> 
+>>> вот новый получившийся файл:
+>>> 
+>>> 
+>>> cat openssl_1.0.2j.bb
+>>> SUMMARY = "Secure Socket Layer"
+>>> DESCRIPTION = "Secure Socket Layer (SSL) binary and related
+>>> cryptographic tools."
+>>> HOMEPAGE = "http://www.openssl.org/"
+>>> BUGTRACKER = "http://www.openssl.org/news/vulnerabilities.html"
+>>> SECTION = "libs/network"
+>>> 
+>>> # "openssl" here actually means both OpenSSL and SSLeay licenses 
+>>> apply
+>>> # (see meta/files/common-licenses/OpenSSL to which "openssl" is
+>>> SPDXLICENSEMAPped)
+>>> LICENSE = "openssl"
+>>> LIC_FILES_CHKSUM = 
+>>> "file://LICENSE;md5=27ffa5d74bb5a337056c14b2ef93fbf6"
+>>> 
+>>> DEPENDS = "hostperl-runtime-native"
+>>> 
+>>> SRC_URI = "http://www.openssl.org/source/openssl-${PV}.tar.gz \
+>>>            file://run-ptest \
+>>>            "
+>>> 
+>>> SRC_URI_append_class-nativesdk = " \
+>>>            file://environment.d-openssl.sh \
+>>>            "
+>>> 
+>>> SRC_URI[sha256sum] =
+>>> "e7aff292be21c259c6af26469c7a9b3ba26e9abaaffd325e3dccc9785256c431"
+>>> 
+>>> inherit lib_package multilib_header multilib_script ptest
+>>> MULTILIB_SCRIPTS = "${PN}-bin:${bindir}/c_rehash"
+>>> 
+>>> PACKAGECONFIG ?= ""
+>>> PACKAGECONFIG_class-native = ""
+>>> PACKAGECONFIG_class-nativesdk = ""
+>>> 
+>>> PACKAGECONFIG[cryptodev-linux] =
+>>> "enable-devcryptoeng,disable-devcryptoeng,cryptodev-linux,,cryptodev-module"
+>>> 
+>>> B = "${WORKDIR}/build"
+>>> do_configure[cleandirs] = "${B}"
+>>> 
+>>> #| ./libcrypto.so: undefined reference to `getcontext'
+>>> #| ./libcrypto.so: undefined reference to `setcontext'
+>>> #| ./libcrypto.so: undefined reference to `makecontext'
+>>> EXTRA_OECONF_append_libc-musl = " no-async"
+>>> EXTRA_OECONF_append_libc-musl_powerpc64 = " no-asm"
+>>> 
+>>> # adding devrandom prevents openssl from using getrandom() which is
+>>> not available on older glibc versions
+>>> # (native versions can be built with newer glibc, but then relocated
+>>> onto a system with older glibc)
+>>> EXTRA_OECONF_class-native = "--with-rand-seed=os,devrandom"
+>>> EXTRA_OECONF_class-nativesdk = "--with-rand-seed=os,devrandom"
+>>> 
+>>> # Relying on hardcoded built-in paths causes openssl-native to not be
+>>> relocateable from sstate.
+>>> CFLAGS_append_class-native = " -DOPENSSLDIR=/not/builtin
+>>> -DENGINESDIR=/not/builtin"
+>>> CFLAGS_append_class-nativesdk = " -DOPENSSLDIR=/not/builtin
+>>> -DENGINESDIR=/not/builtin"
+>>> 
+>>> do_configure () {
+>>> os=${HOST_OS}
+>>> case $os in
+>>> linux-gnueabi |\
+>>> linux-gnuspe |\
+>>> linux-musleabi |\
+>>> linux-muslspe |\
+>>> linux-musl )
+>>> os=linux
+>>> ;;
+>>> *)
+>>> ;;
+>>> esac
+>>> target="$os-${HOST_ARCH}"
+>>> case $target in
+>>> linux-arm*)
+>>> target=linux-armv4
+>>> ;;
+>>> linux-aarch64*)
+>>> target=linux-aarch64
+>>> ;;
+>>> linux-i?86 | linux-viac3)
+>>> target=linux-x86
+>>> ;;
+>>> linux-gnux32-x86_64 | linux-muslx32-x86_64 )
+>>> target=linux-x32
+>>> ;;
+>>> linux-gnu64-x86_64)
+>>> target=linux-x86_64
+>>> ;;
+>>> linux-mips | linux-mipsel)
+>>> # specifying TARGET_CC_ARCH prevents openssl from (incorrectly) 
+>>> adding
+>>> target architecture flags
+>>> target="linux-mips32 ${TARGET_CC_ARCH}"
+>>> ;;
+>>> linux-gnun32-mips*)
+>>> target=linux-mips64
+>>> ;;
+>>> linux-*-mips64 | linux-mips64 | linux-*-mips64el | linux-mips64el)
+>>> target=linux64-mips64
+>>> ;;
+>>> linux-microblaze* | linux-nios2* | linux-sh3 | linux-sh4 | 
+>>> linux-arc*)
+>>> target=linux-generic32
+>>> ;;
+>>> linux-powerpc)
+>>> target=linux-ppc
+>>> ;;
+>>> linux-powerpc64)
+>>> target=linux-ppc64
+>>> ;;
+>>> linux-powerpc64le)
+>>> target=linux-ppc64le
+>>> ;;
+>>> linux-riscv32)
+>>> target=linux-generic32
+>>> ;;
+>>> linux-riscv64)
+>>> target=linux-generic64
+>>> ;;
+>>> linux-sparc | linux-supersparc)
+>>> target=linux-sparcv9
+>>> ;;
+>>> esac
+>>> 
+>>> useprefix=${prefix}
+>>> if [ "x$useprefix" = "x" ]; then
+>>> useprefix=/
+>>> fi
+>>> # WARNING: do not set compiler/linker flags (-I/-D etc.) in
+>>> EXTRA_OECONF, as they will fully replace the
+>>> # environment variables set by bitbake. Adjust the environment
+>>> variables instead.
+>>> HASHBANGPERL="/usr/bin/env perl" PERL=perl
+>>> PERL5LIB="${S}/external/perl/Text-Template-1.46/lib/" \
+>>> perl ${S}/Configure ${EXTRA_OECONF} ${PACKAGECONFIG_CONFARGS}
+>>> --prefix=$useprefix --openssldir=${libdir}/ssl-1.0 --libdir=${libdir}
+>>> $target
+>>> perl ${B}/configdata.pm --dump
+>>> }
+>>> 
+>>> do_install () {
+>>> oe_runmake DESTDIR="${D}" MANDIR="${mandir}" MANSUFFIX=ssl install
+>>> 
+>>> oe_multilib_header openssl/opensslconf.h
+>>> 
+>>> # Create SSL structure for packages such as ca-certificates which
+>>> # contain hard-coded paths to /etc/ssl. Debian does the same.
+>>> install -d ${D}${sysconfdir}/ssl
+>>> mv ${D}${libdir}/ssl-1.0/certs \
+>>>    ${D}${libdir}/ssl-1.0/private \
+>>>    ${D}${libdir}/ssl-1.0/openssl.cnf \
+>>>    ${D}${sysconfdir}/ssl/
+>>> 
+>>> # Although absolute symlinks would be OK for the target, they become
+>>> # invalid if native or nativesdk are relocated from sstate.
+>>> ln -sf ${@oe.path.relative('${libdir}/ssl-1.0',
+>>> '${sysconfdir}/ssl/certs')} ${D}${libdir}/ssl-1.0/certs
+>>> ln -sf ${@oe.path.relative('${libdir}/ssl-1.0',
+>>> '${sysconfdir}/ssl/private')} ${D}${libdir}/ssl-1.0/private
+>>> ln -sf ${@oe.path.relative('${libdir}/ssl-1.0',
+>>> '${sysconfdir}/ssl/openssl.cnf')} ${D}${libdir}/ssl-1.0/openssl.cnf
+>>> }
+>>> 
+>>> do_install_append_class-native () {
+>>> create_wrapper ${D}${bindir}/openssl \
+>>>     OPENSSL_CONF=${libdir}/ssl-1.0/openssl.cnf \
+>>>     SSL_CERT_DIR=${libdir}/ssl-1.0/certs \
+>>>     SSL_CERT_FILE=${libdir}/ssl-1.0/cert.pem \
+>>>     OPENSSL_ENGINES=${libdir}/engines-1.0
+>>> }
+>>> 
+>>> do_install_append_class-nativesdk () {
+>>> mkdir -p ${D}${SDKPATHNATIVE}/environment-setup.d
+>>> install -m 644 ${WORKDIR}/environment.d-openssl.sh
+>>> ${D}${SDKPATHNATIVE}/environment-setup.d/openssl.sh
+>>> sed 's|/usr/lib/ssl/|/usr/lib/ssl-1.0/|g' -i
+>>> ${D}${SDKPATHNATIVE}/environment-setup.d/openssl.sh
+>>> }
+>>> 
+>>> PTEST_BUILD_HOST_FILES += "configdata.pm"
+>>> PTEST_BUILD_HOST_PATTERN = "perl_version ="
+>>> do_install_ptest () {
+>>> # Prune the build tree
+>>> rm -f ${B}/fuzz/*.* ${B}/test/*.*
+>>> 
+>>> cp ${S}/Configure ${B}/configdata.pm ${D}${PTEST_PATH}
+>>> cp -r ${S}/external ${B}/test ${S}/test ${B}/fuzz ${S}/util ${B}/util
+>>> ${D}${PTEST_PATH}
+>>> 
+>>> # For test_shlibload
+>>> ln -s ${libdir}/libcrypto.so.1.0 ${D}${PTEST_PATH}/
+>>> ln -s ${libdir}/libssl.so.1.0 ${D}${PTEST_PATH}/
+>>> 
+>>> install -d ${D}${PTEST_PATH}/apps
+>>> ln -s ${bindir}/openssl ${D}${PTEST_PATH}/apps
+>>> install -m644 ${S}/apps/*.pem ${S}/apps/*.srl ${S}/apps/openssl.cnf
+>>> ${D}${PTEST_PATH}/apps
+>>> install -m755 ${B}/apps/CA.pl ${D}${PTEST_PATH}/apps
+>>> 
+>>> install -d ${D}${PTEST_PATH}/engines
+>>> install -m755 ${B}/engines/ossltest.so ${D}${PTEST_PATH}/engines
+>>> }
+>>> 
+>>> # Add the openssl.cnf file to the openssl-conf package. Make the 
+>>> libcrypto
+>>> # package RRECOMMENDS on this package. This will enable the 
+>>> configuration
+>>> # file to be installed for both the openssl-bin package and the 
+>>> libcrypto
+>>> # package since the openssl-bin package depends on the libcrypto 
+>>> package.
+>>> 
+>>> PACKAGES =+ "libcrypto libssl openssl-conf ${PN}-engines ${PN}-misc"
+>>> 
+>>> FILES_libcrypto = "${libdir}/libcrypto${SOLIBS}"
+>>> FILES_libssl = "${libdir}/libssl${SOLIBS}"
+>>> FILES_openssl-conf = "${sysconfdir}/ssl/openssl.cnf \
+>>>                       ${libdir}/ssl-1.0/openssl.cnf* \
+>>>                       "
+>>> FILES_${PN}-engines = "${libdir}/engines-1.0"
+>>> FILES_${PN}-misc = "${libdir}/ssl-1.0/misc"
+>>> FILES_${PN} =+ "${libdir}/ssl-1.0/*"
+>>> FILES_${PN}_append_class-nativesdk = "
+>>> ${SDKPATHNATIVE}/environment-setup.d/openssl.sh"
+>>> 
+>>> CONFFILES_openssl-conf = "${sysconfdir}/ssl/openssl.cnf"
+>>> 
+>>> RRECOMMENDS_libcrypto += "openssl-conf"
+>>> RDEPENDS_${PN}-ptest += "openssl-bin perl perl-modules bash"
+>>> 
+>>> RDEPENDS_${PN}-bin += "openssl-conf"
+>>> 
+>>> BBCLASSEXTEND = "native nativesdk"
+>>> 
+>>> CVE_PRODUCT = "openssl:openssl"
+>>> 
+>>> # Only affects OpenSSL >= 1.1.1 in combination with Apache < 2.4.37
+>>> # Apache in meta-webserver is already recent enough
+>>> CVE_CHECK_WHITELIST += "CVE-2019-0190"
+>>> 
+>>> 
+>>> I understand that I need to figure out the configs yourself, but I 
+>>> get
+>>> this error when executing the
+>>> 
+>>> bitbake openssl-native
+>>> 
+>>> ERROR: Execution of
+>>> '/home/ivr/work/yocto_orig/build/tmp/work/x86_64-linux/openssl-native/1.0.2j-r0/temp/run.do_configure.1071458'
+>>> failed with exit code 2:
+>>> | unable to read opensslv.h:No such file or directory
+>>> | Configuring for linux-x86_64
+>>> |     no-devcryptoeng [option]   OPENSSL_NO_DEVCRYPTOENG (skip dir)
+>>> |     no-ec_nistp_64_gcc_128 [default]  
+>>> OPENSSL_NO_EC_NISTP_64_GCC_128
+>>> (skip dir)
+>>> |     no-gmp          [default]  OPENSSL_NO_GMP (skip dir)
+>>> |     no-jpake        [experimental] OPENSSL_NO_JPAKE (skip dir)
+>>> |     no-krb5         [krb5-flavor not specified] OPENSSL_NO_KRB5
+>>> |     no-libunbound   [experimental] OPENSSL_NO_LIBUNBOUND (skip dir)
+>>> |     no-md2          [default]  OPENSSL_NO_MD2 (skip dir)
+>>> |     no-rc5          [default]  OPENSSL_NO_RC5 (skip dir)
+>>> |     no-rfc3779      [default]  OPENSSL_NO_RFC3779 (skip dir)
+>>> |     no-sctp         [default]  OPENSSL_NO_SCTP (skip dir)
+>>> |     no-shared       [default]
+>>> |     no-ssl-trace    [default]  OPENSSL_NO_SSL_TRACE (skip dir)
+>>> |     no-ssl2         [default]  OPENSSL_NO_SSL2 (skip dir)
+>>> |     no-store        [experimental] OPENSSL_NO_STORE (skip dir)
+>>> |     no-unit-test    [default]  OPENSSL_NO_UNIT_TEST (skip dir)
+>>> |     no-weak-ssl-ciphers [default]  OPENSSL_NO_WEAK_SSL_CIPHERS 
+>>> (skip dir)
+>>> |     no-zlib         [default]
+>>> |     no-zlib-dynamic [default]
+>>> | IsMK1MF=0
+>>> | WARNING: exit code 2 from a shell command.
+>>> |
+>>> 
+>>> As far as I can understand, the opensslv.h file is generated just at
+>>> the configuration stage, why does the configuration stage give an
+>>> error of the absence of this file?
+>>> 
+>>> 
+>>> 
+> 
+> 
+> 
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+end of thread, other threads:[~2021-08-31 10:26 UTC | newest]
+
+Thread overview: 4+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-08-30 13:32 downgrade openssl libraryes Ivan Riabtsov
+2021-08-30 13:50 ` [yocto] " Alexander Kanavin
+2021-08-30 14:56   ` Ivan Riabtsov
+2021-08-31 10:26     ` Bas Mevissen
+

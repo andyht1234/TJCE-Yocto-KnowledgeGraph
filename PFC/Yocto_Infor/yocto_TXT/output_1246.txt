@@ -1,0 +1,180 @@
+* Python3 project without setup.py
+@ 2022-11-03 23:03 John Klug
+  2022-11-04  8:05 ` [yocto] " Alexander Kanavin
+  2022-11-04 11:05 ` Ross Burton
+  0 siblings, 2 replies; 4+ messages in thread
+From: John Klug @ 2022-11-03 23:03 UTC (permalink / raw)
+  To: "yocto@lists.yoctoproject.org"
+
+I am using Dunfell.
+
+What should I do in a recipe if a python project has no setup.py?
+
+Specifically:
+https://github.com/pyhys/minimalmodbus   
+
+I tried adding a trivial setup.py:
+
+>from setuptools import setup
+>if __name__ == '__main__':
+>    setup()
+
+This results in the recipe failing while trying to "import serial" from the python code in the project:
+
+Log data follows:
+| DEBUG: Executing shell function do_compile
+| Traceback (most recent call last):
+|   File "setup.py", line 4, in <module>
+|     setup()
+
+   ...
+
+|   File "/home/jklug/mlinux/build/tmp/work/arm926ejste-mlinux-linux-gnueabi/python3-minimalmodbus/2.0.1-r0/git/minimalmodbus.py", line 38, in <module>
+|     import serial
+| ModuleNotFoundError: No module named 'serial'
+
+
+
+John Klug
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] Python3 project without setup.py
+  2022-11-03 23:03 Python3 project without setup.py John Klug
+@ 2022-11-04  8:05 ` Alexander Kanavin
+  2022-11-04 11:05 ` Ross Burton
+  1 sibling, 0 replies; 4+ messages in thread
+From: Alexander Kanavin @ 2022-11-04  8:05 UTC (permalink / raw)
+  To: John Klug; +Cc: yocto
+
+This is probably not available in dunfel, but in master there are
+bbclasses that handle this:
+
+inherit pypi python_setuptools_build_meta
+
+So try with master, and then consider your options.
+
+Alex
+
+On Fri, 4 Nov 2022 at 00:03, John Klug <john.klug@multitech.com> wrote:
+>
+> I am using Dunfell.
+>
+> What should I do in a recipe if a python project has no setup.py?
+>
+> Specifically:
+> https://github.com/pyhys/minimalmodbus
+>
+> I tried adding a trivial setup.py:
+>
+> >from setuptools import setup
+> >if __name__ == '__main__':
+> >    setup()
+>
+> This results in the recipe failing while trying to "import serial" from the python code in the project:
+>
+> Log data follows:
+> | DEBUG: Executing shell function do_compile
+> | Traceback (most recent call last):
+> |   File "setup.py", line 4, in <module>
+> |     setup()
+>
+>    ...
+>
+> |   File "/home/jklug/mlinux/build/tmp/work/arm926ejste-mlinux-linux-gnueabi/python3-minimalmodbus/2.0.1-r0/git/minimalmodbus.py", line 38, in <module>
+> |     import serial
+> | ModuleNotFoundError: No module named 'serial'
+>
+>
+>
+> John Klug
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#58482): https://lists.yoctoproject.org/g/yocto/message/58482
+> Mute This Topic: https://lists.yoctoproject.org/mt/94795363/1686489
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] Python3 project without setup.py
+  2022-11-03 23:03 Python3 project without setup.py John Klug
+  2022-11-04  8:05 ` [yocto] " Alexander Kanavin
+@ 2022-11-04 11:05 ` Ross Burton
+  2022-11-04 22:17   ` [yocto] Python3 project without http://mail2.multitech.com:32224/?dmVyPTEuMDAxJiZjNWFjMTlhNjM2YTE2MGEzNj02MzY0RjFGRF83NDYyMl8yNjk5XzEmJmQ3MjcwZjg5YzhhYTU5Mz0yMzMzJiZ1cmw9c2V0dXAlMkVweQ== John Klug
+  1 sibling, 1 reply; 4+ messages in thread
+From: Ross Burton @ 2022-11-04 11:05 UTC (permalink / raw)
+  To: john.klug; +Cc: yocto
+
+On 3 Nov 2022, at 23:03, John Klug via lists.yoctoproject.org <john.klug=multitech.com@lists.yoctoproject.org> wrote:
+> 
+> I am using Dunfell.
+> 
+> What should I do in a recipe if a python project has no setup.py?
+> 
+> Specifically:
+> https://github.com/pyhys/minimalmodbus   
+
+That project uses [buildsystem] attributes in pyproject.toml, for more details I spoke about what this means and how it impacts Yocto at the Yocto Summit earlier this year:
+
+https://www.youtube.com/watch?v=To9TSBaIg2Q&list=PLD4M5FoHz-Twd-JGczxzYQ01DJ_4_sAHg&index=15
+
+However, this all landed in kirkstone and nobody has backported it to dunfell as far as I’m aware.
+
+Adding the stub setup.py likely did the right thing, and albeit outside of Yocto it worked for me:
+
+$ python3 ./setup.py  build
+running build
+running build_py
+creating build
+creating build/lib
+copying minimalmodbus.py -> build/lib
+running egg_info
+creating minimalmodbus.egg-info
+writing minimalmodbus.egg-info/PKG-INFO
+writing dependency_links to minimalmodbus.egg-info/dependency_links.txt
+writing requirements to minimalmodbus.egg-info/requires.txt
+writing top-level names to minimalmodbus.egg-info/top_level.txt
+writing manifest file 'minimalmodbus.egg-info/SOURCES.txt'
+reading manifest file 'minimalmodbus.egg-info/SOURCES.txt'
+reading manifest template 'MANIFEST.in'
+warning: no previously-included files matching '__pycache__' found under directory '*'
+warning: no previously-included files matching '*.py[co]' found under directory '*'
+adding license file 'LICENSE'
+adding license file 'AUTHORS.rst'
+writing manifest file 'minimalmodbus.egg-info/SOURCES.txt’
+
+Maybe share the recipe or at least the full logs?
+
+Ross
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] Python3 project without http://mail2.multitech.com:32224/?dmVyPTEuMDAxJiZjNWFjMTlhNjM2YTE2MGEzNj02MzY0RjFGRF83NDYyMl8yNjk5XzEmJmQ3MjcwZjg5YzhhYTU5Mz0yMzMzJiZ1cmw9c2V0dXAlMkVweQ==
+  2022-11-04 11:05 ` Ross Burton
+@ 2022-11-04 22:17   ` John Klug
+  0 siblings, 0 replies; 4+ messages in thread
+From: John Klug @ 2022-11-04 22:17 UTC (permalink / raw)
+  To: "yocto@lists.yoctoproject.org"
+
+What I did to solve this was to grab the setup.py from where it was removed:
+
+    https://github.com/pyhys/minimalmodbus/blob/b40e2946cd33684281dbf34ae1a8a4290cded649/setup.py
+
+Then I updated it with the changes to setup.cfg (which disallowed old levels of Python).
+
+By using this setup.py instead of my trivial setup.py my recipe worked just fine, and no longer attempted to do "import serial" which makes no sense on the build machine.
+
+John Klug
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+end of thread, other threads:[~2022-11-04 22:17 UTC | newest]
+
+Thread overview: 4+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-11-03 23:03 Python3 project without setup.py John Klug
+2022-11-04  8:05 ` [yocto] " Alexander Kanavin
+2022-11-04 11:05 ` Ross Burton
+2022-11-04 22:17   ` [yocto] Python3 project without http://mail2.multitech.com:32224/?dmVyPTEuMDAxJiZjNWFjMTlhNjM2YTE2MGEzNj02MzY0RjFGRF83NDYyMl8yNjk5XzEmJmQ3MjcwZjg5YzhhYTU5Mz0yMzMzJiZ1cmw9c2V0dXAlMkVweQ== John Klug
+

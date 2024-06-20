@@ -1,0 +1,241 @@
+* [meta-selinux][PATCH 1/4] libselinux: inherit pkgconfig
+@ 2021-10-12  7:00 Yi Zhao
+  2021-10-12  7:00 ` [meta-selinux][PATCH 2/4] libselinux-python: " Yi Zhao
+                   ` (2 more replies)
+  0 siblings, 3 replies; 4+ messages in thread
+From: Yi Zhao @ 2021-10-12  7:00 UTC (permalink / raw)
+  To: yocto, joe_macdonald, joe
+
+Inherit pkgconfig to fix the build error which is introduced by
+oe-commit:
+  commit 8e26252b45b7660c7c67c702411bdec187a76ffc
+  Author: Richard Purdie <richard.purdie@linuxfoundation.org>
+  Date:   Sun Sep 19 16:17:31 2021 +0100
+
+    layer.conf: Extend recipes not to install without explict dependencies
+
+Fixes:
+make: pkg-config: Command not found
+/usr/src/debug/libselinux/3.2-r0/git/libselinux/src/regex.c:399: undefined reference to `pcre_fullinfo'
+/usr/src/debug/libselinux/3.3-r0/git/libselinux/src/regex.c:444: undefined reference to `pcre_free'
+/usr/src/debug/libselinux/3.3-r0/git/libselinux/src/regex.c:456: undefined reference to `pcre_exec'
+
+Signed-off-by: Yi Zhao <yi.zhao@windriver.com>
+---
+ recipes-security/selinux/libselinux_3.2.bb | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/recipes-security/selinux/libselinux_3.2.bb b/recipes-security/selinux/libselinux_3.2.bb
+index 55efbae..1144840 100644
+--- a/recipes-security/selinux/libselinux_3.2.bb
++++ b/recipes-security/selinux/libselinux_3.2.bb
+@@ -8,7 +8,7 @@ LIC_FILES_CHKSUM = "file://${S}/LICENSE;md5=84b4d2c6ef954a2d4081e775a270d0d0"
+ 
+ require selinux_common.inc
+ 
+-inherit lib_package python3native
++inherit lib_package python3native pkgconfig
+ 
+ DEPENDS += "libsepol libpcre"
+ DEPENDS:append:libc-musl = " fts"
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 4+ messages in thread
+* [meta-selinux][PATCH 2/4] libselinux-python: inherit pkgconfig
+  2021-10-12  7:00 [meta-selinux][PATCH 1/4] libselinux: inherit pkgconfig Yi Zhao
+@ 2021-10-12  7:00 ` Yi Zhao
+  2021-10-12  7:00 ` [meta-selinux][PATCH 3/4] selinux-python: add RDEPENDES on audit-python Yi Zhao
+  2021-10-12  7:00 ` [meta-selinux][PATCH 4/4] selinux: move selinux scripts to selinux-scripts Yi Zhao
+  2 siblings, 0 replies; 4+ messages in thread
+From: Yi Zhao @ 2021-10-12  7:00 UTC (permalink / raw)
+  To: yocto, joe_macdonald, joe
+
+Inherit pkgconfig to fix the build error which is introduced by
+oe-commit:
+  commit 8e26252b45b7660c7c67c702411bdec187a76ffc
+  Author: Richard Purdie <richard.purdie@linuxfoundation.org>
+  Date:   Sun Sep 19 16:17:31 2021 +0100
+
+    layer.conf: Extend recipes not to install without explict dependencies
+
+Fixes:
+make: pkg-config: Command not found
+/usr/src/debug/libselinux/3.2-r0/git/libselinux/src/regex.c:399: undefined reference to `pcre_fullinfo'
+/usr/src/debug/libselinux/3.3-r0/git/libselinux/src/regex.c:444: undefined reference to `pcre_free'
+/usr/src/debug/libselinux/3.3-r0/git/libselinux/src/regex.c:456: undefined reference to `pcre_exec'
+
+Signed-off-by: Yi Zhao <yi.zhao@windriver.com>
+---
+ recipes-security/selinux/libselinux-python_3.2.bb | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/recipes-security/selinux/libselinux-python_3.2.bb b/recipes-security/selinux/libselinux-python_3.2.bb
+index f589ebd..136f538 100644
+--- a/recipes-security/selinux/libselinux-python_3.2.bb
++++ b/recipes-security/selinux/libselinux-python_3.2.bb
+@@ -8,7 +8,7 @@ LIC_FILES_CHKSUM = "file://${S}/LICENSE;md5=84b4d2c6ef954a2d4081e775a270d0d0"
+ 
+ require selinux_common.inc
+ 
+-inherit python3native python3targetconfig
++inherit python3native python3targetconfig pkgconfig
+ 
+ FILESEXTRAPATHS:prepend := "${THISDIR}/libselinux:"
+ SRC_URI += "\
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 4+ messages in thread
+* [meta-selinux][PATCH 3/4] selinux-python: add RDEPENDES on audit-python
+  2021-10-12  7:00 [meta-selinux][PATCH 1/4] libselinux: inherit pkgconfig Yi Zhao
+  2021-10-12  7:00 ` [meta-selinux][PATCH 2/4] libselinux-python: " Yi Zhao
+@ 2021-10-12  7:00 ` Yi Zhao
+  2021-10-12  7:00 ` [meta-selinux][PATCH 4/4] selinux: move selinux scripts to selinux-scripts Yi Zhao
+  2 siblings, 0 replies; 4+ messages in thread
+From: Yi Zhao @ 2021-10-12  7:00 UTC (permalink / raw)
+  To: yocto, joe_macdonald, joe
+
+Add RDEPENDS on audit-python for selinux-python-semanage.
+
+Fixes:
+$ semanage fcontext -a -t user_home_t "/web(/.*)?"
+Traceback (most recent call last):
+  File "/usr/sbin/semanage", line 975, in <module>
+    do_parser()
+  File "/usr/sbin/semanage", line 947, in do_parser
+    args.func(args)
+  File "/usr/sbin/semanage", line 329, in handleFcontext
+    OBJECT.add(args.file_spec, args.type, args.ftype, args.range, args.seuser)
+  File "/usr/lib/python3.9/site-packages/seobject.py", line 2485, in add
+    self.__add(target, type, ftype, serange, seuser)
+  File "/usr/lib/python3.9/site-packages/seobject.py", line 2481, in __add
+    self.mylog.log_change("resrc=fcontext op=add %s ftype=%s tcontext=%s:%s:%s:%s"
+      % (audit.audit_encode_nv_string("tglob", target, 0), ftype_to_audit[ftype],)
+NameError: name 'audit' is not defined
+
+Signed-off-by: Yi Zhao <yi.zhao@windriver.com>
+---
+ recipes-security/selinux/selinux-python_3.2.bb | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/recipes-security/selinux/selinux-python_3.2.bb b/recipes-security/selinux/selinux-python_3.2.bb
+index a954676..d130900 100644
+--- a/recipes-security/selinux/selinux-python_3.2.bb
++++ b/recipes-security/selinux/selinux-python_3.2.bb
+@@ -50,6 +50,7 @@ RDEPENDS:${BPN}-semanage += "\
+         python3-xml \
+         python3-misc \
+         libselinux-python \
++        audit-python \
+         ${BPN} \
+ "
+ RDEPENDS:${BPN}-sepolicy += "\
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 4+ messages in thread
+* [meta-selinux][PATCH 4/4] selinux: move selinux scripts to selinux-scripts
+  2021-10-12  7:00 [meta-selinux][PATCH 1/4] libselinux: inherit pkgconfig Yi Zhao
+  2021-10-12  7:00 ` [meta-selinux][PATCH 2/4] libselinux-python: " Yi Zhao
+  2021-10-12  7:00 ` [meta-selinux][PATCH 3/4] selinux-python: add RDEPENDES on audit-python Yi Zhao
+@ 2021-10-12  7:00 ` Yi Zhao
+  2 siblings, 0 replies; 4+ messages in thread
+From: Yi Zhao @ 2021-10-12  7:00 UTC (permalink / raw)
+  To: yocto, joe_macdonald, joe
+
+There are too many recipes in recipes-security/selinux. Keep the selinux
+userspace recipes and move selinux scripts to selinux-scripts directory
+to make the directory hierarchy clearer.
+
+Signed-off-by: Yi Zhao <yi.zhao@windriver.com>
+---
+ .../selinux-autorelabel/selinux-autorelabel.service               | 0
+ .../selinux-autorelabel/selinux-autorelabel.sh                    | 0
+ .../{selinux => selinux-scripts}/selinux-autorelabel_0.1.bb       | 0
+ .../selinux-init/selinux-init.service                             | 0
+ .../{selinux => selinux-scripts}/selinux-init/selinux-init.sh     | 0
+ .../selinux-init/selinux-init.sh.sysvinit                         | 0
+ recipes-security/{selinux => selinux-scripts}/selinux-init_0.1.bb | 0
+ recipes-security/{selinux => selinux-scripts}/selinux-initsh.inc  | 0
+ .../selinux-labeldev/selinux-labeldev.service                     | 0
+ .../selinux-labeldev/selinux-labeldev.sh                          | 0
+ .../{selinux => selinux-scripts}/selinux-labeldev_0.1.bb          | 0
+ 11 files changed, 0 insertions(+), 0 deletions(-)
+ rename recipes-security/{selinux => selinux-scripts}/selinux-autorelabel/selinux-autorelabel.service (100%)
+ rename recipes-security/{selinux => selinux-scripts}/selinux-autorelabel/selinux-autorelabel.sh (100%)
+ rename recipes-security/{selinux => selinux-scripts}/selinux-autorelabel_0.1.bb (100%)
+ rename recipes-security/{selinux => selinux-scripts}/selinux-init/selinux-init.service (100%)
+ rename recipes-security/{selinux => selinux-scripts}/selinux-init/selinux-init.sh (100%)
+ rename recipes-security/{selinux => selinux-scripts}/selinux-init/selinux-init.sh.sysvinit (100%)
+ rename recipes-security/{selinux => selinux-scripts}/selinux-init_0.1.bb (100%)
+ rename recipes-security/{selinux => selinux-scripts}/selinux-initsh.inc (100%)
+ rename recipes-security/{selinux => selinux-scripts}/selinux-labeldev/selinux-labeldev.service (100%)
+ rename recipes-security/{selinux => selinux-scripts}/selinux-labeldev/selinux-labeldev.sh (100%)
+ rename recipes-security/{selinux => selinux-scripts}/selinux-labeldev_0.1.bb (100%)
+
+diff --git a/recipes-security/selinux/selinux-autorelabel/selinux-autorelabel.service b/recipes-security/selinux-scripts/selinux-autorelabel/selinux-autorelabel.service
+similarity index 100%
+rename from recipes-security/selinux/selinux-autorelabel/selinux-autorelabel.service
+rename to recipes-security/selinux-scripts/selinux-autorelabel/selinux-autorelabel.service
+diff --git a/recipes-security/selinux/selinux-autorelabel/selinux-autorelabel.sh b/recipes-security/selinux-scripts/selinux-autorelabel/selinux-autorelabel.sh
+similarity index 100%
+rename from recipes-security/selinux/selinux-autorelabel/selinux-autorelabel.sh
+rename to recipes-security/selinux-scripts/selinux-autorelabel/selinux-autorelabel.sh
+diff --git a/recipes-security/selinux/selinux-autorelabel_0.1.bb b/recipes-security/selinux-scripts/selinux-autorelabel_0.1.bb
+similarity index 100%
+rename from recipes-security/selinux/selinux-autorelabel_0.1.bb
+rename to recipes-security/selinux-scripts/selinux-autorelabel_0.1.bb
+diff --git a/recipes-security/selinux/selinux-init/selinux-init.service b/recipes-security/selinux-scripts/selinux-init/selinux-init.service
+similarity index 100%
+rename from recipes-security/selinux/selinux-init/selinux-init.service
+rename to recipes-security/selinux-scripts/selinux-init/selinux-init.service
+diff --git a/recipes-security/selinux/selinux-init/selinux-init.sh b/recipes-security/selinux-scripts/selinux-init/selinux-init.sh
+similarity index 100%
+rename from recipes-security/selinux/selinux-init/selinux-init.sh
+rename to recipes-security/selinux-scripts/selinux-init/selinux-init.sh
+diff --git a/recipes-security/selinux/selinux-init/selinux-init.sh.sysvinit b/recipes-security/selinux-scripts/selinux-init/selinux-init.sh.sysvinit
+similarity index 100%
+rename from recipes-security/selinux/selinux-init/selinux-init.sh.sysvinit
+rename to recipes-security/selinux-scripts/selinux-init/selinux-init.sh.sysvinit
+diff --git a/recipes-security/selinux/selinux-init_0.1.bb b/recipes-security/selinux-scripts/selinux-init_0.1.bb
+similarity index 100%
+rename from recipes-security/selinux/selinux-init_0.1.bb
+rename to recipes-security/selinux-scripts/selinux-init_0.1.bb
+diff --git a/recipes-security/selinux/selinux-initsh.inc b/recipes-security/selinux-scripts/selinux-initsh.inc
+similarity index 100%
+rename from recipes-security/selinux/selinux-initsh.inc
+rename to recipes-security/selinux-scripts/selinux-initsh.inc
+diff --git a/recipes-security/selinux/selinux-labeldev/selinux-labeldev.service b/recipes-security/selinux-scripts/selinux-labeldev/selinux-labeldev.service
+similarity index 100%
+rename from recipes-security/selinux/selinux-labeldev/selinux-labeldev.service
+rename to recipes-security/selinux-scripts/selinux-labeldev/selinux-labeldev.service
+diff --git a/recipes-security/selinux/selinux-labeldev/selinux-labeldev.sh b/recipes-security/selinux-scripts/selinux-labeldev/selinux-labeldev.sh
+similarity index 100%
+rename from recipes-security/selinux/selinux-labeldev/selinux-labeldev.sh
+rename to recipes-security/selinux-scripts/selinux-labeldev/selinux-labeldev.sh
+diff --git a/recipes-security/selinux/selinux-labeldev_0.1.bb b/recipes-security/selinux-scripts/selinux-labeldev_0.1.bb
+similarity index 100%
+rename from recipes-security/selinux/selinux-labeldev_0.1.bb
+rename to recipes-security/selinux-scripts/selinux-labeldev_0.1.bb
+-- 
+2.25.1
+
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+end of thread, other threads:[~2021-10-12  7:01 UTC | newest]
+
+Thread overview: 4+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-10-12  7:00 [meta-selinux][PATCH 1/4] libselinux: inherit pkgconfig Yi Zhao
+2021-10-12  7:00 ` [meta-selinux][PATCH 2/4] libselinux-python: " Yi Zhao
+2021-10-12  7:00 ` [meta-selinux][PATCH 3/4] selinux-python: add RDEPENDES on audit-python Yi Zhao
+2021-10-12  7:00 ` [meta-selinux][PATCH 4/4] selinux: move selinux scripts to selinux-scripts Yi Zhao
+

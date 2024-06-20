@@ -1,0 +1,775 @@
+* Poky/Mickledore bitbake menuconfig does not work
+@ 2023-08-21 13:48 Sebert, Holger.ext
+       [not found] ` <CAGAf8LwKRDmacsgnsKLqofneB85CetU_h3H7s12b8gY8_y6ZwA@mail.gmail.com>
+  0 siblings, 1 reply; 6+ messages in thread
+From: Sebert, Holger.ext @ 2023-08-21 13:48 UTC (permalink / raw)
+  To: yocto
+
+Hi,
+
+I am using a Yocto-Poky-Mickledore (version 4.2.1) based system.
+
+For configuring the kernel, I would like to use the command
+
+    bitbake -c menuconfig virtual/kernel
+
+If I do that, Bitbake opens an xterm window and runs the build steps
+for Kconfig. However, after the compiler has finised, the xterm window
+immediately closes and Bitbake exists as if nothing happened, i.e. it
+does not show any error message or similar.
+
+I investigated the problem and found out that, internally, Bitbake
+calls the following command for starting Kconfig:
+
+    make menuconfig CC="ccache x86_64-system-linux-gcc ..." \
+        CFLAGS="..." HOSTCC="ccache gcc" HOSTCCFLAGS="..."
+
+The quotes, however, seem to get lost when starting the actual command
+in the terminal. This leads to a command line like follows:
+
+    make menuconfig CC=ccache x86_64-system-linux-gcc ... \
+        CFLAGS=... HOSTCC="ccache gcc" HOSTCCFLAGS="...
+
+which is clearly wrong.
+
+The following patch fixes the problem in meta/classes-recipe/cml1.bbclass:
+
+diff --git a/meta/classes-recipe/cml1.bbclass b/meta/classes-recipe/cml1.bbclass
+index a09a042c3f..d6001d6fd0 100644
+--- a/meta/classes-recipe/cml1.bbclass
++++ b/meta/classes-recipe/cml1.bbclass
+@@ -53,7 +53,8 @@ python do_menuconfig() {
+     # ensure that environment variables are overwritten with this tasks 'd' values
+     d.appendVar("OE_TERMINAL_EXPORTS", " PKG_CONFIG_DIR PKG_CONFIG_PATH PKG_CONFIG_LIBDIR PKG_CONFIG_SYSROOT_DIR")
+
+-    oe_terminal("sh -c \"make %s; if [ \\$? -ne 0 ]; then echo 'Command failed.'; printf 'Press any key to continue... '; read r; fi\"" % d.getVar('KCONFIG_CONFIG_COMMAND'),
++    make_cmd = "make %s" % d.getVar('KCONFIG_CONFIG_COMMAND').replace('"', '\\"')
++    oe_terminal("sh -c \"%s; if [ \\$? -ne 0 ]; then echo 'Command failed.'; printf 'Press any key to continue... '; read r; fi\"" % make_cmd,
+                 d.getVar('PN') + ' Configuration', d)
+
+What do you think? Is my observed behavior a configuration error of my
+setup or does the patch above indeed make sense?
+
+Best regards,
+Holger
+
+
+^ permalink raw reply related	[flat|nested] 6+ messages in thread
+* AW:  Re: [yocto] Poky/Mickledore bitbake menuconfig does not work
+       [not found] ` <CAGAf8LwKRDmacsgnsKLqofneB85CetU_h3H7s12b8gY8_y6ZwA@mail.gmail.com>
+@ 2023-09-14 12:10   ` Sebert, Holger.ext
+  2023-09-14 21:52     ` Yoann CONGAL
+  0 siblings, 1 reply; 6+ messages in thread
+From: Sebert, Holger.ext @ 2023-09-14 12:10 UTC (permalink / raw)
+  To: Zoran Stojsavljevic; +Cc: Yocto-mailing-list
+
+Hi Zoran,
+
+I was able to reproduce the behavior described in my original post by enabling CCache. Here are the precise steps to reproduce:
+
+1. Checkout Poky/Mickledore
+2. Add the following to `build/conf/local.conf`:
+    INHERIT += "ccache"
+3. Run `bitbake -c menuconfig virtual/kernel`
+
+The reason for the failure is that due to CCache the compiler is no longer `gcc` but `ccache gcc`, i.e. we have the following variables in the environment:
+
+    CC="ccache x86_64-poky-linux-gcc"
+    HOSTCC="ccache gcc"
+    ...
+    etc.
+
+This is when the wrong quoting in the invocation of `menuconfig` leads to errors.
+
+Could you please verify/check?
+
+Best,
+Holger
+
+
+________________________________________
+Von: Zoran Stojsavljevic <zoran.stojsavljevic@gmail.com>
+Gesendet: Mittwoch, 23. August 2023 13:08
+An: Sebert, Holger.ext
+Cc: Yocto-mailing-list
+Betreff: [Ext] Re: [yocto] Poky/Mickledore bitbake menuconfig does not work
+
+Guten Morgen, Holger,
+
+Es arbeitet für mich. Diese command:
+bitbake -c menuconfig virtual/kernel
+
+Ich glaube, sie haben etwas Fehler in ihrer Umgebung.
+_______
+
+I have attached my outcome of bitbake -c menuconfig virtual/kernel for BBB:
+
+VG,
+Zee
+_______
+
+On Mon, Aug 21, 2023 at 3:48 PM Sebert, Holger.ext
+<holger.sebert.ext@karlstorz.com> wrote:
+>
+> Hi,
+>
+> I am using a Yocto-Poky-Mickledore (version 4.2.1) based system.
+>
+> For configuring the kernel, I would like to use the command
+>
+>     bitbake -c menuconfig virtual/kernel
+>
+> If I do that, Bitbake opens an xterm window and runs the build steps
+> for Kconfig. However, after the compiler has finised, the xterm window
+> immediately closes and Bitbake exists as if nothing happened, i.e. it
+> does not show any error message or similar.
+>
+> I investigated the problem and found out that, internally, Bitbake
+> calls the following command for starting Kconfig:
+>
+>     make menuconfig CC="ccache x86_64-system-linux-gcc ..." \
+>         CFLAGS="..." HOSTCC="ccache gcc" HOSTCCFLAGS="..."
+>
+> The quotes, however, seem to get lost when starting the actual command
+> in the terminal. This leads to a command line like follows:
+>
+>     make menuconfig CC=ccache x86_64-system-linux-gcc ... \
+>         CFLAGS=... HOSTCC="ccache gcc" HOSTCCFLAGS="...
+>
+> which is clearly wrong.
+>
+> The following patch fixes the problem in meta/classes-recipe/cml1.bbclass:
+>
+> diff --git a/meta/classes-recipe/cml1.bbclass b/meta/classes-recipe/cml1.bbclass
+> index a09a042c3f..d6001d6fd0 100644
+> --- a/meta/classes-recipe/cml1.bbclass
+> +++ b/meta/classes-recipe/cml1.bbclass
+> @@ -53,7 +53,8 @@ python do_menuconfig() {
+>      # ensure that environment variables are overwritten with this tasks 'd' values
+>      d.appendVar("OE_TERMINAL_EXPORTS", " PKG_CONFIG_DIR PKG_CONFIG_PATH PKG_CONFIG_LIBDIR PKG_CONFIG_SYSROOT_DIR")
+>
+> -    oe_terminal("sh -c \"make %s; if [ \\$? -ne 0 ]; then echo 'Command failed.'; printf 'Press any key to continue... '; read r; fi\"" % d.getVar('KCONFIG_CONFIG_COMMAND'),
+> +    make_cmd = "make %s" % d.getVar('KCONFIG_CONFIG_COMMAND').replace('"', '\\"')
+> +    oe_terminal("sh -c \"%s; if [ \\$? -ne 0 ]; then echo 'Command failed.'; printf 'Press any key to continue... '; read r; fi\"" % make_cmd,
+>                  d.getVar('PN') + ' Configuration', d)
+>
+> What do you think? Is my observed behavior a configuration error of my
+> setup or does the patch above indeed make sense?
+>
+> Best regards,
+> Holger
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#60840): https://urldefense.com/v3/__https://lists.yoctoproject.org/g/yocto/message/60840__;!!Lw1uGqvHvtJ_psGG2Et-1voSwbo!bLmchF-ws0U0J0oWqe4AH0OF_S48o_5K_0XYxFjMrUstSbtHGDeRL_OP8S0oGcoDWAvBg1-i8C03ObRDBMlpr-vP3cjAoNMNWXdt$
+> Mute This Topic: https://urldefense.com/v3/__https://lists.yoctoproject.org/mt/100872991/3618681__;!!Lw1uGqvHvtJ_psGG2Et-1voSwbo!bLmchF-ws0U0J0oWqe4AH0OF_S48o_5K_0XYxFjMrUstSbtHGDeRL_OP8S0oGcoDWAvBg1-i8C03ObRDBMlpr-vP3cjAoAHHKFU2$
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://urldefense.com/v3/__https://lists.yoctoproject.org/g/yocto/unsub__;!!Lw1uGqvHvtJ_psGG2Et-1voSwbo!bLmchF-ws0U0J0oWqe4AH0OF_S48o_5K_0XYxFjMrUstSbtHGDeRL_OP8S0oGcoDWAvBg1-i8C03ObRDBMlpr-vP3cjAoF96mbNB$  [zoran.stojsavljevic@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] Poky/Mickledore bitbake menuconfig does not work
+  2023-09-14 12:10   ` AW: Re: [yocto] " Sebert, Holger.ext
+@ 2023-09-14 21:52     ` Yoann CONGAL
+  2023-09-19 16:57       ` Sebert, Holger.ext
+  0 siblings, 1 reply; 6+ messages in thread
+From: Yoann CONGAL @ 2023-09-14 21:52 UTC (permalink / raw)
+  To: Sebert, Holger.ext; +Cc: Zoran Stojsavljevic, Yocto-mailing-list
+
+[-- Attachment #1: Type: text/plain, Size: 3721 bytes --]
+
+Hi,
+
+Le jeu. 14 sept. 2023 à 14:10, Sebert, Holger.ext <
+holger.sebert.ext@karlstorz.com> a écrit :
+
+> Hi Zoran,
+>
+> I was able to reproduce the behavior described in my original post by
+> enabling CCache. Here are the precise steps to reproduce:
+>
+> 1. Checkout Poky/Mickledore
+> 2. Add the following to `build/conf/local.conf`:
+>     INHERIT += "ccache"
+> 3. Run `bitbake -c menuconfig virtual/kernel`
+>
+> The reason for the failure is that due to CCache the compiler is no longer
+> `gcc` but `ccache gcc`, i.e. we have the following variables in the
+> environment:
+>
+>     CC="ccache x86_64-poky-linux-gcc"
+>     HOSTCC="ccache gcc"
+>     ...
+>     etc.
+>
+> This is when the wrong quoting in the invocation of `menuconfig` leads to
+> errors.
+>
+> Could you please verify/check?
+>
+
+
+I have reproduced this. It really looks like a bug!
+
+
+> [...]
+> On Mon, Aug 21, 2023 at 3:48 PM Sebert, Holger.ext
+> <holger.sebert.ext@karlstorz.com> wrote:
+> >
+> > Hi,
+> >
+> > I am using a Yocto-Poky-Mickledore (version 4.2.1) based system.
+> >
+> > For configuring the kernel, I would like to use the command
+> >
+> >     bitbake -c menuconfig virtual/kernel
+> >
+> > If I do that, Bitbake opens an xterm window and runs the build steps
+> > for Kconfig. However, after the compiler has finised, the xterm window
+> > immediately closes and Bitbake exists as if nothing happened, i.e. it
+> > does not show any error message or similar.
+> >
+> > I investigated the problem and found out that, internally, Bitbake
+> > calls the following command for starting Kconfig:
+> >
+> >     make menuconfig CC="ccache x86_64-system-linux-gcc ..." \
+> >         CFLAGS="..." HOSTCC="ccache gcc" HOSTCCFLAGS="..."
+> >
+> > The quotes, however, seem to get lost when starting the actual command
+> > in the terminal. This leads to a command line like follows:
+> >
+> >     make menuconfig CC=ccache x86_64-system-linux-gcc ... \
+> >         CFLAGS=... HOSTCC="ccache gcc" HOSTCCFLAGS="...
+> >
+> > which is clearly wrong.
+> >
+> > The following patch fixes the problem in
+> meta/classes-recipe/cml1.bbclass:
+> >
+> > diff --git a/meta/classes-recipe/cml1.bbclass
+> b/meta/classes-recipe/cml1.bbclass
+> > index a09a042c3f..d6001d6fd0 100644
+> > --- a/meta/classes-recipe/cml1.bbclass
+> > +++ b/meta/classes-recipe/cml1.bbclass
+> > @@ -53,7 +53,8 @@ python do_menuconfig() {
+> >      # ensure that environment variables are overwritten with this tasks
+> 'd' values
+> >      d.appendVar("OE_TERMINAL_EXPORTS", " PKG_CONFIG_DIR PKG_CONFIG_PATH
+> PKG_CONFIG_LIBDIR PKG_CONFIG_SYSROOT_DIR")
+> >
+> > -    oe_terminal("sh -c \"make %s; if [ \\$? -ne 0 ]; then echo 'Command
+> failed.'; printf 'Press any key to continue... '; read r; fi\"" %
+> d.getVar('KCONFIG_CONFIG_COMMAND'),
+> > +    make_cmd = "make %s" %
+> d.getVar('KCONFIG_CONFIG_COMMAND').replace('"', '\\"')
+> > +    oe_terminal("sh -c \"%s; if [ \\$? -ne 0 ]; then echo 'Command
+> failed.'; printf 'Press any key to continue... '; read r; fi\"" % make_cmd,
+> >                  d.getVar('PN') + ' Configuration', d)
+>
+
+This patch looks interesting!
+I would use shlex.join() to safely construct the command :
+https://docs.python.org/3/library/shlex.html#shlex.join
+
+
+> > What do you think? Is my observed behavior a configuration error of my
+> > setup or does the patch above indeed make sense?
+>
+
+The patch makes sense to me.
+
+I guess your next steps are :
+* If you want to contribute your patch : reproduce the bug and rebase your
+patch on master and send it to the mailing list
+* Or, create a bug in https://bugzilla.yoctoproject.org/
+
+Best Regards,
+
+-- 
+Yoann Congal
+Smile ECS - Tech expert
+
+[-- Attachment #2: Type: text/html, Size: 5468 bytes --]
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] Poky/Mickledore bitbake menuconfig does not work
+  2023-09-14 21:52     ` Yoann CONGAL
+@ 2023-09-19 16:57       ` Sebert, Holger.ext
+  2023-09-20 17:59         ` Yoann CONGAL
+  0 siblings, 1 reply; 6+ messages in thread
+From: Sebert, Holger.ext @ 2023-09-19 16:57 UTC (permalink / raw)
+  To: Yoann CONGAL; +Cc: Zoran Stojsavljevic, Yocto-mailing-list
+
+Hi Yoann, hi Zoran,
+
+The bug is not present on the Poky master branch.
+
+Until the project is rebased onto the next release, I will simply disable CCache whenever I need to do a kernel menuconfig.
+
+Thanks!
+
+-Holger
+
+________________________________________
+Von: Yoann CONGAL <yoann.congal@smile.fr>
+Gesendet: Donnerstag, 14. September 2023 23:52
+An: Sebert, Holger.ext
+Cc: Zoran Stojsavljevic; Yocto-mailing-list
+Betreff: [Ext] Re: [yocto] Poky/Mickledore bitbake menuconfig does not work
+
+Hi,
+
+Le jeu. 14 sept. 2023 à 14:10, Sebert, Holger.ext <holger.sebert.ext@karlstorz.com<mailto:holger.sebert.ext@karlstorz.com>> a écrit :
+Hi Zoran,
+
+I was able to reproduce the behavior described in my original post by enabling CCache. Here are the precise steps to reproduce:
+
+1. Checkout Poky/Mickledore
+2. Add the following to `build/conf/local.conf`:
+    INHERIT += "ccache"
+3. Run `bitbake -c menuconfig virtual/kernel`
+
+The reason for the failure is that due to CCache the compiler is no longer `gcc` but `ccache gcc`, i.e. we have the following variables in the environment:
+
+    CC="ccache x86_64-poky-linux-gcc"
+    HOSTCC="ccache gcc"
+    ...
+    etc.
+
+This is when the wrong quoting in the invocation of `menuconfig` leads to errors.
+
+Could you please verify/check?
+
+
+I have reproduced this. It really looks like a bug!
+
+[...]
+On Mon, Aug 21, 2023 at 3:48 PM Sebert, Holger.ext
+<holger.sebert.ext@karlstorz.com<mailto:holger.sebert.ext@karlstorz.com>> wrote:
+>
+> Hi,
+>
+> I am using a Yocto-Poky-Mickledore (version 4.2.1) based system.
+>
+> For configuring the kernel, I would like to use the command
+>
+>     bitbake -c menuconfig virtual/kernel
+>
+> If I do that, Bitbake opens an xterm window and runs the build steps
+> for Kconfig. However, after the compiler has finised, the xterm window
+> immediately closes and Bitbake exists as if nothing happened, i.e. it
+> does not show any error message or similar.
+>
+> I investigated the problem and found out that, internally, Bitbake
+> calls the following command for starting Kconfig:
+>
+>     make menuconfig CC="ccache x86_64-system-linux-gcc ..." \
+>         CFLAGS="..." HOSTCC="ccache gcc" HOSTCCFLAGS="..."
+>
+> The quotes, however, seem to get lost when starting the actual command
+> in the terminal. This leads to a command line like follows:
+>
+>     make menuconfig CC=ccache x86_64-system-linux-gcc ... \
+>         CFLAGS=... HOSTCC="ccache gcc" HOSTCCFLAGS="...
+>
+> which is clearly wrong.
+>
+> The following patch fixes the problem in meta/classes-recipe/cml1.bbclass:
+>
+> diff --git a/meta/classes-recipe/cml1.bbclass b/meta/classes-recipe/cml1.bbclass
+> index a09a042c3f..d6001d6fd0 100644
+> --- a/meta/classes-recipe/cml1.bbclass
+> +++ b/meta/classes-recipe/cml1.bbclass
+> @@ -53,7 +53,8 @@ python do_menuconfig() {
+>      # ensure that environment variables are overwritten with this tasks 'd' values
+>      d.appendVar("OE_TERMINAL_EXPORTS", " PKG_CONFIG_DIR PKG_CONFIG_PATH PKG_CONFIG_LIBDIR PKG_CONFIG_SYSROOT_DIR")
+>
+> -    oe_terminal("sh -c \"make %s; if [ \\$? -ne 0 ]; then echo 'Command failed.'; printf 'Press any key to continue... '; read r; fi\"" % d.getVar('KCONFIG_CONFIG_COMMAND'),
+> +    make_cmd = "make %s" % d.getVar('KCONFIG_CONFIG_COMMAND').replace('"', '\\"')
+> +    oe_terminal("sh -c \"%s; if [ \\$? -ne 0 ]; then echo 'Command failed.'; printf 'Press any key to continue... '; read r; fi\"" % make_cmd,
+>                  d.getVar('PN') + ' Configuration', d)
+
+This patch looks interesting!
+I would use shlex.join() to safely construct the command :
+https://docs.python.org/3/library/shlex.html#shlex.join<https://urldefense.com/v3/__https://docs.python.org/3/library/shlex.html*shlex.join__;Iw!!Lw1uGqvHvtJ_psGG2Et-1voSwbo!fQdtwGScMriVPQw2RO0unCFPxKM9NGX19bIH6mNdVfb77dZxiYZEkdNFiD5PZzVoxaOccilrT4L2I56P_pSw6FJuljKxeNTW$>
+
+> What do you think? Is my observed behavior a configuration error of my
+> setup or does the patch above indeed make sense?
+
+The patch makes sense to me.
+
+I guess your next steps are :
+* If you want to contribute your patch : reproduce the bug and rebase your patch on master and send it to the mailing list
+* Or, create a bug in https://bugzilla.yoctoproject.org/<https://urldefense.com/v3/__https://bugzilla.yoctoproject.org/__;!!Lw1uGqvHvtJ_psGG2Et-1voSwbo!fQdtwGScMriVPQw2RO0unCFPxKM9NGX19bIH6mNdVfb77dZxiYZEkdNFiD5PZzVoxaOccilrT4L2I56P_pSw6FJulqw2-PFV$>
+
+Best Regards,
+
+--
+Yoann Congal
+Smile ECS - Tech expert
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] Poky/Mickledore bitbake menuconfig does not work
+  2023-09-19 16:57       ` Sebert, Holger.ext
+@ 2023-09-20 17:59         ` Yoann CONGAL
+  2023-09-30 14:12           ` Yoann CONGAL
+  0 siblings, 1 reply; 6+ messages in thread
+From: Yoann CONGAL @ 2023-09-20 17:59 UTC (permalink / raw)
+  To: Sebert, Holger.ext; +Cc: Zoran Stojsavljevic, Yocto-mailing-list
+
+[-- Attachment #1: Type: text/plain, Size: 5270 bytes --]
+
+Le mar. 19 sept. 2023 à 18:57, Sebert, Holger.ext <
+Holger.Sebert.ext@karlstorz.com> a écrit :
+
+> Hi Yoann, hi Zoran,
+>
+
+Hi,
+
+
+> The bug is not present on the Poky master branch.
+>
+> Until the project is rebased onto the next release, I will simply disable
+> CCache whenever I need to do a kernel menuconfig.
+>
+
+You peaked my curiosity and I've tracked down the fix on master : Your
+problem is fixed by
+https://git.yoctoproject.org/poky/commit/?id=d4664d2b7974354e73d891762ebb2c8a12d62438
+
+I've requested a backport on mickledore :
+https://lists.openembedded.org/g/openembedded-core/message/187934
+
+Regards,
+
+
+> Thanks!
+>
+> -Holger
+>
+> ________________________________________
+> Von: Yoann CONGAL <yoann.congal@smile.fr>
+> Gesendet: Donnerstag, 14. September 2023 23:52
+> An: Sebert, Holger.ext
+> Cc: Zoran Stojsavljevic; Yocto-mailing-list
+> Betreff: [Ext] Re: [yocto] Poky/Mickledore bitbake menuconfig does not work
+>
+> Hi,
+>
+> Le jeu. 14 sept. 2023 à 14:10, Sebert, Holger.ext <
+> holger.sebert.ext@karlstorz.com<mailto:holger.sebert.ext@karlstorz.com>>
+> a écrit :
+> Hi Zoran,
+>
+> I was able to reproduce the behavior described in my original post by
+> enabling CCache. Here are the precise steps to reproduce:
+>
+> 1. Checkout Poky/Mickledore
+> 2. Add the following to `build/conf/local.conf`:
+>     INHERIT += "ccache"
+> 3. Run `bitbake -c menuconfig virtual/kernel`
+>
+> The reason for the failure is that due to CCache the compiler is no longer
+> `gcc` but `ccache gcc`, i.e. we have the following variables in the
+> environment:
+>
+>     CC="ccache x86_64-poky-linux-gcc"
+>     HOSTCC="ccache gcc"
+>     ...
+>     etc.
+>
+> This is when the wrong quoting in the invocation of `menuconfig` leads to
+> errors.
+>
+> Could you please verify/check?
+>
+>
+> I have reproduced this. It really looks like a bug!
+>
+> [...]
+> On Mon, Aug 21, 2023 at 3:48 PM Sebert, Holger.ext
+> <holger.sebert.ext@karlstorz.com<mailto:holger.sebert.ext@karlstorz.com>>
+> wrote:
+> >
+> > Hi,
+> >
+> > I am using a Yocto-Poky-Mickledore (version 4.2.1) based system.
+> >
+> > For configuring the kernel, I would like to use the command
+> >
+> >     bitbake -c menuconfig virtual/kernel
+> >
+> > If I do that, Bitbake opens an xterm window and runs the build steps
+> > for Kconfig. However, after the compiler has finised, the xterm window
+> > immediately closes and Bitbake exists as if nothing happened, i.e. it
+> > does not show any error message or similar.
+> >
+> > I investigated the problem and found out that, internally, Bitbake
+> > calls the following command for starting Kconfig:
+> >
+> >     make menuconfig CC="ccache x86_64-system-linux-gcc ..." \
+> >         CFLAGS="..." HOSTCC="ccache gcc" HOSTCCFLAGS="..."
+> >
+> > The quotes, however, seem to get lost when starting the actual command
+> > in the terminal. This leads to a command line like follows:
+> >
+> >     make menuconfig CC=ccache x86_64-system-linux-gcc ... \
+> >         CFLAGS=... HOSTCC="ccache gcc" HOSTCCFLAGS="...
+> >
+> > which is clearly wrong.
+> >
+> > The following patch fixes the problem in
+> meta/classes-recipe/cml1.bbclass:
+> >
+> > diff --git a/meta/classes-recipe/cml1.bbclass
+> b/meta/classes-recipe/cml1.bbclass
+> > index a09a042c3f..d6001d6fd0 100644
+> > --- a/meta/classes-recipe/cml1.bbclass
+> > +++ b/meta/classes-recipe/cml1.bbclass
+> > @@ -53,7 +53,8 @@ python do_menuconfig() {
+> >      # ensure that environment variables are overwritten with this tasks
+> 'd' values
+> >      d.appendVar("OE_TERMINAL_EXPORTS", " PKG_CONFIG_DIR PKG_CONFIG_PATH
+> PKG_CONFIG_LIBDIR PKG_CONFIG_SYSROOT_DIR")
+> >
+> > -    oe_terminal("sh -c \"make %s; if [ \\$? -ne 0 ]; then echo 'Command
+> failed.'; printf 'Press any key to continue... '; read r; fi\"" %
+> d.getVar('KCONFIG_CONFIG_COMMAND'),
+> > +    make_cmd = "make %s" %
+> d.getVar('KCONFIG_CONFIG_COMMAND').replace('"', '\\"')
+> > +    oe_terminal("sh -c \"%s; if [ \\$? -ne 0 ]; then echo 'Command
+> failed.'; printf 'Press any key to continue... '; read r; fi\"" % make_cmd,
+> >                  d.getVar('PN') + ' Configuration', d)
+>
+> This patch looks interesting!
+> I would use shlex.join() to safely construct the command :
+> https://docs.python.org/3/library/shlex.html#shlex.join<
+> https://urldefense.com/v3/__https://docs.python.org/3/library/shlex.html*shlex.join__;Iw!!Lw1uGqvHvtJ_psGG2Et-1voSwbo!fQdtwGScMriVPQw2RO0unCFPxKM9NGX19bIH6mNdVfb77dZxiYZEkdNFiD5PZzVoxaOccilrT4L2I56P_pSw6FJuljKxeNTW$
+> >
+>
+> > What do you think? Is my observed behavior a configuration error of my
+> > setup or does the patch above indeed make sense?
+>
+> The patch makes sense to me.
+>
+> I guess your next steps are :
+> * If you want to contribute your patch : reproduce the bug and rebase your
+> patch on master and send it to the mailing list
+> * Or, create a bug in https://bugzilla.yoctoproject.org/<
+> https://urldefense.com/v3/__https://bugzilla.yoctoproject.org/__;!!Lw1uGqvHvtJ_psGG2Et-1voSwbo!fQdtwGScMriVPQw2RO0unCFPxKM9NGX19bIH6mNdVfb77dZxiYZEkdNFiD5PZzVoxaOccilrT4L2I56P_pSw6FJulqw2-PFV$
+> >
+>
+> Best Regards,
+>
+> --
+> Yoann Congal
+> Smile ECS - Tech expert
+>
+
+
+-- 
+Yoann Congal
+Smile ECS - Tech expert
+
+[-- Attachment #2: Type: text/html, Size: 8064 bytes --]
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] Poky/Mickledore bitbake menuconfig does not work
+  2023-09-20 17:59         ` Yoann CONGAL
+@ 2023-09-30 14:12           ` Yoann CONGAL
+  0 siblings, 0 replies; 6+ messages in thread
+From: Yoann CONGAL @ 2023-09-30 14:12 UTC (permalink / raw)
+  To: Sebert, Holger.ext; +Cc: Zoran Stojsavljevic, Yocto-mailing-list
+
+[-- Attachment #1: Type: text/plain, Size: 5813 bytes --]
+
+Le mer. 20 sept. 2023 à 19:59, Yoann CONGAL <yoann.congal@smile.fr> a
+écrit :
+
+> Le mar. 19 sept. 2023 à 18:57, Sebert, Holger.ext <
+> Holger.Sebert.ext@karlstorz.com> a écrit :
+>
+>> Hi Yoann, hi Zoran,
+>>
+>
+> Hi,
+>
+>
+>> The bug is not present on the Poky master branch.
+>>
+>> Until the project is rebased onto the next release, I will simply disable
+>> CCache whenever I need to do a kernel menuconfig.
+>>
+>
+> You peaked my curiosity and I've tracked down the fix on master : Your
+> problem is fixed by
+>
+> https://git.yoctoproject.org/poky/commit/?id=d4664d2b7974354e73d891762ebb2c8a12d62438
+>
+> I've requested a backport on mickledore :
+> https://lists.openembedded.org/g/openembedded-core/message/187934
+>
+
+Fix has now been merged in mickledore :
+https://git.yoctoproject.org/poky/commit/?h=mickledore&id=cd0c6173a375e5c7b617985ca2efcf167c92c827
+
+You would just have to update your poky mickledore branch to fix your
+problem :)
+
+Enjoy!
+
+Regards,
+>
+>
+>> Thanks!
+>>
+>> -Holger
+>>
+>> ________________________________________
+>> Von: Yoann CONGAL <yoann.congal@smile.fr>
+>> Gesendet: Donnerstag, 14. September 2023 23:52
+>> An: Sebert, Holger.ext
+>> Cc: Zoran Stojsavljevic; Yocto-mailing-list
+>> Betreff: [Ext] Re: [yocto] Poky/Mickledore bitbake menuconfig does not
+>> work
+>>
+>> Hi,
+>>
+>> Le jeu. 14 sept. 2023 à 14:10, Sebert, Holger.ext <
+>> holger.sebert.ext@karlstorz.com<mailto:holger.sebert.ext@karlstorz.com>>
+>> a écrit :
+>> Hi Zoran,
+>>
+>> I was able to reproduce the behavior described in my original post by
+>> enabling CCache. Here are the precise steps to reproduce:
+>>
+>> 1. Checkout Poky/Mickledore
+>> 2. Add the following to `build/conf/local.conf`:
+>>     INHERIT += "ccache"
+>> 3. Run `bitbake -c menuconfig virtual/kernel`
+>>
+>> The reason for the failure is that due to CCache the compiler is no
+>> longer `gcc` but `ccache gcc`, i.e. we have the following variables in the
+>> environment:
+>>
+>>     CC="ccache x86_64-poky-linux-gcc"
+>>     HOSTCC="ccache gcc"
+>>     ...
+>>     etc.
+>>
+>> This is when the wrong quoting in the invocation of `menuconfig` leads to
+>> errors.
+>>
+>> Could you please verify/check?
+>>
+>>
+>> I have reproduced this. It really looks like a bug!
+>>
+>> [...]
+>> On Mon, Aug 21, 2023 at 3:48 PM Sebert, Holger.ext
+>> <holger.sebert.ext@karlstorz.com<mailto:holger.sebert.ext@karlstorz.com>>
+>> wrote:
+>> >
+>> > Hi,
+>> >
+>> > I am using a Yocto-Poky-Mickledore (version 4.2.1) based system.
+>> >
+>> > For configuring the kernel, I would like to use the command
+>> >
+>> >     bitbake -c menuconfig virtual/kernel
+>> >
+>> > If I do that, Bitbake opens an xterm window and runs the build steps
+>> > for Kconfig. However, after the compiler has finised, the xterm window
+>> > immediately closes and Bitbake exists as if nothing happened, i.e. it
+>> > does not show any error message or similar.
+>> >
+>> > I investigated the problem and found out that, internally, Bitbake
+>> > calls the following command for starting Kconfig:
+>> >
+>> >     make menuconfig CC="ccache x86_64-system-linux-gcc ..." \
+>> >         CFLAGS="..." HOSTCC="ccache gcc" HOSTCCFLAGS="..."
+>> >
+>> > The quotes, however, seem to get lost when starting the actual command
+>> > in the terminal. This leads to a command line like follows:
+>> >
+>> >     make menuconfig CC=ccache x86_64-system-linux-gcc ... \
+>> >         CFLAGS=... HOSTCC="ccache gcc" HOSTCCFLAGS="...
+>> >
+>> > which is clearly wrong.
+>> >
+>> > The following patch fixes the problem in
+>> meta/classes-recipe/cml1.bbclass:
+>> >
+>> > diff --git a/meta/classes-recipe/cml1.bbclass
+>> b/meta/classes-recipe/cml1.bbclass
+>> > index a09a042c3f..d6001d6fd0 100644
+>> > --- a/meta/classes-recipe/cml1.bbclass
+>> > +++ b/meta/classes-recipe/cml1.bbclass
+>> > @@ -53,7 +53,8 @@ python do_menuconfig() {
+>> >      # ensure that environment variables are overwritten with this
+>> tasks 'd' values
+>> >      d.appendVar("OE_TERMINAL_EXPORTS", " PKG_CONFIG_DIR
+>> PKG_CONFIG_PATH PKG_CONFIG_LIBDIR PKG_CONFIG_SYSROOT_DIR")
+>> >
+>> > -    oe_terminal("sh -c \"make %s; if [ \\$? -ne 0 ]; then echo
+>> 'Command failed.'; printf 'Press any key to continue... '; read r; fi\"" %
+>> d.getVar('KCONFIG_CONFIG_COMMAND'),
+>> > +    make_cmd = "make %s" %
+>> d.getVar('KCONFIG_CONFIG_COMMAND').replace('"', '\\"')
+>> > +    oe_terminal("sh -c \"%s; if [ \\$? -ne 0 ]; then echo 'Command
+>> failed.'; printf 'Press any key to continue... '; read r; fi\"" % make_cmd,
+>> >                  d.getVar('PN') + ' Configuration', d)
+>>
+>> This patch looks interesting!
+>> I would use shlex.join() to safely construct the command :
+>> https://docs.python.org/3/library/shlex.html#shlex.join<
+>> https://urldefense.com/v3/__https://docs.python.org/3/library/shlex.html*shlex.join__;Iw!!Lw1uGqvHvtJ_psGG2Et-1voSwbo!fQdtwGScMriVPQw2RO0unCFPxKM9NGX19bIH6mNdVfb77dZxiYZEkdNFiD5PZzVoxaOccilrT4L2I56P_pSw6FJuljKxeNTW$
+>> >
+>>
+>> > What do you think? Is my observed behavior a configuration error of my
+>> > setup or does the patch above indeed make sense?
+>>
+>> The patch makes sense to me.
+>>
+>> I guess your next steps are :
+>> * If you want to contribute your patch : reproduce the bug and rebase
+>> your patch on master and send it to the mailing list
+>> * Or, create a bug in https://bugzilla.yoctoproject.org/<
+>> https://urldefense.com/v3/__https://bugzilla.yoctoproject.org/__;!!Lw1uGqvHvtJ_psGG2Et-1voSwbo!fQdtwGScMriVPQw2RO0unCFPxKM9NGX19bIH6mNdVfb77dZxiYZEkdNFiD5PZzVoxaOccilrT4L2I56P_pSw6FJulqw2-PFV$
+>> >
+>>
+>> Best Regards,
+>>
+>> --
+>> Yoann Congal
+>> Smile ECS - Tech expert
+>>
+>
+>
+> --
+> Yoann Congal
+> Smile ECS - Tech expert
+>
+
+
+-- 
+Yoann Congal
+Smile ECS - Tech expert
+
+[-- Attachment #2: Type: text/html, Size: 9252 bytes --]
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+end of thread, other threads:[~2023-09-30 14:13 UTC | newest]
+
+Thread overview: 6+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-08-21 13:48 Poky/Mickledore bitbake menuconfig does not work Sebert, Holger.ext
+     [not found] ` <CAGAf8LwKRDmacsgnsKLqofneB85CetU_h3H7s12b8gY8_y6ZwA@mail.gmail.com>
+2023-09-14 12:10   ` AW: Re: [yocto] " Sebert, Holger.ext
+2023-09-14 21:52     ` Yoann CONGAL
+2023-09-19 16:57       ` Sebert, Holger.ext
+2023-09-20 17:59         ` Yoann CONGAL
+2023-09-30 14:12           ` Yoann CONGAL
+

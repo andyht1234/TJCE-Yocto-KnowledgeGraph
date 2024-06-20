@@ -1,0 +1,147 @@
+* Yocto Technical Team Minutes, Engineering Sync, for May 11, 2021
+@ 2021-05-13 16:29 Trevor Woerner
+  0 siblings, 0 replies; only message in thread
+From: Trevor Woerner @ 2021-05-13 16:29 UTC (permalink / raw)
+  To: yocto
+
+Yocto Technical Team Minutes, Engineering Sync, for May 11, 2021
+archive: https://docs.google.com/document/d/1ly8nyhO14kDNnFcW2QskANXW3ZT7QwKC5wWVDg9dDH4/edit
+
+== announcements ==
+The upcoming Yocto Project Summit is taking place May 25-26 2021
+details: https://www.yoctoproject.org/yocto-project-virtual-summit-2021/
+registration: https://www.cvent.com/d/yjq4dr/4W?ct=868bfddd-ca91-46bb-aaa5-62d2b61b2501
+
+== disclaimer ==
+Best efforts are made to ensure the below is accurate and valid. However,
+errors sometimes happen. If any errors or omissions are found, please feel
+free to reply to this email with any corrections.
+
+== attendees ==
+Trevor Woerner, Stephen Jolley, Armin Kuster, Scott Murray, Joshua Watt,
+Randy MacLeod, Bruce Ashfield, Tony Tascioglu (WR intern), Trevor Gamblin,
+Steve Sakoman, Alexander Belloni, Michael Halstead, Paul Barker, Ross
+Burton, Tim Orling, Saul Wold, Jere Viikari, Alejandro H
+
+== notes ==
+- 3.2.4 in QA, out in a couple days (this will be the final 3.2 release,
+  aka gatesgarth)
+- significant patches going into master, lots of version updates (thanks
+  AlexK)
+- multiconfig changes in bitbake cause challenges
+- some CVEs showed up that could use help
+- smp for various qemu machines added/enabled
+- should we consider a different default qemu emulation (for arm?)
+- serial IRQ handling issues with qemu-ppc
+- gnome switched from gtk to ??
+
+== general ==
+AlexB: I’ve been looking into some of the intermittent AB issues, i believe
+    a couple of them can be closed now. there appear to be a lot of duplicates
+    (same issue, different manifestations)
+Randy: good to hear, how many issues?
+AlexB: we can look at them in the bug triage meeting. i’m guessing it’s
+    getting better. there are very few that happen regularly, and many others
+    happen only once. maybe 4 or 5 race conditions that are infrequent. the
+    improtant ones are qemu not working properly and the io load issue(s).
+    i’d like to get some graphs to visualize. there are issues related to
+    running out of memory, so maybe the solution is to not run so many things
+    at once
+Randy: we used to use top to analyse what’s going on, but it’s tedious.
+    instead we can look at the tail of the cooker log that gives more
+    information, but is missing the total view of what’s going on at a given
+    time slice. we need a list of bitbake tasks and where to find their cooker
+    logs. once we have that the next step is to figure out who is doing all
+    the I/O. we’ve been looking at a tool called iotop, but i don’t think
+    that’s what we want.
+RP: iotop is probably what we want, but requires root priv
+
+
+RP: x86 cpu machine arguments in qemu
+RP: i think all these RCU stalls we’re seeing is due to the cpu emulation
+    we’re using (which is very old) when we enabled SMP it caused everything
+    to fall over the edge and fail everywhere. maybe the qemu process is
+    locked up, rather than the system being overloaded
+Randy: interesting theory
+RP: i have a patch in master-next to upgrade to ivy-bridge qemu emulation. i
+    guess we’ll see what happens
+AlexB: i don’t think it’ll solve all issues. we’ve seen RCU stalls on
+    other qemu machines, not just x86 (mips, arm64, arm)
+RP: i thought it was just x86
+AlexB: i have the list, i can confirm that we’ve seen rcu stalls on qemuarm
+    at least
+RP: maybe there’s a pattern where the logs stop, then we get the rcu stall
+    kicking in. it could be we have 2 issues which are interfering with each
+    other. i’m not ready to give up on the theory yet
+AlexB: it’s probably still useful to do regardless
+RP: yes, i think we need to do it anyway. it won’t solve the ptest failures
+    on qemuarm, for example, but might help with others
+Ross: the qemu person i talked with said that on a heavily loaded
+    system you'd expect some level of rcu stalls
+RP: but should rcu stalls take out qemu?
+Bruce: it should recover
+AlexB: i’m not sure that’s a kernel thing that would kill it
+JPEW: is it possible that because there’s too many rcu stalls that we end up
+    running out of memory
+Bruce: we could turn rcu off and see if it recovers
+RP: we should check if it recovers, or if it’s hanging. there might be 2
+    patterns here. this morning there was a lockup but there was no stack
+    trace
+JPEW: is there a way to force the kernel to process all rcu’s?
+??: i think that’s what it’s doing
+AlexB: it’s the rcu stall detection. the cpu has been stalled for too long.
+    it’s not an issue with rcu itself, it’s just that rcu is what’s
+    noticed that the cpu has stopped responding
+Randy: so ideally it would be nice to detect this ourselves and shed load
+    before the stalls happen
+JPEW: tweak stall detection time?
+??: takes about 80 seconds
+AlexB: 20 seconds i think
+JPEW: 21 seconds, according to docs. looks like it can be set on kernel
+    cmdline
+Randy: heavily loaded system for cpu and io, tweaking the params isn’t going
+    to fix the issue
+RP: it might help guide the debugging, might get more info turning on smp
+
+
+Randy: been talking with TrevorG about job server. might get started next week
+
+
+Randy: Saul are you getting back to qemu machine protocol
+Saul: looking at it
+Randy: how do you test it
+Saul: don’t have a strong hold on it yet
+RP: there is a hanging qemu on the AB, and it should have had the qmp patches
+    applied. so in theory there’s one there that we might be able to
+    interrogate
+Saul: could you point me at it again?
+RP: qemu-x86-64 on the AB, it should still be running
+
+
+TW: topic ideas for OEDVM
+PaulB: is there a way to just join the developer’s meeting without attending
+    the whole conference?
+
+
+Armin: lgtm.com bitbake/yp is listed there. i sent in some patches to improve
+    the metrics
+Armin: see https://lgtm.com/projects/g/openembedded/bitbake?mode=list
+Armin: 31 errors, 80 warnings, 234 recommendations (currently)
+ScottM: maybe we could do a checkpatch type thing for python linting
+Armin: there is an integration with github, but requires corporate github
+AlexB: should we open newcomer bugs?
+Armin: we could, it tells you exactly where the problem is and what to do
+ScottM: we don’t have tests, so fixes could end up breaking more things
+AlexB: maybe we need test cases for bitbake/toaster/etc
+
+
+Randy: our build quality is amazing! currently 0.2% build failures (mostly
+    running out of memory)
+
+^ permalink raw reply	[flat|nested] only message in thread
+only message in thread, other threads:[~2021-05-13 16:29 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-05-13 16:29 Yocto Technical Team Minutes, Engineering Sync, for May 11, 2021 Trevor Woerner
+

@@ -1,0 +1,217 @@
+* [meta-zephyr][PATCH 1/2] zephyr-core/zephyr-kernel: Use the upstream "cross-compile" toolchain
+@ 2023-02-22 23:07 Peter Hoyes
+  2023-02-22 23:07 ` [meta-zephyr][PATCH 2/2] zephyr-core/zephyr-kernel: Remove the downstream "yocto" toolchain Peter Hoyes
+  0 siblings, 1 reply; 2+ messages in thread
+From: Peter Hoyes @ 2023-02-22 23:07 UTC (permalink / raw)
+  To: yocto; +Cc: Peter Hoyes
+
+From: Peter Hoyes <Peter.Hoyes@arm.com>
+
+Zephyr upstream contains CMake configuration for a "cross-compile"
+toolchain for "other cross compilers" which works with the Yocto-built
+toolchain out-of-the-box, so use this instead of the "yocto" toolchain,
+which requires a downstream patch to be carried.
+
+The Yocto-built toolchain does not support --print-sysroot so that
+toolchains can be shared between multiple builds with different
+sysroots, so manually set SYSROOT_DIR to the staging directory.
+
+Use the "cross-compile" toolchain by default.
+
+Signed-off-by: Peter Hoyes <Peter.Hoyes@arm.com>
+---
+ .../zephyr-kernel/zephyr-kernel-common.inc           |  2 +-
+ .../zephyr-kernel/zephyr-toolchain-cross-compile.inc | 12 ++++++++++++
+ 2 files changed, 13 insertions(+), 1 deletion(-)
+ create mode 100644 meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-toolchain-cross-compile.inc
+
+diff --git a/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-kernel-common.inc b/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-kernel-common.inc
+index 5c9d9e5..ba70a29 100644
+--- a/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-kernel-common.inc
++++ b/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-kernel-common.inc
+@@ -7,7 +7,7 @@ inherit ${ZEPHYR_INHERIT_CLASSES}
+ # filesystem.
+ IMAGE_NO_MANIFEST = "1"
+ 
+-ZEPHYR_TOOLCHAIN_VARIANT ?= "yocto"
++ZEPHYR_TOOLCHAIN_VARIANT ?= "cross-compile"
+ require zephyr-toolchain-${ZEPHYR_TOOLCHAIN_VARIANT}.inc
+ 
+ ZEPHYR_MAKE_OUTPUT = "zephyr.elf"
+diff --git a/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-toolchain-cross-compile.inc b/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-toolchain-cross-compile.inc
+new file mode 100644
+index 0000000..2f1ea37
+--- /dev/null
++++ b/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-toolchain-cross-compile.inc
+@@ -0,0 +1,12 @@
++# Additional definitions to use the cross-compile toolchain
++
++CROSS_COMPILE = "${STAGING_BINDIR_TOOLCHAIN}/${TARGET_PREFIX}"
++SYSROOT_DIR="${STAGING_DIR_TARGET}"
++
++EXTRA_OECMAKE:append = " \
++    -DCROSS_COMPILE=${CROSS_COMPILE} \
++    -DSYSROOT_DIR=${SYSROOT_DIR} \
++    "
++
++OE_TERMINAL_EXPORTS += "CROSS_COMPILE"
++OE_TERMINAL_EXPORTS += "SYSROOT_DIR"
+-- 
+2.34.1
+
+
+
+^ permalink raw reply related	[flat|nested] 2+ messages in thread
+* [meta-zephyr][PATCH 2/2] zephyr-core/zephyr-kernel: Remove the downstream "yocto" toolchain
+  2023-02-22 23:07 [meta-zephyr][PATCH 1/2] zephyr-core/zephyr-kernel: Use the upstream "cross-compile" toolchain Peter Hoyes
+@ 2023-02-22 23:07 ` Peter Hoyes
+  0 siblings, 0 replies; 2+ messages in thread
+From: Peter Hoyes @ 2023-02-22 23:07 UTC (permalink / raw)
+  To: yocto; +Cc: Peter Hoyes
+
+From: Peter Hoyes <Peter.Hoyes@arm.com>
+
+The "yocto" toolchain requires a downstream patch to be carried and
+maintained. The upstream "cross-compile" toolchain is equivalent so this
+is no longer needed.
+
+Remove the toolchain-specific inc file and the downstream patch.
+
+Signed-off-by: Peter Hoyes <Peter.Hoyes@arm.com>
+---
+ .../0001-3.3-cmake-add-yocto-toolchain.patch  | 63 -------------------
+ .../zephyr-kernel/zephyr-kernel-src-3.3.0.inc |  1 -
+ .../zephyr-kernel/zephyr-toolchain-yocto.inc  | 16 -----
+ .../scripts/zephyr-kernel-src.inc.jinja       |  1 -
+ 4 files changed, 81 deletions(-)
+ delete mode 100644 meta-zephyr-core/recipes-kernel/zephyr-kernel/files/0001-3.3-cmake-add-yocto-toolchain.patch
+ delete mode 100644 meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-toolchain-yocto.inc
+
+diff --git a/meta-zephyr-core/recipes-kernel/zephyr-kernel/files/0001-3.3-cmake-add-yocto-toolchain.patch b/meta-zephyr-core/recipes-kernel/zephyr-kernel/files/0001-3.3-cmake-add-yocto-toolchain.patch
+deleted file mode 100644
+index a16eabf..0000000
+--- a/meta-zephyr-core/recipes-kernel/zephyr-kernel/files/0001-3.3-cmake-add-yocto-toolchain.patch
++++ /dev/null
+@@ -1,63 +0,0 @@
+-From 39f1dd116d00b6c2135c4ccd216341dcd2f2917e Mon Sep 17 00:00:00 2001
+-From: Naveen Saini <naveen.kumar.saini@intel.com>
+-Date: Tue, 26 Jul 2022 14:12:18 +0200
+-Subject: [PATCH] cmake: add yocto toolchain
+-
+-Upstream status: inappropriate [OE specific]
+-
+-Signed-off-by: Naveen Saini <naveen.kumar.saini@intel.com>
+----
+- cmake/compiler/gcc/target.cmake     |  7 -------
+- cmake/toolchain/yocto/generic.cmake | 13 +++++++++++++
+- cmake/toolchain/yocto/target.cmake  |  1 +
+- 3 files changed, 14 insertions(+), 7 deletions(-)
+- create mode 100644 cmake/toolchain/yocto/generic.cmake
+- create mode 100644 cmake/toolchain/yocto/target.cmake
+-
+-diff --git a/cmake/compiler/gcc/target.cmake b/cmake/compiler/gcc/target.cmake
+-index 014447e67e..b510f47d59 100644
+---- a/cmake/compiler/gcc/target.cmake
+-+++ b/cmake/compiler/gcc/target.cmake
+-@@ -94,13 +94,6 @@ execute_process(
+-   OUTPUT_STRIP_TRAILING_WHITESPACE
+-   )
+- 
+--assert_exists(LIBGCC_FILE_NAME)
+--
+--get_filename_component(LIBGCC_DIR ${LIBGCC_FILE_NAME} DIRECTORY)
+--
+--assert_exists(LIBGCC_DIR)
+--
+--LIST(APPEND LIB_INCLUDE_DIR "-L\"${LIBGCC_DIR}\"")
+- LIST(APPEND TOOLCHAIN_LIBS gcc)
+- 
+- # For CMake to be able to test if a compiler flag is supported by the
+-diff --git a/cmake/toolchain/yocto/generic.cmake b/cmake/toolchain/yocto/generic.cmake
+-new file mode 100644
+-index 0000000000..45e5777e2a
+---- /dev/null
+-+++ b/cmake/toolchain/yocto/generic.cmake
+-@@ -0,0 +1,13 @@
+-+set(COMPILER gcc)
+-+set(LINKER ld)
+-+set(BINTOOLS gnu)
+-+
+-+set(ZEPHYR_SYSROOT ${ZEPHYR_SYSROOT})
+-+set(SYSROOT_DIR ${ZEPHYR_SYSROOT})
+-+set(LIBC_LIBRARY_DIR "\"${SYSROOT_DIR}\"/")
+-+set(LIBC_INCLUDE_DIR ${SYSROOT_DIR}/include)
+-+LIST(APPEND TOOLCHAIN_LIBS gcc)
+-+
+-+LIST(APPEND LIB_INCLUDE_DIR "-L\"${STAGING_LIBDIR}\"")
+-+
+-+set(TOOLCHAIN_LIBS gcc)
+-diff --git a/cmake/toolchain/yocto/target.cmake b/cmake/toolchain/yocto/target.cmake
+-new file mode 100644
+-index 0000000000..9881313609
+---- /dev/null
+-+++ b/cmake/toolchain/yocto/target.cmake
+-@@ -0,0 +1 @@
+-+# SPDX-License-Identifier: Apache-2.0
+--- 
+-2.34.1
+-
+diff --git a/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-kernel-src-3.3.0.inc b/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-kernel-src-3.3.0.inc
+index c7614a7..245ba81 100644
+--- a/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-kernel-src-3.3.0.inc
++++ b/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-kernel-src-3.3.0.inc
+@@ -115,7 +115,6 @@ SRC_URI_ZEPHYR_ZSCILIB ?= "git://github.com/zephyrproject-rtos/zscilib;protocol=
+ SRC_URI_ZEPHYR_THRIFT ?= "git://github.com/zephyrproject-rtos/thrift;protocol=https"
+ 
+ SRC_URI_PATCHES ?= "\
+-    file://0001-3.3-cmake-add-yocto-toolchain.patch;patchdir=zephyr \
+     file://0001-3.3-x86-fix-efi-binary-generation-issue-in-cross-compila.patch;patchdir=zephyr \
+ "
+ 
+diff --git a/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-toolchain-yocto.inc b/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-toolchain-yocto.inc
+deleted file mode 100644
+index b167695..0000000
+--- a/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-toolchain-yocto.inc
++++ /dev/null
+@@ -1,16 +0,0 @@
+-# Additional definitions to use the Yocto toolchain
+-
+-ZEPHYR_GCC_VARIANT="yocto"
+-ZEPHYR_SYSROOT="${STAGING_DIR_TARGET}"
+-CROSS_COMPILE = "${STAGING_BINDIR_TOOLCHAIN}/${TARGET_PREFIX}"
+-
+-EXTRA_OECMAKE:append = " \
+-    -DZEPHYR_GCC_VARIANT=${ZEPHYR_GCC_VARIANT} \
+-    -DCROSS_COMPILE=${CROSS_COMPILE} \
+-    -DZEPHYR_SYSROOT=${ZEPHYR_SYSROOT} \
+-    -DEXTRA_CPPFLAGS=${CPPFLAGS} \
+-    "
+-
+-OE_TERMINAL_EXPORTS += "CROSS_COMPILE"
+-OE_TERMINAL_EXPORTS += "ZEPHYR_SYSROOT"
+-OE_TERMINAL_EXPORTS += "ZEPHYR_GCC_VARIANT"
+diff --git a/meta-zephyr-core/scripts/zephyr-kernel-src.inc.jinja b/meta-zephyr-core/scripts/zephyr-kernel-src.inc.jinja
+index 1723b88..a2d2232 100644
+--- a/meta-zephyr-core/scripts/zephyr-kernel-src.inc.jinja
++++ b/meta-zephyr-core/scripts/zephyr-kernel-src.inc.jinja
+@@ -13,7 +13,6 @@ SRC_URI_ZEPHYR_{{ project.name | bitbake_var }} ?= "{{ project.url | git_url_to_
+ {%- endfor %}
+ 
+ SRC_URI_PATCHES ?= "\
+-    file://0001-{{ short_version }}-cmake-add-yocto-toolchain.patch;patchdir=zephyr \
+     file://0001-{{ short_version }}-x86-fix-efi-binary-generation-issue-in-cross-compila.patch;patchdir=zephyr \
+ "
+ 
+-- 
+2.34.1
+
+
+
+^ permalink raw reply related	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2023-02-22 23:07 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-02-22 23:07 [meta-zephyr][PATCH 1/2] zephyr-core/zephyr-kernel: Use the upstream "cross-compile" toolchain Peter Hoyes
+2023-02-22 23:07 ` [meta-zephyr][PATCH 2/2] zephyr-core/zephyr-kernel: Remove the downstream "yocto" toolchain Peter Hoyes
+

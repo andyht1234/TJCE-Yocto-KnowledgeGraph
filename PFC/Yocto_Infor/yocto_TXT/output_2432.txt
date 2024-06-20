@@ -1,0 +1,119 @@
+* Bitbake: checksums handling for local directories
+@ 2021-12-22 17:54 Shmuel Hazan
+       [not found] ` <f9956bd115ac0ed26d7ef966e89bd8dc1d30a667.camel@linuxfoundation.org>
+  0 siblings, 1 reply; 2+ messages in thread
+From: Shmuel Hazan @ 2021-12-22 17:54 UTC (permalink / raw)
+  To: yocto
+
+Hi everyone,
+
+I noticed a strange behavior of bitbake, and I am not sure whether it is a bug:
+
+Let say that I have a simple recipe that takes the directory `THISDIR/files/A` and install all the files inside of it:
+
+...
+SRC_URI = "file://A/" 
+S = "${WORKDIR}/A"
+do_install() {
+    install -m 644 ${S}/* ${D}
+}
+...
+
+Let say that I have one file called "my_file" inside of that directory. 
+
+It will work great, and I will get a package with "/myfile" -- until I will rename a file to "/myfile1" in the directory. Since the file content stayed the same, do_fetch won't be triggered and as a result, the package will stay the same and have "/myfile". 
+
+The only proper way to workaround it was to mark this recipe's do_fetch as nostamp:
+
+do_fetch[nostamp] = "1" 
+
+I am currently working with bitbake 1.46.0. 
+
+Questions:
+1. Is this a known issue?
+2. I could not find any reference to a similar issue / a recent change that could have caused the issue, am I doing something wrong here?
+
+Thanks,
+Shmuel.  
+
+
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+* Re: [yocto] Bitbake: checksums handling for local directories
+       [not found] ` <f9956bd115ac0ed26d7ef966e89bd8dc1d30a667.camel@linuxfoundation.org>
+@ 2021-12-22 18:57   ` Shmuel Hazan
+  0 siblings, 0 replies; 2+ messages in thread
+From: Shmuel Hazan @ 2021-12-22 18:57 UTC (permalink / raw)
+  To: richard.purdie, yocto
+
+On Wed, 2021-12-22 at 18:10 +0000, Richard Purdie wrote:
+> On Wed, 2021-12-22 at 17:54 +0000, Shmuel Hazan wrote:
+> > I noticed a strange behavior of bitbake, and I am not sure whether
+> > it is a
+> > bug:
+> > 
+> > Let say that I have a simple recipe that takes the directory
+> > `THISDIR/files/A`
+> > and install all the files inside of it:
+> > 
+> > ...
+> > SRC_URI = "file://A/" 
+> > S = "${WORKDIR}/A"
+> > do_install() {
+> >     install -m 644 ${S}/* ${D}
+> > }
+> > ...
+> > 
+> > Let say that I have one file called "my_file" inside of that
+> > directory. 
+> > 
+> > It will work great, and I will get a package with "/myfile" --
+> > until I will
+> > rename a file to "/myfile1" in the directory. Since the file
+> > content stayed
+> > the same, do_fetch won't be triggered and as a result, the package
+> > will stay
+> > the same and have "/myfile". 
+> > 
+> > The only proper way to workaround it was to mark this recipe's
+> > do_fetch as
+> > nostamp:
+> > 
+> > do_fetch[nostamp] = "1" 
+> > 
+> > I am currently working with bitbake 1.46.0. 
+> > 
+> > Questions:
+> > 1. Is this a known issue?
+> > 2. I could not find any reference to a similar issue / a recent
+> > change that
+> > could have caused the issue, am I doing something wrong here?
+> 
+> I'm pretty sure we fixed bugs like that in more recent versions.
+> 
+
+Thanks! 
+
+For a reference, b4975d2ecf615ac4c240808fbc5a3f879a93846b
+(fetch2/checksum/siggen: Fix taskhashes not tracking file directories)
+from 2~ months ago seems to solve that issue. 
+
+I see that the checksum code was not changed for a long time, is there
+a chance that someone would accept a backport of this commit to
+Dunfell/1.46? 
+
+> Cheers,
+> 
+> Richard
+> 
+
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2021-12-22 18:58 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-12-22 17:54 Bitbake: checksums handling for local directories Shmuel Hazan
+     [not found] ` <f9956bd115ac0ed26d7ef966e89bd8dc1d30a667.camel@linuxfoundation.org>
+2021-12-22 18:57   ` [yocto] " Shmuel Hazan
+

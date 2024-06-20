@@ -1,0 +1,294 @@
+* Password added succesfully but defaults to autologin
+@ 2023-10-09 11:03 MOHAMMED HASSAN
+  2023-10-09 14:25 ` MOHAMMED HASSAN
+  0 siblings, 1 reply; 2+ messages in thread
+From: MOHAMMED HASSAN @ 2023-10-09 11:03 UTC (permalink / raw)
+  To: yocto
+
+
+[-- Attachment #1.1: Type: text/plain, Size: 776 bytes --]
+
+Hi guys,
+I am trying to set up a login password for my hardware but the problem is
+that my device uses automatic login. I checked online to comment out
+automatic login but it seems like
+my /lib/systemd/system/serial-getty\@.service contains the line
+"ExecStart=-/sbin/agetty -8 -L %I 921600 $TERM --autologin root" but before
+building the image i checked my service file and "ExecStart=-/sbin/agetty
+-8 -L %I @BAUDRATE@ $TERM". There is no mention of autologin and in my
+image recipe file I have not enabled it.
+After removing the line manually and reloading the service I can use the
+login creds to login but ssh login returns the message "permission denied".
+
+I have attached the relevant files for your reference. Let me know if you
+need more information.
+
+Regards,
+Hassan
+
+[-- Attachment #1.2: Type: text/html, Size: 913 bytes --]
+
+[-- Attachment #2: amlogic-yocto.bb --]
+[-- Type: application/octet-stream, Size: 4844 bytes --]
+
+SUMMARY = "Amlogic Yocto Image"
+
+FILESEXTRAPATHS_prepend := "${THISDIR}/files:"
+
+IMAGECLASS ?= " ${@bb.utils.contains('DISTRO_FEATURES', 'selinux', 'selinux-image', 'core-image', d)} "
+inherit ${IMAGECLASS}
+
+#configuration to add password to hub
+IMAGE_FEATURES_remove += " \
+	debug-tweaks \
+"
+
+inherit extrausers
+EXTRA_USERS_PARAMS = " \
+	usermod -P hassan root; \
+"
+
+IMAGE_FSTYPES = "${@bb.utils.contains('DISTRO_FEATURES', 'nand', 'ubi', 'ext4', d)}"
+
+require aml-package.inc
+
+LICENSE = "MIT"
+
+IMAGE_FEATURES_t7 += "splash "
+#IMAGE_FEATURES += "tools-debug "
+
+IMAGE_INSTALL += " \
+    packagegroup-amlogic-baserootfs \
+    boa \
+    ${@bb.utils.contains('DISTRO_FEATURES', 'selinux', 'packagegroup-core-selinux auditd', '', d)} \
+    ${@bb.utils.contains('DISTRO_FEATURES', 'aml-bluez-alsa', 'aml-bluez-alsa', '', d)} \
+    ${@bb.utils.contains("DISTRO_FEATURES", "gst1-plugins-tsplayer", "gst1-plugins-tsplayer", "", d)} \
+    ${@bb.utils.contains('DISTRO_FEATURES', 'swupdate', 'swupdate', '', d)} \
+    ${@bb.utils.contains('DISTRO_FEATURES', 'test_tools', 'test-tools', '', d)} \
+    "
+
+# unicode locale support
+IMAGE_INSTALL_append = " glibc-utils localedef"
+
+# web-ui-wifi supported by default
+IMAGE_INSTALL_append = " web-ui-wifi"
+
+MACHINE_IMAGE_NAME ?= "${PN}"
+IMAGE_FEATURES_remove = " read-only-rootfs"
+
+DEPENDS_append = " android-tools-native"
+
+PACKAGE_INSTALL += "base-files netbase ${VIRTUAL-RUNTIME_base-utils} base-passwd ${ROOTFS_BOOTSTRAP_INSTALL} initramfs-meson-boot udev-extraconf e2fsprogs "
+
+# Linguas defined in local.conf
+#IMAGE_LINGUAS = ""
+
+#reduce this value to reserve space for DM-verity/AVB meta-data at the end of partition(64M)
+IMAGE_ROOTFS_SIZE = "983040"
+
+#UBI
+UBI_VOLNAME = "rootfs"
+#4k
+#MKUBIFS_ARGS = "-F -m 4096 -e 253952 -c 1120"
+#UBINIZE_ARGS = "-m 4096 -p 256KiB -s 4096 -O 4096"
+
+#2K
+#MKUBIFS_ARGS = "-v -m 2048 -e 126976 -c 2212"
+#UBINIZE_ARGS = "-m 2048 -p 128KiB -s 2048 -O 2048"
+
+IMAGE_ROOTFS_EXTRA_SPACE = "0"
+KERNEL_BOOTARGS = "root=/dev/system rootfstype=ext4"
+
+do_rootfs[depends] += "android-tools-native:do_populate_sysroot"
+#PREFERRED_VERSION_ell = "0.22"
+
+#ROOTFS_POSTPROCESS_COMMAND += "disable_systemd_services; "
+
+##disable_systemd_services() {
+#        if [ -d ${IMAGE_ROOTFS}${sysconfdir}/systemd/system/multi-user.target.wants/ ]; then
+#                rm -f ${IMAGE_ROOTFS}${sysconfdir}/systemd/system/multi-user.target.wants/appmanager.service;
+#
+#        fi
+#
+#        # Remove files added by openembedded-core/meta/recipes-connectivity/wpa-supplicant/wpa-supplicant_2.7.bb:
+#        rm -f ${IMAGE_ROOTFS}${systemd_unitdir}/system/wpa_supplicant.service
+#        rm -f ${IMAGE_ROOTFS}${systemd_unitdir}/system/wpa_supplicant-nl80211@.service
+#        rm -f ${IMAGE_ROOTFS}${systemd_unitdir}/system/wpa_supplicant-wired@.service
+#        rm -f ${IMAGE_ROOTFS}${systemd_unitdir}/system/wpa_supplicant@.service
+#        rm -f ${IMAGE_ROOTFS}${sysconfdir}/network/if-pre-up.d/wpa-supplicant
+#        rm -f ${IMAGE_ROOTFS}${sysconfdir}/network/if-post-down.d/wpa_supplicant
+#        #rm -f ${IMAGE_ROOTFS}${sysconfdir}/dbus-1/system.d/dbus-wpa_supplicant.conf
+#        #rm -f ${IMAGE_ROOTFS}${sysconfdir}/etc/default/volatiles/99_wpa_supplicant
+#}
+
+R = "${IMAGE_ROOTFS}"
+
+PROJECT_BRANCH ?= "default"
+
+python version_hook(){
+      bb.build.exec_func('create_version_file', d)
+}
+
+python create_version_file() {
+
+    version_file = os.path.join(d.getVar("R", True), 'version.txt')
+    image_name = d.getVar("IMAGE_NAME", True)
+    machine = d.getVar("MACHINE", True).upper()
+    branch = d.getVar("PROJECT_BRANCH", True)
+    yocto_version = d.getVar("DISTRO_CODENAME", True)
+    release_version = d.getVar("RELEASE_VERSION", True) or '0.0.0.0'
+    release_spin = d.getVar("RELEASE_SPIN", True) or '0'
+    stamp = d.getVar("DATETIME", True)
+    t = time.strptime(stamp, '%Y%m%d%H%M%S')
+    build_time = time.strftime('"%Y-%m-%d %H:%M:%S"', t)
+    gen_time = time.strftime('Generated on %a %b %d  %H:%M:%S UTC %Y', t)
+    with open(version_file, 'w') as fw:
+        fw.write('imagename:{0}\n'.format(image_name))
+        fw.write('BRANCH={0}\n'.format(branch))
+        fw.write('YOCTO_VERSION={0}\n'.format(yocto_version))
+        fw.write('VERSION={0}\n'.format(release_version))
+        fw.write('SPIN={0}\n'.format(release_spin))
+        fw.write('BUILD_TIME={0}\n'.format(build_time))
+        fw.write('{0}\n'.format(gen_time))
+    build_config = os.path.join(d.getVar("TOPDIR", True), 'build-images.txt')
+    taskdata = d.getVar("BB_TASKDEPDATA", True)
+    key = sorted(taskdata)[0]
+    target = taskdata[key][0]
+    line = '{0} - {1}\n'.format(target, image_name)
+    with open(build_config, 'a') as fw:
+        fw.write(line)
+}
+
+create_version_file[vardepsexclude] += "DATETIME"
+create_version_file[vardepsexclude] += "BB_TASKDEPDATA"
+
+ROOTFS_POSTPROCESS_COMMAND += "version_hook; "
+
+[-- Attachment #3: serial-getty@.service --]
+[-- Type: text/x-dbus-service, Size: 1335 bytes --]
+
+#  SPDX-License-Identifier: LGPL-2.1+
+#
+#  This file is part of systemd.
+#
+#  systemd is free software; you can redistribute it and/or modify it
+#  under the terms of the GNU Lesser General Public License as published by
+#  the Free Software Foundation; either version 2.1 of the License, or
+#  (at your option) any later version.
+
+[Unit]
+Description=Serial Getty on %I
+Documentation=man:agetty(8) man:systemd-getty-generator(8)
+Documentation=http://0pointer.de/blog/projects/serial-console.html
+PartOf=dev-%i.device
+ConditionPathExists=/dev/%i
+After=dev-%i.device systemd-user-sessions.service plymouth-quit-wait.service getty-pre.target
+After=rc-local.service
+
+# If additional gettys are spawned during boot then we should make
+# sure that this is synchronized before getty.target, even though
+# getty.target didn't actually pull it in.
+Before=getty.target
+IgnoreOnIsolate=yes
+
+# IgnoreOnIsolate causes issues with sulogin, if someone isolates
+# rescue.target or starts rescue.service from multi-user.target or
+# graphical.target.
+Conflicts=rescue.service
+Before=rescue.service
+
+[Service]
+Environment="TERM=xterm"
+ExecStart=-/sbin/agetty -8 -L %I @BAUDRATE@ $TERM
+Type=idle
+Restart=always
+UtmpIdentifier=%I
+TTYPath=/dev/%I
+TTYReset=yes
+TTYVHangup=yes
+KillMode=process
+IgnoreSIGPIPE=no
+SendSIGHUP=yes
+
+[Install]
+WantedBy=getty.target
+
+[-- Attachment #4: systemd-serialgetty.bb --]
+[-- Type: application/octet-stream, Size: 1949 bytes --]
+
+SUMMARY = "Serial terminal support for systemd"
+HOMEPAGE = "https://www.freedesktop.org/wiki/Software/systemd/"
+LICENSE = "GPLv2+"
+LIC_FILES_CHKSUM = "file://${COREBASE}/meta/files/common-licenses/GPL-2.0;md5=801f80980d171dd6425610833a22dbe6"
+
+PR = "r5"
+
+SERIAL_CONSOLES ?= "115200;ttyS0"
+
+SRC_URI = "file://serial-getty@.service"
+
+S = "${WORKDIR}"
+
+# As this package is tied to systemd, only build it when we're also building systemd.
+inherit features_check
+REQUIRED_DISTRO_FEATURES = "systemd"
+
+do_install() {
+	if [ ! -z "${SERIAL_CONSOLES}" ] ; then
+		default_baudrate=`echo "${SERIAL_CONSOLES}" | sed 's/\;.*//'`
+		install -d ${D}${systemd_unitdir}/system/
+		install -d ${D}${sysconfdir}/systemd/system/getty.target.wants/
+		install -m 0644 ${WORKDIR}/serial-getty@.service ${D}${systemd_unitdir}/system/
+		sed -i -e "s/\@BAUDRATE\@/$default_baudrate/g" ${D}${systemd_unitdir}/system/serial-getty@.service
+
+		tmp="${SERIAL_CONSOLES}"
+		for entry in $tmp ; do
+			baudrate=`echo $entry | sed 's/\;.*//'`
+			ttydev=`echo $entry | sed -e 's/^[0-9]*\;//' -e 's/\;.*//'`
+			if [ "$baudrate" = "$default_baudrate" ] ; then
+				# enable the service
+				ln -sf ${systemd_unitdir}/system/serial-getty@.service \
+					${D}${sysconfdir}/systemd/system/getty.target.wants/serial-getty@$ttydev.service
+			else
+				# install custom service file for the non-default baudrate
+				install -m 0644 ${WORKDIR}/serial-getty@.service ${D}${systemd_unitdir}/system/serial-getty$baudrate@.service
+				sed -i -e "s/\@BAUDRATE\@/$baudrate/g" ${D}${systemd_unitdir}/system/serial-getty$baudrate@.service
+				# enable the service
+				ln -sf ${systemd_unitdir}/system/serial-getty$baudrate@.service \
+					${D}${sysconfdir}/systemd/system/getty.target.wants/serial-getty$baudrate@$ttydev.service
+			fi
+		done
+	fi
+}
+
+# This is a machine specific file
+FILES_${PN} = "${systemd_unitdir}/system/*.service ${sysconfdir}"
+PACKAGE_ARCH = "${MACHINE_ARCH}"
+
+ALLOW_EMPTY_${PN} = "1"
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+* Re: Password added succesfully but defaults to autologin
+  2023-10-09 11:03 Password added succesfully but defaults to autologin MOHAMMED HASSAN
+@ 2023-10-09 14:25 ` MOHAMMED HASSAN
+  0 siblings, 0 replies; 2+ messages in thread
+From: MOHAMMED HASSAN @ 2023-10-09 14:25 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 153 bytes --]
+
+Let me know if I am making any mistakes here. Also let me know if you need any other piece of information to help me on this issue.
+
+Thanks,
+Hassan
+
+[-- Attachment #2: Type: text/html, Size: 187 bytes --]
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2023-10-09 14:25 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-10-09 11:03 Password added succesfully but defaults to autologin MOHAMMED HASSAN
+2023-10-09 14:25 ` MOHAMMED HASSAN
+

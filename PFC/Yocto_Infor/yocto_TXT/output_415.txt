@@ -1,0 +1,88 @@
+* [meta-selinux][PATCH] libselinux: fix compilation with musl
+@ 2023-06-29 14:31 Renato Caldas
+  0 siblings, 0 replies; only message in thread
+From: Renato Caldas @ 2023-06-29 14:31 UTC (permalink / raw)
+  To: yocto; +Cc: Renato Caldas
+
+From: Renato Caldas <renato@calgera.com>
+
+Signed-off-by: Renato Caldas <renato@calgera.com>
+---
+ ...re-drop-the-obsolete-LSF-transitiona.patch | 39 +++++++++++++++++++
+ recipes-security/selinux/libselinux_3.5.bb    |  5 +++
+ 2 files changed, 44 insertions(+)
+ create mode 100644 recipes-security/selinux/libselinux/0003-libselinux-restore-drop-the-obsolete-LSF-transitiona.patch
+
+diff --git a/recipes-security/selinux/libselinux/0003-libselinux-restore-drop-the-obsolete-LSF-transitiona.patch b/recipes-security/selinux/libselinux/0003-libselinux-restore-drop-the-obsolete-LSF-transitiona.patch
+new file mode 100644
+index 0000000..5b37395
+--- /dev/null
++++ b/recipes-security/selinux/libselinux/0003-libselinux-restore-drop-the-obsolete-LSF-transitiona.patch
+@@ -0,0 +1,39 @@
++From a822176c6f181d1e6989900dfc58bbdab6d9065a Mon Sep 17 00:00:00 2001
++From: Renato Caldas <renato@calgera.com>
++Date: Thu, 29 Jun 2023 13:59:11 +0100
++Subject: [PATCH] libselinux: restore: drop the obsolete LSF transitional API.
++
++The preferred way to enable LSF support on 32 bit systems is to define
++_FILE_OFFSET_BITS=64 when building selinux.
++
++Upstream-Status: Submitted [https://github.com/SELinuxProject/selinux/pull/401]
++
++Signed-off-by: Renato Caldas <renato@calgera.com>
++---
++ libselinux/src/selinux_restorecon.c | 4 ++--
++ 1 file changed, 2 insertions(+), 2 deletions(-)
++
++diff --git a/libselinux/src/selinux_restorecon.c b/libselinux/src/selinux_restorecon.c
++index 7ef2d45d..2ff920b0 100644
++--- a/src/selinux_restorecon.c
+++++ b/src/selinux_restorecon.c
++@@ -437,7 +437,7 @@ static int filespec_add(ino_t ino, const char *con, const char *file,
++ 	file_spec_t *prevfl, *fl;
++ 	uint32_t h;
++ 	int ret;
++-	struct stat64 sb;
+++	struct stat sb;
++
++ 	__pthread_mutex_lock(&fl_mutex);
++
++@@ -451,7 +451,7 @@ static int filespec_add(ino_t ino, const char *con, const char *file,
++ 	for (prevfl = &fl_head[h], fl = fl_head[h].next; fl;
++ 	     prevfl = fl, fl = fl->next) {
++ 		if (ino == fl->ino) {
++-			ret = lstat64(fl->file, &sb);
+++			ret = lstat(fl->file, &sb);
++ 			if (ret < 0 || sb.st_ino != ino) {
++ 				freecon(fl->con);
++ 				free(fl->file);
++--
++2.41.0
+diff --git a/recipes-security/selinux/libselinux_3.5.bb b/recipes-security/selinux/libselinux_3.5.bb
+index 8009d6d..37383eb 100644
+--- a/recipes-security/selinux/libselinux_3.5.bb
++++ b/recipes-security/selinux/libselinux_3.5.bb
+@@ -10,6 +10,11 @@ require selinux_common.inc
+ 
+ inherit lib_package pkgconfig
+ 
++FILESEXTRAPATHS:prepend := "${THISDIR}/libselinux:"
++SRC_URI += "\
++        file://0003-libselinux-restore-drop-the-obsolete-LSF-transitiona.patch \
++        "
++
+ DEPENDS = "libsepol libpcre2"
+ DEPENDS:append:libc-musl = " fts"
+ 
+-- 
+2.41.0
+
+
+
+^ permalink raw reply related	[flat|nested] only message in thread
+only message in thread, other threads:[~2023-06-29 14:32 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-06-29 14:31 [meta-selinux][PATCH] libselinux: fix compilation with musl Renato Caldas
+

@@ -1,0 +1,209 @@
+* [yocto-autobuilder2][PATCH] builders.py: Add canStartBuild disk space check
+@ 2021-10-29 13:22 Trevor Gamblin
+  2021-10-30 12:33 ` [yocto] " Richard Purdie
+  0 siblings, 1 reply; 2+ messages in thread
+From: Trevor Gamblin @ 2021-10-29 13:22 UTC (permalink / raw)
+  To: yocto
+
+We need a way to limit the builds for when a given worker has less than
+a certain amount of disk space available. This implements a
+canStartBuild method based on the example in the Buildbot docs and
+blocks a build if the worker has less than 60GB of disk space available.
+Unlike the example code, we want the stdout of the command so that we
+can calculate the amount of disk space, rather than just relying on the
+remote command's return code.
+
+Docs: https://docs.buildbot.net/latest/manual/customization.html#canstartbuild-functions
+
+[YOCTO #14591]
+
+Signed-off-by: Trevor Gamblin <trevor.gamblin@windriver.com>
+---
+ builders.py | 44 ++++++++++++++++++++++++++++++++++++++++----
+ 1 file changed, 40 insertions(+), 4 deletions(-)
+
+diff --git a/builders.py b/builders.py
+index 5773950..0d1facc 100644
+--- a/builders.py
++++ b/builders.py
+@@ -8,6 +8,7 @@ from yoctoabb import config
+ from yoctoabb.steps.writelayerinfo import WriteLayerInfo
+ from yoctoabb.steps.runconfig import get_publish_dest, get_publish_resultdir, get_publish_name, RunConfigCheckSteps, TargetPresent
+ from buildbot.process.results import Results, SUCCESS, FAILURE, CANCELLED, WARNINGS, SKIPPED, EXCEPTION, RETRY
++from buildbot.process.remotecommand import RemoteCommand
+ 
+ from twisted.python import log
+ from twisted.internet import defer
+@@ -45,6 +46,41 @@ def ensure_props_set(props):
+         "publish_destination": props.getProperty("publish_destination", "")
+     }
+ 
++@defer.inlineCallbacks
++def shell(command, worker, builder):
++    args = {
++        'command': command,
++        'workdir': worker.worker_basedir,
++        'logEnviron': False,
++        'want_stdout': True,
++        'want_stderr': False,
++    }
++
++    cmd = RemoteCommand('shell', args, collectStdout=True, stdioLogName="stdio")
++    cmd.worker = worker
++    yield cmd.run(None, worker.conn, builder.name)
++    return cmd
++
++@defer.inlineCallbacks
++def canStartBuild(builder, wfb, request):
++    log.msg("Checking available disk space...")
++
++    cmd = yield shell("df -BG | grep $(findmnt -T . | awk '{print $2}' | sed -n 2p) | awk '{print $4}' | sed 's/[^0-9]*//g'", wfb.worker, builder)
++    threshold = 60 # GB of space
++    if int(cmd.stdout) < threshold:
++        log.msg("Detected {0} GB of space available, less than threshold of {1} GB. Can't start build".format(cmd.stdout, threshold))
++        wfb.worker.putInQuarantine()
++        return False
++    else:
++        log.msg("Detected {0} GB of space available, more than threshold of {1} GB. OK to build".format(cmd.stdout, threshold))
++
++    wfb.worker.quarantine_timeout = 120
++    wfb.worker.putInQuarantine()
++
++    wfb.worker.resetQuarantine()
++
++    return True
++
+ def create_builder_factory():
+     f = util.BuildFactory()
+ 
+@@ -136,7 +172,7 @@ for builder in config.subbuilders:
+     if not workers:
+         workers = config.builder_to_workers['default']
+     builders.append(util.BuilderConfig(name=builder,
+-                                       workernames=workers, nextWorker=nextWorker, nextBuild=nextBuild,
++                                       workernames=workers, canStartBuild=canStartBuild, nextWorker=nextWorker, nextBuild=nextBuild,
+                                        factory=f, env=extra_env))
+ 
+ # Prioritize assigning builders to available workers based on the length
+@@ -300,8 +336,8 @@ def create_parent_builder_factory(buildername, waitname):
+ 
+     return factory
+ 
+-builders.append(util.BuilderConfig(name="a-quick", workernames=config.workers, factory=create_parent_builder_factory("a-quick", "wait-quick"), nextWorker=nextWorker, nextBuild=nextBuild, env=extra_env))
+-builders.append(util.BuilderConfig(name="a-full", workernames=config.workers, factory=create_parent_builder_factory("a-full", "wait-full"), nextWorker=nextWorker, nextBuild=nextBuild, env=extra_env))
++builders.append(util.BuilderConfig(name="a-quick", workernames=config.workers, factory=create_parent_builder_factory("a-quick", "wait-quick"), canStartBuild=canStartBuild, nextWorker=nextWorker, nextBuild=nextBuild, env=extra_env))
++builders.append(util.BuilderConfig(name="a-full", workernames=config.workers, factory=create_parent_builder_factory("a-full", "wait-full"), canStartBuild=canStartBuild,nextWorker=nextWorker, nextBuild=nextBuild, env=extra_env))
+ 
+ def create_doc_builder_factory():
+     f = util.BuildFactory()
+@@ -345,4 +381,4 @@ def create_doc_builder_factory():
+ 
+ # Only run one docs build at a time
+ docs_lock = util.MasterLock("docs_lock")
+-builders.append(util.BuilderConfig(name="docs", workernames=config.workers, factory=create_doc_builder_factory(), nextWorker=nextWorker, nextBuild=nextBuild, env=extra_env, locks=[docs_lock.access('exclusive')]))
++builders.append(util.BuilderConfig(name="docs", workernames=config.workers, factory=create_doc_builder_factory(), canStartBuild=canStartBuild, nextWorker=nextWorker, nextBuild=nextBuild, env=extra_env, locks=[docs_lock.access('exclusive')]))
+-- 
+2.31.1
+
+
+
+^ permalink raw reply related	[flat|nested] 2+ messages in thread
+* Re: [yocto] [yocto-autobuilder2][PATCH] builders.py: Add canStartBuild disk space check
+  2021-10-29 13:22 [yocto-autobuilder2][PATCH] builders.py: Add canStartBuild disk space check Trevor Gamblin
+@ 2021-10-30 12:33 ` Richard Purdie
+  0 siblings, 0 replies; 2+ messages in thread
+From: Richard Purdie @ 2021-10-30 12:33 UTC (permalink / raw)
+  To: Trevor Gamblin, yocto
+
+On Fri, 2021-10-29 at 09:22 -0400, Trevor Gamblin wrote:
+> We need a way to limit the builds for when a given worker has less than
+> a certain amount of disk space available. This implements a
+> canStartBuild method based on the example in the Buildbot docs and
+> blocks a build if the worker has less than 60GB of disk space available.
+> Unlike the example code, we want the stdout of the command so that we
+> can calculate the amount of disk space, rather than just relying on the
+> remote command's return code.
+> 
+> Docs: https://docs.buildbot.net/latest/manual/customization.html#canstartbuild-functions
+> 
+> [YOCTO #14591]
+> 
+> Signed-off-by: Trevor Gamblin <trevor.gamblin@windriver.com>
+> ---
+>  builders.py | 44 ++++++++++++++++++++++++++++++++++++++++----
+>  1 file changed, 40 insertions(+), 4 deletions(-)
+> 
+> diff --git a/builders.py b/builders.py
+> index 5773950..0d1facc 100644
+> --- a/builders.py
+> +++ b/builders.py
+> @@ -8,6 +8,7 @@ from yoctoabb import config
+>  from yoctoabb.steps.writelayerinfo import WriteLayerInfo
+>  from yoctoabb.steps.runconfig import get_publish_dest, get_publish_resultdir, get_publish_name, RunConfigCheckSteps, TargetPresent
+>  from buildbot.process.results import Results, SUCCESS, FAILURE, CANCELLED, WARNINGS, SKIPPED, EXCEPTION, RETRY
+> +from buildbot.process.remotecommand import RemoteCommand
+>  
+>  from twisted.python import log
+>  from twisted.internet import defer
+> @@ -45,6 +46,41 @@ def ensure_props_set(props):
+>          "publish_destination": props.getProperty("publish_destination", "")
+>      }
+>  
+> +@defer.inlineCallbacks
+> +def shell(command, worker, builder):
+> +    args = {
+> +        'command': command,
+> +        'workdir': worker.worker_basedir,
+> +        'logEnviron': False,
+> +        'want_stdout': True,
+> +        'want_stderr': False,
+> +    }
+> +
+> +    cmd = RemoteCommand('shell', args, collectStdout=True, stdioLogName="stdio")
+> +    cmd.worker = worker
+> +    yield cmd.run(None, worker.conn, builder.name)
+> +    return cmd
+> +
+> +@defer.inlineCallbacks
+> +def canStartBuild(builder, wfb, request):
+> +    log.msg("Checking available disk space...")
+> +
+> +    cmd = yield shell("df -BG | grep $(findmnt -T . | awk '{print $2}' | sed -n 2p) | awk '{print $4}' | sed 's/[^0-9]*//g'", wfb.worker, builder)
+> +    threshold = 60 # GB of space
+> +    if int(cmd.stdout) < threshold:
+> +        log.msg("Detected {0} GB of space available, less than threshold of {1} GB. Can't start build".format(cmd.stdout, threshold))
+> +        wfb.worker.putInQuarantine()
+> +        return False
+> +    else:
+> +        log.msg("Detected {0} GB of space available, more than threshold of {1} GB. OK to build".format(cmd.stdout, threshold))
+> +
+> +    wfb.worker.quarantine_timeout = 120
+> +    wfb.worker.putInQuarantine()
+> +
+> +    wfb.worker.resetQuarantine()
+> +
+> +    return True
+> +
+
+Unfortunately this quarantine piece is causing problems. It means that even if
+there is free space on the builder and always was, a maximum of one build every
+2 minutes can be started.
+
+I'll probably drop the quarantine piece as it was a nice to have soft start for
+recovery rather than an essential.
+
+Cheers,
+
+Richard
+
+
+
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2021-10-30 12:33 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-10-29 13:22 [yocto-autobuilder2][PATCH] builders.py: Add canStartBuild disk space check Trevor Gamblin
+2021-10-30 12:33 ` [yocto] " Richard Purdie
+

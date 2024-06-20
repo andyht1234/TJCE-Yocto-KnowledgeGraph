@@ -1,0 +1,326 @@
+* [meta-zephyr][PATCH 1/2] zephyr-core/zephyr-kernel: Refactor zephyr-image and zephyr-sample
+@ 2022-09-30 16:34 Peter Hoyes
+  2022-09-30 16:34 ` [meta-zephyr][PATCH 2/2] zephyr-core/zephyr-kernel: Implement do_install Peter Hoyes
+  2022-09-30 18:57 ` [meta-zephyr][PATCH 1/2] zephyr-core/zephyr-kernel: Refactor zephyr-image and zephyr-sample Jon Mason
+  0 siblings, 2 replies; 3+ messages in thread
+From: Peter Hoyes @ 2022-09-30 16:34 UTC (permalink / raw)
+  To: yocto; +Cc: diego.sueiro, Peter Hoyes
+
+From: Peter Hoyes <Peter.Hoyes@arm.com>
+
+At the moment:
+ * zephyr-image.inc depends on zephyr-sample.inc, which doesn't really
+   make sense.
+ * zephyr-image.inc inherits testimage, even though it may not be
+   required.
+ * Out-of-tree Zephyr apps have to include zephyr-sample.inc in order to
+   deploy the binaries, which is confusingly named if your application
+   isn't a "sample".
+
+Do some minor refactoring to untangle the above. Now:
+ * zephyr-sample.inc depends on zephyr-image.inc
+ * zephyrtest.bbclass inherits testimage.
+ * Out-of-tree Zephyr apps can include zephyr-image.inc
+
+Additionally, remove QEMU_BIN_PATH, as recent Zephyr versions now pick
+up the QEMU binary automatically from PATH.
+
+Signed-off-by: Peter Hoyes <Peter.Hoyes@arm.com>
+---
+ meta-zephyr-core/classes/zephyrtest.bbclass   |  4 ++--
+ .../zephyr-kernel/zephyr-image.inc            | 23 +++++++++++++++----
+ .../zephyr-kernel/zephyr-sample.inc           | 23 +------------------
+ 3 files changed, 21 insertions(+), 29 deletions(-)
+
+diff --git a/meta-zephyr-core/classes/zephyrtest.bbclass b/meta-zephyr-core/classes/zephyrtest.bbclass
+index aa48e6c..d4fc75e 100644
+--- a/meta-zephyr-core/classes/zephyrtest.bbclass
++++ b/meta-zephyr-core/classes/zephyrtest.bbclass
+@@ -1,4 +1,4 @@
+-inherit rootfs-postcommands
++inherit rootfs-postcommands testimage
+ 
+ python zephyrtest_virtclass_handler () {
+     variant = e.data.getVar("BBEXTENDVARIANT", True)
+@@ -14,7 +14,7 @@ python zephyrtest_virtclass_handler () {
+     e.data.setVar("ZEPHYR_IMAGENAME", pn + ".elf")
+ 
+     # Most tests for Zephyr 1.6 are in the "legacy" folder
+-    e.data.setVar("ZEPHYR_SRC_DIR", "tests/kernel/" + variant)
++    e.data.setVar("ZEPHYR_SRC_DIR", "${ZEPHYR_BASE}/tests/kernel/" + variant)
+     e.data.setVar("ZEPHYR_MAKE_OUTPUT", "zephyr.elf")
+ 
+     # Allow to build using both foo-some_test form as well as foo-some-test
+diff --git a/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-image.inc b/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-image.inc
+index f4c9db1..fc8c077 100644
+--- a/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-image.inc
++++ b/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-image.inc
+@@ -1,9 +1,22 @@
+-require zephyr-sample.inc
+-inherit testimage
++require zephyr-kernel-src.inc
++require zephyr-kernel-common.inc
++inherit deploy
+ 
+-QEMU_BIN_PATH = "${STAGING_BINDIR_NATIVE}"
++OECMAKE_SOURCEPATH = "${ZEPHYR_SRC_DIR}"
+ 
+-OECMAKE_SOURCEPATH = "${ZEPHYR_BASE}/${ZEPHYR_SRC_DIR}"
++do_install[noexec] = "1"
++
++do_deploy() {
++    install -D ${B}/zephyr/${ZEPHYR_MAKE_OUTPUT} ${DEPLOYDIR}/${PN}.elf
+ 
++    if [ -f ${B}/zephyr/${ZEPHYR_MAKE_BIN_OUTPUT} ]
++    then
++      install -D ${B}/zephyr/${ZEPHYR_MAKE_BIN_OUTPUT} ${DEPLOYDIR}/${PN}.bin
++    fi
++
++    if [ -f ${B}/zephyr/${ZEPHYR_MAKE_EFI_OUTPUT} ]
++    then
++      install -D ${B}/zephyr/${ZEPHYR_MAKE_EFI_OUTPUT} ${DEPLOYDIR}/${PN}.efi
++    fi
++}
+ addtask deploy after do_compile
+-do_install[noexec] = "1"
+diff --git a/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-sample.inc b/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-sample.inc
+index 10c25c5..5f6dea9 100644
+--- a/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-sample.inc
++++ b/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-sample.inc
+@@ -1,22 +1 @@
+-require zephyr-kernel-src.inc
+-require zephyr-kernel-common.inc
+-inherit deploy
+-
+-OECMAKE_SOURCEPATH = "${ZEPHYR_SRC_DIR}"
+-
+-do_install[noexec] = "1"
+-
+-do_deploy () {
+-    install -D ${B}/zephyr/${ZEPHYR_MAKE_OUTPUT} ${DEPLOYDIR}/${PN}.elf
+-
+-    if [ -f ${B}/zephyr/${ZEPHYR_MAKE_BIN_OUTPUT} ]
+-    then
+-      install -D ${B}/zephyr/${ZEPHYR_MAKE_BIN_OUTPUT} ${DEPLOYDIR}/${PN}.bin
+-    fi
+-
+-    if [ -f ${B}/zephyr/${ZEPHYR_MAKE_EFI_OUTPUT} ]
+-    then
+-      install -D ${B}/zephyr/${ZEPHYR_MAKE_EFI_OUTPUT} ${DEPLOYDIR}/${PN}.efi
+-    fi
+-}
+-addtask deploy after do_compile
++require zephyr-image.inc
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 3+ messages in thread
+* [meta-zephyr][PATCH 2/2] zephyr-core/zephyr-kernel: Implement do_install
+  2022-09-30 16:34 [meta-zephyr][PATCH 1/2] zephyr-core/zephyr-kernel: Refactor zephyr-image and zephyr-sample Peter Hoyes
+@ 2022-09-30 16:34 ` Peter Hoyes
+  2022-09-30 18:57 ` [meta-zephyr][PATCH 1/2] zephyr-core/zephyr-kernel: Refactor zephyr-image and zephyr-sample Jon Mason
+  1 sibling, 0 replies; 3+ messages in thread
+From: Peter Hoyes @ 2022-09-30 16:34 UTC (permalink / raw)
+  To: yocto; +Cc: diego.sueiro, Peter Hoyes
+
+From: Peter Hoyes <Peter.Hoyes@arm.com>
+
+Install the Zephyr binaries to ${D}/firmware prior to copying them to
+${DEPLOYDIR}.
+
+Implementing do_install has three advantages:
+ * In use-cases when the Zephyr application is not the final artifact
+   (e.g. when signing or using additional firmware), other recipes can
+   pick up the Zephyr binary from the sysroot instead of
+   DEPLOY_DIR_IMAGE.
+ * It may sometimes make sense to install the binaries in a Linux
+   filesystem (e.g. to be run by a hypervisor).
+ * OE-core's QA checks run on the packaged binaries.
+
+There are currently two QA checks that fail, so add these to INSANE_SKIP
+for now.
+
+Signed-off-by: Peter Hoyes <Peter.Hoyes@arm.com>
+---
+ .../zephyr-kernel/zephyr-image.inc            | 19 +++++++++++++------
+ 1 file changed, 13 insertions(+), 6 deletions(-)
+
+diff --git a/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-image.inc b/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-image.inc
+index fc8c077..d6ee21f 100644
+--- a/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-image.inc
++++ b/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-image.inc
+@@ -4,19 +4,26 @@ inherit deploy
+ 
+ OECMAKE_SOURCEPATH = "${ZEPHYR_SRC_DIR}"
+ 
+-do_install[noexec] = "1"
++do_install() {
++    install -d ${D}/firmware
+ 
+-do_deploy() {
+-    install -D ${B}/zephyr/${ZEPHYR_MAKE_OUTPUT} ${DEPLOYDIR}/${PN}.elf
++    install -D ${B}/zephyr/${ZEPHYR_MAKE_OUTPUT} ${D}/firmware/${PN}.elf
+ 
+     if [ -f ${B}/zephyr/${ZEPHYR_MAKE_BIN_OUTPUT} ]
+     then
+-      install -D ${B}/zephyr/${ZEPHYR_MAKE_BIN_OUTPUT} ${DEPLOYDIR}/${PN}.bin
++      install -D ${B}/zephyr/${ZEPHYR_MAKE_BIN_OUTPUT} ${D}/firmware/${PN}.bin
+     fi
+ 
+     if [ -f ${B}/zephyr/${ZEPHYR_MAKE_EFI_OUTPUT} ]
+     then
+-      install -D ${B}/zephyr/${ZEPHYR_MAKE_EFI_OUTPUT} ${DEPLOYDIR}/${PN}.efi
++      install -D ${B}/zephyr/${ZEPHYR_MAKE_EFI_OUTPUT} ${D}/firmware/${PN}.efi
+     fi
+ }
+-addtask deploy after do_compile
++FILES:${PN} = "/firmware"
++INSANE_SKIP += "ldflags buildpaths"
++SYSROOT_DIRS += "/firmware"
++
++do_deploy() {
++    cp ${D}/firmware/${PN}.* ${DEPLOYDIR}/
++}
++addtask deploy after do_install
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 3+ messages in thread
+* Re: [meta-zephyr][PATCH 1/2] zephyr-core/zephyr-kernel: Refactor zephyr-image and zephyr-sample
+  2022-09-30 16:34 [meta-zephyr][PATCH 1/2] zephyr-core/zephyr-kernel: Refactor zephyr-image and zephyr-sample Peter Hoyes
+  2022-09-30 16:34 ` [meta-zephyr][PATCH 2/2] zephyr-core/zephyr-kernel: Implement do_install Peter Hoyes
+@ 2022-09-30 18:57 ` Jon Mason
+  1 sibling, 0 replies; 3+ messages in thread
+From: Jon Mason @ 2022-09-30 18:57 UTC (permalink / raw)
+  To: Peter Hoyes; +Cc: yocto, diego.sueiro
+
+On Fri, Sep 30, 2022 at 05:34:36PM +0100, Peter Hoyes wrote:
+> From: Peter Hoyes <Peter.Hoyes@arm.com>
+> 
+> At the moment:
+>  * zephyr-image.inc depends on zephyr-sample.inc, which doesn't really
+>    make sense.
+>  * zephyr-image.inc inherits testimage, even though it may not be
+>    required.
+>  * Out-of-tree Zephyr apps have to include zephyr-sample.inc in order to
+>    deploy the binaries, which is confusingly named if your application
+>    isn't a "sample".
+> 
+> Do some minor refactoring to untangle the above. Now:
+>  * zephyr-sample.inc depends on zephyr-image.inc
+>  * zephyrtest.bbclass inherits testimage.
+>  * Out-of-tree Zephyr apps can include zephyr-image.inc
+> 
+> Additionally, remove QEMU_BIN_PATH, as recent Zephyr versions now pick
+> up the QEMU binary automatically from PATH.
+> 
+> Signed-off-by: Peter Hoyes <Peter.Hoyes@arm.com>
+
+Series verified in a batch CI job (on top of the other submitted patches).  See https://gitlab.com/jonmason00/meta-zephyr/-/pipelines/655489776
+
+Tested-by: Jon Mason <jon.mason@arm.com>
+
+> ---
+>  meta-zephyr-core/classes/zephyrtest.bbclass   |  4 ++--
+>  .../zephyr-kernel/zephyr-image.inc            | 23 +++++++++++++++----
+>  .../zephyr-kernel/zephyr-sample.inc           | 23 +------------------
+>  3 files changed, 21 insertions(+), 29 deletions(-)
+> 
+> diff --git a/meta-zephyr-core/classes/zephyrtest.bbclass b/meta-zephyr-core/classes/zephyrtest.bbclass
+> index aa48e6c..d4fc75e 100644
+> --- a/meta-zephyr-core/classes/zephyrtest.bbclass
+> +++ b/meta-zephyr-core/classes/zephyrtest.bbclass
+> @@ -1,4 +1,4 @@
+> -inherit rootfs-postcommands
+> +inherit rootfs-postcommands testimage
+>  
+>  python zephyrtest_virtclass_handler () {
+>      variant = e.data.getVar("BBEXTENDVARIANT", True)
+> @@ -14,7 +14,7 @@ python zephyrtest_virtclass_handler () {
+>      e.data.setVar("ZEPHYR_IMAGENAME", pn + ".elf")
+>  
+>      # Most tests for Zephyr 1.6 are in the "legacy" folder
+> -    e.data.setVar("ZEPHYR_SRC_DIR", "tests/kernel/" + variant)
+> +    e.data.setVar("ZEPHYR_SRC_DIR", "${ZEPHYR_BASE}/tests/kernel/" + variant)
+>      e.data.setVar("ZEPHYR_MAKE_OUTPUT", "zephyr.elf")
+>  
+>      # Allow to build using both foo-some_test form as well as foo-some-test
+> diff --git a/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-image.inc b/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-image.inc
+> index f4c9db1..fc8c077 100644
+> --- a/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-image.inc
+> +++ b/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-image.inc
+> @@ -1,9 +1,22 @@
+> -require zephyr-sample.inc
+> -inherit testimage
+> +require zephyr-kernel-src.inc
+> +require zephyr-kernel-common.inc
+> +inherit deploy
+>  
+> -QEMU_BIN_PATH = "${STAGING_BINDIR_NATIVE}"
+> +OECMAKE_SOURCEPATH = "${ZEPHYR_SRC_DIR}"
+>  
+> -OECMAKE_SOURCEPATH = "${ZEPHYR_BASE}/${ZEPHYR_SRC_DIR}"
+> +do_install[noexec] = "1"
+> +
+> +do_deploy() {
+> +    install -D ${B}/zephyr/${ZEPHYR_MAKE_OUTPUT} ${DEPLOYDIR}/${PN}.elf
+>  
+> +    if [ -f ${B}/zephyr/${ZEPHYR_MAKE_BIN_OUTPUT} ]
+> +    then
+> +      install -D ${B}/zephyr/${ZEPHYR_MAKE_BIN_OUTPUT} ${DEPLOYDIR}/${PN}.bin
+> +    fi
+> +
+> +    if [ -f ${B}/zephyr/${ZEPHYR_MAKE_EFI_OUTPUT} ]
+> +    then
+> +      install -D ${B}/zephyr/${ZEPHYR_MAKE_EFI_OUTPUT} ${DEPLOYDIR}/${PN}.efi
+> +    fi
+> +}
+>  addtask deploy after do_compile
+> -do_install[noexec] = "1"
+> diff --git a/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-sample.inc b/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-sample.inc
+> index 10c25c5..5f6dea9 100644
+> --- a/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-sample.inc
+> +++ b/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-sample.inc
+> @@ -1,22 +1 @@
+> -require zephyr-kernel-src.inc
+> -require zephyr-kernel-common.inc
+> -inherit deploy
+> -
+> -OECMAKE_SOURCEPATH = "${ZEPHYR_SRC_DIR}"
+> -
+> -do_install[noexec] = "1"
+> -
+> -do_deploy () {
+> -    install -D ${B}/zephyr/${ZEPHYR_MAKE_OUTPUT} ${DEPLOYDIR}/${PN}.elf
+> -
+> -    if [ -f ${B}/zephyr/${ZEPHYR_MAKE_BIN_OUTPUT} ]
+> -    then
+> -      install -D ${B}/zephyr/${ZEPHYR_MAKE_BIN_OUTPUT} ${DEPLOYDIR}/${PN}.bin
+> -    fi
+> -
+> -    if [ -f ${B}/zephyr/${ZEPHYR_MAKE_EFI_OUTPUT} ]
+> -    then
+> -      install -D ${B}/zephyr/${ZEPHYR_MAKE_EFI_OUTPUT} ${DEPLOYDIR}/${PN}.efi
+> -    fi
+> -}
+> -addtask deploy after do_compile
+> +require zephyr-image.inc
+> -- 
+> 2.25.1
+> 
+> 
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2022-09-30 18:57 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-09-30 16:34 [meta-zephyr][PATCH 1/2] zephyr-core/zephyr-kernel: Refactor zephyr-image and zephyr-sample Peter Hoyes
+2022-09-30 16:34 ` [meta-zephyr][PATCH 2/2] zephyr-core/zephyr-kernel: Implement do_install Peter Hoyes
+2022-09-30 18:57 ` [meta-zephyr][PATCH 1/2] zephyr-core/zephyr-kernel: Refactor zephyr-image and zephyr-sample Jon Mason
+

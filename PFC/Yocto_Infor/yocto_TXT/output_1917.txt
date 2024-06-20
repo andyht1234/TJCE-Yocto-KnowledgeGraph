@@ -1,0 +1,270 @@
+* [PATCH yocto-autobuilder-helper v8] Add a banner on the old documentation docs.
+@ 2022-04-23 21:40 Abongwa Bonalais Amahnui
+  2022-04-25  8:43 ` [yocto] " Ross Burton
+  0 siblings, 1 reply; 4+ messages in thread
+From: Abongwa Bonalais Amahnui @ 2022-04-23 21:40 UTC (permalink / raw)
+  To: yocto; +Cc: Abongwa Bonalais Amahnui
+
+Signed-off-by: Abongwa Bonalais Amahnui <abongwabonalais@gmail.com>
+---
+ scripts/docs_fix_all_html_css.py | 85 ++++++++++++++++++++++++++++++++
+ scripts/run-docs-build           |  1 +
+ 2 files changed, 86 insertions(+)
+ create mode 100755 scripts/docs_fix_all_html_css.py
+
+diff --git a/scripts/docs_fix_all_html_css.py b/scripts/docs_fix_all_html_css.py
+new file mode 100755
+index 0000000..7257477
+--- /dev/null
++++ b/scripts/docs_fix_all_html_css.py
+@@ -0,0 +1,85 @@
++#!/usr/bin/env python3
++#
++# SPDX-License-Identifier: GPL-2.0-only
++#
++#Signed-off-by: Abongwa Bonalais Amahnui <abongwabonalais@gmail.com>
++#
++#
++# function to append to the content of a html file below the body tag
++#
++#
++from logging import root
++import os
++import re
++
++
++html_content = '''
++<div id="outdated-warning">This document is outdated, you should select the <a href="https://docs.yoctoproject.org/">latest release version</a> in this series.</div>
++<div xml:lang="en" class="body" lang="en">
++'''
++last_div = '''
++</div>
++
++'''
++
++css_replacement_content = '''
++ 
++  font-family: Verdana, Sans, sans-serif;
++
++  /*min-width: 640px;*/
++  width: 100%;
++  margin:  0;
++  padding: 0;
++  color: #333;
++  overflow-x: hidden;
++  }
++ 
++ /*added books too*/
++.body{
++margin:  0 auto;
++min-width: 640px;
++padding: 0 5em 5em 5em;
++}
++/* added the id below to make the banner show and be fixed*/
++#outdated-warning{
++text-align: center;
++background-color: rgb(255, 186, 186); 
++color: rgb(106, 14, 14); 
++padding: 0.5em 0; 
++width: 100%;
++position: fixed;
++top: 0;
++
++
++'''
++    # pattern = '^3.1*'
++    # exclude = re.search(pattern, dir)
++def loop_through_html_directories(dir):
++    for root, dirs, filenames in os.walk(dir, topdown=True):
++        # loop through all files in the directory
++        exclude = set(['3.1', '3.1.1', '3.1.2', '3.1.3'])
++        dirs[:] = list(filter(lambda x: not x in exclude, dirs))
++        for filename in filenames:
++            # check if the file is an html file
++            if filename.endswith('.html'):
++                # open the html file in read mode
++                with open(os.path.join(root, filename), 'r', encoding="ISO-8859-1") as f:
++                    # read the content of the html file
++                    current_content = f.read()
++                # open the html file in write mode
++                with open(os.path.join(root, filename), 'w') as f:
++                    # write the content of the html file
++                    f.write(current_content.replace('<body>', '<body>' + html_content))
++                    f.write(current_content.replace('</body>', last_div + '</body>'))
++            if filename.endswith('.css'):
++                # open the css file in read mode
++                with open(os.path.join(root, filename), 'r', encoding="ISO-8859-1") as f:
++                    # read the content of the css file
++                    css_content = f.read()
++                # open the css file in write mode
++                with open(os.path.join(root, filename), 'w') as f:
++                    # write the content of the css file
++                    f.write(css_content.replace(css_content[css_content.find('body {'):css_content.find('}'[0])], 'body {' + css_replacement_content ))
++loop_through_html_directories('.')
++
++
+diff --git a/scripts/run-docs-build b/scripts/run-docs-build
+index ecc5332..4be5bc6 100755
+--- a/scripts/run-docs-build
++++ b/scripts/run-docs-build
+@@ -37,6 +37,7 @@ cd $outputdir
+ echo Extracing old content from archive
+ tar -xJf $docbookarchive
+ 
++$scriptdir/docs_fix_all_html_css.py
+ cd $bbdocs
+ mkdir $outputdir/bitbake
+ 
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 4+ messages in thread
+* Re: [yocto] [PATCH yocto-autobuilder-helper v8] Add a banner on the old documentation docs.
+  2022-04-23 21:40 [PATCH yocto-autobuilder-helper v8] Add a banner on the old documentation docs Abongwa Bonalais Amahnui
+@ 2022-04-25  8:43 ` Ross Burton
+  2022-04-25  8:52   ` Quentin Schulz
+  0 siblings, 1 reply; 4+ messages in thread
+From: Ross Burton @ 2022-04-25  8:43 UTC (permalink / raw)
+  To: abongwabonalais; +Cc: yocto
+
+> +from logging import root
+> +import os
+> +import re
+
+The logging and re imports are unused, remove these.
+
+> +
+> +
+> +html_content = '''
+> +<div id="outdated-warning">This document is outdated, you should select the <a href="https://docs.yoctoproject.org/">latest release version</a> in this series.</div>
+> +<div xml:lang="en" class="body" lang="en">
+> +'''
+> +last_div = '''
+> +</div>
+
+Add a comment explaining why you need to add a <div> wrapping the main content.
+
+> +    # pattern = '^3.1*'
+> +    # exclude = re.search(pattern, dir)
+> +def loop_through_html_directories(dir):
+> +    for root, dirs, filenames in os.walk(dir, topdown=True):
+> +        # loop through all files in the directory
+> +        exclude = set(['3.1', '3.1.1', '3.1.2', '3.1.3'])
+
+Hardcoding numbers like this isn’t a great idea.  If the intention is to add the warning on all versions earlier than 3.2, then the regex approach that is commented out would be better.  It most likely didn’t work as regex matching isn’t like shell/windows matching:
+
+pattern = r”^3\.1.*"
+
+A good solution would be to use packaging.version.parse, but that’s not a built-in module so would need to be added to the build. That can wait, the regex solution should be good.
+
+A comment here explaining what the exclusion is for, and why 3.1, would be good.
+
+> +        dirs[:] = list(filter(lambda x: not x in exclude, dirs))
+> +        for filename in filenames:
+> +            # check if the file is an html file
+
+No need for obvious comments
+
+> +            if filename.endswith('.html'):
+> +                # open the html file in read mode
+
+Obvious comment, again, and several times below.
+
+Ross
+IMPORTANT NOTICE: The contents of this email and any attachments are confidential and may also be privileged. If you are not the intended recipient, please notify the sender immediately and do not disclose the contents to any other person, use it for any purpose, or store or copy the information in any medium. Thank you.
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] [PATCH yocto-autobuilder-helper v8] Add a banner on the old documentation docs.
+  2022-04-25  8:43 ` [yocto] " Ross Burton
+@ 2022-04-25  8:52   ` Quentin Schulz
+  2022-04-25 13:57     ` Abongwa Amahnui Bonalais
+  0 siblings, 1 reply; 4+ messages in thread
+From: Quentin Schulz @ 2022-04-25  8:52 UTC (permalink / raw)
+  To: Ross Burton, abongwabonalais; +Cc: yocto
+
+Hi Ross,
+
+On 4/25/22 10:43, Ross Burton wrote:
+>> +from logging import root
+>> +import os
+>> +import re
+> 
+> The logging and re imports are unused, remove these.
+> 
+>> +
+>> +
+>> +html_content = '''
+>> +<div id="outdated-warning">This document is outdated, you should select the <a href="https://urldefense.proofpoint.com/v2/url?u=https-3A__docs.yoctoproject.org_&amp;d=DwMGaQ&amp;c=_sEr5x9kUWhuk4_nFwjJtA&amp;r=LYjLexDn7rXIzVmkNPvw5ymA1XTSqHGq8yBP6m6qZZ4njZguQhZhkI_-172IIy1t&amp;m=3Ugg7DXNtg5Jzu8oqGU6VwYTbn01QrCiaWSKjVlkEVKyVfiZZnaOgnCbTgFNdaTg&amp;s=NpHhdUuDWyKDzpnNui16Z9MijVOTPcXWU2zzwvY-aWw&amp;e=">latest release version</a> in this series.</div>
+>> +<div xml:lang="en" class="body" lang="en">
+>> +'''
+>> +last_div = '''
+>> +</div>
+> 
+> Add a comment explaining why you need to add a <div> wrapping the main content.
+> 
+>> +    # pattern = '^3.1*'
+>> +    # exclude = re.search(pattern, dir)
+>> +def loop_through_html_directories(dir):
+>> +    for root, dirs, filenames in os.walk(dir, topdown=True):
+>> +        # loop through all files in the directory
+>> +        exclude = set(['3.1', '3.1.1', '3.1.2', '3.1.3'])
+> 
+> Hardcoding numbers like this isn’t a great idea.  If the intention is to add the warning on all versions earlier than 3.2, then the regex approach that is commented out would be better.  It most likely didn’t work as regex matching isn’t like shell/windows matching:
+> 
+> pattern = r”^3\.1.*"
+> 
+> A good solution would be to use packaging.version.parse, but that’s not a built-in module so would need to be added to the build. That can wait, the regex solution should be good.
+> 
+
+To be fair, the list of impacted versions for dunfell is finite, since 
+we're talking about old docs that aren't regenerated anymore. Dunfell 
+was migrated to Sphinx (and is thus regenerated by run-docs-build 
+script) in 3.1.5. (So I think we're missing 3.1.4 in there.)
+
+For Dunfell, this message will ultimately be replaced with the obsolete 
+message common to all other old docs, in 2 years from now, when it's 
+obsolete.
+
+Just to give more context, I'm not particularly pushing for anything here.
+
+Cheers,
+Quentin
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [PATCH yocto-autobuilder-helper v8] Add a banner on the old documentation docs.
+  2022-04-25  8:52   ` Quentin Schulz
+@ 2022-04-25 13:57     ` Abongwa Amahnui Bonalais
+  0 siblings, 0 replies; 4+ messages in thread
+From: Abongwa Amahnui Bonalais @ 2022-04-25 13:57 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 782 bytes --]
+
+> 
+> Hardcoding numbers like this isn’t a great idea. If the intention is to
+> add the warning on all versions earlier than 3.2, then the regex approach
+> that is commented out would be better. It most likely didn’t work as regex
+> matching isn’t like shell/windows matching: pattern = r”^3\.1.*" A good
+> solution would be to use packaging.version.parse, but that’s not a
+> built-in module so would need to be added to the build. That can wait, the
+> regex solution should be good.
+> 
+
+Hi Ross, I tried out the regex solution but I did not work and I also noticed that the 3.1.x doc versions on the documentation website already contains the banner
+I thought from 3.1.2 above were not outdate to, I am a little bit confused about which version is the latest.
+
+[-- Attachment #2: Type: text/html, Size: 981 bytes --]
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+end of thread, other threads:[~2022-04-25 19:26 UTC | newest]
+
+Thread overview: 4+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-04-23 21:40 [PATCH yocto-autobuilder-helper v8] Add a banner on the old documentation docs Abongwa Bonalais Amahnui
+2022-04-25  8:43 ` [yocto] " Ross Burton
+2022-04-25  8:52   ` Quentin Schulz
+2022-04-25 13:57     ` Abongwa Amahnui Bonalais
+

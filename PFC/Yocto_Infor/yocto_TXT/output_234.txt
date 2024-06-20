@@ -1,0 +1,482 @@
+* "Replicating a Build Offline" not working as expected when Git data is removed
+@ 2023-08-25  9:19 Stephan M
+  2023-08-25  9:28 ` [yocto] " Alexander Kanavin
+  0 siblings, 1 reply; 5+ messages in thread
+From: Stephan M @ 2023-08-25  9:19 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 5915 bytes --]
+
+Hi,
+
+I'm trying to follow the steps to replicate a build offline: https://docs.yoctoproject.org/4.2.2/dev-manual/building.html?highlight=bb_no_network#replicating-a-build-offline
+
+This is not working as expected. Originally I ran into this with NXP's mickledore build, but I can replicate that with a plain mickledore poky environment.
+
+In the documentation it says:
+
+Optionally Remove Any Git or other SCM Subdirectories From the Downloads Directory: If you want, you can clean up your downloads directory by removing any Git or other Source Control Management (SCM) subdirectories such as ${DL_DIR}/git2/*. ...
+
+When I do that, the offline build breaks. Without that step it succeeds.
+
+I did the following:
+
+~/src$ git clone -b mickledore-4.2.2 https://git.yoctoproject.org/poky
+Cloning into 'poky'...
+...
+~/src$ cd poky/
+~/src/poky$ . oe-init-build-env
+
+You had no conf/local.conf file. This configuration file has therefore been
+
+created for you from /home/stm/src/poky/meta-poky/conf/templates/default/local.conf.sample
+
+You may wish to edit it to, for example, select a different MACHINE (target
+
+hardware).
+...
+
+# Now edited conf/local.conf and added: BB_GENERATE_MIRROR_TARBALLS = "1"
+
+~/src/poky/build$ bitbake core-image-minimal --runonly=fetch
+
+# All the packages are downloaded and tar files are created in ${TOPDIR}/downloads
+# Now I remove the Git data from the "downloads" directory:
+
+~/src/poky/build$ rm -rf downloads/git2/*
+
+# Now I edit conf/local.conf again and add the following according to the documentation
+# SOURCE_MIRROR_URL ?= "file://${TOPDIR}/downloads/"
+
+# INHERIT += "own-mirrors"
+
+# BB_NO_NETWORK = "1"
+
+~/src/poky/build$ tail -10 conf/local.conf
+
+# CONF_VERSION is increased each time build/conf/ changes incompatibly and is used to
+
+# track the version of this file when it was generated. This can safely be ignored if
+
+# this doesn't mean anything to you.
+
+CONF_VERSION = "2"
+
+BB_GENERATE_MIRROR_TARBALLS = "1"
+
+SOURCE_MIRROR_URL ?= "file://${TOPDIR}/downloads/"
+
+INHERIT += "own-mirrors"
+
+BB_NO_NETWORK = "1"
+
+# An attempt to run the build fails early with these error messages:
+
+~/src/poky/build$ bitbake core-image-minimal
+
+Loading cache: 100% |                                                                                   | ETA:  --:--:--
+
+Loaded 0 entries from dependency cache.
+
+Parsing recipes: 100% |##################################################################################| Time: 0:00:07
+
+Parsing of 899 .bb files complete (0 cached, 899 parsed). 1799 targets, 49 skipped, 0 masked, 0 errors.
+
+NOTE: Resolving any missing task queue dependencies
+
+Build Configuration:
+
+BB_VERSION           = "2.4.0"
+
+BUILD_SYS            = "x86_64-linux"
+
+NATIVELSBSTRING      = "universal"
+
+TARGET_SYS           = "x86_64-poky-linux"
+
+MACHINE              = "qemux86-64"
+
+DISTRO               = "poky"
+
+DISTRO_VERSION       = "4.2.2"
+
+TUNE_FEATURES        = "m64 core2"
+
+TARGET_FPU           = ""
+
+meta
+
+meta-poky
+
+meta-yocto-bsp       = "HEAD:6e17b3e644ca15b8b4afd071ccaa6f172a0e681a"
+
+Initialising tasks: 100% |###############################################################################| Time: 0:00:01
+
+Sstate summary: Wanted 1074 Local 0 Mirrors 0 Missed 1074 Current 0 (0% match, 0% complete)
+
+NOTE: Executing Tasks
+
+ERROR: gnu-config-native-20230216+gitAUTOINC+63acb96f92-r0 do_unpack: Bitbake Fetcher Error: UnpackError('No up to date source found: clone directory not available or not up to date: /home/stm/src/poky/build/downloads/git2/git.savannah.gnu.org.git.config.git; shallow clone not enabled', 'git://git.savannah.gnu.org/git/config.git;protocol=https;branch=master')
+
+ERROR: Logfile of failure stored in: /home/stm/src/poky/build/tmp/work/x86_64-linux/gnu-config-native/20230216+gitAUTOINC+63acb96f92-r0/temp/log.do_unpack.19635
+
+ERROR: Task (virtual:native:/home/stm/src/poky/meta/recipes-devtools/gnu-config/gnu-config_git.bb:do_unpack) failed with exit code '1'
+
+ERROR: pkgconfig-native-0.29.2+gitAUTOINC+d97db4fae4-r0 do_unpack: Bitbake Fetcher Error: UnpackError('No up to date source found: clone directory not available or not up to date: /home/stm/src/poky/build/downloads/git2/gitlab.freedesktop.org.pkg-config.pkg-config.git; shallow clone not enabled', 'git://gitlab.freedesktop.org/pkg-config/pkg-config.git;branch=master;protocol=https')
+
+ERROR: Logfile of failure stored in: /home/stm/src/poky/build/tmp/work/x86_64-linux/pkgconfig-native/0.29.2+gitAUTOINC+d97db4fae4-r0/temp/log.do_unpack.19647
+
+ERROR: Task (virtual:native:/home/stm/src/poky/meta/recipes-devtools/pkgconfig/pkgconfig_git.bb:do_unpack) failed with exit code '1'
+
+NOTE: Tasks Summary: Attempted 44 tasks of which 22 didn't need to be rerun and 2 failed.
+
+Summary: 2 tasks failed:
+
+virtual:native:/home/stm/src/poky/meta/recipes-devtools/gnu-config/gnu-config_git.bb:do_unpack
+
+virtual:native:/home/stm/src/poky/meta/recipes-devtools/pkgconfig/pkgconfig_git.bb:do_unpack
+
+Summary: There were 2 ERROR messages, returning a non-zero exit code.
+
+Am I doing something wrong, or is this a bug?
+
+The background for these experiments is the question how to guarantee long-term reproducibility of our Yocto project builds. My current idea is to preserve the "downloads" directory as a separate Git repository, maybe using Git LFS. Is this a good or bad idea?
+
+I read of course https://docs.yoctoproject.org/4.2.2/test-manual/reproducible-builds.html?highlight=reproducibility#reproducible-builds , but my concern are the downloaded packages. If I try to reproduce a certain build 5 or 10 years from now, it might no longer be possible to download all the relevant packages if I want to create a build environment from scratch.
+
+Thanks
+Stephan
+
+[-- Attachment #2: Type: text/html, Size: 10824 bytes --]
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] "Replicating a Build Offline" not working as expected when Git data is removed
+  2023-08-25  9:19 "Replicating a Build Offline" not working as expected when Git data is removed Stephan M
+@ 2023-08-25  9:28 ` Alexander Kanavin
+  2023-08-28  6:16   ` Stephan Mühlstrasser
+  0 siblings, 1 reply; 5+ messages in thread
+From: Alexander Kanavin @ 2023-08-25  9:28 UTC (permalink / raw)
+  To: Stephan M; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 6971 bytes --]
+
+The documentation isn’t perfect. Sometimes it becomes outdated and no one
+notices, or it may be inaccurate to begin with. Personally I would never
+tamper with content of downloads and preserve it exactly as it is. Doesn’t
+have to be git lfs, plain artifact storage options work too.
+
+Alex
+
+On Fri 25. Aug 2023 at 11.20, Stephan M <stephan.muehlstrasser@gmail.com>
+wrote:
+
+> Hi,
+>
+> I'm trying to follow the steps to replicate a build offline:
+> https://docs.yoctoproject.org/4.2.2/dev-manual/building.html?highlight=bb_no_network#replicating-a-build-offline
+>
+> This is not working as expected. Originally I ran into this with NXP's
+> mickledore build, but I can replicate that with a plain mickledore poky
+> environment.
+>
+> In the documentation it says:
+>
+> *Optionally Remove Any Git or other SCM Subdirectories From the Downloads
+> Directory:* If you want, you can clean up your downloads directory by
+> removing any Git or other Source Control Management (SCM) subdirectories
+> such as ${DL_DIR}/git2/*. ...
+>
+> When I do that, the offline build breaks. Without that step it succeeds.
+>
+> I did the following:
+>
+> ~/src$ git clone -b mickledore-4.2.2 https://git.yoctoproject.org/poky
+> Cloning into 'poky'...
+> ...
+> ~/src$ cd poky/
+> ~/src/poky$ . oe-init-build-env
+>
+> You had no conf/local.conf file. This configuration file has therefore been
+>
+> created for you from
+> /home/stm/src/poky/meta-poky/conf/templates/default/local.conf.sample
+>
+> You may wish to edit it to, for example, select a different MACHINE (target
+>
+> hardware).
+> ...
+>
+> # Now edited conf/local.conf and added: BB_GENERATE_MIRROR_TARBALLS = "1"
+>
+> ~/src/poky/build$ bitbake core-image-minimal --runonly=fetch
+>
+> # All the packages are downloaded and tar files are created in
+> ${TOPDIR}/downloads
+> # Now I remove the Git data from the "downloads" directory:
+>
+> ~/src/poky/build$ rm -rf downloads/git2/*
+>
+> # Now I edit conf/local.conf again and add the following according to the
+> documentation
+> # SOURCE_MIRROR_URL ?= "file://${TOPDIR}/downloads/"
+>
+> # INHERIT += "own-mirrors"
+>
+> # BB_NO_NETWORK = "1"
+>
+> ~/src/poky/build$ tail -10 conf/local.conf
+>
+> # CONF_VERSION is increased each time build/conf/ changes incompatibly and
+> is used to
+>
+> # track the version of this file when it was generated. This can safely be
+> ignored if
+>
+> # this doesn't mean anything to you.
+>
+> CONF_VERSION = "2"
+>
+>
+>
+> BB_GENERATE_MIRROR_TARBALLS = "1"
+>
+> SOURCE_MIRROR_URL ?= "file://${TOPDIR}/downloads/"
+>
+> INHERIT += "own-mirrors"
+>
+> BB_NO_NETWORK = "1"
+>
+>
+> # An attempt to run the build fails early with these error messages:
+>
+> ~/src/poky/build$ bitbake core-image-minimal
+>
+> Loading cache: 100% |
+>                              | ETA:  --:--:--
+>
+> Loaded 0 entries from dependency cache.
+>
+> Parsing recipes: 100%
+> |##################################################################################|
+> Time: 0:00:07
+>
+> Parsing of 899 .bb files complete (0 cached, 899 parsed). 1799 targets, 49
+> skipped, 0 masked, 0 errors.
+>
+> NOTE: Resolving any missing task queue dependencies
+>
+>
+>
+> Build Configuration:
+>
+> BB_VERSION           = "2.4.0"
+>
+> BUILD_SYS            = "x86_64-linux"
+>
+> NATIVELSBSTRING      = "universal"
+>
+> TARGET_SYS           = "x86_64-poky-linux"
+>
+> MACHINE              = "qemux86-64"
+>
+> DISTRO               = "poky"
+>
+> DISTRO_VERSION       = "4.2.2"
+>
+> TUNE_FEATURES        = "m64 core2"
+>
+> TARGET_FPU           = ""
+>
+> meta
+>
+> meta-poky
+>
+> meta-yocto-bsp       = "HEAD:6e17b3e644ca15b8b4afd071ccaa6f172a0e681a"
+>
+>
+>
+> Initialising tasks: 100%
+> |###############################################################################|
+> Time: 0:00:01
+>
+> Sstate summary: Wanted 1074 Local 0 Mirrors 0 Missed 1074 Current 0 (0%
+> match, 0% complete)
+>
+> NOTE: Executing Tasks
+>
+> ERROR: gnu-config-native-20230216+gitAUTOINC+63acb96f92-r0 do_unpack:
+> Bitbake Fetcher Error: UnpackError('No up to date source found: clone
+> directory not available or not up to date:
+> /home/stm/src/poky/build/downloads/git2/git.savannah.gnu.org.git.config.git;
+> shallow clone not enabled', 'git://
+> git.savannah.gnu.org/git/config.git;protocol=https;branch=master')
+>
+> ERROR: Logfile of failure stored in:
+> /home/stm/src/poky/build/tmp/work/x86_64-linux/gnu-config-native/20230216+gitAUTOINC+63acb96f92-r0/temp/log.do_unpack.19635
+>
+> ERROR: Task
+> (virtual:native:/home/stm/src/poky/meta/recipes-devtools/gnu-config/gnu-config_git.bb:do_unpack)
+> failed with exit code '1'
+>
+> ERROR: pkgconfig-native-0.29.2+gitAUTOINC+d97db4fae4-r0 do_unpack: Bitbake
+> Fetcher Error: UnpackError('No up to date source found: clone directory not
+> available or not up to date:
+> /home/stm/src/poky/build/downloads/git2/gitlab.freedesktop.org.pkg-config.pkg-config.git;
+> shallow clone not enabled', 'git://
+> gitlab.freedesktop.org/pkg-config/pkg-config.git;branch=master;protocol=https
+> ')
+>
+> ERROR: Logfile of failure stored in:
+> /home/stm/src/poky/build/tmp/work/x86_64-linux/pkgconfig-native/0.29.2+gitAUTOINC+d97db4fae4-r0/temp/log.do_unpack.19647
+>
+> ERROR: Task
+> (virtual:native:/home/stm/src/poky/meta/recipes-devtools/pkgconfig/pkgconfig_git.bb:do_unpack)
+> failed with exit code '1'
+>
+> NOTE: Tasks Summary: Attempted 44 tasks of which 22 didn't need to be
+> rerun and 2 failed.
+>
+>
+>
+> Summary: 2 tasks failed:
+>
+>
+> virtual:native:/home/stm/src/poky/meta/recipes-devtools/gnu-config/gnu-config_git.bb:
+> do_unpack
+>
+>
+> virtual:native:/home/stm/src/poky/meta/recipes-devtools/pkgconfig/pkgconfig_git.bb:
+> do_unpack
+>
+> Summary: There were 2 ERROR messages, returning a non-zero exit code.
+>
+>
+>
+> Am I doing something wrong, or is this a bug?
+>
+> The background for these experiments is the question how to guarantee
+> long-term reproducibility of our Yocto project builds. My current idea is
+> to preserve the "downloads" directory as a separate Git repository, maybe
+> using Git LFS. Is this a good or bad idea?
+>
+> I read of course
+> https://docs.yoctoproject.org/4.2.2/test-manual/reproducible-builds.html?highlight=reproducibility#reproducible-builds ,
+> but my concern are the downloaded packages. If I try to reproduce a certain
+> build 5 or 10 years from now, it might no longer be possible to download
+> all the relevant packages if I want to create a build environment from
+> scratch.
+>
+> Thanks
+> Stephan
+>
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#60889):
+> https://lists.yoctoproject.org/g/yocto/message/60889
+> Mute This Topic: https://lists.yoctoproject.org/mt/100952497/1686489
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> alex.kanavin@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 12366 bytes --]
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] "Replicating a Build Offline" not working as expected when Git data is removed
+  2023-08-25  9:28 ` [yocto] " Alexander Kanavin
+@ 2023-08-28  6:16   ` Stephan Mühlstrasser
+  2023-08-28  8:25     ` Alexander Kanavin
+  0 siblings, 1 reply; 5+ messages in thread
+From: Stephan Mühlstrasser @ 2023-08-28  6:16 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: yocto
+
+Am Fr., 25. Aug. 2023 um 11:28 Uhr schrieb Alexander Kanavin
+<alex.kanavin@gmail.com>:
+>
+> The documentation isn’t perfect. Sometimes it becomes outdated and no one notices, or it may be inaccurate to begin with. Personally I would never tamper with content of downloads and preserve it exactly as it is. Doesn’t have to be git lfs, plain artifact storage options work too.
+
+If it doesn't work as documented, could someone elaborate what is
+currently necessary to replicate a build offline? Is it possible to
+reproduce a build only with the tarballs or is it actually necessary
+to keep the cloned Git repositories in the download directory as well?
+
+Thanks
+Stephan
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] "Replicating a Build Offline" not working as expected when Git data is removed
+  2023-08-28  6:16   ` Stephan Mühlstrasser
+@ 2023-08-28  8:25     ` Alexander Kanavin
+  2023-08-28  9:22       ` Stephan Mühlstrasser
+  0 siblings, 1 reply; 5+ messages in thread
+From: Alexander Kanavin @ 2023-08-28  8:25 UTC (permalink / raw)
+  To: Stephan Mühlstrasser; +Cc: yocto
+
+On Mon, 28 Aug 2023 at 08:16, Stephan Mühlstrasser
+<stephan.muehlstrasser@gmail.com> wrote:
+> > The documentation isn’t perfect. Sometimes it becomes outdated and no one notices, or it may be inaccurate to begin with. Personally I would never tamper with content of downloads and preserve it exactly as it is. Doesn’t have to be git lfs, plain artifact storage options work too.
+>
+> If it doesn't work as documented, could someone elaborate what is
+> currently necessary to replicate a build offline? Is it possible to
+> reproduce a build only with the tarballs or is it actually necessary
+> to keep the cloned Git repositories in the download directory as well?
+
+It's well possible no one knows the definite answer, and the best
+advice is what I said: don't touch the downloads at all. In any case,
+if the documentation is not accurate, patches to make it accurate
+would be appreciated.
+
+Alex
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] "Replicating a Build Offline" not working as expected when Git data is removed
+  2023-08-28  8:25     ` Alexander Kanavin
+@ 2023-08-28  9:22       ` Stephan Mühlstrasser
+  0 siblings, 0 replies; 5+ messages in thread
+From: Stephan Mühlstrasser @ 2023-08-28  9:22 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: yocto
+
+Am Mo., 28. Aug. 2023 um 10:25 Uhr schrieb Alexander Kanavin
+<alex.kanavin@gmail.com>:
+
+> It's well possible no one knows the definite answer, and the best
+> advice is what I said: don't touch the downloads at all. In any case,
+> if the documentation is not accurate, patches to make it accurate
+> would be appreciated.
+
+I certainly do not know the answer, as I'm just a beginner with Yocto
+and I try to follow the documentation to get things done.
+
+It may be a bug in the documentation, but it may as well be a bug in
+the implementation. It is certainly a desirable feature not having to
+keep the Git and other SCM directories in the downloads directory and
+to retain only the tarballs because of disk space. I assume that it
+has worked in the past, otherwise it wouldn't be documented.
+
+If it is a documentation bug, it would have further further
+consequences. If it is not possible to rely on the tarballs only for
+an offline build then the functionality to generate the tarballs via
+the BB_GENERATE_MIRROR_TARBALLS variable is probably useless.
+
+I filed a bug for this: https://bugzilla.yoctoproject.org/show_bug.cgi?id=15202
+
+Stephan
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+end of thread, other threads:[~2023-08-28  9:22 UTC | newest]
+
+Thread overview: 5+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-08-25  9:19 "Replicating a Build Offline" not working as expected when Git data is removed Stephan M
+2023-08-25  9:28 ` [yocto] " Alexander Kanavin
+2023-08-28  6:16   ` Stephan Mühlstrasser
+2023-08-28  8:25     ` Alexander Kanavin
+2023-08-28  9:22       ` Stephan Mühlstrasser
+

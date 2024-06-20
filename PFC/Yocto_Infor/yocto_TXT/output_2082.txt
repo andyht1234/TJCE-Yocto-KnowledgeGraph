@@ -1,0 +1,267 @@
+* How to manage disk space while working with Yocto?
+@ 2022-03-16  7:54 Sourabh Hegde
+  2022-03-16  9:12 ` [yocto] " Mikko.Rapeli
+  2022-03-16  9:12 ` Manuel Wagesreither
+  0 siblings, 2 replies; 9+ messages in thread
+From: Sourabh Hegde @ 2022-03-16  7:54 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1256 bytes --]
+
+Hello All,
+
+I am using Yocto for one of my project. I know that Yocto needs a good amount of disk space for build activities. And also I am working as non-root user in Ubuntu 20.04. But I often run into space issues during build.
+
+WARNING: The free space of [...]/tmp-glibc (overlay) is running low (0.555GB left)
+ERROR: No new tasks can be executed since the disk space monitor action is "STOPTASKS"!
+WARNING: The free space of [...]/downloads (overlay) is running low (0.555GB left)
+ERROR: No new tasks can be executed since the disk space monitor action is "STOPTASKS"!
+WARNING: The free space of [...]/sstate-cache (overlay) is running low (0.555GB left)
+ERROR: No new tasks can be executed since the disk space monitor action is "STOPTASKS"!
+
+I have tried deleting $TMPDIR (build/tmp) , $SSTATE_DIR (build/sstate-cache) , $DL_DIR (build/downloads). But these things didn't help me.
+
+Is there any way to allocate more space to user in Ubuntu? And also what is the best practice for space usage while working with Yocto?
+
+Can anyone please let me know how to resolve this issue?
+
+Your help will be much appreciated.
+
+Thanks in advance.
+
+P.S: I working with Yocto "Honister" release. Please let me know if any info is missing here.
+
+[-- Attachment #2: Type: text/html, Size: 5821 bytes --]
+
+^ permalink raw reply	[flat|nested] 9+ messages in thread
+* Re: [yocto] How to manage disk space while working with Yocto?
+  2022-03-16  7:54 How to manage disk space while working with Yocto? Sourabh Hegde
+@ 2022-03-16  9:12 ` Mikko.Rapeli
+  2022-03-16  9:12 ` Manuel Wagesreither
+  1 sibling, 0 replies; 9+ messages in thread
+From: Mikko.Rapeli @ 2022-03-16  9:12 UTC (permalink / raw)
+  To: hrsourabh011; +Cc: yocto
+
+Hi,
+
+On Wed, Mar 16, 2022 at 12:54:14AM -0700, Sourabh Hegde wrote:
+> Hello All,
+> 
+> I am using Yocto for one of my project. I know that Yocto needs a good amount of disk space for build activities. And also I am working as non-root user in Ubuntu 20.04. But I often run into space issues during build.
+> 
+> WARNING: The free space of [...]/tmp-glibc (overlay) is running low (0.555GB left)
+> ERROR: No new tasks can be executed since the disk space monitor action is "STOPTASKS"!
+> WARNING: The free space of [...]/downloads (overlay) is running low (0.555GB left)
+> ERROR: No new tasks can be executed since the disk space monitor action is "STOPTASKS"!
+> WARNING: The free space of [...]/sstate-cache (overlay) is running low (0.555GB left)
+> ERROR: No new tasks can be executed since the disk space monitor action is "STOPTASKS"!
+> 
+> I have tried deleting $TMPDIR (build/tmp) , $SSTATE_DIR (build/sstate-cache) , $DL_DIR (build/downloads). But these things didn't help me.
+> 
+> Is there any way to allocate more space to user in Ubuntu? And also what is the best practice for space usage while working with Yocto?
+> 
+> Can anyone please let me know how to resolve this issue?
+> 
+> Your help will be much appreciated.
+
+This is a common problem. I run to this almost weekly basis doing a lot yocto compiles
+on my developer machine.
+
+Solution for me is to manually check before compiling that I still have
+100's gigabytes of diskspace free. If not, I will delete first build/tmp
+directories. If that doesn't give me enough free space, I sometimes need to
+delete the whole build directory which includes the sstate cache directories.
+In worst case I need to delete also the download cache directories which
+in my case lives outside of build directories.
+
+On CI build servers I start every build by cleaning the build directory but I do
+preserve the sstate cache, cache directory (prserv database from previous release),
+and download cache. Size of the caches on each CI server is monitored separately.
+
+Hope this helps,
+
+-Mikko
+
+^ permalink raw reply	[flat|nested] 9+ messages in thread
+* Re: [yocto] How to manage disk space while working with Yocto?
+  2022-03-16  7:54 How to manage disk space while working with Yocto? Sourabh Hegde
+  2022-03-16  9:12 ` [yocto] " Mikko.Rapeli
+@ 2022-03-16  9:12 ` Manuel Wagesreither
+  2022-03-16  9:52   ` Alexander Kanavin
+  1 sibling, 1 reply; 9+ messages in thread
+From: Manuel Wagesreither @ 2022-03-16  9:12 UTC (permalink / raw)
+  To: Sourabh Hegde, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 762 bytes --]
+
+Am Mi, 16. Mär 2022, um 08:54, schrieb Sourabh Hegde:
+> I have tried deleting `$TMPDIR (build/tmp)`, `$SSTATE_DIR (build/sstate-cache)`, `$DL_DIR (build/downloads)`. But these things didn't help me.
+
+These directories are crucial for a yocto build and they will get recreated if not existing. Deleting them does nothing besides prolonging the build process.
+
+You could try putting `INHERIT += "rm_work"` in the build/conf/local.conf. It will delete the work directories at build completition. I just don't know if they get deleted when building of the individual package is finished (which would be good for you), or after completition of the complete build. (That would be too late for you, as you already ran out of disk space then.)
+
+Regards, Manuel
+
+[-- Attachment #2: Type: text/html, Size: 4104 bytes --]
+
+^ permalink raw reply	[flat|nested] 9+ messages in thread
+* Re: [yocto] How to manage disk space while working with Yocto?
+  2022-03-16  9:12 ` Manuel Wagesreither
+@ 2022-03-16  9:52   ` Alexander Kanavin
+  2022-03-16 10:32     ` Sourabh Hegde
+  0 siblings, 1 reply; 9+ messages in thread
+From: Alexander Kanavin @ 2022-03-16  9:52 UTC (permalink / raw)
+  To: Manuel Wagesreither; +Cc: Sourabh Hegde, Yocto-mailing-list
+
+On Wed, 16 Mar 2022 at 10:13, Manuel Wagesreither <ManWag@fastmail.fm> wrote:
+> I have tried deleting $TMPDIR (build/tmp), $SSTATE_DIR (build/sstate-cache), $DL_DIR (build/downloads). But these things didn't help me.
+>
+>
+> These directories are crucial for a yocto build and they will get recreated if not existing. Deleting them does nothing besides prolonging the build process.
+
+Only the last two. Deleting tmp/ does help as then any needed binary
+items will be taken from sstate cache instead of being unpacked from
+source and rebuilt.
+
+Alex
+
+
+^ permalink raw reply	[flat|nested] 9+ messages in thread
+* Re: How to manage disk space while working with Yocto?
+  2022-03-16  9:52   ` Alexander Kanavin
+@ 2022-03-16 10:32     ` Sourabh Hegde
+  2022-03-16 10:49       ` [yocto] " Alexander Kanavin
+  0 siblings, 1 reply; 9+ messages in thread
+From: Sourabh Hegde @ 2022-03-16 10:32 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 290 bytes --]
+
+Hello,
+
+Thanks for the update.
+
+Even after deleting build/tmp and build/sstate-cache and setting `INHERIT += "rm_work"` in the build/conf/local.conf.
+But still I am facing same issue.
+
+Is there any way to allocate more space to user in ubuntu?
+
+I don't have any CI build servers.
+
+[-- Attachment #2: Type: text/html, Size: 429 bytes --]
+
+^ permalink raw reply	[flat|nested] 9+ messages in thread
+* Re: [yocto] How to manage disk space while working with Yocto?
+  2022-03-16 10:32     ` Sourabh Hegde
+@ 2022-03-16 10:49       ` Alexander Kanavin
+  2022-03-16 10:57         ` Sourabh Hegde
+  0 siblings, 1 reply; 9+ messages in thread
+From: Alexander Kanavin @ 2022-03-16 10:49 UTC (permalink / raw)
+  To: Sourabh Hegde; +Cc: Yocto-mailing-list
+
+On Wed, 16 Mar 2022 at 11:32, Sourabh Hegde <hrsourabh011@gmail.com> wrote:
+> Even after deleting build/tmp and build/sstate-cache and setting `INHERIT += "rm_work"` in the build/conf/local.conf.
+> But still I am facing same issue.
+>
+> Is there any way to allocate more space to user in ubuntu?
+>
+> I don't have any CI build servers.
+
+Can you show the output of 'df' please?
+
+Alex
+
+
+^ permalink raw reply	[flat|nested] 9+ messages in thread
+* Re: How to manage disk space while working with Yocto?
+  2022-03-16 10:49       ` [yocto] " Alexander Kanavin
+@ 2022-03-16 10:57         ` Sourabh Hegde
+  2022-03-16 11:14           ` [yocto] " Alexander Kanavin
+  0 siblings, 1 reply; 9+ messages in thread
+From: Sourabh Hegde @ 2022-03-16 10:57 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 42 bytes --]
+
+Hi Alex,
+
+Below is the output of "df":
+
+[-- Attachment #2: Type: text/html, Size: 21978 bytes --]
+
+^ permalink raw reply	[flat|nested] 9+ messages in thread
+* Re: [yocto] How to manage disk space while working with Yocto?
+  2022-03-16 10:57         ` Sourabh Hegde
+@ 2022-03-16 11:14           ` Alexander Kanavin
+  2022-03-16 11:26             ` Sourabh Hegde
+  0 siblings, 1 reply; 9+ messages in thread
+From: Alexander Kanavin @ 2022-03-16 11:14 UTC (permalink / raw)
+  To: Sourabh Hegde; +Cc: Yocto-mailing-list
+
+
+[-- Attachment #1.1: Type: text/plain, Size: 726 bytes --]
+
+Are you running in a virtual machine of some kind? It's better to get a
+real linux computer. Otherwise you need to check how to allocate more disk
+space to the virtual machine from the host.
+
+Alex
+
+On Wed, 16 Mar 2022 at 11:57, Sourabh Hegde <hrsourabh011@gmail.com> wrote:
+
+> Hi Alex,
+>
+> Below is the output of "df":
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#56464):
+> https://lists.yoctoproject.org/g/yocto/message/56464
+> Mute This Topic: https://lists.yoctoproject.org/mt/89817082/1686489
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> alex.kanavin@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+[-- Attachment #1.2: Type: text/html, Size: 1620 bytes --]
+
+[-- Attachment #2: dummyfile.0.part --]
+[-- Type: image/png, Size: 16385 bytes --]
+
+^ permalink raw reply	[flat|nested] 9+ messages in thread
+* Re: How to manage disk space while working with Yocto?
+  2022-03-16 11:14           ` [yocto] " Alexander Kanavin
+@ 2022-03-16 11:26             ` Sourabh Hegde
+  0 siblings, 0 replies; 9+ messages in thread
+From: Sourabh Hegde @ 2022-03-16 11:26 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 222 bytes --]
+
+> 
+> Are you running in a virtual machine of some kind? It's better to get a
+> real linux computer.
+
+Yes, I am building Yocto inside docker containers. But previously, I did not face this issue with docker container.
+
+[-- Attachment #2: Type: text/html, Size: 242 bytes --]
+
+^ permalink raw reply	[flat|nested] 9+ messages in thread
+end of thread, other threads:[~2022-03-16 11:26 UTC | newest]
+
+Thread overview: 9+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-03-16  7:54 How to manage disk space while working with Yocto? Sourabh Hegde
+2022-03-16  9:12 ` [yocto] " Mikko.Rapeli
+2022-03-16  9:12 ` Manuel Wagesreither
+2022-03-16  9:52   ` Alexander Kanavin
+2022-03-16 10:32     ` Sourabh Hegde
+2022-03-16 10:49       ` [yocto] " Alexander Kanavin
+2022-03-16 10:57         ` Sourabh Hegde
+2022-03-16 11:14           ` [yocto] " Alexander Kanavin
+2022-03-16 11:26             ` Sourabh Hegde
+

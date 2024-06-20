@@ -1,0 +1,160 @@
+* Multiconfig dependency
+@ 2022-03-17 20:29 Oleh Kravchenko
+  2022-03-19 21:20 ` Oleh Kravchenko
+  2022-03-21  6:02 ` [yocto] " Manuel Wagesreither
+  0 siblings, 2 replies; 4+ messages in thread
+From: Oleh Kravchenko @ 2022-03-17 20:29 UTC (permalink / raw)
+  To: yocto
+
+Hello guys!
+Could you please help me with Multiconfig setup?
+
+I’ve "default" configuration with SystemD by default.
+And "initramfs" configuration with Busybox and other settings.
+
+I use next targets/recipes with initramfs configuration:
+1. core-image-rootfs - packs core-image-minimal ext4 image to debian 
+package;
+2. initramfs-flasher-image - image that has core-image-rootfs;
+
+Default configuration:
+1. core-image-minimal - main rootfs;
+2. flasher - packs initramfs-flasher-image squashfs image to debian package;
+3. app-flasher - special application that has inside squashfs file from 
+flasher package.
+
+Everything works fine if I do clean build.
+If I change somethings for core-image-minial (like IMAGE_INSTALL), it 
+builds core-image-minial only:
+
+> bitbake app-flasher
+But no updates for core-image-rootfs, initramfs-flasher-image, flasher 
+and app-flasher.
+
+Here how my multiconfig dependency in core-image-rootfs.bb:
+
+ > do_install[mcdepends] = 
+"mc:initramfs::core-image-minimal:do_image_complete"
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: Multiconfig dependency
+  2022-03-17 20:29 Multiconfig dependency Oleh Kravchenko
+@ 2022-03-19 21:20 ` Oleh Kravchenko
+  2022-03-21  6:02 ` [yocto] " Manuel Wagesreither
+  1 sibling, 0 replies; 4+ messages in thread
+From: Oleh Kravchenko @ 2022-03-19 21:20 UTC (permalink / raw)
+  To: JPEWhacker; +Cc: yocto
+
+
+Hello Joshua,
+Could you please help me with multiconfig?
+
+Currently I've found this workaround:
+ > do_install[nostamp] = "1"
+
+For all tasks that have "do_install[mcdepends]".
+
+17.03.22 22:29, Oleh Kravchenko пише:
+> Hello guys!
+> Could you please help me with Multiconfig setup?
+> 
+> I’ve "default" configuration with SystemD by default.
+> And "initramfs" configuration with Busybox and other settings.
+> 
+> I use next targets/recipes with initramfs configuration:
+> 1. core-image-rootfs - packs core-image-minimal ext4 image to debian 
+> package;
+> 2. initramfs-flasher-image - image that has core-image-rootfs;
+> 
+> Default configuration:
+> 1. core-image-minimal - main rootfs;
+> 2. flasher - packs initramfs-flasher-image squashfs image to debian 
+> package;
+> 3. app-flasher - special application that has inside squashfs file from 
+> flasher package.
+> 
+> Everything works fine if I do clean build.
+> If I change somethings for core-image-minial (like IMAGE_INSTALL), it 
+> builds core-image-minial only:
+> 
+>> bitbake app-flasher
+> But no updates for core-image-rootfs, initramfs-flasher-image, flasher 
+> and app-flasher.
+> 
+> Here how my multiconfig dependency in core-image-rootfs.bb:
+> 
+>  > do_install[mcdepends] = 
+> "mc:initramfs::core-image-minimal:do_image_complete"
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] Multiconfig dependency
+  2022-03-17 20:29 Multiconfig dependency Oleh Kravchenko
+  2022-03-19 21:20 ` Oleh Kravchenko
+@ 2022-03-21  6:02 ` Manuel Wagesreither
+  2022-03-21  9:57   ` Oleh Kravchenko
+  1 sibling, 1 reply; 4+ messages in thread
+From: Manuel Wagesreither @ 2022-03-21  6:02 UTC (permalink / raw)
+  To: Oleh Kravchenko, yocto
+
+Hi Oleh,
+
+Am Do, 17. Mär 2022, um 21:29, schrieb Oleh Kravchenko:
+>  do_install[mcdepends] = "mc:initramfs::core-image-minimal:do_image_complete"
+
+I have zero practical experience with multiconfig, but isn't this missing one argument?
+
+See here:
+
+https://github.com/JPEWdev/meta-multiconfig-demos/blob/main/recipes-misc/arthur-embed/arthur-embed.bb#L21https://youtu.be/YvtlGjWrL-M?list=PLD4M5FoHz-TwWYbaJwduH8ZYNYvva76QQ&t=5030
+
+Regards,
+Manuel
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] Multiconfig dependency
+  2022-03-21  6:02 ` [yocto] " Manuel Wagesreither
+@ 2022-03-21  9:57   ` Oleh Kravchenko
+  0 siblings, 0 replies; 4+ messages in thread
+From: Oleh Kravchenko @ 2022-03-21  9:57 UTC (permalink / raw)
+  To: Manuel Wagesreither; +Cc: yocto
+
+Hello Manuel,
+Thank you for your reply.
+
+It isn't missing.
+Here is a cut from manual:
+
+A "default" configuration already exists by definition. This 
+configuration is named: "" (i.e. empty string) and is defined by the 
+variables coming from your local.conf file.
+
+
+21.03.22 08:02, Manuel Wagesreither пише:
+> Hi Oleh,
+> 
+> Am Do, 17. Mär 2022, um 21:29, schrieb Oleh Kravchenko:
+>>   do_install[mcdepends] = "mc:initramfs::core-image-minimal:do_image_complete"
+> 
+> I have zero practical experience with multiconfig, but isn't this missing one argument?
+> 
+> See here:
+> 
+> https://github.com/JPEWdev/meta-multiconfig-demos/blob/main/recipes-misc/arthur-embed/arthur-embed.bb#L21https://youtu.be/YvtlGjWrL-M?list=PLD4M5FoHz-TwWYbaJwduH8ZYNYvva76QQ&t=5030
+> 
+> Regards,
+> Manuel
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+end of thread, other threads:[~2022-03-21  9:57 UTC | newest]
+
+Thread overview: 4+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-03-17 20:29 Multiconfig dependency Oleh Kravchenko
+2022-03-19 21:20 ` Oleh Kravchenko
+2022-03-21  6:02 ` [yocto] " Manuel Wagesreither
+2022-03-21  9:57   ` Oleh Kravchenko
+

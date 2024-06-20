@@ -1,0 +1,108 @@
+* [meta-selinux][dunfell][PATCH] libselinux: Backport NULL pointer fix from 3.1
+@ 2021-10-08 13:46 Jonas.Brich
+  0 siblings, 0 replies; only message in thread
+From: Jonas.Brich @ 2021-10-08 13:46 UTC (permalink / raw)
+  To: yocto
+
+
+[-- Attachment #1.1: Type: text/plain, Size: 475 bytes --]
+
+Attached the diff.
+
+
+Thanks
+
+
+BMW Car IT GmbH
+Jonas Brich
+Spezialist Entwicklung
+Lise-Meitner-Str. 14
+89081 Ulm
+
+Tel.:  +49 731 3780 4292
+Mail: jonas.brich@bmw.de
+Web: http://www.bmw-carit.de
+----------------------------------------------------------------------
+BMW Car IT GmbH
+Geschaeftsfuehrer: Kai-Uwe Balszuweit und Michael Böttrich
+Sitz und Registergericht: Muenchen HRB 134810
+----------------------------------------------------------------------
+
+[-- Attachment #1.2: Type: text/html, Size: 1387 bytes --]
+
+[-- Warning: decoded text below may be mangled, UTF-8 assumed --]
+[-- Attachment #2: 67803f9.diff --]
+[-- Type: text/x-patch; name="67803f9.diff", Size: 2852 bytes --]
+
+From 67803f939210f995fb4e39b3b67c57ca23959728 Mon Sep 17 00:00:00 2001
+From: Jonas Brich <Jonas.Brich@bmw.de>
+Date: Fri, 08 Oct 2021 14:47:14 +0200
+Subject: [PATCH] libselinux: Backport NULL pointer fix from 3.1
+
+Using function restorecon_init inside selinux_restorecon.c can
+result in a NULL pointer. This happens because function
+selinux_restorecon_set_sehandle can return a NULL pointer. But
+it is not checked and directly given to the next function.
+
+This problem is already fixed in libselinux 3.1 and above.
+Therefore backport this fix.
+
+Upstream-Status: Backport [https://github.com/SELinuxProject/selinux/commit/08f5e30177218fae7ce9f5c8d6856690126b2b30]
+Issue: MGURSU-7259
+Change-Id: Ice5c7c94987441ba53431aeffc200c0b9c5697a4
+---
+
+diff --git a/recipes-security/selinux/libselinux/0001-Fix-NULL-pointer-use-in-selinux_restorecon_set_sehandle.patch b/recipes-security/selinux/libselinux/0001-Fix-NULL-pointer-use-in-selinux_restorecon_set_sehandle.patch
+new file mode 100644
+index 0000000..8a9fb7c
+--- /dev/null
++++ b/recipes-security/selinux/libselinux/0001-Fix-NULL-pointer-use-in-selinux_restorecon_set_sehandle.patch
+@@ -0,0 +1,30 @@
++From 08f5e30177218fae7ce9f5c8d6856690126b2b30 Mon Sep 17 00:00:00 2001
++From: Ji Qin <jiqin.ji@huawei.com>
++Date: Sun, 14 Jun 2020 21:20:23 -0400
++Subject: [PATCH] libselinux: Fix NULL pointer use in
++ selinux_restorecon_set_sehandle
++
++error occur when selinux_restorecon_default_handle return NULL in
++restorecon_init.
++
++fixes: https://github.com/SELinuxProject/selinux/issues/249
++
++Signed-off-by: Ji Qin <jiqin.ji@huawei.com>
++Acked-by: Stephen Smalley <stephen.smalley.work@gmail.com>
++---
++ libselinux/src/selinux_restorecon.c | 2 ++
++ 1 file changed, 2 insertions(+)
++
++diff --git a/libselinux/src/selinux_restorecon.c b/libselinux/src/selinux_restorecon.c
++index d1ce830c5..6993be6fd 100644
++--- a/libselinux/src/selinux_restorecon.c
+++++ b/libselinux/src/selinux_restorecon.c
++@@ -1154,6 +1154,8 @@ void selinux_restorecon_set_sehandle(struct selabel_handle *hndl)
++ 	size_t num_specfiles, fc_digest_len;
++ 
++ 	fc_sehandle = (struct selabel_handle *) hndl;
+++	if (!fc_sehandle)
+++		return;
++ 
++ 	/* Check if digest requested in selabel_open(3), if so use it. */
++ 	if (selabel_digest(fc_sehandle, &fc_digest, &fc_digest_len,
+diff --git a/recipes-security/selinux/libselinux_3.0.bb b/recipes-security/selinux/libselinux_3.0.bb
+index 17a25a9..01f9b7b 100644
+--- a/recipes-security/selinux/libselinux_3.0.bb
++++ b/recipes-security/selinux/libselinux_3.0.bb
+@@ -13,4 +13,5 @@
+         file://libselinux-define-FD_CLOEXEC-as-necessary.patch \
+         file://0001-Fix-building-against-musl-and-uClibc-libc-libraries.patch \
+         file://0001-libselinux-export-flush_class_cache-call-it-on-polic.patch \
++        file://0001-Fix-NULL-pointer-use-in-selinux_restorecon_set_sehandle.patch \
+         "
+
+^ permalink raw reply related	[flat|nested] only message in thread
+only message in thread, other threads:[~2021-10-08 13:47 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-10-08 13:46 [meta-selinux][dunfell][PATCH] libselinux: Backport NULL pointer fix from 3.1 Jonas.Brich
+

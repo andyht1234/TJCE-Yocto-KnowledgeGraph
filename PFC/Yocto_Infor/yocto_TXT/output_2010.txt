@@ -1,0 +1,166 @@
+* [yocto 3.1] adding custom testsdk script in own layer
+@ 2022-03-29 23:34 Karthik Poduval
+  2022-04-02  1:44 ` Karthik Poduval
+  0 siblings, 1 reply; 3+ messages in thread
+From: Karthik Poduval @ 2022-03-29 23:34 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 552 bytes --]
+
+Hi All,
+
+We were trying to add a custom sdktest script as shown in example
+https://docs.yoctoproject.org/test-manual/intro.html#testsdk.
+
+The script gets invoked when placed in meta/lib/oeqa/sdk/cases/mysdktest.py
+
+However when placed under.
+<my layer>/lib/oeqa/sdk/cases/mysdktest.py
+It does not get invoked when running
+bitbake <my image> -c testsdk
+
+The testimage scripts do work when placed under
+<my layer>/lib/oeqa/runtime/cases/
+as they are controlled by the TEST_SUITES variable.
+
+Kindly advise on how to proceed.
+
+-- 
+Regards,
+Karthik Poduval
+
+[-- Attachment #2: Type: text/html, Size: 807 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto 3.1] adding custom testsdk script in own layer
+  2022-03-29 23:34 [yocto 3.1] adding custom testsdk script in own layer Karthik Poduval
+@ 2022-04-02  1:44 ` Karthik Poduval
+  2022-04-02  2:32   ` [yocto] " ChenQi
+  0 siblings, 1 reply; 3+ messages in thread
+From: Karthik Poduval @ 2022-04-02  1:44 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 732 bytes --]
+
+Ping. Still need help on this one, experts kindly advise.
+
+On Tue, Mar 29, 2022, 4:34 PM Karthik Poduval <karthik.poduval@gmail.com>
+wrote:
+
+> Hi All,
+>
+> We were trying to add a custom sdktest script as shown in example
+> https://docs.yoctoproject.org/test-manual/intro.html#testsdk.
+>
+> The script gets invoked when placed in meta/lib/oeqa/sdk/cases/mysdktest.py
+>
+> However when placed under.
+> <my layer>/lib/oeqa/sdk/cases/mysdktest.py
+> It does not get invoked when running
+> bitbake <my image> -c testsdk
+>
+> The testimage scripts do work when placed under
+> <my layer>/lib/oeqa/runtime/cases/
+> as they are controlled by the TEST_SUITES variable.
+>
+> Kindly advise on how to proceed.
+>
+> --
+> Regards,
+> Karthik Poduval
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 1248 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] [yocto 3.1] adding custom testsdk script in own layer
+  2022-04-02  1:44 ` Karthik Poduval
+@ 2022-04-02  2:32   ` ChenQi
+  0 siblings, 0 replies; 3+ messages in thread
+From: ChenQi @ 2022-04-02  2:32 UTC (permalink / raw)
+  To: Karthik Poduval, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2542 bytes --]
+
+Hi Karthik,
+
+Looking at the codes briefly, I would say the reason is that testimage 
+considers all BBLAYERS while testsdk does not.
+
+The key codes for testimage are:
+testimage.bbclass:get_runtime_paths:
+for layer in d.getVar('BBLAYERS').split():
+         path = os.path.join(layer, 'lib/oeqa/runtime/cases')
+         if os.path.isdir(path):
+             paths.append(path)
+     return paths
+
+The key codes for testsdk are:
+meta/lib/oeqa/sdk/context.py:OESDKTestContextExecutor:
+default_cases = 
+[os.path.join(os.path.abspath(os.path.dirname(__file__)), 'cases')]
+
+I think you can fix the codes in sdk/context.py to make it consider 
+BBLAYERS just as testimage.bbclass does.
+
+P.S.
+I'm not 100% sure, as I did not do any tests.
+
+Regards,
+Qi
+
+
+On 4/2/22 09:44, Karthik Poduval wrote:
+> Ping. Still need help on this one, experts kindly advise.
+>
+> On Tue, Mar 29, 2022, 4:34 PM Karthik Poduval 
+> <karthik.poduval@gmail.com> wrote:
+>
+>     Hi All,
+>
+>     We were trying to add a custom sdktest script as shown in example
+>     https://docs.yoctoproject.org/test-manual/intro.html#testsdk
+>     <https://urldefense.com/v3/__https://docs.yoctoproject.org/test-manual/intro.html*testsdk__;Iw!!AjveYdw8EvQ!JtBicjGMMHASyKUPwtEZhlYlVAqH5TLsRa5hAQxWy9bq5OdzOqUnRgpfPH_zu_iqfw$>.
+>
+>     The script gets invoked when placed in
+>     meta/lib/oeqa/sdk/cases/mysdktest.py
+>     <https://urldefense.com/v3/__http://mysdktest.py__;!!AjveYdw8EvQ!JtBicjGMMHASyKUPwtEZhlYlVAqH5TLsRa5hAQxWy9bq5OdzOqUnRgpfPH8nH-l2cA$>
+>
+>     However when placed under.
+>     <my layer>/lib/oeqa/sdk/cases/mysdktest.py
+>     <https://urldefense.com/v3/__http://mysdktest.py__;!!AjveYdw8EvQ!JtBicjGMMHASyKUPwtEZhlYlVAqH5TLsRa5hAQxWy9bq5OdzOqUnRgpfPH8nH-l2cA$>
+>     It does not get invoked when running
+>     bitbake <my image> -c testsdk
+>
+>     The testimage scripts do work when placed under
+>     <my layer>/lib/oeqa/runtime/cases/
+>     as they are controlled by the TEST_SUITES variable.
+>
+>     Kindly advise on how to proceed.
+>
+>     -- 
+>     Regards,
+>     Karthik Poduval
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#56619):https://lists.yoctoproject.org/g/yocto/message/56619
+> Mute This Topic:https://lists.yoctoproject.org/mt/90121010/3618072
+> Group Owner:yocto+owner@lists.yoctoproject.org
+> Unsubscribe:https://lists.yoctoproject.org/g/yocto/unsub  [Qi.Chen@windriver.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+[-- Attachment #2: Type: text/html, Size: 5541 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2022-04-04 18:46 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-03-29 23:34 [yocto 3.1] adding custom testsdk script in own layer Karthik Poduval
+2022-04-02  1:44 ` Karthik Poduval
+2022-04-02  2:32   ` [yocto] " ChenQi
+

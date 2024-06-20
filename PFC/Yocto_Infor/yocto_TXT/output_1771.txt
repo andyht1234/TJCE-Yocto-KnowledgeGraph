@@ -1,0 +1,251 @@
+* [meta-tpm][PATCH 1/5] swtpm: enable seccomp if DISTRO is enabled
+@ 2022-05-30 14:52 Armin Kuster
+  2022-05-30 14:52 ` [meta-tpm][PATCH 2/5] security-tpm2-image: add swtpm Armin Kuster
+                   ` (3 more replies)
+  0 siblings, 4 replies; 5+ messages in thread
+From: Armin Kuster @ 2022-05-30 14:52 UTC (permalink / raw)
+  To: yocto
+
+Signed-off-by: Armin Kuster <akuster808@gmail.com>
+---
+ meta-tpm/recipes-tpm/swtpm/swtpm_0.7.1.bb | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/meta-tpm/recipes-tpm/swtpm/swtpm_0.7.1.bb b/meta-tpm/recipes-tpm/swtpm/swtpm_0.7.1.bb
+index 85e4c5d..db6ceee 100644
+--- a/meta-tpm/recipes-tpm/swtpm/swtpm_0.7.1.bb
++++ b/meta-tpm/recipes-tpm/swtpm/swtpm_0.7.1.bb
+@@ -22,6 +22,7 @@ TSS_GROUP="tss"
+ 
+ PACKAGECONFIG ?= "openssl"
+ PACKAGECONFIG += "${@bb.utils.contains('DISTRO_FEATURES', 'selinux', 'selinux', '', d)}"
++PACKAGECONFIG += "${@bb.utils.contains('DISTRO_FEATURES', 'seccomp', 'seccomp', '', d)}"
+ PACKAGECONFIG += "${@bb.utils.contains('BBFILE_COLLECTIONS', 'filesystems-layer', 'cuse', '', d)}"
+ PACKAGECONFIG[openssl] = "--with-openssl, --without-openssl, openssl"
+ # expect, bash, tpm2-pkcs11-tools (tpm2_ptool), tpmtool and certtool is
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 5+ messages in thread
+* [meta-tpm][PATCH 2/5] security-tpm2-image: add swtpm
+  2022-05-30 14:52 [meta-tpm][PATCH 1/5] swtpm: enable seccomp if DISTRO is enabled Armin Kuster
+@ 2022-05-30 14:52 ` Armin Kuster
+  2022-05-30 14:52 ` [meta-tpm][PATCH 3/5] swtpm: enable gnutls Armin Kuster
+                   ` (2 subsequent siblings)
+  3 siblings, 0 replies; 5+ messages in thread
+From: Armin Kuster @ 2022-05-30 14:52 UTC (permalink / raw)
+  To: yocto
+
+Signed-off-by: Armin Kuster <akuster808@gmail.com>
+---
+ meta-tpm/recipes-core/images/security-tpm2-image.bb | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/meta-tpm/recipes-core/images/security-tpm2-image.bb b/meta-tpm/recipes-core/images/security-tpm2-image.bb
+index 7e047d1..941a661 100644
+--- a/meta-tpm/recipes-core/images/security-tpm2-image.bb
++++ b/meta-tpm/recipes-core/images/security-tpm2-image.bb
+@@ -7,6 +7,7 @@ IMAGE_INSTALL = "\
+     packagegroup-core-boot \
+     packagegroup-security-tpm2 \
+     os-release \
++    swtpm \
+ "
+ 
+ IMAGE_LINGUAS ?= " "
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 5+ messages in thread
+* [meta-tpm][PATCH 3/5] swtpm: enable gnutls
+  2022-05-30 14:52 [meta-tpm][PATCH 1/5] swtpm: enable seccomp if DISTRO is enabled Armin Kuster
+  2022-05-30 14:52 ` [meta-tpm][PATCH 2/5] security-tpm2-image: add swtpm Armin Kuster
+@ 2022-05-30 14:52 ` Armin Kuster
+  2022-05-30 14:52 ` [meta-tpm][PATCH 4/5] oeqa/swtpm: add swtpm runtime Armin Kuster
+  2022-05-30 14:52 ` [meta-tpm][PATCH 5/5] oeqa/tpm2: fix and cleanup tests Armin Kuster
+  3 siblings, 0 replies; 5+ messages in thread
+From: Armin Kuster @ 2022-05-30 14:52 UTC (permalink / raw)
+  To: yocto
+
+needed for cert support
+
+Signed-off-by: Armin Kuster <akuster808@gmail.com>
+---
+ meta-tpm/recipes-tpm/swtpm/swtpm_0.7.1.bb | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/meta-tpm/recipes-tpm/swtpm/swtpm_0.7.1.bb b/meta-tpm/recipes-tpm/swtpm/swtpm_0.7.1.bb
+index db6ceee..03899d8 100644
+--- a/meta-tpm/recipes-tpm/swtpm/swtpm_0.7.1.bb
++++ b/meta-tpm/recipes-tpm/swtpm/swtpm_0.7.1.bb
+@@ -20,7 +20,7 @@ inherit autotools pkgconfig perlnative
+ TSS_USER="tss"
+ TSS_GROUP="tss"
+ 
+-PACKAGECONFIG ?= "openssl"
++PACKAGECONFIG ?= "openssl gnutls"
+ PACKAGECONFIG += "${@bb.utils.contains('DISTRO_FEATURES', 'selinux', 'selinux', '', d)}"
+ PACKAGECONFIG += "${@bb.utils.contains('DISTRO_FEATURES', 'seccomp', 'seccomp', '', d)}"
+ PACKAGECONFIG += "${@bb.utils.contains('BBFILE_COLLECTIONS', 'filesystems-layer', 'cuse', '', d)}"
+@@ -28,7 +28,7 @@ PACKAGECONFIG[openssl] = "--with-openssl, --without-openssl, openssl"
+ # expect, bash, tpm2-pkcs11-tools (tpm2_ptool), tpmtool and certtool is
+ # used by swtpm-create-tpmca (the last two is provided by gnutls)
+ # gnutls is required by: swtpm-create-tpmca, swtpm-localca and swtpm_cert
+-PACKAGECONFIG[gnutls] = "--with-gnutls, --without-gnutls, gnutls, gnutls, expect bash tpm2-pkcs11-tools"
++PACKAGECONFIG[gnutls] = "--with-gnutls, --without-gnutls, gnutls-native gnutls, gnutls-bin expect bash tpm2-pkcs11-tools"
+ PACKAGECONFIG[selinux] = "--with-selinux, --without-selinux, libselinux"
+ PACKAGECONFIG[cuse] = "--with-cuse, --without-cuse, fuse"
+ PACKAGECONFIG[seccomp] = "--with-seccomp, --without-seccomp, libseccomp"
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 5+ messages in thread
+* [meta-tpm][PATCH 4/5] oeqa/swtpm: add swtpm runtime
+  2022-05-30 14:52 [meta-tpm][PATCH 1/5] swtpm: enable seccomp if DISTRO is enabled Armin Kuster
+  2022-05-30 14:52 ` [meta-tpm][PATCH 2/5] security-tpm2-image: add swtpm Armin Kuster
+  2022-05-30 14:52 ` [meta-tpm][PATCH 3/5] swtpm: enable gnutls Armin Kuster
+@ 2022-05-30 14:52 ` Armin Kuster
+  2022-05-30 14:52 ` [meta-tpm][PATCH 5/5] oeqa/tpm2: fix and cleanup tests Armin Kuster
+  3 siblings, 0 replies; 5+ messages in thread
+From: Armin Kuster @ 2022-05-30 14:52 UTC (permalink / raw)
+  To: yocto
+
+Signed-off-by: Armin Kuster <akuster808@gmail.com>
+---
+ meta-tpm/lib/oeqa/runtime/cases/swtpm.py | 24 ++++++++++++++++++++++++
+ 1 file changed, 24 insertions(+)
+ create mode 100644 meta-tpm/lib/oeqa/runtime/cases/swtpm.py
+
+diff --git a/meta-tpm/lib/oeqa/runtime/cases/swtpm.py b/meta-tpm/lib/oeqa/runtime/cases/swtpm.py
+new file mode 100644
+index 0000000..df47b35
+--- /dev/null
++++ b/meta-tpm/lib/oeqa/runtime/cases/swtpm.py
+@@ -0,0 +1,24 @@
++# Copyright (C) 2022 Armin Kuster <akuster808@gmail.com>
++#
++from oeqa.runtime.case import OERuntimeTestCase
++from oeqa.core.decorator.depends import OETestDepends
++from oeqa.runtime.decorator.package import OEHasPackage
++from oeqa.core.decorator.data import skipIfNotFeature
++
++class SwTpmTest(OERuntimeTestCase):
++    @classmethod
++    def setUpClass(cls):
++        cls.tc.target.run('mkdir /tmp/myvtpm2')
++        cls.tc.target.run('chown tss:root /tmp/myvtpm2')
++
++    @classmethod
++    def tearDownClass(cls):
++        cls.tc.target.run('rm -fr /tmp/myvtpm2')
++
++    @skipIfNotFeature('tpm2','Test tpm2_swtpm_socket requires tpm2 to be in DISTRO_FEATURES')
++    @OETestDepends(['ssh.SSHTest.test_ssh'])
++    @OEHasPackage(['swtpm'])
++    def test_swtpm2_ek_cert(self):
++            cmd = 'swtpm_setup --tpmstate /tmp/myvtpm2 --create-ek-cert --create-platform-cert --tpm2',
++            status, output = self.target.run(cmd)
++            self.assertEqual(status, 0, msg="swtpm create-ek-cert failed: %s" % output)
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 5+ messages in thread
+* [meta-tpm][PATCH 5/5] oeqa/tpm2: fix and cleanup tests
+  2022-05-30 14:52 [meta-tpm][PATCH 1/5] swtpm: enable seccomp if DISTRO is enabled Armin Kuster
+                   ` (2 preceding siblings ...)
+  2022-05-30 14:52 ` [meta-tpm][PATCH 4/5] oeqa/swtpm: add swtpm runtime Armin Kuster
+@ 2022-05-30 14:52 ` Armin Kuster
+  3 siblings, 0 replies; 5+ messages in thread
+From: Armin Kuster @ 2022-05-30 14:52 UTC (permalink / raw)
+  To: yocto
+
+Signed-off-by: Armin Kuster <akuster808@gmail.com>
+---
+ meta-tpm/lib/oeqa/runtime/cases/tpm2.py | 25 ++++++++++++++++---------
+ 1 file changed, 16 insertions(+), 9 deletions(-)
+
+diff --git a/meta-tpm/lib/oeqa/runtime/cases/tpm2.py b/meta-tpm/lib/oeqa/runtime/cases/tpm2.py
+index c2c95e7..e64d19d 100644
+--- a/meta-tpm/lib/oeqa/runtime/cases/tpm2.py
++++ b/meta-tpm/lib/oeqa/runtime/cases/tpm2.py
+@@ -1,11 +1,19 @@
+-# Copyright (C) 2019 Armin Kuster <akuster808@gmail.com>
++# Copyright (C) 2019 - 2022 Armin Kuster <akuster808@gmail.com>
+ #
+ from oeqa.runtime.case import OERuntimeTestCase
+ from oeqa.core.decorator.depends import OETestDepends
+ from oeqa.runtime.decorator.package import OEHasPackage
+-
++from oeqa.core.decorator.data import skipIfNotFeature
+ 
+ class Tpm2Test(OERuntimeTestCase):
++    @classmethod
++    def setUpClass(cls):
++        cls.tc.target.run('mkdir /tmp/myvtpm2')
++
++    @classmethod
++    def tearDownClass(cls):
++        cls.tc.target.run('rm -fr /tmp/myvtpm2')
++
+     def check_endlines(self, results,  expected_endlines): 
+         for line in results.splitlines():
+             for el in expected_endlines:
+@@ -19,20 +27,19 @@ class Tpm2Test(OERuntimeTestCase):
+     @OEHasPackage(['tpm2-tools'])
+     @OEHasPackage(['tpm2-abrmd'])
+     @OEHasPackage(['swtpm'])
++    @skipIfNotFeature('tpm2','Test tpm2_startup requires tpm2 to be in DISTRO_FEATURES')
+     @OETestDepends(['ssh.SSHTest.test_ssh'])
+-    def test_tpm2_swtpm_socket(self):
++    def test_tpm2_startup(self):
+         cmds = [
+-                'mkdir /tmp/myvtpm',
+-                'swtpm socket --tpmstate dir=/tmp/myvtpm --tpm2 --ctrl type=tcp,port=2322 --server type=tcp,port=2321 --flags not-need-init &',
+-                'export TPM2TOOLS_TCTI="swtpm:port=2321"',
+-                'tpm2_startup -c'
++                'swtpm socket -d --tpmstate dir=/tmp/myvtpm2 --tpm2 --ctrl type=tcp,port=2322 --server type=tcp,port=2321 --flags not-need-init',
++                'tpm2_startup -c -T "swtpm:port=2321"',
+                ]
+ 
+         for cmd in cmds:
+             status, output = self.target.run(cmd)
+             self.assertEqual(status, 0, msg='\n'.join([cmd, output]))
+ 
+-    @OETestDepends(['tpm2.Tpm2Test.test_tpm2_swtpm_socket'])
++    @OETestDepends(['tpm2.Tpm2Test.test_tpm2_startup'])
+     def test_tpm2_pcrread(self):
+          (status, output) = self.target.run('tpm2_pcrread')
+          expected_endlines = []
+@@ -49,7 +56,7 @@ class Tpm2Test(OERuntimeTestCase):
+ 
+     @OEHasPackage(['p11-kit'])
+     @OEHasPackage(['tpm2-pkcs11'])
+-    @OETestDepends(['tpm2.Tpm2Test.test_tpm2_swtpm_socket'])
++    @OETestDepends(['tpm2.Tpm2Test.test_tpm2_pcrread'])
+     def test_tpm2_pkcs11(self):
+          (status, output) = self.target.run('p11-kit list-modules -v')
+          self.assertEqual(status, 0, msg="Modules missing: %s" % output)
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 5+ messages in thread
+end of thread, other threads:[~2022-05-30 14:55 UTC | newest]
+
+Thread overview: 5+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-05-30 14:52 [meta-tpm][PATCH 1/5] swtpm: enable seccomp if DISTRO is enabled Armin Kuster
+2022-05-30 14:52 ` [meta-tpm][PATCH 2/5] security-tpm2-image: add swtpm Armin Kuster
+2022-05-30 14:52 ` [meta-tpm][PATCH 3/5] swtpm: enable gnutls Armin Kuster
+2022-05-30 14:52 ` [meta-tpm][PATCH 4/5] oeqa/swtpm: add swtpm runtime Armin Kuster
+2022-05-30 14:52 ` [meta-tpm][PATCH 5/5] oeqa/tpm2: fix and cleanup tests Armin Kuster
+

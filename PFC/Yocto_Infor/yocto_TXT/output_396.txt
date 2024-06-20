@@ -1,0 +1,577 @@
+* Building Tailscale with Yocto #golang
+@ 2023-07-02 19:45 przemek.recha
+  2023-07-02 20:30 ` [yocto] " f_l_k
+  2023-07-03 20:19 ` Tom Isaacson
+  0 siblings, 2 replies; 9+ messages in thread
+From: przemek.recha @ 2023-07-02 19:45 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2243 bytes --]
+
+Hi!
+I'm trying to build Tailscale with Yocto
+This is me recipe:
+
+inherit go-mod
+
+SRC_URI = "git://github.com/tailscale/tailscale;protocol=https;branch=main"
+SRCREV = "30d9201a11ebc2e3a0f17bf8963956b77dadeb5d"
+
+GO_IMPORT = "tailscale.com"
+GO_WORKDIR = "${GO_IMPORT}"
+GO_INSTALL = "\
+${GO_IMPORT}/cmd/tailscale \
+${GO_IMPORT}/cmd/tailscaled \
+"
+
+do_install() {
+install -d ${D}/${bindir}
+install -d ${D}/${sbindir}
+install ${B}/bin/tailscale ${D}/${bindir}/tailscale
+install ${B}/bin/tailscaled ${D}/${sbindir}/tailscaled
+}
+
+However, build step ends up with errors like these (full log):
+
+| wgengine/netstack/netstack.go:34:2: gvisor.dev/gvisor@v0.0.0-20230504175454-7b0a1988a28f: Get "https://proxy.golang.org/gvisor.dev/gvisor/@v/v0.0.0-20230504175454-7b0a1988a28f.zip": dial tcp: lookup proxy.golang.org on 8.8.8.8:53: dial udp 8.8.8.8:53: connect: network is unreachable
+| wgengine/netstack/netstack.go:35:2: gvisor.dev/gvisor@v0.0.0-20230504175454-7b0a1988a28f: Get "https://proxy.golang.org/gvisor.dev/gvisor/@v/v0.0.0-20230504175454-7b0a1988a28f.zip": dial tcp: lookup proxy.golang.org on 8.8.8.8:53: dial udp 8.8.8.8:53: connect: network is unreachable
+| net/tstun/tap_linux.go:23:2: gvisor.dev/gvisor@v0.0.0-20230504175454-7b0a1988a28f: Get "https://proxy.golang.org/gvisor.dev/gvisor/@v/v0.0.0-20230504175454-7b0a1988a28f.zip": dial tcp: lookup proxy.golang.org on 8.8.8.8:53: dial udp 8.8.8.8:53: connect: network is unreachable
+| wgengine/netstack/netstack.go:37:2: gvisor.dev/gvisor@v0.0.0-20230504175454-7b0a1988a28f: Get "https://proxy.golang.org/gvisor.dev/gvisor/@v/v0.0.0-20230504175454-7b0a1988a28f.zip": dial tcp: lookup proxy.golang.org on 8.8.8.8:53: dial udp 8.8.8.8:53: connect: network is unreachable
+| ipn/ipnauth/ipnauth.go:16:2: inet.af/peercred@v0.0.0-20210906144145-0893ea02156a: Get "https://proxy.golang.org/inet.af/peercred/@v/v0.0.0-20210906144145-0893ea02156a.zip": dial tcp: lookup proxy.golang.org on 8.8.8.8:53: dial udp 8.8.8.8:53: connect: network is unreachable
+
+On some resources I have found it was recomended to add environmental variables: `GOPROXY="direct"` and `GOSUMDB="off"`, but it didn't helped.
+
+Maybe someone has some ideas what is the cause of these errors?
+
+[-- Attachment #2: Type: text/html, Size: 2768 bytes --]
+
+^ permalink raw reply	[flat|nested] 9+ messages in thread
+* Re: [yocto] Building Tailscale with Yocto #golang
+  2023-07-02 19:45 Building Tailscale with Yocto #golang przemek.recha
+@ 2023-07-02 20:30 ` f_l_k
+  2023-07-03 13:07   ` Bruce Ashfield
+  2023-07-03 20:19 ` Tom Isaacson
+  1 sibling, 1 reply; 9+ messages in thread
+From: f_l_k @ 2023-07-02 20:30 UTC (permalink / raw)
+  To: przemek.recha; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2536 bytes --]
+
+You need to allow network connection for the do_compile task
+
+do_compile[network] = "1"
+
+
+On Sun, Jul 2 2023 at 12:45:40 PM -0700, przemek.recha@gmail.com wrote:
+> Hi!
+> I'm trying to build Tailscale with Yocto
+> This is me recipe:
+> 
+> inherit go-mod
+> 
+> SRC_URI = 
+> "git://github.com/tailscale/tailscale;protocol=https;branch=main"
+> SRCREV = "30d9201a11ebc2e3a0f17bf8963956b77dadeb5d"
+> 
+> GO_IMPORT = "tailscale.com"
+> GO_WORKDIR = "${GO_IMPORT}"
+> GO_INSTALL = "\
+>     ${GO_IMPORT}/cmd/tailscale \
+>     ${GO_IMPORT}/cmd/tailscaled \
+> "
+> 
+> do_install() {
+>     install -d ${D}/${bindir}
+>     install -d ${D}/${sbindir}
+>     install ${B}/bin/tailscale ${D}/${bindir}/tailscale
+>     install ${B}/bin/tailscaled ${D}/${sbindir}/tailscaled
+> }
+> 
+> 
+> However, build step ends up with errors like these (full log):
+> 
+> | wgengine/netstack/netstack.go:34:2: 
+> gvisor.dev/gvisor@v0.0.0-20230504175454-7b0a1988a28f: Get 
+> "https://proxy.golang.org/gvisor.dev/gvisor/@v/v0.0.0-20230504175454-7b0a1988a28f.zip": 
+> dial tcp: lookup proxy.golang.org on 8.8.8.8:53: dial udp 8.8.8.8:53: 
+> connect: network is unreachable
+> | wgengine/netstack/netstack.go:35:2: 
+> gvisor.dev/gvisor@v0.0.0-20230504175454-7b0a1988a28f: Get 
+> "https://proxy.golang.org/gvisor.dev/gvisor/@v/v0.0.0-20230504175454-7b0a1988a28f.zip": 
+> dial tcp: lookup proxy.golang.org on 8.8.8.8:53: dial udp 8.8.8.8:53: 
+> connect: network is unreachable
+> | net/tstun/tap_linux.go:23:2: 
+> gvisor.dev/gvisor@v0.0.0-20230504175454-7b0a1988a28f: Get 
+> "https://proxy.golang.org/gvisor.dev/gvisor/@v/v0.0.0-20230504175454-7b0a1988a28f.zip": 
+> dial tcp: lookup proxy.golang.org on 8.8.8.8:53: dial udp 8.8.8.8:53: 
+> connect: network is unreachable
+> | wgengine/netstack/netstack.go:37:2: 
+> gvisor.dev/gvisor@v0.0.0-20230504175454-7b0a1988a28f: Get 
+> "https://proxy.golang.org/gvisor.dev/gvisor/@v/v0.0.0-20230504175454-7b0a1988a28f.zip": 
+> dial tcp: lookup proxy.golang.org on 8.8.8.8:53: dial udp 8.8.8.8:53: 
+> connect: network is unreachable
+> | ipn/ipnauth/ipnauth.go:16:2: 
+> inet.af/peercred@v0.0.0-20210906144145-0893ea02156a: Get 
+> "https://proxy.golang.org/inet.af/peercred/@v/v0.0.0-20210906144145-0893ea02156a.zip": 
+> dial tcp: lookup proxy.golang.org on 8.8.8.8:53: dial udp 8.8.8.8:53: 
+> connect: network is unreachable
+> 
+> On some resources I have found it was recomended to add environmental 
+> variables: `GOPROXY="direct"` and `GOSUMDB="off"`, but it didn't 
+> helped.
+> 
+> Maybe someone has some ideas what is the cause of these errors?
+
+
+[-- Attachment #2: Type: text/html, Size: 3074 bytes --]
+
+^ permalink raw reply	[flat|nested] 9+ messages in thread
+* Re: [yocto] Building Tailscale with Yocto #golang
+  2023-07-02 20:30 ` [yocto] " f_l_k
+@ 2023-07-03 13:07   ` Bruce Ashfield
+  2023-07-03 13:43     ` f_l_k
+  0 siblings, 1 reply; 9+ messages in thread
+From: Bruce Ashfield @ 2023-07-03 13:07 UTC (permalink / raw)
+  To: Markus Volk; +Cc: przemek.recha, yocto
+
+On Sun, Jul 2, 2023 at 4:30 PM Markus Volk <f_l_k@t-online.de> wrote:
+>
+> You need to allow network connection for the do_compile task
+>
+> do_compile[network] = "1"
+
+We really shouldn't suggest the above to a developer without also the
+explanation as to why network access is disabled by default in tasks
+such as compile.
+
+Your build may in fact work once you've allowed go to fetch its
+dependencies / modules, but you will also not have reproducibility, a
+full license report or sstate/download reuse (things you'd get from
+fetcher integration).
+
+If none of those things are significant to you, then by all means, you
+can just allow go fetching in do_compile()
+
+For more details on the options and the long discussions on the topic
+in the past, I'd suggest searching the oe-core mailing list archives.
+
+Bruce
+
+>
+>
+> On Sun, Jul 2 2023 at 12:45:40 PM -0700, przemek.recha@gmail.com wrote:
+>
+> Hi!
+> I'm trying to build Tailscale with Yocto
+> This is me recipe:
+>
+> inherit go-mod
+>
+> SRC_URI = "git://github.com/tailscale/tailscale;protocol=https;branch=main"
+> SRCREV = "30d9201a11ebc2e3a0f17bf8963956b77dadeb5d"
+>
+> GO_IMPORT = "tailscale.com"
+> GO_WORKDIR = "${GO_IMPORT}"
+> GO_INSTALL = "\
+>     ${GO_IMPORT}/cmd/tailscale \
+>     ${GO_IMPORT}/cmd/tailscaled \
+> "
+>
+> do_install() {
+>     install -d ${D}/${bindir}
+>     install -d ${D}/${sbindir}
+>     install ${B}/bin/tailscale ${D}/${bindir}/tailscale
+>     install ${B}/bin/tailscaled ${D}/${sbindir}/tailscaled
+> }
+>
+>
+> However, build step ends up with errors like these (full log):
+>
+> | wgengine/netstack/netstack.go:34:2: gvisor.dev/gvisor@v0.0.0-20230504175454-7b0a1988a28f: Get "https://proxy.golang.org/gvisor.dev/gvisor/@v/v0.0.0-20230504175454-7b0a1988a28f.zip": dial tcp: lookup proxy.golang.org on 8.8.8.8:53: dial udp 8.8.8.8:53: connect: network is unreachable
+> | wgengine/netstack/netstack.go:35:2: gvisor.dev/gvisor@v0.0.0-20230504175454-7b0a1988a28f: Get "https://proxy.golang.org/gvisor.dev/gvisor/@v/v0.0.0-20230504175454-7b0a1988a28f.zip": dial tcp: lookup proxy.golang.org on 8.8.8.8:53: dial udp 8.8.8.8:53: connect: network is unreachable
+> | net/tstun/tap_linux.go:23:2: gvisor.dev/gvisor@v0.0.0-20230504175454-7b0a1988a28f: Get "https://proxy.golang.org/gvisor.dev/gvisor/@v/v0.0.0-20230504175454-7b0a1988a28f.zip": dial tcp: lookup proxy.golang.org on 8.8.8.8:53: dial udp 8.8.8.8:53: connect: network is unreachable
+> | wgengine/netstack/netstack.go:37:2: gvisor.dev/gvisor@v0.0.0-20230504175454-7b0a1988a28f: Get "https://proxy.golang.org/gvisor.dev/gvisor/@v/v0.0.0-20230504175454-7b0a1988a28f.zip": dial tcp: lookup proxy.golang.org on 8.8.8.8:53: dial udp 8.8.8.8:53: connect: network is unreachable
+> | ipn/ipnauth/ipnauth.go:16:2: inet.af/peercred@v0.0.0-20210906144145-0893ea02156a: Get "https://proxy.golang.org/inet.af/peercred/@v/v0.0.0-20210906144145-0893ea02156a.zip": dial tcp: lookup proxy.golang.org on 8.8.8.8:53: dial udp 8.8.8.8:53: connect: network is unreachable
+>
+> On some resources I have found it was recomended to add environmental variables: `GOPROXY="direct"` and `GOSUMDB="off"`, but it didn't helped.
+>
+> Maybe someone has some ideas what is the cause of these errors?
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#60492): https://lists.yoctoproject.org/g/yocto/message/60492
+> Mute This Topic: https://lists.yoctoproject.org/mt/99915079/1050810
+> Mute #golang:https://lists.yoctoproject.org/g/yocto/mutehashtag/golang
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [bruce.ashfield@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+-- 
+- Thou shalt not follow the NULL pointer, for chaos and madness await
+thee at its end
+- "Use the force Harry" - Gandalf, Star Trek II
+
+
+^ permalink raw reply	[flat|nested] 9+ messages in thread
+* Re: [yocto] Building Tailscale with Yocto #golang
+  2023-07-03 13:07   ` Bruce Ashfield
+@ 2023-07-03 13:43     ` f_l_k
+  2023-07-03 14:05       ` Janne Kiiskila
+  0 siblings, 1 reply; 9+ messages in thread
+From: f_l_k @ 2023-07-03 13:43 UTC (permalink / raw)
+  To: Bruce Ashfield; +Cc: przemek.recha, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 769 bytes --]
+
+On Mon, Jul 3 2023 at 09:07:11 AM -0400, Bruce Ashfield 
+<bruce.ashfield@gmail.com> wrote:
+> We really shouldn't suggest the above to a developer without also the
+> explanation as to why network access is disabled by default in tasks
+> such as compile.
+
+You are of course right with your objections. However, this is the only 
+way I know of to get around this problem. Reproducibility is not a must 
+have requirement for me, but I use some gtk go programs and would love 
+to have a way to build at least gotk3 shared, since it takes quite a 
+long time and has to be rebuilt for each program.
+I had experimented with this some time ago, but it looked to me like 
+there was no easy solution to this problem. This is somehow quite a 
+conflict between different concepts.
+
+
+[-- Attachment #2: Type: text/html, Size: 948 bytes --]
+
+^ permalink raw reply	[flat|nested] 9+ messages in thread
+* RE: [yocto] Building Tailscale with Yocto #golang
+  2023-07-03 13:43     ` f_l_k
+@ 2023-07-03 14:05       ` Janne Kiiskila
+  2023-07-03 15:58         ` Khem Raj
+  2023-07-03 17:22         ` Bruce Ashfield
+  0 siblings, 2 replies; 9+ messages in thread
+From: Janne Kiiskila @ 2023-07-03 14:05 UTC (permalink / raw)
+  To: f_l_k, Bruce Ashfield; +Cc: przemek.recha, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1538 bytes --]
+
+Hei,
+
+Golang does have the required features to support this, but it is more of a challenge to convince the repo owners to start using this.
+You can download all of the dependencies in golang with go mod vendor and then store the vendor-folder to the repo as well.
+But, the repo will get a lot larger that way. But, that fulfills the Yocto demands as far as I know.
+
+Best Regards,
+
+
+Janne Kiiskilä
+
+
+From: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org> On Behalf Of Markus Volk via lists.yoctoproject.org
+Sent: maanantai 3. heinäkuuta 2023 16.43
+To: Bruce Ashfield <bruce.ashfield@gmail.com>
+Cc: przemek.recha@gmail.com; yocto@lists.yoctoproject.org
+Subject: Re: [yocto] Building Tailscale with Yocto #golang
+
+On Mon, Jul 3 2023 at 09:07:11 AM -0400, Bruce Ashfield <bruce.ashfield@gmail.com<mailto:bruce.ashfield@gmail.com>> wrote:
+
+We really shouldn't suggest the above to a developer without also the explanation as to why network access is disabled by default in tasks such as compile.
+
+You are of course right with your objections. However, this is the only way I know of to get around this problem. Reproducibility is not a must have requirement for me, but I use some gtk go programs and would love to have a way to build at least gotk3 shared, since it takes quite a long time and has to be rebuilt for each program.
+I had experimented with this some time ago, but it looked to me like there was no easy solution to this problem. This is somehow quite a conflict between different concepts.
+
+[-- Attachment #2: Type: text/html, Size: 4706 bytes --]
+
+^ permalink raw reply	[flat|nested] 9+ messages in thread
+* Re: [yocto] Building Tailscale with Yocto #golang
+  2023-07-03 14:05       ` Janne Kiiskila
+@ 2023-07-03 15:58         ` Khem Raj
+  2023-07-03 17:22         ` Bruce Ashfield
+  1 sibling, 0 replies; 9+ messages in thread
+From: Khem Raj @ 2023-07-03 15:58 UTC (permalink / raw)
+  To: Janne Kiiskila; +Cc: f_l_k, Bruce Ashfield, przemek.recha, yocto
+
+On Mon, Jul 3, 2023 at 7:25 AM Janne Kiiskila
+<janne.kiiskila@izumanetworks.com> wrote:
+>
+> Hei,
+>
+>
+>
+> Golang does have the required features to support this, but it is more of a challenge to convince the repo owners to start using this.
+>
+> You can download all of the dependencies in golang with go mod vendor and then store the vendor-folder to the repo as well.
+>
+
+yes go mod vendor is a way to get this working in a reasonable way.
+This also avoid go's module management coming in way of
+bitbake fetcher.
+
+> But, the repo will get a lot larger that way. But, that fulfills the Yocto demands as far as I know.
+
+As a distro, I think this should be even preferred even though size is
+bigger and several modules will be duplicated per recipe if
+there are other go packages in image. As a developer this might be not
+preferred however.
+
+>
+>
+>
+> Best Regards,
+>
+>
+>
+>
+>
+> Janne Kiiskilä
+>
+>
+>
+>
+>
+> From: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org> On Behalf Of Markus Volk via lists.yoctoproject.org
+> Sent: maanantai 3. heinäkuuta 2023 16.43
+> To: Bruce Ashfield <bruce.ashfield@gmail.com>
+> Cc: przemek.recha@gmail.com; yocto@lists.yoctoproject.org
+> Subject: Re: [yocto] Building Tailscale with Yocto #golang
+>
+>
+>
+> On Mon, Jul 3 2023 at 09:07:11 AM -0400, Bruce Ashfield <bruce.ashfield@gmail.com> wrote:
+>
+> We really shouldn't suggest the above to a developer without also the explanation as to why network access is disabled by default in tasks such as compile.
+>
+>
+>
+> You are of course right with your objections. However, this is the only way I know of to get around this problem. Reproducibility is not a must have requirement for me, but I use some gtk go programs and would love to have a way to build at least gotk3 shared, since it takes quite a long time and has to be rebuilt for each program.
+>
+> I had experimented with this some time ago, but it looked to me like there was no easy solution to this problem. This is somehow quite a conflict between different concepts.
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> You automatically follow any topics you start or reply to.
+> View/Reply Online (#60498): https://lists.yoctoproject.org/g/yocto/message/60498
+> Mute This Topic: https://lists.yoctoproject.org/mt/99915079/1997914
+> Mute #golang:https://lists.yoctoproject.org/g/yocto/mutehashtag/golang
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [raj.khem@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 9+ messages in thread
+* Re: [yocto] Building Tailscale with Yocto #golang
+  2023-07-03 14:05       ` Janne Kiiskila
+  2023-07-03 15:58         ` Khem Raj
+@ 2023-07-03 17:22         ` Bruce Ashfield
+  1 sibling, 0 replies; 9+ messages in thread
+From: Bruce Ashfield @ 2023-07-03 17:22 UTC (permalink / raw)
+  To: Janne Kiiskila; +Cc: f_l_k, przemek.recha, yocto
+
+On Mon, Jul 3, 2023 at 10:05 AM Janne Kiiskila
+<janne.kiiskila@izumanetworks.com> wrote:
+>
+> Hei,
+>
+>
+>
+> Golang does have the required features to support this, but it is more of a challenge to convince the repo owners to start using this.
+>
+> You can download all of the dependencies in golang with go mod vendor and then store the vendor-folder to the repo as well.
+>
+> But, the repo will get a lot larger that way. But, that fulfills the Yocto demands as far as I know.
+>
+
+Yes, again, if you read the mailing list discussions on this in the
+past, we are well aware of what golang does (and doesn't do) and the
+options to fully integrate into the core capabilities via a dedicated
+fetcher.
+
+But no one has stepped up to implement a fully integrated solution, so
+we have proposals only as this point.
+
+I've gone a different way with meta-virtualization and am using large
+SRC_URIs with the dependencies fetched to allow full integration with
+the fetcher, and still build reproducible go binaries.
+
+Bruce
+
+>
+>
+> Best Regards,
+>
+>
+>
+>
+>
+> Janne Kiiskilä
+>
+>
+>
+>
+>
+> From: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org> On Behalf Of Markus Volk via lists.yoctoproject.org
+> Sent: maanantai 3. heinäkuuta 2023 16.43
+> To: Bruce Ashfield <bruce.ashfield@gmail.com>
+> Cc: przemek.recha@gmail.com; yocto@lists.yoctoproject.org
+> Subject: Re: [yocto] Building Tailscale with Yocto #golang
+>
+>
+>
+> On Mon, Jul 3 2023 at 09:07:11 AM -0400, Bruce Ashfield <bruce.ashfield@gmail.com> wrote:
+>
+> We really shouldn't suggest the above to a developer without also the explanation as to why network access is disabled by default in tasks such as compile.
+>
+>
+>
+> You are of course right with your objections. However, this is the only way I know of to get around this problem. Reproducibility is not a must have requirement for me, but I use some gtk go programs and would love to have a way to build at least gotk3 shared, since it takes quite a long time and has to be rebuilt for each program.
+>
+> I had experimented with this some time ago, but it looked to me like there was no easy solution to this problem. This is somehow quite a conflict between different concepts.
+
+
+
+-- 
+- Thou shalt not follow the NULL pointer, for chaos and madness await
+thee at its end
+- "Use the force Harry" - Gandalf, Star Trek II
+
+
+^ permalink raw reply	[flat|nested] 9+ messages in thread
+* Re: [yocto] Building Tailscale with Yocto #golang
+  2023-07-02 19:45 Building Tailscale with Yocto #golang przemek.recha
+  2023-07-02 20:30 ` [yocto] " f_l_k
+@ 2023-07-03 20:19 ` Tom Isaacson
+  2023-07-05 13:58   ` pszemoc
+  1 sibling, 1 reply; 9+ messages in thread
+From: Tom Isaacson @ 2023-07-03 20:19 UTC (permalink / raw)
+  To: przemek.recha; +Cc: yocto
+
+What Yocto release are you using? I tried building Tailscale with
+Dunfell but the version of Go it includes was too old.
+
+On Mon, Jul 3, 2023 at 7:45 AM <przemek.recha@gmail.com> wrote:
+>
+> Hi!
+> I'm trying to build Tailscale with Yocto
+> This is me recipe:
+>
+> inherit go-mod
+>
+> SRC_URI = "git://github.com/tailscale/tailscale;protocol=https;branch=main"
+> SRCREV = "30d9201a11ebc2e3a0f17bf8963956b77dadeb5d"
+>
+> GO_IMPORT = "tailscale.com"
+> GO_WORKDIR = "${GO_IMPORT}"
+> GO_INSTALL = "\
+>     ${GO_IMPORT}/cmd/tailscale \
+>     ${GO_IMPORT}/cmd/tailscaled \
+> "
+>
+> do_install() {
+>     install -d ${D}/${bindir}
+>     install -d ${D}/${sbindir}
+>     install ${B}/bin/tailscale ${D}/${bindir}/tailscale
+>     install ${B}/bin/tailscaled ${D}/${sbindir}/tailscaled
+> }
+>
+>
+> However, build step ends up with errors like these (full log):
+>
+> | wgengine/netstack/netstack.go:34:2: gvisor.dev/gvisor@v0.0.0-20230504175454-7b0a1988a28f: Get "https://proxy.golang.org/gvisor.dev/gvisor/@v/v0.0.0-20230504175454-7b0a1988a28f.zip": dial tcp: lookup proxy.golang.org on 8.8.8.8:53: dial udp 8.8.8.8:53: connect: network is unreachable
+> | wgengine/netstack/netstack.go:35:2: gvisor.dev/gvisor@v0.0.0-20230504175454-7b0a1988a28f: Get "https://proxy.golang.org/gvisor.dev/gvisor/@v/v0.0.0-20230504175454-7b0a1988a28f.zip": dial tcp: lookup proxy.golang.org on 8.8.8.8:53: dial udp 8.8.8.8:53: connect: network is unreachable
+> | net/tstun/tap_linux.go:23:2: gvisor.dev/gvisor@v0.0.0-20230504175454-7b0a1988a28f: Get "https://proxy.golang.org/gvisor.dev/gvisor/@v/v0.0.0-20230504175454-7b0a1988a28f.zip": dial tcp: lookup proxy.golang.org on 8.8.8.8:53: dial udp 8.8.8.8:53: connect: network is unreachable
+> | wgengine/netstack/netstack.go:37:2: gvisor.dev/gvisor@v0.0.0-20230504175454-7b0a1988a28f: Get "https://proxy.golang.org/gvisor.dev/gvisor/@v/v0.0.0-20230504175454-7b0a1988a28f.zip": dial tcp: lookup proxy.golang.org on 8.8.8.8:53: dial udp 8.8.8.8:53: connect: network is unreachable
+> | ipn/ipnauth/ipnauth.go:16:2: inet.af/peercred@v0.0.0-20210906144145-0893ea02156a: Get "https://proxy.golang.org/inet.af/peercred/@v/v0.0.0-20210906144145-0893ea02156a.zip": dial tcp: lookup proxy.golang.org on 8.8.8.8:53: dial udp 8.8.8.8:53: connect: network is unreachable
+>
+> On some resources I have found it was recomended to add environmental variables: `GOPROXY="direct"` and `GOSUMDB="off"`, but it didn't helped.
+>
+> Maybe someone has some ideas what is the cause of these errors?
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#60491): https://lists.yoctoproject.org/g/yocto/message/60491
+> Mute This Topic: https://lists.yoctoproject.org/mt/99915079/7359542
+> Mute #golang:https://lists.yoctoproject.org/g/yocto/mutehashtag/golang
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [tom.isaacson@teknique.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+-- 
+Tom Isaacson
+
+
+^ permalink raw reply	[flat|nested] 9+ messages in thread
+* Re: Building Tailscale with Yocto #golang
+  2023-07-03 20:19 ` Tom Isaacson
+@ 2023-07-05 13:58   ` pszemoc
+  0 siblings, 0 replies; 9+ messages in thread
+From: pszemoc @ 2023-07-05 13:58 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1936 bytes --]
+
+I'am using Mickledore, with Go 1.20.5
+
+I got successful build with following recipe:
+
+GO_IMPORT = "tailscale.com"
+GO_WORKDIR = "${GO_IMPORT}"
+GO_INSTALL = "\
+${GO_IMPORT}/cmd/tailscale \
+${GO_IMPORT}/cmd/tailscaled \
+"
+
+do_compile() {
+${GO} install ${GOBUILDFLAGS} ${GO_INSTALL}
+}
+
+do_compile[network] = "1"
+
+do_install() {
+install -d ${D}/${bindir}
+install -d ${D}/${sbindir}
+install ${B}/bin/linux_arm/tailscale ${D}/${bindir}/tailscale
+install ${B}/bin/linux_arm/tailscaled ${D}/${sbindir}/tailscaled
+if ${@bb.utils.contains('DISTRO_FEATURES', 'systemd', 'true', 'false', d)}; then
+install -d ${D}${sysconfdir}/default/
+install -m 0644 ${WORKDIR}/build/src/${GO_IMPORT}/cmd/tailscaled/tailscaled.defaults ${D}${sysconfdir}/default/tailscaled
+install -d ${D}${systemd_unitdir}/system
+install -m 0644 ${WORKDIR}/build/src/${GO_IMPORT}/cmd/tailscaled/tailscaled.service ${D}${systemd_unitdir}/system/tailscaled.service
+install -d ${D}${sysconfdir}/systemd/system/multi-user.target.wants/
+ln -s ${systemd_unitdir}/system/tailscaled.service ${D}${sysconfdir}/systemd/system/multi-user.target.wants/tailscaled.service
+fi
+}
+
+SYSTEMD_PACKAGES = "${PN}"
+SYSTEMD_SERVICE:${PN} = "tailscaled.service"
+SYSTEMD_AUTO_ENABLE = "enable"
+
+It's using do_compile[network] = "1" as was mentioned in this topic to omit network isolation.
+
+I'm not particularly pleased with defining compile task for this recipe as it should use task from go.bbclass, but without it it gave me following error:
+
+| 2023/07/05 12:35:55 duplicated definition of symbol tailscale.com/util/singleflight.(*Group[go.shape.string,go.shape.struct { tailscale.com/net/dnscache.ip net/netip.Addr; tailscale.com/net/dnscache.ip6 net/netip.Addr; tailscale.com/net/dnscache.allIPs []net/netip.Addr }]).doCall.func2, from tailscale.com/derp/derphttp and main
+
+I'm not really familiar with Go, so I have no idea what's the cause of this error.
+
+[-- Attachment #2: Type: text/html, Size: 2480 bytes --]
+
+^ permalink raw reply	[flat|nested] 9+ messages in thread
+end of thread, other threads:[~2023-07-05 13:58 UTC | newest]
+
+Thread overview: 9+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-07-02 19:45 Building Tailscale with Yocto #golang przemek.recha
+2023-07-02 20:30 ` [yocto] " f_l_k
+2023-07-03 13:07   ` Bruce Ashfield
+2023-07-03 13:43     ` f_l_k
+2023-07-03 14:05       ` Janne Kiiskila
+2023-07-03 15:58         ` Khem Raj
+2023-07-03 17:22         ` Bruce Ashfield
+2023-07-03 20:19 ` Tom Isaacson
+2023-07-05 13:58   ` pszemoc
+

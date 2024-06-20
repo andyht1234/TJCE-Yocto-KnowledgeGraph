@@ -1,0 +1,957 @@
+* Re: [yocto] [meta-rockchip][PATCH] kernel: linux-yocto: fix broken Ethernet MAC controller on RK3399 on 5.14 >= version <= 5.14.11
+       [not found] <20211116153256.3639663-1-quentin.schulz@theobroma-systems.com>
+@ 2021-11-16 17:00 ` Khem Raj
+       [not found]   ` <20211116170406.abau3j6liwsdonbp@fedora>
+  0 siblings, 1 reply; 9+ messages in thread
+From: Khem Raj @ 2021-11-16 17:00 UTC (permalink / raw)
+  To: Quentin Schulz; +Cc: Yocto-mailing-list, Trevor Woerner, Quentin Schulz
+
+On Tue, Nov 16, 2021 at 7:52 AM Quentin Schulz
+<quentin.schulz@theobroma-systems.com> wrote:
+>
+> From Linux kernel v5.14 to v5.14.11 (both included), the Ethernet MAC
+> controller found on RK3399 is not working.
+>
+> A fix is available in v5.14.12 and later (available also in v5.15)
+> which is provided here and applied to linux-yocto source tree if
+> linux-yocto version is of the impacted ones.
+>
+> The conditional patching is unfortunately required because Honister 3.4
+> has linux-yocto v5.14.9 and Honister 3.4.1 will have at least
+> linux-yocto v5.14.14.
+
+Patching piece below looks quite a bit.
+lets just fix v5.14.14 and dont worry about 3.4
+
+>
+> Cc: Quentin Schulz <foss+yocto@0leil.net>
+> Signed-off-by: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+> ---
+>  ...-rk-Fix-ethernet-on-rk3399-based-dev.patch | 63 +++++++++++++++++++
+>  .../linux/linux-yocto/5.14-rk3399-mac-fix.scc |  1 +
+>  .../linux/linux-yocto_5.14.bbappend           | 11 ++++
+>  3 files changed, 75 insertions(+)
+>  create mode 100644 recipes-kernel/linux/linux-yocto/0001-net-stmmac-dwmac-rk-Fix-ethernet-on-rk3399-based-dev.patch
+>  create mode 100644 recipes-kernel/linux/linux-yocto/5.14-rk3399-mac-fix.scc
+>  create mode 100644 recipes-kernel/linux/linux-yocto_5.14.bbappend
+>
+> diff --git a/recipes-kernel/linux/linux-yocto/0001-net-stmmac-dwmac-rk-Fix-ethernet-on-rk3399-based-dev.patch b/recipes-kernel/linux/linux-yocto/0001-net-stmmac-dwmac-rk-Fix-ethernet-on-rk3399-based-dev.patch
+> new file mode 100644
+> index 0000000..b2ce7e8
+> --- /dev/null
+> +++ b/recipes-kernel/linux/linux-yocto/0001-net-stmmac-dwmac-rk-Fix-ethernet-on-rk3399-based-dev.patch
+> @@ -0,0 +1,63 @@
+> +From 8efe947ea1eace444d78398a31469b30e47ae585 Mon Sep 17 00:00:00 2001
+> +From: Punit Agrawal <punitagrawal@gmail.com>
+> +Date: Wed, 29 Sep 2021 22:50:49 +0900
+> +Subject: [PATCH] net: stmmac: dwmac-rk: Fix ethernet on rk3399 based devices
+> +
+> +[ Upstream commit aec3f415f7244b7747a7952596971adb0df2f568 ]
+> +
+> +Commit 2d26f6e39afb ("net: stmmac: dwmac-rk: fix unbalanced pm_runtime_enable warnings")
+> +while getting rid of a runtime PM warning ended up breaking ethernet
+> +on rk3399 based devices. By dropping an extra reference to the device,
+> +the commit ends up enabling suspend / resume of the ethernet device -
+> +which appears to be broken.
+> +
+> +While the issue with runtime pm is being investigated, partially
+> +revert commit 2d26f6e39afb to restore the network on rk3399.
+> +
+> +Fixes: 2d26f6e39afb ("net: stmmac: dwmac-rk: fix unbalanced pm_runtime_enable warnings")
+> +Suggested-by: Heiko Stuebner <heiko@sntech.de>
+> +Signed-off-by: Punit Agrawal <punitagrawal@gmail.com>
+> +Cc: Michael Riesch <michael.riesch@wolfvision.net>
+> +Tested-by: Heiko Stuebner <heiko@sntech.de>
+> +Link: https://lore.kernel.org/r/20210929135049.3426058-1-punitagrawal@gmail.com
+> +Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+> +Signed-off-by: Sasha Levin <sashal@kernel.org>
+> +
+> +Upstream-Status: Backport [8efe947ea1eace444d78398a31469b30e47ae585]
+> +---
+> + drivers/net/ethernet/stmicro/stmmac/dwmac-rk.c | 5 +++++
+> + 1 file changed, 5 insertions(+)
+> +
+> +diff --git a/drivers/net/ethernet/stmicro/stmmac/dwmac-rk.c b/drivers/net/ethernet/stmicro/stmmac/dwmac-rk.c
+> +index ed817011a94a..6924a6aacbd5 100644
+> +--- a/drivers/net/ethernet/stmicro/stmmac/dwmac-rk.c
+> ++++ b/drivers/net/ethernet/stmicro/stmmac/dwmac-rk.c
+> +@@ -21,6 +21,7 @@
+> + #include <linux/delay.h>
+> + #include <linux/mfd/syscon.h>
+> + #include <linux/regmap.h>
+> ++#include <linux/pm_runtime.h>
+> +
+> + #include "stmmac_platform.h"
+> +
+> +@@ -1528,6 +1529,8 @@ static int rk_gmac_powerup(struct rk_priv_data *bsp_priv)
+> +               return ret;
+> +       }
+> +
+> ++      pm_runtime_get_sync(dev);
+> ++
+> +       if (bsp_priv->integrated_phy)
+> +               rk_gmac_integrated_phy_powerup(bsp_priv);
+> +
+> +@@ -1539,6 +1542,8 @@ static void rk_gmac_powerdown(struct rk_priv_data *gmac)
+> +       if (gmac->integrated_phy)
+> +               rk_gmac_integrated_phy_powerdown(gmac);
+> +
+> ++      pm_runtime_put_sync(&gmac->pdev->dev);
+> ++
+> +       phy_power_on(gmac, false);
+> +       gmac_clk_enable(gmac, false);
+> + }
+> +--
+> +2.33.1
+> +
+> diff --git a/recipes-kernel/linux/linux-yocto/5.14-rk3399-mac-fix.scc b/recipes-kernel/linux/linux-yocto/5.14-rk3399-mac-fix.scc
+> new file mode 100644
+> index 0000000..1ad2bde
+> --- /dev/null
+> +++ b/recipes-kernel/linux/linux-yocto/5.14-rk3399-mac-fix.scc
+> @@ -0,0 +1 @@
+> +patch 0001-net-stmmac-dwmac-rk-Fix-ethernet-on-rk3399-based-dev.patch
+> diff --git a/recipes-kernel/linux/linux-yocto_5.14.bbappend b/recipes-kernel/linux/linux-yocto_5.14.bbappend
+> new file mode 100644
+> index 0000000..5eaa604
+> --- /dev/null
+> +++ b/recipes-kernel/linux/linux-yocto_5.14.bbappend
+> @@ -0,0 +1,11 @@
+> +FILESEXTRAPATHS:prepend := "${THISDIR}/${PN}:"
+> +
+> +# Fix Ethernet on 5.14 until 5.14.11 (included) for RK3399 MAC controller
+> +# Conditional patching required because Honister 3.4 has linux-yocto
+> +# v5.14.9 and Honister 3.4.1 will have at least linux-yocto v5.14.14.
+> +python __anonymous() {
+> +    kver = d.getVar('LINUX_VERSION') or ''
+> +    if bb.utils.is_semver(kver) \
+> +      and bb.utils.vercmp_string(kver, '5.14.11') <= 0:
+> +        d.appendVar('SRC_URI', ' file://5.14-rk3399-mac-fix.scc')
+> +}
+> --
+> 2.30.2
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> You automatically follow any topics you start or reply to.
+> View/Reply Online (#55345): https://lists.yoctoproject.org/g/yocto/message/55345
+> Mute This Topic: https://lists.yoctoproject.org/mt/87097671/1997914
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [raj.khem@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 9+ messages in thread
+* Re: [yocto] [meta-rockchip][PATCH] kernel: linux-yocto: fix broken Ethernet MAC controller on RK3399 on 5.14 >= version <= 5.14.11
+       [not found]   ` <20211116170406.abau3j6liwsdonbp@fedora>
+@ 2021-11-16 17:08     ` Khem Raj
+       [not found]       ` <20211116171242.7dyycd3d2qwb4ske@fedora>
+  0 siblings, 1 reply; 9+ messages in thread
+From: Khem Raj @ 2021-11-16 17:08 UTC (permalink / raw)
+  To: Quentin Schulz; +Cc: Yocto-mailing-list, Trevor Woerner, Quentin Schulz
+
+On Tue, Nov 16, 2021 at 9:04 AM Quentin Schulz
+<quentin.schulz@theobroma-systems.com> wrote:
+>
+> On Tue, Nov 16, 2021 at 09:00:42AM -0800, Khem Raj wrote:
+> > On Tue, Nov 16, 2021 at 7:52 AM Quentin Schulz
+> > <quentin.schulz@theobroma-systems.com> wrote:
+> > >
+> > > From Linux kernel v5.14 to v5.14.11 (both included), the Ethernet MAC
+> > > controller found on RK3399 is not working.
+> > >
+> > > A fix is available in v5.14.12 and later (available also in v5.15)
+> > > which is provided here and applied to linux-yocto source tree if
+> > > linux-yocto version is of the impacted ones.
+> > >
+> > > The conditional patching is unfortunately required because Honister 3.4
+> > > has linux-yocto v5.14.9 and Honister 3.4.1 will have at least
+> > > linux-yocto v5.14.14.
+> >
+> > Patching piece below looks quite a bit.
+> > lets just fix v5.14.14 and dont worry about 3.4
+> >
+>
+> v5.14.14 is already fixed. The only release currently is 3.4 and I hit
+> that issue, hence the patch.
+> I assume not everybody is updating to 3.4.1 when it's out, I've seen
+> people running behind dot releases.
+> What's bothering you?
+
+once dot release is out then thats whats maintained not the original
+release since they are incremental.
+the anon python to apply a patch. Can you explain why we want to patch
+applied this way ?
+
+>
+> Cheers,
+> Quentin
+
+
+^ permalink raw reply	[flat|nested] 9+ messages in thread
+* Re: [yocto] [meta-rockchip][PATCH] kernel: linux-yocto: fix broken Ethernet MAC controller on RK3399 on 5.14 >= version <= 5.14.11
+       [not found]       ` <20211116171242.7dyycd3d2qwb4ske@fedora>
+@ 2021-11-16 17:45         ` Khem Raj
+  2021-11-16 18:03           ` Quentin Schulz
+  0 siblings, 1 reply; 9+ messages in thread
+From: Khem Raj @ 2021-11-16 17:45 UTC (permalink / raw)
+  To: Quentin Schulz; +Cc: Quentin Schulz, Trevor Woerner, Yocto-mailing-list
+
+[-- Attachment #1: Type: text/plain, Size: 1841 bytes --]
+
+On Tue, Nov 16, 2021 at 9:12 AM Quentin Schulz <
+quentin.schulz@theobroma-systems.com> wrote:
+
+> On Tue, Nov 16, 2021 at 09:08:41AM -0800, Khem Raj wrote:
+> > On Tue, Nov 16, 2021 at 9:04 AM Quentin Schulz
+> > <quentin.schulz@theobroma-systems.com> wrote:
+> > >
+> > > On Tue, Nov 16, 2021 at 09:00:42AM -0800, Khem Raj wrote:
+> > > > On Tue, Nov 16, 2021 at 7:52 AM Quentin Schulz
+> > > > <quentin.schulz@theobroma-systems.com> wrote:
+> > > > >
+> > > > > From Linux kernel v5.14 to v5.14.11 (both included), the Ethernet
+> MAC
+> > > > > controller found on RK3399 is not working.
+> > > > >
+> > > > > A fix is available in v5.14.12 and later (available also in v5.15)
+> > > > > which is provided here and applied to linux-yocto source tree if
+> > > > > linux-yocto version is of the impacted ones.
+> > > > >
+> > > > > The conditional patching is unfortunately required because
+> Honister 3.4
+> > > > > has linux-yocto v5.14.9 and Honister 3.4.1 will have at least
+> > > > > linux-yocto v5.14.14.
+> > > >
+> > > > Patching piece below looks quite a bit.
+> > > > lets just fix v5.14.14 and dont worry about 3.4
+> > > >
+> > >
+> > > v5.14.14 is already fixed. The only release currently is 3.4 and I hit
+> > > that issue, hence the patch.
+> > > I assume not everybody is updating to 3.4.1 when it's out, I've seen
+> > > people running behind dot releases.
+> > > What's bothering you?
+> >
+> > once dot release is out then thats whats maintained not the original
+> > release since they are incremental.
+> > the anon python to apply a patch. Can you explain why we want to patch
+> > applied this way ?
+> >
+>
+> I could define a python function and use it like this:
+> SRC_URI:append:rk3399 = "${@rk3399_fix_mac(d)}"
+>
+> Would that work better for you?
+
+
+I am not yet convinced why should we have such version specific patch
+
+>
+>
+> Cheers,
+> Quentin
+>
+
+[-- Attachment #2: Type: text/html, Size: 2859 bytes --]
+
+^ permalink raw reply	[flat|nested] 9+ messages in thread
+* Re: [yocto] [meta-rockchip][PATCH] kernel: linux-yocto: fix broken Ethernet MAC controller on RK3399 on 5.14 >= version <= 5.14.11
+  2021-11-16 17:45         ` Khem Raj
+@ 2021-11-16 18:03           ` Quentin Schulz
+  2021-11-16 18:50             ` Khem Raj
+  0 siblings, 1 reply; 9+ messages in thread
+From: Quentin Schulz @ 2021-11-16 18:03 UTC (permalink / raw)
+  To: Khem Raj, Quentin Schulz
+  Cc: Quentin Schulz, Trevor Woerner, Yocto-mailing-list
+
+
+
+On November 16, 2021 6:45:05 PM GMT+01:00, Khem Raj <raj.khem@gmail.com> wrote:
+>On Tue, Nov 16, 2021 at 9:12 AM Quentin Schulz <
+>quentin.schulz@theobroma-systems.com> wrote:
+>
+>> On Tue, Nov 16, 2021 at 09:08:41AM -0800, Khem Raj wrote:
+>> > On Tue, Nov 16, 2021 at 9:04 AM Quentin Schulz
+>> > <quentin.schulz@theobroma-systems.com> wrote:
+>> > >
+>> > > On Tue, Nov 16, 2021 at 09:00:42AM -0800, Khem Raj wrote:
+>> > > > On Tue, Nov 16, 2021 at 7:52 AM Quentin Schulz
+>> > > > <quentin.schulz@theobroma-systems.com> wrote:
+>> > > > >
+>> > > > > From Linux kernel v5.14 to v5.14.11 (both included), the Ethernet
+>> MAC
+>> > > > > controller found on RK3399 is not working.
+>> > > > >
+>> > > > > A fix is available in v5.14.12 and later (available also in v5.15)
+>> > > > > which is provided here and applied to linux-yocto source tree if
+>> > > > > linux-yocto version is of the impacted ones.
+>> > > > >
+>> > > > > The conditional patching is unfortunately required because
+>> Honister 3.4
+>> > > > > has linux-yocto v5.14.9 and Honister 3.4.1 will have at least
+>> > > > > linux-yocto v5.14.14.
+>> > > >
+>> > > > Patching piece below looks quite a bit.
+>> > > > lets just fix v5.14.14 and dont worry about 3.4
+>> > > >
+>> > >
+>> > > v5.14.14 is already fixed. The only release currently is 3.4 and I hit
+>> > > that issue, hence the patch.
+>> > > I assume not everybody is updating to 3.4.1 when it's out, I've seen
+>> > > people running behind dot releases.
+>> > > What's bothering you?
+>> >
+>> > once dot release is out then thats whats maintained not the original
+>> > release since they are incremental.
+>> > the anon python to apply a patch. Can you explain why we want to patch
+>> > applied this way ?
+>> >
+>>
+>> I could define a python function and use it like this:
+>> SRC_URI:append:rk3399 = "${@rk3399_fix_mac(d)}"
+>>
+>> Would that work better for you?
+>
+>
+>I am not yet convinced why should we have such version specific patch
+>
+
+If you could explain what's *really* bothering you, I could try to find a proper explanation or agree with you but it's a bit too vague to me right now. Anyway, I'll do some guesses in the next paragraphs.
+
+Because Ethernet does not work for all RK3399-based boards in the latest and only release of Honister?
+
+meta-rockchip is the BSP layer for Rockchip based devices, if not there, where should I put this patch?
+
+Or are we just going to say "Ethernet does not work, we know" to people asking instead of having this patch in? Obviously you could tell them to upgrade their oe-core/poky git repo to rolling honister or 3.4.1 once it's out but having this patch in avoid those questions.
+
+I understand we're talking about policy here. I am not fond of this patch either but Ethernet is quite critical on boards which don't have WiFi for example. I don't have anything better to suggest to fix this in the *latest* release.
+
+Cheers
+Quentin
+>>
+>>
+>> Cheers,
+>> Quentin
+>>
+
+
+^ permalink raw reply	[flat|nested] 9+ messages in thread
+* Re: [yocto] [meta-rockchip][PATCH] kernel: linux-yocto: fix broken Ethernet MAC controller on RK3399 on 5.14 >= version <= 5.14.11
+  2021-11-16 18:03           ` Quentin Schulz
+@ 2021-11-16 18:50             ` Khem Raj
+       [not found]               ` <20211213090032.dy47s56sykoikbfc@fedora>
+  0 siblings, 1 reply; 9+ messages in thread
+From: Khem Raj @ 2021-11-16 18:50 UTC (permalink / raw)
+  To: Quentin Schulz
+  Cc: Quentin Schulz, Quentin Schulz, Trevor Woerner, Yocto-mailing-list
+
+On Tue, Nov 16, 2021 at 10:03 AM Quentin Schulz <foss@0leil.net> wrote:
+>
+>
+>
+> On November 16, 2021 6:45:05 PM GMT+01:00, Khem Raj <raj.khem@gmail.com> wrote:
+> >On Tue, Nov 16, 2021 at 9:12 AM Quentin Schulz <
+> >quentin.schulz@theobroma-systems.com> wrote:
+> >
+> >> On Tue, Nov 16, 2021 at 09:08:41AM -0800, Khem Raj wrote:
+> >> > On Tue, Nov 16, 2021 at 9:04 AM Quentin Schulz
+> >> > <quentin.schulz@theobroma-systems.com> wrote:
+> >> > >
+> >> > > On Tue, Nov 16, 2021 at 09:00:42AM -0800, Khem Raj wrote:
+> >> > > > On Tue, Nov 16, 2021 at 7:52 AM Quentin Schulz
+> >> > > > <quentin.schulz@theobroma-systems.com> wrote:
+> >> > > > >
+> >> > > > > From Linux kernel v5.14 to v5.14.11 (both included), the Ethernet
+> >> MAC
+> >> > > > > controller found on RK3399 is not working.
+> >> > > > >
+> >> > > > > A fix is available in v5.14.12 and later (available also in v5.15)
+> >> > > > > which is provided here and applied to linux-yocto source tree if
+> >> > > > > linux-yocto version is of the impacted ones.
+> >> > > > >
+> >> > > > > The conditional patching is unfortunately required because
+> >> Honister 3.4
+> >> > > > > has linux-yocto v5.14.9 and Honister 3.4.1 will have at least
+> >> > > > > linux-yocto v5.14.14.
+> >> > > >
+> >> > > > Patching piece below looks quite a bit.
+> >> > > > lets just fix v5.14.14 and dont worry about 3.4
+> >> > > >
+> >> > >
+> >> > > v5.14.14 is already fixed. The only release currently is 3.4 and I hit
+> >> > > that issue, hence the patch.
+> >> > > I assume not everybody is updating to 3.4.1 when it's out, I've seen
+> >> > > people running behind dot releases.
+> >> > > What's bothering you?
+> >> >
+> >> > once dot release is out then thats whats maintained not the original
+> >> > release since they are incremental.
+> >> > the anon python to apply a patch. Can you explain why we want to patch
+> >> > applied this way ?
+> >> >
+> >>
+> >> I could define a python function and use it like this:
+> >> SRC_URI:append:rk3399 = "${@rk3399_fix_mac(d)}"
+> >>
+> >> Would that work better for you?
+> >
+> >
+> >I am not yet convinced why should we have such version specific patch
+> >
+>
+> If you could explain what's *really* bothering you, I could try to find a proper explanation or agree with you but it's a bit too vague to me right now. Anyway, I'll do some guesses in the next paragraphs.
+>
+> Because Ethernet does not work for all RK3399-based boards in the latest and only release of Honister?
+
+meta-rockchip does not have honister branch for now. So it expects
+master to keep working with honister for now. kernel upgrades are
+already committed into honister branch on meta-yocto-bsps so fix it
+already available in latest honister
+branch and will be in imminent point release soon as well.
+
+>
+> meta-rockchip is the BSP layer for Rockchip based devices, if not there, where should I put this patch?
+>
+> Or are we just going to say "Ethernet does not work, we know" to people asking instead of having this patch in? Obviously you could tell them to upgrade their oe-core/poky git repo to rolling honister or 3.4.1 once it's out but having this patch in avoid those questions.
+>
+
+I would say yes, document it as that of a known issue and possible fix
+if someone is using exact point release. They might have snapshotted
+meta-rockpi too and in that case it will be easy for them to carry a
+local patch if needed.
+vesion specific patching would also be setting a not so desired
+patching practice, so I am trying to avoid it if we can.
+
+> I understand we're talking about policy here. I am not fond of this patch either but Ethernet is quite critical on boards which don't have WiFi for example. I don't have anything better to suggest to fix this in the *latest* release.
+
+Update to latest honister branch or wait for 3.4.1, would be my suggestion.
+
+>
+> Cheers
+> Quentin
+> >>
+> >>
+> >> Cheers,
+> >> Quentin
+> >>
+
+
+^ permalink raw reply	[flat|nested] 9+ messages in thread
+* Re: [yocto] [meta-rockchip][PATCH] kernel: linux-yocto: fix broken Ethernet MAC controller on RK3399 on 5.14 >= version <= 5.14.11
+       [not found]               ` <20211213090032.dy47s56sykoikbfc@fedora>
+@ 2021-12-13 15:04                 ` Khem Raj
+  2021-12-13 17:18                   ` Quentin Schulz
+  0 siblings, 1 reply; 9+ messages in thread
+From: Khem Raj @ 2021-12-13 15:04 UTC (permalink / raw)
+  To: Quentin Schulz; +Cc: Quentin Schulz, Trevor Woerner, Yocto-mailing-list
+
+[-- Attachment #1: Type: text/plain, Size: 4896 bytes --]
+
+On Mon, Dec 13, 2021 at 1:00 AM Quentin Schulz <
+quentin.schulz@theobroma-systems.com> wrote:
+
+> Hi Trevor,
+>
+> Gentle ping :)
+>
+> Honister 3.4.1 being out it's less of an issue but the question remains
+> at least for settling on a policy :)
+
+
+Do we still need this patch ? I think now that dot release is out it’s less
+of a problem. Version specific patching will set a different preset for the
+layer to carry unexcercised patches
+
+
+>
+> Cheers,
+> Quentin
+>
+> On Tue, Nov 16, 2021 at 10:50:13AM -0800, Khem Raj wrote:
+> > On Tue, Nov 16, 2021 at 10:03 AM Quentin Schulz <foss@0leil.net> wrote:
+> > >
+> > >
+> > >
+> > > On November 16, 2021 6:45:05 PM GMT+01:00, Khem Raj <
+> raj.khem@gmail.com> wrote:
+> > > >On Tue, Nov 16, 2021 at 9:12 AM Quentin Schulz <
+> > > >quentin.schulz@theobroma-systems.com> wrote:
+> > > >
+> > > >> On Tue, Nov 16, 2021 at 09:08:41AM -0800, Khem Raj wrote:
+> > > >> > On Tue, Nov 16, 2021 at 9:04 AM Quentin Schulz
+> > > >> > <quentin.schulz@theobroma-systems.com> wrote:
+> > > >> > >
+> > > >> > > On Tue, Nov 16, 2021 at 09:00:42AM -0800, Khem Raj wrote:
+> > > >> > > > On Tue, Nov 16, 2021 at 7:52 AM Quentin Schulz
+> > > >> > > > <quentin.schulz@theobroma-systems.com> wrote:
+> > > >> > > > >
+> > > >> > > > > From Linux kernel v5.14 to v5.14.11 (both included), the
+> Ethernet
+> > > >> MAC
+> > > >> > > > > controller found on RK3399 is not working.
+> > > >> > > > >
+> > > >> > > > > A fix is available in v5.14.12 and later (available also in
+> v5.15)
+> > > >> > > > > which is provided here and applied to linux-yocto source
+> tree if
+> > > >> > > > > linux-yocto version is of the impacted ones.
+> > > >> > > > >
+> > > >> > > > > The conditional patching is unfortunately required because
+> > > >> Honister 3.4
+> > > >> > > > > has linux-yocto v5.14.9 and Honister 3.4.1 will have at
+> least
+> > > >> > > > > linux-yocto v5.14.14.
+> > > >> > > >
+> > > >> > > > Patching piece below looks quite a bit.
+> > > >> > > > lets just fix v5.14.14 and dont worry about 3.4
+> > > >> > > >
+> > > >> > >
+> > > >> > > v5.14.14 is already fixed. The only release currently is 3.4
+> and I hit
+> > > >> > > that issue, hence the patch.
+> > > >> > > I assume not everybody is updating to 3.4.1 when it's out, I've
+> seen
+> > > >> > > people running behind dot releases.
+> > > >> > > What's bothering you?
+> > > >> >
+> > > >> > once dot release is out then thats whats maintained not the
+> original
+> > > >> > release since they are incremental.
+> > > >> > the anon python to apply a patch. Can you explain why we want to
+> patch
+> > > >> > applied this way ?
+> > > >> >
+> > > >>
+> > > >> I could define a python function and use it like this:
+> > > >> SRC_URI:append:rk3399 = "${@rk3399_fix_mac(d)}"
+> > > >>
+> > > >> Would that work better for you?
+> > > >
+> > > >
+> > > >I am not yet convinced why should we have such version specific patch
+> > > >
+> > >
+> > > If you could explain what's *really* bothering you, I could try to
+> find a proper explanation or agree with you but it's a bit too vague to me
+> right now. Anyway, I'll do some guesses in the next paragraphs.
+> > >
+> > > Because Ethernet does not work for all RK3399-based boards in the
+> latest and only release of Honister?
+> >
+> > meta-rockchip does not have honister branch for now. So it expects
+> > master to keep working with honister for now. kernel upgrades are
+> > already committed into honister branch on meta-yocto-bsps so fix it
+> > already available in latest honister
+> > branch and will be in imminent point release soon as well.
+> >
+> > >
+> > > meta-rockchip is the BSP layer for Rockchip based devices, if not
+> there, where should I put this patch?
+> > >
+> > > Or are we just going to say "Ethernet does not work, we know" to
+> people asking instead of having this patch in? Obviously you could tell
+> them to upgrade their oe-core/poky git repo to rolling honister or 3.4.1
+> once it's out but having this patch in avoid those questions.
+> > >
+> >
+> > I would say yes, document it as that of a known issue and possible fix
+> > if someone is using exact point release. They might have snapshotted
+> > meta-rockpi too and in that case it will be easy for them to carry a
+> > local patch if needed.
+> > vesion specific patching would also be setting a not so desired
+> > patching practice, so I am trying to avoid it if we can.
+> >
+> > > I understand we're talking about policy here. I am not fond of this
+> patch either but Ethernet is quite critical on boards which don't have WiFi
+> for example. I don't have anything better to suggest to fix this in the
+> *latest* release.
+> >
+> > Update to latest honister branch or wait for 3.4.1, would be my
+> suggestion.
+> >
+> > >
+> > > Cheers
+> > > Quentin
+> > > >>
+> > > >>
+> > > >> Cheers,
+> > > >> Quentin
+> > > >>
+>
+
+[-- Attachment #2: Type: text/html, Size: 7088 bytes --]
+
+^ permalink raw reply	[flat|nested] 9+ messages in thread
+* Re: [yocto] [meta-rockchip][PATCH] kernel: linux-yocto: fix broken Ethernet MAC controller on RK3399 on 5.14 >= version <= 5.14.11
+  2021-12-13 15:04                 ` Khem Raj
+@ 2021-12-13 17:18                   ` Quentin Schulz
+  2021-12-13 17:35                     ` Khem Raj
+  0 siblings, 1 reply; 9+ messages in thread
+From: Quentin Schulz @ 2021-12-13 17:18 UTC (permalink / raw)
+  To: yocto, Khem Raj, Quentin Schulz; +Cc: Trevor Woerner, Yocto-mailing-list
+
+Hi Khem,
+
+On December 13, 2021 4:04:03 PM GMT+01:00, Khem Raj <raj.khem@gmail.com> wrote:
+>On Mon, Dec 13, 2021 at 1:00 AM Quentin Schulz <
+>quentin.schulz@theobroma-systems.com> wrote:
+>
+>> Hi Trevor,
+>>
+>> Gentle ping :)
+>>
+>> Honister 3.4.1 being out it's less of an issue but the question remains
+>> at least for settling on a policy :)
+>
+>
+>Do we still need this patch ? I think now that dot release is out it’s less
+>of a problem. Version specific patching will set a different preset for the
+>layer to carry unexcercised patches
+>
+
+We need this patch for honister 3.4 but what I meant is that even though it's not needed for honister >= 3.4.1, I'm still interested in what the policy should be. Especially what we should have done between 3.4 and 3.4.1, before the latter was released.
+
+I understand the precedent it creates but also, it's a bit sad for a "BSP" layer to have some support broken between Yocto releases.
+
+Cheers,
+Quentin
+
+>
+>>
+>> Cheers,
+>> Quentin
+>>
+>> On Tue, Nov 16, 2021 at 10:50:13AM -0800, Khem Raj wrote:
+>> > On Tue, Nov 16, 2021 at 10:03 AM Quentin Schulz <foss@0leil.net> wrote:
+>> > >
+>> > >
+>> > >
+>> > > On November 16, 2021 6:45:05 PM GMT+01:00, Khem Raj <
+>> raj.khem@gmail.com> wrote:
+>> > > >On Tue, Nov 16, 2021 at 9:12 AM Quentin Schulz <
+>> > > >quentin.schulz@theobroma-systems.com> wrote:
+>> > > >
+>> > > >> On Tue, Nov 16, 2021 at 09:08:41AM -0800, Khem Raj wrote:
+>> > > >> > On Tue, Nov 16, 2021 at 9:04 AM Quentin Schulz
+>> > > >> > <quentin.schulz@theobroma-systems.com> wrote:
+>> > > >> > >
+>> > > >> > > On Tue, Nov 16, 2021 at 09:00:42AM -0800, Khem Raj wrote:
+>> > > >> > > > On Tue, Nov 16, 2021 at 7:52 AM Quentin Schulz
+>> > > >> > > > <quentin.schulz@theobroma-systems.com> wrote:
+>> > > >> > > > >
+>> > > >> > > > > From Linux kernel v5.14 to v5.14.11 (both included), the
+>> Ethernet
+>> > > >> MAC
+>> > > >> > > > > controller found on RK3399 is not working.
+>> > > >> > > > >
+>> > > >> > > > > A fix is available in v5.14.12 and later (available also in
+>> v5.15)
+>> > > >> > > > > which is provided here and applied to linux-yocto source
+>> tree if
+>> > > >> > > > > linux-yocto version is of the impacted ones.
+>> > > >> > > > >
+>> > > >> > > > > The conditional patching is unfortunately required because
+>> > > >> Honister 3.4
+>> > > >> > > > > has linux-yocto v5.14.9 and Honister 3.4.1 will have at
+>> least
+>> > > >> > > > > linux-yocto v5.14.14.
+>> > > >> > > >
+>> > > >> > > > Patching piece below looks quite a bit.
+>> > > >> > > > lets just fix v5.14.14 and dont worry about 3.4
+>> > > >> > > >
+>> > > >> > >
+>> > > >> > > v5.14.14 is already fixed. The only release currently is 3.4
+>> and I hit
+>> > > >> > > that issue, hence the patch.
+>> > > >> > > I assume not everybody is updating to 3.4.1 when it's out, I've
+>> seen
+>> > > >> > > people running behind dot releases.
+>> > > >> > > What's bothering you?
+>> > > >> >
+>> > > >> > once dot release is out then thats whats maintained not the
+>> original
+>> > > >> > release since they are incremental.
+>> > > >> > the anon python to apply a patch. Can you explain why we want to
+>> patch
+>> > > >> > applied this way ?
+>> > > >> >
+>> > > >>
+>> > > >> I could define a python function and use it like this:
+>> > > >> SRC_URI:append:rk3399 = "${@rk3399_fix_mac(d)}"
+>> > > >>
+>> > > >> Would that work better for you?
+>> > > >
+>> > > >
+>> > > >I am not yet convinced why should we have such version specific patch
+>> > > >
+>> > >
+>> > > If you could explain what's *really* bothering you, I could try to
+>> find a proper explanation or agree with you but it's a bit too vague to me
+>> right now. Anyway, I'll do some guesses in the next paragraphs.
+>> > >
+>> > > Because Ethernet does not work for all RK3399-based boards in the
+>> latest and only release of Honister?
+>> >
+>> > meta-rockchip does not have honister branch for now. So it expects
+>> > master to keep working with honister for now. kernel upgrades are
+>> > already committed into honister branch on meta-yocto-bsps so fix it
+>> > already available in latest honister
+>> > branch and will be in imminent point release soon as well.
+>> >
+>> > >
+>> > > meta-rockchip is the BSP layer for Rockchip based devices, if not
+>> there, where should I put this patch?
+>> > >
+>> > > Or are we just going to say "Ethernet does not work, we know" to
+>> people asking instead of having this patch in? Obviously you could tell
+>> them to upgrade their oe-core/poky git repo to rolling honister or 3.4.1
+>> once it's out but having this patch in avoid those questions.
+>> > >
+>> >
+>> > I would say yes, document it as that of a known issue and possible fix
+>> > if someone is using exact point release. They might have snapshotted
+>> > meta-rockpi too and in that case it will be easy for them to carry a
+>> > local patch if needed.
+>> > vesion specific patching would also be setting a not so desired
+>> > patching practice, so I am trying to avoid it if we can.
+>> >
+>> > > I understand we're talking about policy here. I am not fond of this
+>> patch either but Ethernet is quite critical on boards which don't have WiFi
+>> for example. I don't have anything better to suggest to fix this in the
+>> *latest* release.
+>> >
+>> > Update to latest honister branch or wait for 3.4.1, would be my
+>> suggestion.
+>> >
+>> > >
+>> > > Cheers
+>> > > Quentin
+>> > > >>
+>> > > >>
+>> > > >> Cheers,
+>> > > >> Quentin
+>> > > >>
+>>
+
+
+^ permalink raw reply	[flat|nested] 9+ messages in thread
+* Re: [yocto] [meta-rockchip][PATCH] kernel: linux-yocto: fix broken Ethernet MAC controller on RK3399 on 5.14 >= version <= 5.14.11
+  2021-12-13 17:18                   ` Quentin Schulz
+@ 2021-12-13 17:35                     ` Khem Raj
+  2021-12-13 22:30                       ` Trevor Woerner
+  0 siblings, 1 reply; 9+ messages in thread
+From: Khem Raj @ 2021-12-13 17:35 UTC (permalink / raw)
+  To: Quentin Schulz; +Cc: Yocto-mailing-list, Quentin Schulz, Trevor Woerner
+
+On Mon, Dec 13, 2021 at 9:18 AM Quentin Schulz <foss+yocto@0leil.net> wrote:
+>
+> Hi Khem,
+>
+> On December 13, 2021 4:04:03 PM GMT+01:00, Khem Raj <raj.khem@gmail.com> wrote:
+> >On Mon, Dec 13, 2021 at 1:00 AM Quentin Schulz <
+> >quentin.schulz@theobroma-systems.com> wrote:
+> >
+> >> Hi Trevor,
+> >>
+> >> Gentle ping :)
+> >>
+> >> Honister 3.4.1 being out it's less of an issue but the question remains
+> >> at least for settling on a policy :)
+> >
+> >
+> >Do we still need this patch ? I think now that dot release is out it’s less
+> >of a problem. Version specific patching will set a different preset for the
+> >layer to carry unexcercised patches
+> >
+>
+> We need this patch for honister 3.4 but what I meant is that even though it's not needed for honister >= 3.4.1, I'm still interested in what the policy should be. Especially what we should have done between 3.4 and 3.4.1, before the latter was released.
+>
+> I understand the precedent it creates but also, it's a bit sad for a "BSP" layer to have some support broken between Yocto releases.
+
+I agree with you that broken is not good as it was for sometime, but
+now with the latest  supported release in 3.4 series ( which is 3.4.1)
+things should be good.
+
+>
+> Cheers,
+> Quentin
+>
+> >
+> >>
+> >> Cheers,
+> >> Quentin
+> >>
+> >> On Tue, Nov 16, 2021 at 10:50:13AM -0800, Khem Raj wrote:
+> >> > On Tue, Nov 16, 2021 at 10:03 AM Quentin Schulz <foss@0leil.net> wrote:
+> >> > >
+> >> > >
+> >> > >
+> >> > > On November 16, 2021 6:45:05 PM GMT+01:00, Khem Raj <
+> >> raj.khem@gmail.com> wrote:
+> >> > > >On Tue, Nov 16, 2021 at 9:12 AM Quentin Schulz <
+> >> > > >quentin.schulz@theobroma-systems.com> wrote:
+> >> > > >
+> >> > > >> On Tue, Nov 16, 2021 at 09:08:41AM -0800, Khem Raj wrote:
+> >> > > >> > On Tue, Nov 16, 2021 at 9:04 AM Quentin Schulz
+> >> > > >> > <quentin.schulz@theobroma-systems.com> wrote:
+> >> > > >> > >
+> >> > > >> > > On Tue, Nov 16, 2021 at 09:00:42AM -0800, Khem Raj wrote:
+> >> > > >> > > > On Tue, Nov 16, 2021 at 7:52 AM Quentin Schulz
+> >> > > >> > > > <quentin.schulz@theobroma-systems.com> wrote:
+> >> > > >> > > > >
+> >> > > >> > > > > From Linux kernel v5.14 to v5.14.11 (both included), the
+> >> Ethernet
+> >> > > >> MAC
+> >> > > >> > > > > controller found on RK3399 is not working.
+> >> > > >> > > > >
+> >> > > >> > > > > A fix is available in v5.14.12 and later (available also in
+> >> v5.15)
+> >> > > >> > > > > which is provided here and applied to linux-yocto source
+> >> tree if
+> >> > > >> > > > > linux-yocto version is of the impacted ones.
+> >> > > >> > > > >
+> >> > > >> > > > > The conditional patching is unfortunately required because
+> >> > > >> Honister 3.4
+> >> > > >> > > > > has linux-yocto v5.14.9 and Honister 3.4.1 will have at
+> >> least
+> >> > > >> > > > > linux-yocto v5.14.14.
+> >> > > >> > > >
+> >> > > >> > > > Patching piece below looks quite a bit.
+> >> > > >> > > > lets just fix v5.14.14 and dont worry about 3.4
+> >> > > >> > > >
+> >> > > >> > >
+> >> > > >> > > v5.14.14 is already fixed. The only release currently is 3.4
+> >> and I hit
+> >> > > >> > > that issue, hence the patch.
+> >> > > >> > > I assume not everybody is updating to 3.4.1 when it's out, I've
+> >> seen
+> >> > > >> > > people running behind dot releases.
+> >> > > >> > > What's bothering you?
+> >> > > >> >
+> >> > > >> > once dot release is out then thats whats maintained not the
+> >> original
+> >> > > >> > release since they are incremental.
+> >> > > >> > the anon python to apply a patch. Can you explain why we want to
+> >> patch
+> >> > > >> > applied this way ?
+> >> > > >> >
+> >> > > >>
+> >> > > >> I could define a python function and use it like this:
+> >> > > >> SRC_URI:append:rk3399 = "${@rk3399_fix_mac(d)}"
+> >> > > >>
+> >> > > >> Would that work better for you?
+> >> > > >
+> >> > > >
+> >> > > >I am not yet convinced why should we have such version specific patch
+> >> > > >
+> >> > >
+> >> > > If you could explain what's *really* bothering you, I could try to
+> >> find a proper explanation or agree with you but it's a bit too vague to me
+> >> right now. Anyway, I'll do some guesses in the next paragraphs.
+> >> > >
+> >> > > Because Ethernet does not work for all RK3399-based boards in the
+> >> latest and only release of Honister?
+> >> >
+> >> > meta-rockchip does not have honister branch for now. So it expects
+> >> > master to keep working with honister for now. kernel upgrades are
+> >> > already committed into honister branch on meta-yocto-bsps so fix it
+> >> > already available in latest honister
+> >> > branch and will be in imminent point release soon as well.
+> >> >
+> >> > >
+> >> > > meta-rockchip is the BSP layer for Rockchip based devices, if not
+> >> there, where should I put this patch?
+> >> > >
+> >> > > Or are we just going to say "Ethernet does not work, we know" to
+> >> people asking instead of having this patch in? Obviously you could tell
+> >> them to upgrade their oe-core/poky git repo to rolling honister or 3.4.1
+> >> once it's out but having this patch in avoid those questions.
+> >> > >
+> >> >
+> >> > I would say yes, document it as that of a known issue and possible fix
+> >> > if someone is using exact point release. They might have snapshotted
+> >> > meta-rockpi too and in that case it will be easy for them to carry a
+> >> > local patch if needed.
+> >> > vesion specific patching would also be setting a not so desired
+> >> > patching practice, so I am trying to avoid it if we can.
+> >> >
+> >> > > I understand we're talking about policy here. I am not fond of this
+> >> patch either but Ethernet is quite critical on boards which don't have WiFi
+> >> for example. I don't have anything better to suggest to fix this in the
+> >> *latest* release.
+> >> >
+> >> > Update to latest honister branch or wait for 3.4.1, would be my
+> >> suggestion.
+> >> >
+> >> > >
+> >> > > Cheers
+> >> > > Quentin
+> >> > > >>
+> >> > > >>
+> >> > > >> Cheers,
+> >> > > >> Quentin
+> >> > > >>
+> >>
+
+
+^ permalink raw reply	[flat|nested] 9+ messages in thread
+* Re: [yocto] [meta-rockchip][PATCH] kernel: linux-yocto: fix broken Ethernet MAC controller on RK3399 on 5.14 >= version <= 5.14.11
+  2021-12-13 17:35                     ` Khem Raj
+@ 2021-12-13 22:30                       ` Trevor Woerner
+  0 siblings, 0 replies; 9+ messages in thread
+From: Trevor Woerner @ 2021-12-13 22:30 UTC (permalink / raw)
+  To: Khem Raj; +Cc: Quentin Schulz, Yocto-mailing-list, Quentin Schulz
+
+Hi Quentin/Khem,
+
+On Mon 2021-12-13 @ 09:35:53 AM, Khem Raj wrote:
+> On Mon, Dec 13, 2021 at 9:18 AM Quentin Schulz <foss+yocto@0leil.net> wrote:
+> >
+> > Hi Khem,
+> >
+> > On December 13, 2021 4:04:03 PM GMT+01:00, Khem Raj <raj.khem@gmail.com> wrote:
+> > >On Mon, Dec 13, 2021 at 1:00 AM Quentin Schulz <
+> > >quentin.schulz@theobroma-systems.com> wrote:
+> > >
+> > >> Hi Trevor,
+> > >>
+> > >> Gentle ping :)
+> > >>
+> > >> Honister 3.4.1 being out it's less of an issue but the question remains
+> > >> at least for settling on a policy :)
+
+I apologize for not reviewing this patch in a timely manner; I'm sorry for the
+frustration it caused.
+
+Would this have been solved by (me) creating a honister  branch? I usually
+don't create a release branch until openembedded-core moves, but this looks
+like it was a case where master and the latest branch diverged?
+
+If so, would that still be useful?
+
+Best regards,
+	Trevor
+
+
+^ permalink raw reply	[flat|nested] 9+ messages in thread
+end of thread, other threads:[~2021-12-13 22:30 UTC | newest]
+
+Thread overview: 9+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+     [not found] <20211116153256.3639663-1-quentin.schulz@theobroma-systems.com>
+2021-11-16 17:00 ` [yocto] [meta-rockchip][PATCH] kernel: linux-yocto: fix broken Ethernet MAC controller on RK3399 on 5.14 >= version <= 5.14.11 Khem Raj
+     [not found]   ` <20211116170406.abau3j6liwsdonbp@fedora>
+2021-11-16 17:08     ` Khem Raj
+     [not found]       ` <20211116171242.7dyycd3d2qwb4ske@fedora>
+2021-11-16 17:45         ` Khem Raj
+2021-11-16 18:03           ` Quentin Schulz
+2021-11-16 18:50             ` Khem Raj
+     [not found]               ` <20211213090032.dy47s56sykoikbfc@fedora>
+2021-12-13 15:04                 ` Khem Raj
+2021-12-13 17:18                   ` Quentin Schulz
+2021-12-13 17:35                     ` Khem Raj
+2021-12-13 22:30                       ` Trevor Woerner
+

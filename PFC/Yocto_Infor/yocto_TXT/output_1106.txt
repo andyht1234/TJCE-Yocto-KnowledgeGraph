@@ -1,0 +1,91 @@
+* Error creating recipe for Perl DBI for postgresql in Kirkstone
+@ 2022-12-20 20:28 Fernando Luiz Cola
+  2022-12-21  0:25 ` [yocto] " Tim Orling
+  0 siblings, 1 reply; 2+ messages in thread
+From: Fernando Luiz Cola @ 2022-12-20 20:28 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 545 bytes --]
+
+Hello, I'm trying to write a recipe a Perl DBI for postgresql. I'm follwing the same recipe found in:
+https://layers.openembedded.org/layerindex/recipe/192563/ ( https://layers.openembedded.org/layerindex/recipe/192563/ ) and https://layers.openembedded.org/layerindex/recipe/190989 /
+Howover I'm having errors regarding *db_config* path, which cannot be found during the do_configure
+here is my following recipe: https://gist.github.com/ferlzc/9234ccd5c5a084f958ff52c7a08899a9 - I'm using Yocto Kirkstone
+
+Any help is highly appreciated!
+
+[-- Attachment #2: Type: text/html, Size: 925 bytes --]
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+* Re: [yocto] Error creating recipe for Perl DBI for postgresql in Kirkstone
+  2022-12-20 20:28 Error creating recipe for Perl DBI for postgresql in Kirkstone Fernando Luiz Cola
+@ 2022-12-21  0:25 ` Tim Orling
+  0 siblings, 0 replies; 2+ messages in thread
+From: Tim Orling @ 2022-12-21  0:25 UTC (permalink / raw)
+  To: Fernando Luiz Cola; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1958 bytes --]
+
+On Tue, Dec 20, 2022 at 12:28 PM Fernando Luiz Cola <ferlzc@gmail.com>
+wrote:
+
+> Hello, I'm trying to write a recipe a Perl DBI for postgresql. I'm
+> follwing the same recipe found in:
+> https://layers.openembedded.org/layerindex/recipe/192563/  and
+> https://layers.openembedded.org/layerindex/recipe/190989/
+> Howover I'm having errors regarding *db_config* path, which cannot be
+> found during the do_configure
+> here is my following recipe:
+> https://gist.github.com/ferlzc/9234ccd5c5a084f958ff52c7a08899a9 - I'm
+> using Yocto Kirkstone
+>
+> Any help is highly appreciated!
+>
+
+There are several layers of problems here.
+
+If you look at
+https://metacpan.org/release/TURNSTEP/DBD-Pg-3.16.0/source/Makefile.PL#L42
+you can see that we could set
+export POSTGRES_INCLUDE="${STAGING_INCDIR}"
+export POSTGERS_LIB="${STAGING_LIBDIR}"
+
+But, even with that, do_config will fail to find the postgres version. It
+depends on https://metacpan.org/pod/App::Info::RDBMS::PostgreSQL to find
+it, and we do not have a recipe for that? (even if we did it is probably
+going to be wrong... not cross-compilation). There is another variable
+POSTGRES_DATA, but it is not clear what the structure/value of that should
+be.
+
+Also, there is no native version/recipe of postgresql. In theory you could
+use that to be able to run /usr/bin/pg_config, but there are likely to be
+cross-compilation errors elsewhere.
+(The lack of postgresql-native also means BBCLASSEXTEND = "native" in your
+libdbd-postgresql-perl recipe is a lie).
+
+Short answer: this is not cross-compilation friendly
+
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#58844):
+> https://lists.yoctoproject.org/g/yocto/message/58844
+> Mute This Topic: https://lists.yoctoproject.org/mt/95793801/924729
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> ticotimo@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 3590 bytes --]
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2022-12-21  0:25 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-12-20 20:28 Error creating recipe for Perl DBI for postgresql in Kirkstone Fernando Luiz Cola
+2022-12-21  0:25 ` [yocto] " Tim Orling
+

@@ -1,0 +1,66 @@
+* [meta-security][PATCH] dm-verity-img.bbclass: Fix the hash offset alignment issue
+@ 2023-03-15  2:12 Kevin Hao
+  0 siblings, 0 replies; only message in thread
+From: Kevin Hao @ 2023-03-15  2:12 UTC (permalink / raw)
+  To: yocto; +Cc: Armin Kuster, Bartosz Golaszewski, Christer Fletcher
+
+When using the kernel module parameter "dm-mod.create=" [1] to create
+the device-mapper device, the hash offset address we passed to kernel
+module is the hash block number. That means the hash offset address
+would have to be aligned to the max(data_block_size, hash_block_size),
+otherwise there would be no way to set the correct hash offset address
+via "dm-mo.create=".
+
+[1] https://www.kernel.org/doc/Documentation/admin-guide/device-mapper/dm-init.rst
+
+Signed-off-by: Kevin Hao <kexin.hao@windriver.com>
+---
+ classes/dm-verity-img.bbclass | 12 +++++++++++-
+ 1 file changed, 11 insertions(+), 1 deletion(-)
+
+diff --git a/classes/dm-verity-img.bbclass b/classes/dm-verity-img.bbclass
+index e5946bc3279c..8fc98de8a2bd 100644
+--- a/classes/dm-verity-img.bbclass
++++ b/classes/dm-verity-img.bbclass
+@@ -25,6 +25,9 @@ STAGING_VERITY_DIR ?= "${TMPDIR}/work-shared/${MACHINE}/dm-verity"
+ # Define the data block size to use in veritysetup.
+ DM_VERITY_IMAGE_DATA_BLOCK_SIZE ?= "1024"
+ 
++# Define the hash block size to use in veritysetup.
++DM_VERITY_IMAGE_HASH_BLOCK_SIZE ?= "4096"
++
+ # Process the output from veritysetup and generate the corresponding .env
+ # file. The output from veritysetup is not very machine-friendly so we need to
+ # convert it to some better format. Let's drop the first line (doesn't contain
+@@ -56,11 +59,18 @@ verity_setup() {
+     local SIZE=$(stat --printf="%s" $INPUT)
+     local OUTPUT=$INPUT.verity
+ 
++    if [ ${DM_VERITY_IMAGE_DATA_BLOCK_SIZE} -ge ${DM_VERITY_IMAGE_HASH_BLOCK_SIZE} ]; then
++        align=${DM_VERITY_IMAGE_DATA_BLOCK_SIZE}
++    else
++        align=${DM_VERITY_IMAGE_HASH_BLOCK_SIZE}
++    fi
++    SIZE=$(expr \( $SIZE + $align - 1 \) / $align \* $align)
++
+     cp -a $INPUT $OUTPUT
+ 
+     # Let's drop the first line of output (doesn't contain any useful info)
+     # and feed the rest to another function.
+-    veritysetup --data-block-size=${DM_VERITY_IMAGE_DATA_BLOCK_SIZE} --hash-offset=$SIZE format $OUTPUT $OUTPUT | tail -n +2 | process_verity
++    veritysetup --data-block-size=${DM_VERITY_IMAGE_DATA_BLOCK_SIZE} --hash-block-size=${DM_VERITY_IMAGE_HASH_BLOCK_SIZE} --hash-offset=$SIZE format $OUTPUT $OUTPUT | tail -n +2 | process_verity
+ }
+ 
+ VERITY_TYPES = " \
+-- 
+2.38.1
+
+
+
+^ permalink raw reply related	[flat|nested] only message in thread
+only message in thread, other threads:[~2023-03-15  2:21 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-03-15  2:12 [meta-security][PATCH] dm-verity-img.bbclass: Fix the hash offset alignment issue Kevin Hao
+

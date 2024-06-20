@@ -1,0 +1,300 @@
+* Question: Sharing SSTATE_DIR and DL_DIR through Lustre/NFS for team work
+@ 2023-09-11  1:49 Li Chen
+  2023-09-11  4:22 ` [yocto] " ChenQi
+  0 siblings, 1 reply; 7+ messages in thread
+From: Li Chen @ 2023-09-11  1:49 UTC (permalink / raw)
+  To: yocto, yoctohelp
+
+Hi Yocto experts,
+
+I'm a Yocto newbiee and I have a concern regarding the slowness of Yocto for our team(around 100 people). There are two main reasons for this:
+
+1. Yocto itself is slower compared to other build systems.
+2. Each user in our team has their own private SSTATE_DIR and DL_DIR, which means the artifacts cannot be shared. This leads to unnecessary disk and CPU usage.
+3. Every user works on SATA devices, so the IOPS and throughput are both low.
+
+Since it's hard for us to invest in expensive enterprise NVMe for all build servers, I have an idea to address this issue. My suggestion is to use Lustre/NFS/Glustrefs along with small NVMe to share everyone's SSTATE/DL_DIR.
+
+I prefer Lustre over NFS because Lustre offers superior IO performance scalability, making it suitable for data-intensive tasks. It splits the data, allowing it to be requested from one server but sent from one or more other servers.
+
+For the storage of SSTATE/DL_DIR only, the size requirement would not be high, so a small NVMe should be sufficient. NVMe can provide much higher throughput and IOPS compared to our current slow SATA, so I guess it can meet our needs. If necessary, we can easily add another NVMe to another server since Lustre is a distributed file system. The overall cost would not be significant.
+
+My questions are:
+1. Are there any errors in my understanding?
+2. Is this solution feasible? If not, why? If yes, can it be further improved?
+
+I look forward to hearing from you!
+
+Regards,
+Li
+
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] Question: Sharing SSTATE_DIR and DL_DIR through Lustre/NFS for team work
+  2023-09-11  1:49 Question: Sharing SSTATE_DIR and DL_DIR through Lustre/NFS for team work Li Chen
+@ 2023-09-11  4:22 ` ChenQi
+  2023-09-11  7:36   ` Alexander Kanavin
+  2023-09-11  8:05   ` Ross Burton
+  0 siblings, 2 replies; 7+ messages in thread
+From: ChenQi @ 2023-09-11  4:22 UTC (permalink / raw)
+  To: me, yocto, yoctohelp
+
+SSTATE_DIR and DL_DIR are writable. Sharing them among different builds 
+owned/controlled by the same user is OK, but sharing these writable 
+directories among different users does not seem to be a good idea.
+You could consider using the PREMIRRORS and SSTATE_MIRRORS.
+
+Regards,
+Qi
+
+On 9/11/23 09:49, Li Chen via lists.yoctoproject.org wrote:
+> Hi Yocto experts,
+>
+> I'm a Yocto newbiee and I have a concern regarding the slowness of Yocto for our team(around 100 people). There are two main reasons for this:
+>
+> 1. Yocto itself is slower compared to other build systems.
+> 2. Each user in our team has their own private SSTATE_DIR and DL_DIR, which means the artifacts cannot be shared. This leads to unnecessary disk and CPU usage.
+> 3. Every user works on SATA devices, so the IOPS and throughput are both low.
+>
+> Since it's hard for us to invest in expensive enterprise NVMe for all build servers, I have an idea to address this issue. My suggestion is to use Lustre/NFS/Glustrefs along with small NVMe to share everyone's SSTATE/DL_DIR.
+>
+> I prefer Lustre over NFS because Lustre offers superior IO performance scalability, making it suitable for data-intensive tasks. It splits the data, allowing it to be requested from one server but sent from one or more other servers.
+>
+> For the storage of SSTATE/DL_DIR only, the size requirement would not be high, so a small NVMe should be sufficient. NVMe can provide much higher throughput and IOPS compared to our current slow SATA, so I guess it can meet our needs. If necessary, we can easily add another NVMe to another server since Lustre is a distributed file system. The overall cost would not be significant.
+>
+> My questions are:
+> 1. Are there any errors in my understanding?
+> 2. Is this solution feasible? If not, why? If yes, can it be further improved?
+>
+> I look forward to hearing from you!
+>
+> Regards,
+> Li
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#60962): https://lists.yoctoproject.org/g/yocto/message/60962
+> Mute This Topic: https://lists.yoctoproject.org/mt/101284965/3618072
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [Qi.Chen@windriver.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] Question: Sharing SSTATE_DIR and DL_DIR through Lustre/NFS for team work
+  2023-09-11  4:22 ` [yocto] " ChenQi
+@ 2023-09-11  7:36   ` Alexander Kanavin
+  2023-09-11  8:09     ` Quentin Schulz
+  2023-09-11  8:12     ` ChenQi
+  2023-09-11  8:05   ` Ross Burton
+  1 sibling, 2 replies; 7+ messages in thread
+From: Alexander Kanavin @ 2023-09-11  7:36 UTC (permalink / raw)
+  To: Qi.Chen; +Cc: me, yocto, yoctohelp
+
+On Mon, 11 Sept 2023 at 06:22, Chen Qi via lists.yoctoproject.org
+<Qi.Chen=windriver.com@lists.yoctoproject.org> wrote:
+
+> SSTATE_DIR and DL_DIR are writable. Sharing them among different builds
+> owned/controlled by the same user is OK, but sharing these writable
+> directories among different users does not seem to be a good idea.
+> You could consider using the PREMIRRORS and SSTATE_MIRRORS.
+
+This is not accurate. SSTATE_DIR is designed to be shared in a
+read-write fashion via NFS or other over the network filesystem
+(between users on the same machine is also ok), and is heavily used
+that way in Yocto CI.
+
+Sharing DL_DIR is less important as it is not that large, and
+downloading does not slow down the builds that much compared to the
+the actual build (and only needs to happen once).
+
+Li, your understanding is more or less completely correct. The
+difficulties are mostly in scaling up, where you might hit the limits
+of how many users can be served at the same time.
+
+Alex
+
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] Question: Sharing SSTATE_DIR and DL_DIR through Lustre/NFS for team work
+  2023-09-11  4:22 ` [yocto] " ChenQi
+  2023-09-11  7:36   ` Alexander Kanavin
+@ 2023-09-11  8:05   ` Ross Burton
+  1 sibling, 0 replies; 7+ messages in thread
+From: Ross Burton @ 2023-09-11  8:05 UTC (permalink / raw)
+  To: Qi.Chen; +Cc: me, yocto, yoctohelp
+
+On 11 Sep 2023, at 05:22, Chen Qi via lists.yoctoproject.org <Qi.Chen=windriver.com@lists.yoctoproject.org> wrote:
+> 
+> SSTATE_DIR and DL_DIR are writable. Sharing them among different builds owned/controlled by the same user is OK, but sharing these writable directories among different users does not seem to be a good idea.
+> You could consider using the PREMIRRORS and SSTATE_MIRRORS.
+
+If you have group-sticky bits on the parent directories and a shared group that all the users are members of then you can share sstate and dldir between different users.
+
+That’s the theory, at least.  The last time I tried this in production there was a bug in sstate writing where the permissions would be incorrectly changed, but I couldn’t replicate with master so possibly this has been fixed.
+
+NFS is known to work fine (the autobuilder uses a NFS mount for sstate/dldir across tens of builders), and people have reported that Cephfs works well too.  I’m not aware of anyone using Lustre.
+
+Ross
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] Question: Sharing SSTATE_DIR and DL_DIR through Lustre/NFS for team work
+  2023-09-11  7:36   ` Alexander Kanavin
+@ 2023-09-11  8:09     ` Quentin Schulz
+  2023-09-11  8:12     ` ChenQi
+  1 sibling, 0 replies; 7+ messages in thread
+From: Quentin Schulz @ 2023-09-11  8:09 UTC (permalink / raw)
+  To: alex.kanavin, Qi.Chen; +Cc: me, yocto, yoctohelp
+
+Hi all,
+
+On 9/11/23 09:36, Alexander Kanavin via lists.yoctoproject.org wrote:
+> On Mon, 11 Sept 2023 at 06:22, Chen Qi via lists.yoctoproject.org
+> <Qi.Chen=windriver.com@lists.yoctoproject.org> wrote:
+> 
+>> SSTATE_DIR and DL_DIR are writable. Sharing them among different builds
+>> owned/controlled by the same user is OK, but sharing these writable
+>> directories among different users does not seem to be a good idea.
+>> You could consider using the PREMIRRORS and SSTATE_MIRRORS.
+> 
+> This is not accurate. SSTATE_DIR is designed to be shared in a
+> read-write fashion via NFS or other over the network filesystem
+> (between users on the same machine is also ok), and is heavily used
+> that way in Yocto CI.
+> 
+
+But sharing the same SSTATE_DIR with people running cleansstate or 
+manually removing entries is an issue as far as I remember. I don't know 
+if mount allows to mount file systems with read and write but not erase 
+permissions?
+
+On a separate note, we've setup NFS donwload cache for Buildroot and 
+Yocto and for one (maybe both?) we had an issue with filelocks. 
+Basically we had one disk on one of the build servers which we exposed 
+through NFS share to other build servers and users. However, the 
+filelocks weren't respected when one was set in NFS (or ext4) and 
+checked against in ext4 (or NFS respectively). So I suggest to be 
+mindful about this when setting up your infrastructure and use the same 
+FS across all users (you can mount a local FS with NFS as far as I 
+remember).
+
+I haven't done that yet but I believe one is supposed to share the 
+hashequiv server too for max reusability? I am unfortunately not 
+familiar with it but just wanted to raise this.
+
+Cheers,
+Quentin
+
+> Sharing DL_DIR is less important as it is not that large, and
+> downloading does not slow down the builds that much compared to the
+> the actual build (and only needs to happen once).
+> 
+> Li, your understanding is more or less completely correct. The
+> difficulties are mostly in scaling up, where you might hit the limits
+> of how many users can be served at the same time.
+> 
+> Alex
+> 
+> 
+> 
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#60965): https://lists.yoctoproject.org/g/yocto/message/60965
+> Mute This Topic: https://lists.yoctoproject.org/mt/101284965/6293953
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [quentin.schulz@theobroma-systems.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+> 
+
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] Question: Sharing SSTATE_DIR and DL_DIR through Lustre/NFS for team work
+  2023-09-11  7:36   ` Alexander Kanavin
+  2023-09-11  8:09     ` Quentin Schulz
+@ 2023-09-11  8:12     ` ChenQi
+  2023-09-11  8:26       ` Alexander Kanavin
+  1 sibling, 1 reply; 7+ messages in thread
+From: ChenQi @ 2023-09-11  8:12 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: me, yocto, yoctohelp
+
+On 9/11/23 15:36, Alexander Kanavin wrote:
+> On Mon, 11 Sept 2023 at 06:22, Chen Qi via lists.yoctoproject.org
+> <Qi.Chen=windriver.com@lists.yoctoproject.org> wrote:
+>
+>> SSTATE_DIR and DL_DIR are writable. Sharing them among different builds
+>> owned/controlled by the same user is OK, but sharing these writable
+>> directories among different users does not seem to be a good idea.
+>> You could consider using the PREMIRRORS and SSTATE_MIRRORS.
+> This is not accurate. SSTATE_DIR is designed to be shared in a
+> read-write fashion via NFS or other over the network filesystem
+> (between users on the same machine is also ok), and is heavily used
+> that way in Yocto CI.
+
+This is the case I referred to as 'different builds owned/controlled by 
+the same user'.
+
+Say, you share the SSTATE_DIR used by Yocto CI to many people via NFS. 
+Then, a 'rm -rf' might be typed by someone by accident, maybe just 
+because of lack of coffee.
+
+Regards,
+
+Qi
+
+>
+> Sharing DL_DIR is less important as it is not that large, and
+> downloading does not slow down the builds that much compared to the
+> the actual build (and only needs to happen once).
+>
+> Li, your understanding is more or less completely correct. The
+> difficulties are mostly in scaling up, where you might hit the limits
+> of how many users can be served at the same time.
+>
+> Alex
+
+
+
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] Question: Sharing SSTATE_DIR and DL_DIR through Lustre/NFS for team work
+  2023-09-11  8:12     ` ChenQi
+@ 2023-09-11  8:26       ` Alexander Kanavin
+  0 siblings, 0 replies; 7+ messages in thread
+From: Alexander Kanavin @ 2023-09-11  8:26 UTC (permalink / raw)
+  To: ChenQi; +Cc: me, yocto, yoctohelp
+
+On Mon, 11 Sept 2023 at 10:13, ChenQi <Qi.Chen@windriver.com> wrote:
+> This is the case I referred to as 'different builds owned/controlled by
+> the same user'.
+
+'User' is ambiguous here - user as a person, or user as a local unix
+user account?
+In the latter case this is likely to be misunderstood as 'sstate cache
+must be private to a user account because it cannot handle multiple
+readers and writers eithe locally or over the network', which it can.
+
+> Say, you share the SSTATE_DIR used by Yocto CI to many people via NFS.
+> Then, a 'rm -rf' might be typed by someone by accident, maybe just
+> because of lack of coffee.
+
+This is correct. Deletion needs to happen via central procedure, and
+those who cannot be trusted with that should get only r/o access.
+
+Alex
+
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+end of thread, other threads:[~2023-09-11  8:26 UTC | newest]
+
+Thread overview: 7+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-09-11  1:49 Question: Sharing SSTATE_DIR and DL_DIR through Lustre/NFS for team work Li Chen
+2023-09-11  4:22 ` [yocto] " ChenQi
+2023-09-11  7:36   ` Alexander Kanavin
+2023-09-11  8:09     ` Quentin Schulz
+2023-09-11  8:12     ` ChenQi
+2023-09-11  8:26       ` Alexander Kanavin
+2023-09-11  8:05   ` Ross Burton
+

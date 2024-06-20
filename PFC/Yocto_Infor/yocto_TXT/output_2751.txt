@@ -1,0 +1,196 @@
+* [meta-rockchip][PATCH] nanopi-m4: enable booting from uSD
+@ 2021-10-06 18:52 Trevor Woerner
+  2021-10-06 21:58 ` [yocto] " Khem Raj
+  0 siblings, 1 reply; 2+ messages in thread
+From: Trevor Woerner @ 2021-10-06 18:52 UTC (permalink / raw)
+  To: yocto
+
+Enable the vcc3v0_sd regulator on boot so that the device can boot from the
+uSD card (when using certain uSD cards).
+
+Upstream-Status: Submitted [http://lists.infradead.org/pipermail/linux-arm-kernel/2021-October/688254.html]
+
+Signed-off-by: Trevor Woerner <twoerner@gmail.com>
+---
+ ....dtsi-enable-sdmmc-regulator-on-boot.patch | 47 +++++++++++++++++++
+ recipes-kernel/linux/linux-yocto%.bbappend    |  1 +
+ 2 files changed, 48 insertions(+)
+ create mode 100644 recipes-kernel/linux/files/0001-rk3399-nanopi4.dtsi-enable-sdmmc-regulator-on-boot.patch
+
+diff --git a/recipes-kernel/linux/files/0001-rk3399-nanopi4.dtsi-enable-sdmmc-regulator-on-boot.patch b/recipes-kernel/linux/files/0001-rk3399-nanopi4.dtsi-enable-sdmmc-regulator-on-boot.patch
+new file mode 100644
+index 0000000..c871c5a
+--- /dev/null
++++ b/recipes-kernel/linux/files/0001-rk3399-nanopi4.dtsi-enable-sdmmc-regulator-on-boot.patch
+@@ -0,0 +1,47 @@
++From 33e3f2f8b22c226977b6461581ae113c3f77f5fd Mon Sep 17 00:00:00 2001
++From: Trevor Woerner <twoerner@gmail.com>
++Date: Wed, 6 Oct 2021 11:41:23 -0400
++Subject: [PATCH] rk3399-nanopi4.dtsi: enable sdmmc regulator on boot
++
++When trying to boot a nanopi-m4 board with an SDHC-class uSD card, the boot
++comes to a full stop shortly after initializing the mmc subsystem. The boot
++can be cajoled into continuing if, after waiting a minute or so, the uSD
++card is ejected and re-inserted. Waiting a minute or so before ejecting and
++re-inserting the uSD card is crucial since the boot will not continue if
++the card is ejected/re-inserted too soon after the boot has stopped.
++
++The nanopi-m4 has a uSD card and an optional eMMC module, either of which
++can be used for booting. In my case I don't have the optional eMMC module,
++therefore I'm booting from the uSD card. When booting from the uSD card,
++its regulator needs to be enabled at boot.
++
++Curiously, this should have been an issue from day one, but it only started
++to become a problem after commit 98e48cd9283d ("regulator: core: resolve
++supply for boot-on/always-on regulators") was merged. Additionally, by
++coincidence, I happened to be using an SDHC-class card in my device, and
++saw the failure. However, if I use an SDXC-class uSD card the problem does
++not occur.
++
++Much thanks to Mark Brown and Javier Martinez Canillas for their assistance
++on irc!
++
++Signed-off-by: Trevor Woerner <twoerner@gmail.com>
++---
++ arch/arm64/boot/dts/rockchip/rk3399-nanopi4.dtsi | 1 +
++ 1 file changed, 1 insertion(+)
++
++diff --git a/arch/arm64/boot/dts/rockchip/rk3399-nanopi4.dtsi b/arch/arm64/boot/dts/rockchip/rk3399-nanopi4.dtsi
++index 8c0ff6c96e03..5cf02e2ef9b3 100644
++--- a/arch/arm64/boot/dts/rockchip/rk3399-nanopi4.dtsi
+++++ b/arch/arm64/boot/dts/rockchip/rk3399-nanopi4.dtsi
++@@ -71,6 +71,7 @@ vcc3v0_sd: vcc3v0-sd {
++ 		pinctrl-names = "default";
++ 		pinctrl-0 = <&sdmmc0_pwr_h>;
++ 		regulator-always-on;
+++		regulator-boot-on;
++ 		regulator-min-microvolt = <3000000>;
++ 		regulator-max-microvolt = <3000000>;
++ 		regulator-name = "vcc3v0_sd";
++-- 
++2.30.0.rc0
++
+diff --git a/recipes-kernel/linux/linux-yocto%.bbappend b/recipes-kernel/linux/linux-yocto%.bbappend
+index 470dc09..61d5116 100644
+--- a/recipes-kernel/linux/linux-yocto%.bbappend
++++ b/recipes-kernel/linux/linux-yocto%.bbappend
+@@ -12,3 +12,4 @@ COMPATIBLE_MACHINE:rock64 = "rock64"
+ COMPATIBLE_MACHINE:rock-pi-e = "rock-pi-e"
+ 
+ FILESEXTRAPATHS:prepend := "${THISDIR}/files:"
++SRC_URI:append:nanopi-m4 = " file://0001-rk3399-nanopi4.dtsi-enable-sdmmc-regulator-on-boot.patch"
+-- 
+2.30.0.rc0
+
+
+
+^ permalink raw reply related	[flat|nested] 2+ messages in thread
+* Re: [yocto] [meta-rockchip][PATCH] nanopi-m4: enable booting from uSD
+  2021-10-06 18:52 [meta-rockchip][PATCH] nanopi-m4: enable booting from uSD Trevor Woerner
+@ 2021-10-06 21:58 ` Khem Raj
+  0 siblings, 0 replies; 2+ messages in thread
+From: Khem Raj @ 2021-10-06 21:58 UTC (permalink / raw)
+  To: Trevor Woerner, yocto
+
+
+
+On 10/6/21 11:52 AM, Trevor Woerner wrote:
+> Enable the vcc3v0_sd regulator on boot so that the device can boot from the
+> uSD card (when using certain uSD cards).
+> 
+> Upstream-Status: Submitted [http://lists.infradead.org/pipermail/linux-arm-kernel/2021-October/688254.html]
+> 
+> Signed-off-by: Trevor Woerner <twoerner@gmail.com>
+> ---
+>   ....dtsi-enable-sdmmc-regulator-on-boot.patch | 47 +++++++++++++++++++
+>   recipes-kernel/linux/linux-yocto%.bbappend    |  1 +
+>   2 files changed, 48 insertions(+)
+>   create mode 100644 recipes-kernel/linux/files/0001-rk3399-nanopi4.dtsi-enable-sdmmc-regulator-on-boot.patch
+> 
+> diff --git a/recipes-kernel/linux/files/0001-rk3399-nanopi4.dtsi-enable-sdmmc-regulator-on-boot.patch b/recipes-kernel/linux/files/0001-rk3399-nanopi4.dtsi-enable-sdmmc-regulator-on-boot.patch
+> new file mode 100644
+> index 0000000..c871c5a
+> --- /dev/null
+> +++ b/recipes-kernel/linux/files/0001-rk3399-nanopi4.dtsi-enable-sdmmc-regulator-on-boot.patch
+> @@ -0,0 +1,47 @@
+> +From 33e3f2f8b22c226977b6461581ae113c3f77f5fd Mon Sep 17 00:00:00 2001
+> +From: Trevor Woerner <twoerner@gmail.com>
+> +Date: Wed, 6 Oct 2021 11:41:23 -0400
+> +Subject: [PATCH] rk3399-nanopi4.dtsi: enable sdmmc regulator on boot
+> +
+> +When trying to boot a nanopi-m4 board with an SDHC-class uSD card, the boot
+> +comes to a full stop shortly after initializing the mmc subsystem. The boot
+> +can be cajoled into continuing if, after waiting a minute or so, the uSD
+> +card is ejected and re-inserted. Waiting a minute or so before ejecting and
+> +re-inserting the uSD card is crucial since the boot will not continue if
+> +the card is ejected/re-inserted too soon after the boot has stopped.
+> +
+> +The nanopi-m4 has a uSD card and an optional eMMC module, either of which
+> +can be used for booting. In my case I don't have the optional eMMC module,
+> +therefore I'm booting from the uSD card. When booting from the uSD card,
+> +its regulator needs to be enabled at boot.
+> +
+> +Curiously, this should have been an issue from day one, but it only started
+> +to become a problem after commit 98e48cd9283d ("regulator: core: resolve
+> +supply for boot-on/always-on regulators") was merged. Additionally, by
+> +coincidence, I happened to be using an SDHC-class card in my device, and
+> +saw the failure. However, if I use an SDXC-class uSD card the problem does
+> +not occur.
+> +
+> +Much thanks to Mark Brown and Javier Martinez Canillas for their assistance
+> +on irc!
+> +
+> +Signed-off-by: Trevor Woerner <twoerner@gmail.com>
+> +---
+> + arch/arm64/boot/dts/rockchip/rk3399-nanopi4.dtsi | 1 +
+> + 1 file changed, 1 insertion(+)
+> +
+> +diff --git a/arch/arm64/boot/dts/rockchip/rk3399-nanopi4.dtsi b/arch/arm64/boot/dts/rockchip/rk3399-nanopi4.dtsi
+> +index 8c0ff6c96e03..5cf02e2ef9b3 100644
+> +--- a/arch/arm64/boot/dts/rockchip/rk3399-nanopi4.dtsi
+> ++++ b/arch/arm64/boot/dts/rockchip/rk3399-nanopi4.dtsi
+> +@@ -71,6 +71,7 @@ vcc3v0_sd: vcc3v0-sd {
+> + 		pinctrl-names = "default";
+> + 		pinctrl-0 = <&sdmmc0_pwr_h>;
+> + 		regulator-always-on;
+> ++		regulator-boot-on;
+> + 		regulator-min-microvolt = <3000000>;
+> + 		regulator-max-microvolt = <3000000>;
+> + 		regulator-name = "vcc3v0_sd";
+> +--
+> +2.30.0.rc0
+> +
+> diff --git a/recipes-kernel/linux/linux-yocto%.bbappend b/recipes-kernel/linux/linux-yocto%.bbappend
+> index 470dc09..61d5116 100644
+> --- a/recipes-kernel/linux/linux-yocto%.bbappend
+> +++ b/recipes-kernel/linux/linux-yocto%.bbappend
+> @@ -12,3 +12,4 @@ COMPATIBLE_MACHINE:rock64 = "rock64"
+>   COMPATIBLE_MACHINE:rock-pi-e = "rock-pi-e"
+>   
+>   FILESEXTRAPATHS:prepend := "${THISDIR}/files:"
+> +SRC_URI:append:nanopi-m4 = " file://0001-rk3399-nanopi4.dtsi-enable-sdmmc-regulator-on-boot.patch"
+
+use of override here seems unnecessary
+
+> 
+> 
+> 
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> You automatically follow any topics you start or reply to.
+> View/Reply Online (#54982): https://lists.yoctoproject.org/g/yocto/message/54982
+> Mute This Topic: https://lists.yoctoproject.org/mt/86127572/1997914
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [raj.khem@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+> 
+
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2021-10-06 21:59 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-10-06 18:52 [meta-rockchip][PATCH] nanopi-m4: enable booting from uSD Trevor Woerner
+2021-10-06 21:58 ` [yocto] " Khem Raj
+

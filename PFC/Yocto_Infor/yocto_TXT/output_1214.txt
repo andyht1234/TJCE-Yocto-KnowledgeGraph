@@ -1,0 +1,270 @@
+* sstate mirror file name length issue #dunfell
+@ 2022-11-15 12:09 Markus Held
+  2022-11-15 14:01 ` [yocto] " Richard Purdie
+  0 siblings, 1 reply; 4+ messages in thread
+From: Markus Held @ 2022-11-15 12:09 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1607 bytes --]
+
+Hello,
+
+I try to use yocto SSTATE_MIRROR with a custom distribution (RDK: https://developer.rdkcentral.com/) and enabled yocto multilib support.
+The sstate directory is created by my build server and published with nginx to the developer machines.
+
+Environment:
+Bitbake 1.46.0 / Yocto Dunfell 3.1
+
+TUNE_PKGARCH = “cortexa53t2hf-neon-fp-armv8”
+
+MULTILIBS = "multilib:lib32"
+
+TARGET_VENDOR="-rdk"
+
+TARGET_OS="linux"
+
+When a developer configures the sstate mirror in his local.conf:
+
+SSTATE_MIRRORS ?= " file://.* http://<build server>/sstate-cache/PATH;downloadfilename=PATH "
+
+the build gets stuck on various _setscene tasks and does not continue. I did some debugging and the issue is related the with file name length of the sstate files. When the developer machine tries to download a file from the mirror, bitbake fetch wants to create a local lock file with name " <file name>.lock". Example of a sstate lock file that fails for me:
+
+sstate:lib32-dibbler:cortexa53t2hf-neon-fp-armv8-rdkmllib32-linux-gnueabi:1.0.1+1.0.2RC1+gitc4b0ed52e751da7823dd9a36e91f93a6310e5525:r0:cortexa53t2hf-neon-fp-armv8:3:169be56e277b6922d1cca3f23f6d56033812941a438f09a477cd96999d7d0801_package_qa.tgz.siginfo.lock
+
+This lock file cannot be created on a ext file system due the file name length > 255. This causes the _setscene task to get stuck indefinitely. It seems like most Linux file systems only support file names up to 255 bytes.
+
+Is there a way to configure or limit the file name length of the sstate cache files? Or a way to avoid the issue with the .lock file?
+
+Thanks
+
+Markus
+
+[-- Attachment #2: Type: text/html, Size: 40268 bytes --]
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] sstate mirror file name length issue #dunfell
+  2022-11-15 12:09 sstate mirror file name length issue #dunfell Markus Held
+@ 2022-11-15 14:01 ` Richard Purdie
+  2022-11-15 14:11   ` Steve Sakoman
+  2022-11-17  8:57   ` Markus Held
+  0 siblings, 2 replies; 4+ messages in thread
+From: Richard Purdie @ 2022-11-15 14:01 UTC (permalink / raw)
+  To: Markus Held, yocto; +Cc: Steve Sakoman
+
+On Tue, 2022-11-15 at 04:09 -0800, Markus Held wrote:
+> Hello,
+> 
+> I try to use yocto SSTATE_MIRROR with a custom distribution (RDK:
+> https://developer.rdkcentral.com/) and enabled yocto multilib
+> support. 
+> The sstate directory is created by my build server and published with
+> nginx to the developer machines.
+>  
+> Environment:
+> Bitbake 1.46.0 / Yocto Dunfell 3.1
+> TUNE_PKGARCH = “cortexa53t2hf-neon-fp-armv8”
+> MULTILIBS = "multilib:lib32"
+> TARGET_VENDOR="-rdk"
+> TARGET_OS="linux"
+>  
+> When a developer configures the sstate mirror in his local.conf:
+> 
+>    SSTATE_MIRRORS ?= " file://.* http://<build server>/sstate-
+> cache/PATH;downloadfilename=PATH "
+> 
+> the build gets stuck on various _setscene tasks and does not
+> continue. I did some debugging and the issue is related the with file
+> name length of the sstate files. When the developer machine tries to
+> download a file from the mirror, bitbake fetch wants to create a
+> local lock file with name "<file name>.lock". Example of a sstate
+> lock file that fails for me:
+> 
+>    sstate:lib32-dibbler:cortexa53t2hf-neon-fp-armv8-rdkmllib32-linux-
+> gnueabi:1.0.1+1.0.2RC1+gitc4b0ed52e751da7823dd9a36e91f93a6310e5525:r0
+> :cortexa53t2hf-neon-fp-
+> armv8:3:169be56e277b6922d1cca3f23f6d56033812941a438f09a477cd96999d7d0
+> 801_package_qa.tgz.siginfo.lock
+> 
+> This lock file cannot be created on a ext file system due the file
+> name length > 255. This causes the _setscene task to get stuck
+> indefinitely. It seems like most Linux file systems only support file
+> names up to 255 bytes.
+> 
+> Is there a way to configure or limit the file name length of the
+> sstate cache files? Or a way to avoid the issue with the .lock file? 
+> 
+
+There were changes in bitbake:
+
+https://git.yoctoproject.org/poky/commit/bitbake/lib/bb/utils.py?id=273b124bf6acd77b074fde2421be331721a68c11
+https://git.yoctoproject.org/poky/commit/bitbake/lib/bb/utils.py?id=09e826cfb021731c1b139046665d2d9fa24baa88
+
+There were also sstate class changes:
+
+https://git.yoctoproject.org/poky/commit/meta/classes/sstate.bbclass?id=b8025e972081b70960ffcbcbe43a7118041556a1
+https://git.yoctoproject.org/poky/commit/meta/classes/sstate.bbclass?id=ed4bdd0f9149ba24fac375fd3af8bb2a06423105
+https://git.yoctoproject.org/poky/commit/meta/classes/sstate.bbclass?id=4c6efbf03530b6f60cde59cdef61aa14538753a3
+
+Cheers,
+
+Richard
+
+
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] sstate mirror file name length issue #dunfell
+  2022-11-15 14:01 ` [yocto] " Richard Purdie
+@ 2022-11-15 14:11   ` Steve Sakoman
+  2022-11-17  8:57   ` Markus Held
+  1 sibling, 0 replies; 4+ messages in thread
+From: Steve Sakoman @ 2022-11-15 14:11 UTC (permalink / raw)
+  To: Richard Purdie; +Cc: Markus Held, yocto
+
+On Tue, Nov 15, 2022 at 4:01 AM Richard Purdie
+<richard.purdie@linuxfoundation.org> wrote:
+>
+> On Tue, 2022-11-15 at 04:09 -0800, Markus Held wrote:
+> > Hello,
+> >
+> > I try to use yocto SSTATE_MIRROR with a custom distribution (RDK:
+> > https://developer.rdkcentral.com/) and enabled yocto multilib
+> > support.
+> > The sstate directory is created by my build server and published with
+> > nginx to the developer machines.
+> >
+> > Environment:
+> > Bitbake 1.46.0 / Yocto Dunfell 3.1
+> > TUNE_PKGARCH = “cortexa53t2hf-neon-fp-armv8”
+> > MULTILIBS = "multilib:lib32"
+> > TARGET_VENDOR="-rdk"
+> > TARGET_OS="linux"
+> >
+> > When a developer configures the sstate mirror in his local.conf:
+> >
+> >    SSTATE_MIRRORS ?= " file://.* http://<build server>/sstate-
+> > cache/PATH;downloadfilename=PATH "
+> >
+> > the build gets stuck on various _setscene tasks and does not
+> > continue. I did some debugging and the issue is related the with file
+> > name length of the sstate files. When the developer machine tries to
+> > download a file from the mirror, bitbake fetch wants to create a
+> > local lock file with name "<file name>.lock". Example of a sstate
+> > lock file that fails for me:
+> >
+> >    sstate:lib32-dibbler:cortexa53t2hf-neon-fp-armv8-rdkmllib32-linux-
+> > gnueabi:1.0.1+1.0.2RC1+gitc4b0ed52e751da7823dd9a36e91f93a6310e5525:r0
+> > :cortexa53t2hf-neon-fp-
+> > armv8:3:169be56e277b6922d1cca3f23f6d56033812941a438f09a477cd96999d7d0
+> > 801_package_qa.tgz.siginfo.lock
+> >
+> > This lock file cannot be created on a ext file system due the file
+> > name length > 255. This causes the _setscene task to get stuck
+> > indefinitely. It seems like most Linux file systems only support file
+> > names up to 255 bytes.
+> >
+> > Is there a way to configure or limit the file name length of the
+> > sstate cache files? Or a way to avoid the issue with the .lock file?
+> >
+>
+> There were changes in bitbake:
+>
+> https://git.yoctoproject.org/poky/commit/bitbake/lib/bb/utils.py?id=273b124bf6acd77b074fde2421be331721a68c11
+> https://git.yoctoproject.org/poky/commit/bitbake/lib/bb/utils.py?id=09e826cfb021731c1b139046665d2d9fa24baa88
+>
+> There were also sstate class changes:
+>
+> https://git.yoctoproject.org/poky/commit/meta/classes/sstate.bbclass?id=b8025e972081b70960ffcbcbe43a7118041556a1
+> https://git.yoctoproject.org/poky/commit/meta/classes/sstate.bbclass?id=ed4bdd0f9149ba24fac375fd3af8bb2a06423105
+> https://git.yoctoproject.org/poky/commit/meta/classes/sstate.bbclass?id=4c6efbf03530b6f60cde59cdef61aa14538753a3
+
+I'll cherry-pick those changes and test on autobuilder.
+
+Steve
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] sstate mirror file name length issue #dunfell
+  2022-11-15 14:01 ` [yocto] " Richard Purdie
+  2022-11-15 14:11   ` Steve Sakoman
+@ 2022-11-17  8:57   ` Markus Held
+  1 sibling, 0 replies; 4+ messages in thread
+From: Markus Held @ 2022-11-17  8:57 UTC (permalink / raw)
+  To: Richard Purdie, yocto; +Cc: Steve Sakoman
+
+
+On 15/11/2022 15:01, Richard Purdie wrote:
+> On Tue, 2022-11-15 at 04:09 -0800, Markus Held wrote:
+>> Hello,
+>>
+>> I try to use yocto SSTATE_MIRROR with a custom distribution (RDK:
+>> https://developer.rdkcentral.com/) and enabled yocto multilib
+>> support.
+>> The sstate directory is created by my build server and published with
+>> nginx to the developer machines.
+>>
+>> Environment:
+>> Bitbake 1.46.0 / Yocto Dunfell 3.1
+>> TUNE_PKGARCH = “cortexa53t2hf-neon-fp-armv8”
+>> MULTILIBS = "multilib:lib32"
+>> TARGET_VENDOR="-rdk"
+>> TARGET_OS="linux"
+>>
+>> When a developer configures the sstate mirror in his local.conf:
+>>
+>>     SSTATE_MIRRORS ?= " file://.* http://<build server>/sstate-
+>> cache/PATH;downloadfilename=PATH "
+>>
+>> the build gets stuck on various _setscene tasks and does not
+>> continue. I did some debugging and the issue is related the with file
+>> name length of the sstate files. When the developer machine tries to
+>> download a file from the mirror, bitbake fetch wants to create a
+>> local lock file with name "<file name>.lock". Example of a sstate
+>> lock file that fails for me:
+>>
+>>     sstate:lib32-dibbler:cortexa53t2hf-neon-fp-armv8-rdkmllib32-linux-
+>> gnueabi:1.0.1+1.0.2RC1+gitc4b0ed52e751da7823dd9a36e91f93a6310e5525:r0
+>> :cortexa53t2hf-neon-fp-
+>> armv8:3:169be56e277b6922d1cca3f23f6d56033812941a438f09a477cd96999d7d0
+>> 801_package_qa.tgz.siginfo.lock
+>>
+>> This lock file cannot be created on a ext file system due the file
+>> name length > 255. This causes the _setscene task to get stuck
+>> indefinitely. It seems like most Linux file systems only support file
+>> names up to 255 bytes.
+>>
+>> Is there a way to configure or limit the file name length of the
+>> sstate cache files? Or a way to avoid the issue with the .lock file?
+>>
+> There were changes in bitbake:
+>
+> https://git.yoctoproject.org/poky/commit/bitbake/lib/bb/utils.py?id=273b124bf6acd77b074fde2421be331721a68c11
+> https://git.yoctoproject.org/poky/commit/bitbake/lib/bb/utils.py?id=09e826cfb021731c1b139046665d2d9fa24baa88
+>
+> There were also sstate class changes:
+>
+> https://git.yoctoproject.org/poky/commit/meta/classes/sstate.bbclass?id=b8025e972081b70960ffcbcbe43a7118041556a1
+> https://git.yoctoproject.org/poky/commit/meta/classes/sstate.bbclass?id=ed4bdd0f9149ba24fac375fd3af8bb2a06423105
+> https://git.yoctoproject.org/poky/commit/meta/classes/sstate.bbclass?id=4c6efbf03530b6f60cde59cdef61aa14538753a3
+>
+> Cheers,
+>
+> Richard
+>
+
+Thanks, I applied the patches locally and it fixed the issue for me.
+
+Markus
+
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+end of thread, other threads:[~2022-11-17  8:57 UTC | newest]
+
+Thread overview: 4+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-11-15 12:09 sstate mirror file name length issue #dunfell Markus Held
+2022-11-15 14:01 ` [yocto] " Richard Purdie
+2022-11-15 14:11   ` Steve Sakoman
+2022-11-17  8:57   ` Markus Held
+

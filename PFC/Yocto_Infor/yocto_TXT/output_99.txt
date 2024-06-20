@@ -1,0 +1,640 @@
+* Trouble enabling vtable-verify for gcc-cross
+@ 2023-09-27 14:40 Alex Roberts
+  2023-09-27 22:41 ` [yocto] " Richard Purdie
+  0 siblings, 1 reply; 6+ messages in thread
+From: Alex Roberts @ 2023-09-27 14:40 UTC (permalink / raw)
+  To: yocto
+
+Hello All,
+
+I'm having trouble getting gcc-cross-9.3.0 recipe to build libvtv. I
+have added “—enable-vtable-verify” to EXTRA_OECONF via a .bbappend.
+The vtable stubs are added to libstdc++ but libvtv itself is not
+compiled. This causes recipes compiling with -fstandard-verify to fail
+because libvtv doesn’t exist and cannot be linked in.
+
+Looking at the autoconf files and the resulting Makefile, libvtv
+should be getting configured and compiled with the recipe, but I can
+not determine why it is not.
+
+Does anyone have experience enabling vtable-verify to a cross-compiler
+toolchain?
+
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] Trouble enabling vtable-verify for gcc-cross
+  2023-09-27 14:40 Trouble enabling vtable-verify for gcc-cross Alex Roberts
+@ 2023-09-27 22:41 ` Richard Purdie
+  2023-09-28  2:16   ` Alex Roberts
+       [not found]   ` <1788EE639287C667.1970@lists.yoctoproject.org>
+  0 siblings, 2 replies; 6+ messages in thread
+From: Richard Purdie @ 2023-09-27 22:41 UTC (permalink / raw)
+  To: Alex Roberts, yocto
+
+On Wed, 2023-09-27 at 09:40 -0500, Alex Roberts wrote:
+> Hello All,
+> 
+> I'm having trouble getting gcc-cross-9.3.0 recipe to build libvtv. I
+> have added “—enable-vtable-verify” to EXTRA_OECONF via a .bbappend.
+> The vtable stubs are added to libstdc++ but libvtv itself is not
+> compiled. This causes recipes compiling with -fstandard-verify to fail
+> because libvtv doesn’t exist and cannot be linked in.
+> 
+> Looking at the autoconf files and the resulting Makefile, libvtv
+> should be getting configured and compiled with the recipe, but I can
+> not determine why it is not.
+> 
+> Does anyone have experience enabling vtable-verify to a cross-compiler
+> toolchain?
+
+If libvtv is a separate library (I've not looked), I suspect there are
+tweaks needed to the gcc-runtime recipe to build it?
+
+Cheers,
+
+Richard
+
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: Trouble enabling vtable-verify for gcc-cross
+  2023-09-27 22:41 ` [yocto] " Richard Purdie
+@ 2023-09-28  2:16   ` Alex Roberts
+       [not found]   ` <1788EE639287C667.1970@lists.yoctoproject.org>
+  1 sibling, 0 replies; 6+ messages in thread
+From: Alex Roberts @ 2023-09-28  2:16 UTC (permalink / raw)
+  To: Richard Purdie; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1823 bytes --]
+
+>If libvtv is a separate library (I've not looked)
+
+It is a separate library whose source is inside the gcc source folder. Much
+of the documentation for enabling vtable verify is for compiling gcc from
+source outside of Yocto and just references using the flag with ./configure
+when building gcc from source.
+
+>  I suspect there are tweaks needed to the gcc-runtime recipe to build it
+
+I put “—enable-vtable-verify” in the gcc-common include so it should have
+been picked up by gcc.bb, gcc-cross and gcc-runtime. I also tried adding to
+just gcc cross and gcc runtime recipes. I also looked at how the sanitizer
+libraries were being built with gcc-sanitizers, but was unable to get a
+working solution. I gave up to focus on other priorities, but figured I’d
+ask the list in case someone had come across this before.
+
+
+On Wednesday, September 27, 2023, Richard Purdie <
+richard.purdie@linuxfoundation.org> wrote:
+
+> On Wed, 2023-09-27 at 09:40 -0500, Alex Roberts wrote:
+> > Hello All,
+> >
+> > I'm having trouble getting gcc-cross-9.3.0 recipe to build libvtv. I
+> > have added “—enable-vtable-verify” to EXTRA_OECONF via a .bbappend.
+> > The vtable stubs are added to libstdc++ but libvtv itself is not
+> > compiled. This causes recipes compiling with -fstandard-verify to fail
+> > because libvtv doesn’t exist and cannot be linked in.
+> >
+> > Looking at the autoconf files and the resulting Makefile, libvtv
+> > should be getting configured and compiled with the recipe, but I can
+> > not determine why it is not.
+> >
+> > Does anyone have experience enabling vtable-verify to a cross-compiler
+> > toolchain?
+>
+> If libvtv is a separate library (I've not looked), I suspect there are
+> tweaks needed to the gcc-runtime recipe to build it?
+>
+> Cheers,
+>
+> Richard
+>
+
+[-- Attachment #2: Type: text/html, Size: 2233 bytes --]
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] Trouble enabling vtable-verify for gcc-cross
+       [not found]   ` <1788EE639287C667.1970@lists.yoctoproject.org>
+@ 2023-09-28 19:55     ` Alex Roberts
+       [not found]     ` <1789283578AF2335.9230@lists.yoctoproject.org>
+  1 sibling, 0 replies; 6+ messages in thread
+From: Alex Roberts @ 2023-09-28 19:55 UTC (permalink / raw)
+  To: arob109; +Cc: Richard Purdie, yocto
+
+Today I revisited cloning gcc-sanitizers.inc and gcc-sanitizers_9.3.bb
+in an attempt to make a recipe that configures and builds libvtv. This
+somewhat works, but I get errors with libtool
+
+
+| /bin/sh ./libtool --tag=CXX   --mode=compile  -DPACKAGE_NAME=\"GNU\
+Vtable\ Verification\ Runtime\ Library\" -DPACKAGE_TARNAME=\"libvtv\"
+-DPACKAGE_VERSION=\"1.0\" -DPACKAGE_STRING=\"GNU\ Vtable\
+Verification\ Runtime\ Library\ 1.0\" -DPACKAGE_BUGREPORT=\"\"
+-DPACKAGE_URL=\"http://www.gnu.org/software/libvtv/\" -DSTDC_HEADERS=1
+-DHAVE_SYS_TYPES_H=1 -DHAVE_SYS_STAT_H=1 -DHAVE_STDLIB_H=1
+-DHAVE_STRING_H=1 -DHAVE_MEMORY_H=1 -DHAVE_STRINGS_H=1
+-DHAVE_INTTYPES_H=1 -DHAVE_STDINT_H=1 -DHAVE_UNISTD_H=1
+-D__EXTENSIONS__=1 -D_ALL_SOURCE=1 -D_GNU_SOURCE=1
+-D_POSIX_PTHREAD_SEMANTICS=1 -D_TANDEM_SOURCE=1 -DPACKAGE=\"libvtv\"
+-DVERSION=\"1.0\" -DHAVE_SECURE_GETENV=1 -DHAVE___FORTIFY_FAIL=1
+-DHAVE_DLFCN_H=1 -DLT_OBJDIR=\".libs/\" -DHAVE__OBSTACK_BEGIN=1 -I.
+-I../../../../../../../../work-shared/gcc-9.3.0-r0/gcc-9.3.0/libvtv
+-I../../../../../../../../work-shared/gcc-9.3.0-r0/gcc-9.3.0/libvtv/../include
+ -D_GNU_SOURCE -Wall -Wextra -fno-exceptions
+-I./../libstdc++-v3/include
+-I./../libstdc++-v3/include/aarch64-oe-linux
+-I../../../../../../../../work-shared/gcc-9.3.0-r0/gcc-9.3.0/libvtv/../libstdc++-v3/libsupc++
+-Wl,-u_vtable_map_vars_start,-u_vtable_map_vars_end -O2
+-fomit-frame-pointer    -Wa,--noexecstack -fexpensive-optimizations
+-frename-registers -ftree-vectorize   -finline-functions
+-finline-limit=64   -Wno-error=maybe-uninitialized
+-Wno-error=unused-result     -fvisibility-inlines-hidden -c -o
+vtv_malloc.lo ../../../../../../../../work-shared/gcc-9.3.0-r0/gcc-9.3.0/libvtv/vtv_malloc.cc
+| /bin/sh ./libtool --tag=CXX   --mode=compile  -DPACKAGE_NAME=\"GNU\
+Vtable\ Verification\ Runtime\ Library\" -DPACKAGE_TARNAME=\"libvtv\"
+-DPACKAGE_VERSION=\"1.0\" -DPACKAGE_STRING=\"GNU\ Vtable\
+Verification\ Runtime\ Library\ 1.0\" -DPACKAGE_BUGREPORT=\"\"
+-DPACKAGE_URL=\"http://www.gnu.org/software/libvtv/\" -DSTDC_HEADERS=1
+-DHAVE_SYS_TYPES_H=1 -DHAVE_SYS_STAT_H=1 -DHAVE_STDLIB_H=1
+-DHAVE_STRING_H=1 -DHAVE_MEMORY_H=1 -DHAVE_STRINGS_H=1
+-DHAVE_INTTYPES_H=1 -DHAVE_STDINT_H=1 -DHAVE_UNISTD_H=1
+-D__EXTENSIONS__=1 -D_ALL_SOURCE=1 -D_GNU_SOURCE=1
+-D_POSIX_PTHREAD_SEMANTICS=1 -D_TANDEM_SOURCE=1 -DPACKAGE=\"libvtv\"
+-DVERSION=\"1.0\" -DHAVE_SECURE_GETENV=1 -DHAVE___FORTIFY_FAIL=1
+-DHAVE_DLFCN_H=1 -DLT_OBJDIR=\".libs/\" -DHAVE__OBSTACK_BEGIN=1 -I.
+-I../../../../../../../../work-shared/gcc-9.3.0-r0/gcc-9.3.0/libvtv
+-I../../../../../../../../work-shared/gcc-9.3.0-r0/gcc-9.3.0/libvtv/../include
+ -D_GNU_SOURCE -Wall -Wextra -fno-exceptions
+-I./../libstdc++-v3/include
+-I./../libstdc++-v3/include/aarch64-oe-linux
+-I../../../../../../../../work-shared/gcc-9.3.0-r0/gcc-9.3.0/libvtv/../libstdc++-v3/libsupc++
+-Wl,-u_vtable_map_vars_start,-u_vtable_map_vars_end -O2
+-fomit-frame-pointer    -Wa,--noexecstack -fexpensive-optimizations
+-frename-registers -ftree-vectorize   -finline-functions
+-finline-limit=64   -Wno-error=maybe-uninitialized
+-Wno-error=unused-result     -fvisibility-inlines-hidden -c -o
+vtv_rts.lo ../../../../../../../../work-shared/gcc-9.3.0-r0/gcc-9.3.0/libvtv/vtv_rts.cc
+| /bin/sh ./libtool --tag=CXX   --mode=compile  -DPACKAGE_NAME=\"GNU\
+Vtable\ Verification\ Runtime\ Library\" -DPACKAGE_TARNAME=\"libvtv\"
+-DPACKAGE_VERSION=\"1.0\" -DPACKAGE_STRING=\"GNU\ Vtable\
+Verification\ Runtime\ Library\ 1.0\" -DPACKAGE_BUGREPORT=\"\"
+-DPACKAGE_URL=\"http://www.gnu.org/software/libvtv/\" -DSTDC_HEADERS=1
+-DHAVE_SYS_TYPES_H=1 -DHAVE_SYS_STAT_H=1 -DHAVE_STDLIB_H=1
+-DHAVE_STRING_H=1 -DHAVE_MEMORY_H=1 -DHAVE_STRINGS_H=1
+-DHAVE_INTTYPES_H=1 -DHAVE_STDINT_H=1 -DHAVE_UNISTD_H=1
+-D__EXTENSIONS__=1 -D_ALL_SOURCE=1 -D_GNU_SOURCE=1
+-D_POSIX_PTHREAD_SEMANTICS=1 -D_TANDEM_SOURCE=1 -DPACKAGE=\"libvtv\"
+-DVERSION=\"1.0\" -DHAVE_SECURE_GETENV=1 -DHAVE___FORTIFY_FAIL=1
+-DHAVE_DLFCN_H=1 -DLT_OBJDIR=\".libs/\" -DHAVE__OBSTACK_BEGIN=1 -I.
+-I../../../../../../../../work-shared/gcc-9.3.0-r0/gcc-9.3.0/libvtv
+-I../../../../../../../../work-shared/gcc-9.3.0-r0/gcc-9.3.0/libvtv/../include
+ -D_GNU_SOURCE -Wall -Wextra -fno-exceptions
+-I./../libstdc++-v3/include
+-I./../libstdc++-v3/include/aarch64-oe-linux
+-I../../../../../../../../work-shared/gcc-9.3.0-r0/gcc-9.3.0/libvtv/../libstdc++-v3/libsupc++
+-Wl,-u_vtable_map_vars_start,-u_vtable_map_vars_end -O2
+-fomit-frame-pointer    -Wa,--noexecstack -fexpensive-optimizations
+-frename-registers -ftree-vectorize   -finline-functions
+-finline-limit=64   -Wno-error=maybe-uninitialized
+-Wno-error=unused-result     -fvisibility-inlines-hidden -c -o
+vtv_utils.lo ../../../../../../../../work-shared/gcc-9.3.0-r0/gcc-9.3.0/libvtv/vtv_utils.cc
+| libtool: compile: unrecognized option `-DPACKAGE_NAME="GNU Vtable
+Verification Runtime Library"'
+| libtool: compile: Try `libtool --help' for more information.
+| libtool: compile: unrecognized option `-DPACKAGE_NAME="GNU Vtable
+Verification Runtime Library"'
+| libtool: compile: Try `libtool --help' for more information.
+| Makefile:607: recipe for target 'vtv_malloc.lo' failed
+| libtool: compile: unrecognized option `-DPACKAGE_NAME="GNU Vtable
+Verification Runtime Library"'
+| make[2]: *** [vtv_malloc.lo] Error 1
+| libtool: compile: Try `libtool --help' for more information.
+| make[2]: *** Waiting for unfinished jobs....
+| Makefile:607: recipe for target 'vtv_rts.lo' failed
+| make[2]: *** [vtv_rts.lo] Error 1
+| Makefile:607: recipe for target 'vtv_utils.lo' failed
+| make[2]: *** [vtv_utils.lo] Error 1
+
+On Wed, Sep 27, 2023 at 9:16 PM Alex Roberts via
+lists.yoctoproject.org <arob109=gmail.com@lists.yoctoproject.org>
+wrote:
+>
+> >If libvtv is a separate library (I've not looked)
+>
+> It is a separate library whose source is inside the gcc source folder. Much of the documentation for enabling vtable verify is for compiling gcc from source outside of Yocto and just references using the flag with ./configure when building gcc from source.
+>
+> >  I suspect there are tweaks needed to the gcc-runtime recipe to build it
+>
+> I put “—enable-vtable-verify” in the gcc-common include so it should have been picked up by gcc.bb, gcc-cross and gcc-runtime. I also tried adding to just gcc cross and gcc runtime recipes. I also looked at how the sanitizer libraries were being built with gcc-sanitizers, but was unable to get a working solution. I gave up to focus on other priorities, but figured I’d ask the list in case someone had come across this before.
+>
+>
+> On Wednesday, September 27, 2023, Richard Purdie <richard.purdie@linuxfoundation.org> wrote:
+>>
+>> On Wed, 2023-09-27 at 09:40 -0500, Alex Roberts wrote:
+>> > Hello All,
+>> >
+>> > I'm having trouble getting gcc-cross-9.3.0 recipe to build libvtv. I
+>> > have added “—enable-vtable-verify” to EXTRA_OECONF via a .bbappend.
+>> > The vtable stubs are added to libstdc++ but libvtv itself is not
+>> > compiled. This causes recipes compiling with -fstandard-verify to fail
+>> > because libvtv doesn’t exist and cannot be linked in.
+>> >
+>> > Looking at the autoconf files and the resulting Makefile, libvtv
+>> > should be getting configured and compiled with the recipe, but I can
+>> > not determine why it is not.
+>> >
+>> > Does anyone have experience enabling vtable-verify to a cross-compiler
+>> > toolchain?
+>>
+>> If libvtv is a separate library (I've not looked), I suspect there are
+>> tweaks needed to the gcc-runtime recipe to build it?
+>>
+>> Cheers,
+>>
+>> Richard
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#61147): https://lists.yoctoproject.org/g/yocto/message/61147
+> Mute This Topic: https://lists.yoctoproject.org/mt/101618304/7886438
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [arob109@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] Trouble enabling vtable-verify for gcc-cross
+       [not found]     ` <1789283578AF2335.9230@lists.yoctoproject.org>
+@ 2023-10-01 21:05       ` Alex Roberts
+  2023-10-01 21:23         ` Khem Raj
+  0 siblings, 1 reply; 6+ messages in thread
+From: Alex Roberts @ 2023-10-01 21:05 UTC (permalink / raw)
+  To: xARob109x; +Cc: Richard Purdie, yocto
+
+I identified the issue. libvtv's Makefile.in and Makefile.am are
+expecting CC_FOR_TARGET to be set
+
+CXXVTV=$(CC_FOR_TARGET)
+CXXLD=$(CC_FOR_TARGET)
+
+gcc-cross_9.3.inc exports CC_FOR_TARGET, but gcc-runtime_9.3.inc does not.
+When libvtv is compiled during gcc-runtime recipe, CXXVTV and CXXLD
+are empty and libtool fails with the error that the -D definitions are
+unrecognized options.
+
+Setting CXXVTV=$(CXX) and CXXLD=$(CXX) allowed me to build libvtv and
+cross-compile programs with the -fvtable-verify compiler option.
+
+On Thu, Sep 28, 2023 at 2:55 PM Alex Roberts via
+lists.yoctoproject.org <arob109=gmail.com@lists.yoctoproject.org>
+wrote:
+>
+> Today I revisited cloning gcc-sanitizers.inc and gcc-sanitizers_9.3.bb
+> in an attempt to make a recipe that configures and builds libvtv. This
+> somewhat works, but I get errors with libtool
+>
+>
+> | /bin/sh ./libtool --tag=CXX   --mode=compile  -DPACKAGE_NAME=\"GNU\
+> Vtable\ Verification\ Runtime\ Library\" -DPACKAGE_TARNAME=\"libvtv\"
+> -DPACKAGE_VERSION=\"1.0\" -DPACKAGE_STRING=\"GNU\ Vtable\
+> Verification\ Runtime\ Library\ 1.0\" -DPACKAGE_BUGREPORT=\"\"
+> -DPACKAGE_URL=\"http://www.gnu.org/software/libvtv/\" -DSTDC_HEADERS=1
+> -DHAVE_SYS_TYPES_H=1 -DHAVE_SYS_STAT_H=1 -DHAVE_STDLIB_H=1
+> -DHAVE_STRING_H=1 -DHAVE_MEMORY_H=1 -DHAVE_STRINGS_H=1
+> -DHAVE_INTTYPES_H=1 -DHAVE_STDINT_H=1 -DHAVE_UNISTD_H=1
+> -D__EXTENSIONS__=1 -D_ALL_SOURCE=1 -D_GNU_SOURCE=1
+> -D_POSIX_PTHREAD_SEMANTICS=1 -D_TANDEM_SOURCE=1 -DPACKAGE=\"libvtv\"
+> -DVERSION=\"1.0\" -DHAVE_SECURE_GETENV=1 -DHAVE___FORTIFY_FAIL=1
+> -DHAVE_DLFCN_H=1 -DLT_OBJDIR=\".libs/\" -DHAVE__OBSTACK_BEGIN=1 -I.
+> -I../../../../../../../../work-shared/gcc-9.3.0-r0/gcc-9.3.0/libvtv
+> -I../../../../../../../../work-shared/gcc-9.3.0-r0/gcc-9.3.0/libvtv/../include
+>  -D_GNU_SOURCE -Wall -Wextra -fno-exceptions
+> -I./../libstdc++-v3/include
+> -I./../libstdc++-v3/include/aarch64-oe-linux
+> -I../../../../../../../../work-shared/gcc-9.3.0-r0/gcc-9.3.0/libvtv/../libstdc++-v3/libsupc++
+> -Wl,-u_vtable_map_vars_start,-u_vtable_map_vars_end -O2
+> -fomit-frame-pointer    -Wa,--noexecstack -fexpensive-optimizations
+> -frename-registers -ftree-vectorize   -finline-functions
+> -finline-limit=64   -Wno-error=maybe-uninitialized
+> -Wno-error=unused-result     -fvisibility-inlines-hidden -c -o
+> vtv_malloc.lo ../../../../../../../../work-shared/gcc-9.3.0-r0/gcc-9.3.0/libvtv/vtv_malloc.cc
+> | /bin/sh ./libtool --tag=CXX   --mode=compile  -DPACKAGE_NAME=\"GNU\
+> Vtable\ Verification\ Runtime\ Library\" -DPACKAGE_TARNAME=\"libvtv\"
+> -DPACKAGE_VERSION=\"1.0\" -DPACKAGE_STRING=\"GNU\ Vtable\
+> Verification\ Runtime\ Library\ 1.0\" -DPACKAGE_BUGREPORT=\"\"
+> -DPACKAGE_URL=\"http://www.gnu.org/software/libvtv/\" -DSTDC_HEADERS=1
+> -DHAVE_SYS_TYPES_H=1 -DHAVE_SYS_STAT_H=1 -DHAVE_STDLIB_H=1
+> -DHAVE_STRING_H=1 -DHAVE_MEMORY_H=1 -DHAVE_STRINGS_H=1
+> -DHAVE_INTTYPES_H=1 -DHAVE_STDINT_H=1 -DHAVE_UNISTD_H=1
+> -D__EXTENSIONS__=1 -D_ALL_SOURCE=1 -D_GNU_SOURCE=1
+> -D_POSIX_PTHREAD_SEMANTICS=1 -D_TANDEM_SOURCE=1 -DPACKAGE=\"libvtv\"
+> -DVERSION=\"1.0\" -DHAVE_SECURE_GETENV=1 -DHAVE___FORTIFY_FAIL=1
+> -DHAVE_DLFCN_H=1 -DLT_OBJDIR=\".libs/\" -DHAVE__OBSTACK_BEGIN=1 -I.
+> -I../../../../../../../../work-shared/gcc-9.3.0-r0/gcc-9.3.0/libvtv
+> -I../../../../../../../../work-shared/gcc-9.3.0-r0/gcc-9.3.0/libvtv/../include
+>  -D_GNU_SOURCE -Wall -Wextra -fno-exceptions
+> -I./../libstdc++-v3/include
+> -I./../libstdc++-v3/include/aarch64-oe-linux
+> -I../../../../../../../../work-shared/gcc-9.3.0-r0/gcc-9.3.0/libvtv/../libstdc++-v3/libsupc++
+> -Wl,-u_vtable_map_vars_start,-u_vtable_map_vars_end -O2
+> -fomit-frame-pointer    -Wa,--noexecstack -fexpensive-optimizations
+> -frename-registers -ftree-vectorize   -finline-functions
+> -finline-limit=64   -Wno-error=maybe-uninitialized
+> -Wno-error=unused-result     -fvisibility-inlines-hidden -c -o
+> vtv_rts.lo ../../../../../../../../work-shared/gcc-9.3.0-r0/gcc-9.3.0/libvtv/vtv_rts.cc
+> | /bin/sh ./libtool --tag=CXX   --mode=compile  -DPACKAGE_NAME=\"GNU\
+> Vtable\ Verification\ Runtime\ Library\" -DPACKAGE_TARNAME=\"libvtv\"
+> -DPACKAGE_VERSION=\"1.0\" -DPACKAGE_STRING=\"GNU\ Vtable\
+> Verification\ Runtime\ Library\ 1.0\" -DPACKAGE_BUGREPORT=\"\"
+> -DPACKAGE_URL=\"http://www.gnu.org/software/libvtv/\" -DSTDC_HEADERS=1
+> -DHAVE_SYS_TYPES_H=1 -DHAVE_SYS_STAT_H=1 -DHAVE_STDLIB_H=1
+> -DHAVE_STRING_H=1 -DHAVE_MEMORY_H=1 -DHAVE_STRINGS_H=1
+> -DHAVE_INTTYPES_H=1 -DHAVE_STDINT_H=1 -DHAVE_UNISTD_H=1
+> -D__EXTENSIONS__=1 -D_ALL_SOURCE=1 -D_GNU_SOURCE=1
+> -D_POSIX_PTHREAD_SEMANTICS=1 -D_TANDEM_SOURCE=1 -DPACKAGE=\"libvtv\"
+> -DVERSION=\"1.0\" -DHAVE_SECURE_GETENV=1 -DHAVE___FORTIFY_FAIL=1
+> -DHAVE_DLFCN_H=1 -DLT_OBJDIR=\".libs/\" -DHAVE__OBSTACK_BEGIN=1 -I.
+> -I../../../../../../../../work-shared/gcc-9.3.0-r0/gcc-9.3.0/libvtv
+> -I../../../../../../../../work-shared/gcc-9.3.0-r0/gcc-9.3.0/libvtv/../include
+>  -D_GNU_SOURCE -Wall -Wextra -fno-exceptions
+> -I./../libstdc++-v3/include
+> -I./../libstdc++-v3/include/aarch64-oe-linux
+> -I../../../../../../../../work-shared/gcc-9.3.0-r0/gcc-9.3.0/libvtv/../libstdc++-v3/libsupc++
+> -Wl,-u_vtable_map_vars_start,-u_vtable_map_vars_end -O2
+> -fomit-frame-pointer    -Wa,--noexecstack -fexpensive-optimizations
+> -frename-registers -ftree-vectorize   -finline-functions
+> -finline-limit=64   -Wno-error=maybe-uninitialized
+> -Wno-error=unused-result     -fvisibility-inlines-hidden -c -o
+> vtv_utils.lo ../../../../../../../../work-shared/gcc-9.3.0-r0/gcc-9.3.0/libvtv/vtv_utils.cc
+> | libtool: compile: unrecognized option `-DPACKAGE_NAME="GNU Vtable
+> Verification Runtime Library"'
+> | libtool: compile: Try `libtool --help' for more information.
+> | libtool: compile: unrecognized option `-DPACKAGE_NAME="GNU Vtable
+> Verification Runtime Library"'
+> | libtool: compile: Try `libtool --help' for more information.
+> | Makefile:607: recipe for target 'vtv_malloc.lo' failed
+> | libtool: compile: unrecognized option `-DPACKAGE_NAME="GNU Vtable
+> Verification Runtime Library"'
+> | make[2]: *** [vtv_malloc.lo] Error 1
+> | libtool: compile: Try `libtool --help' for more information.
+> | make[2]: *** Waiting for unfinished jobs....
+> | Makefile:607: recipe for target 'vtv_rts.lo' failed
+> | make[2]: *** [vtv_rts.lo] Error 1
+> | Makefile:607: recipe for target 'vtv_utils.lo' failed
+> | make[2]: *** [vtv_utils.lo] Error 1
+>
+> On Wed, Sep 27, 2023 at 9:16 PM Alex Roberts via
+> lists.yoctoproject.org <arob109=gmail.com@lists.yoctoproject.org>
+> wrote:
+> >
+> > >If libvtv is a separate library (I've not looked)
+> >
+> > It is a separate library whose source is inside the gcc source folder. Much of the documentation for enabling vtable verify is for compiling gcc from source outside of Yocto and just references using the flag with ./configure when building gcc from source.
+> >
+> > >  I suspect there are tweaks needed to the gcc-runtime recipe to build it
+> >
+> > I put “—enable-vtable-verify” in the gcc-common include so it should have been picked up by gcc.bb, gcc-cross and gcc-runtime. I also tried adding to just gcc cross and gcc runtime recipes. I also looked at how the sanitizer libraries were being built with gcc-sanitizers, but was unable to get a working solution. I gave up to focus on other priorities, but figured I’d ask the list in case someone had come across this before.
+> >
+> >
+> > On Wednesday, September 27, 2023, Richard Purdie <richard.purdie@linuxfoundation.org> wrote:
+> >>
+> >> On Wed, 2023-09-27 at 09:40 -0500, Alex Roberts wrote:
+> >> > Hello All,
+> >> >
+> >> > I'm having trouble getting gcc-cross-9.3.0 recipe to build libvtv. I
+> >> > have added “—enable-vtable-verify” to EXTRA_OECONF via a .bbappend.
+> >> > The vtable stubs are added to libstdc++ but libvtv itself is not
+> >> > compiled. This causes recipes compiling with -fstandard-verify to fail
+> >> > because libvtv doesn’t exist and cannot be linked in.
+> >> >
+> >> > Looking at the autoconf files and the resulting Makefile, libvtv
+> >> > should be getting configured and compiled with the recipe, but I can
+> >> > not determine why it is not.
+> >> >
+> >> > Does anyone have experience enabling vtable-verify to a cross-compiler
+> >> > toolchain?
+> >>
+> >> If libvtv is a separate library (I've not looked), I suspect there are
+> >> tweaks needed to the gcc-runtime recipe to build it?
+> >>
+> >> Cheers,
+> >>
+> >> Richard
+> >
+> >
+> >
+> >
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#61161): https://lists.yoctoproject.org/g/yocto/message/61161
+> Mute This Topic: https://lists.yoctoproject.org/mt/101618304/7886438
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [arob109@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] Trouble enabling vtable-verify for gcc-cross
+  2023-10-01 21:05       ` Alex Roberts
+@ 2023-10-01 21:23         ` Khem Raj
+  0 siblings, 0 replies; 6+ messages in thread
+From: Khem Raj @ 2023-10-01 21:23 UTC (permalink / raw)
+  To: Alex Roberts; +Cc: Richard Purdie, yocto
+
+On Sun, Oct 1, 2023 at 2:05 PM Alex Roberts <arob109@gmail.com> wrote:
+>
+> I identified the issue. libvtv's Makefile.in and Makefile.am are
+> expecting CC_FOR_TARGET to be set
+>
+> CXXVTV=$(CC_FOR_TARGET)
+> CXXLD=$(CC_FOR_TARGET)
+>
+> gcc-cross_9.3.inc exports CC_FOR_TARGET, but gcc-runtime_9.3.inc does not.
+> When libvtv is compiled during gcc-runtime recipe, CXXVTV and CXXLD
+> are empty and libtool fails with the error that the -D definitions are
+> unrecognized options.
+>
+> Setting CXXVTV=$(CXX) and CXXLD=$(CXX) allowed me to build libvtv and
+> cross-compile programs with the -fvtable-verify compiler option.
+>
+
+meta/recipes-devtools/gcc/gcc-configure-common.inc sets CC_FOR_TARGET
+selectively for cross-compiled gcc recipes
+so it should be set in do_configure step of gcc-runtime but you can
+see that gcc-runtime overrides do_configure function
+in meta/recipes-devtools/gcc/gcc-runtime.inc, perhaps we should
+replicate the exports in gcc-runtme do_configure as well
+
+
+> On Thu, Sep 28, 2023 at 2:55 PM Alex Roberts via
+> lists.yoctoproject.org <arob109=gmail.com@lists.yoctoproject.org>
+> wrote:
+> >
+> > Today I revisited cloning gcc-sanitizers.inc and gcc-sanitizers_9.3.bb
+> > in an attempt to make a recipe that configures and builds libvtv. This
+> > somewhat works, but I get errors with libtool
+> >
+> >
+> > | /bin/sh ./libtool --tag=CXX   --mode=compile  -DPACKAGE_NAME=\"GNU\
+> > Vtable\ Verification\ Runtime\ Library\" -DPACKAGE_TARNAME=\"libvtv\"
+> > -DPACKAGE_VERSION=\"1.0\" -DPACKAGE_STRING=\"GNU\ Vtable\
+> > Verification\ Runtime\ Library\ 1.0\" -DPACKAGE_BUGREPORT=\"\"
+> > -DPACKAGE_URL=\"http://www.gnu.org/software/libvtv/\" -DSTDC_HEADERS=1
+> > -DHAVE_SYS_TYPES_H=1 -DHAVE_SYS_STAT_H=1 -DHAVE_STDLIB_H=1
+> > -DHAVE_STRING_H=1 -DHAVE_MEMORY_H=1 -DHAVE_STRINGS_H=1
+> > -DHAVE_INTTYPES_H=1 -DHAVE_STDINT_H=1 -DHAVE_UNISTD_H=1
+> > -D__EXTENSIONS__=1 -D_ALL_SOURCE=1 -D_GNU_SOURCE=1
+> > -D_POSIX_PTHREAD_SEMANTICS=1 -D_TANDEM_SOURCE=1 -DPACKAGE=\"libvtv\"
+> > -DVERSION=\"1.0\" -DHAVE_SECURE_GETENV=1 -DHAVE___FORTIFY_FAIL=1
+> > -DHAVE_DLFCN_H=1 -DLT_OBJDIR=\".libs/\" -DHAVE__OBSTACK_BEGIN=1 -I.
+> > -I../../../../../../../../work-shared/gcc-9.3.0-r0/gcc-9.3.0/libvtv
+> > -I../../../../../../../../work-shared/gcc-9.3.0-r0/gcc-9.3.0/libvtv/../include
+> >  -D_GNU_SOURCE -Wall -Wextra -fno-exceptions
+> > -I./../libstdc++-v3/include
+> > -I./../libstdc++-v3/include/aarch64-oe-linux
+> > -I../../../../../../../../work-shared/gcc-9.3.0-r0/gcc-9.3.0/libvtv/../libstdc++-v3/libsupc++
+> > -Wl,-u_vtable_map_vars_start,-u_vtable_map_vars_end -O2
+> > -fomit-frame-pointer    -Wa,--noexecstack -fexpensive-optimizations
+> > -frename-registers -ftree-vectorize   -finline-functions
+> > -finline-limit=64   -Wno-error=maybe-uninitialized
+> > -Wno-error=unused-result     -fvisibility-inlines-hidden -c -o
+> > vtv_malloc.lo ../../../../../../../../work-shared/gcc-9.3.0-r0/gcc-9.3.0/libvtv/vtv_malloc.cc
+> > | /bin/sh ./libtool --tag=CXX   --mode=compile  -DPACKAGE_NAME=\"GNU\
+> > Vtable\ Verification\ Runtime\ Library\" -DPACKAGE_TARNAME=\"libvtv\"
+> > -DPACKAGE_VERSION=\"1.0\" -DPACKAGE_STRING=\"GNU\ Vtable\
+> > Verification\ Runtime\ Library\ 1.0\" -DPACKAGE_BUGREPORT=\"\"
+> > -DPACKAGE_URL=\"http://www.gnu.org/software/libvtv/\" -DSTDC_HEADERS=1
+> > -DHAVE_SYS_TYPES_H=1 -DHAVE_SYS_STAT_H=1 -DHAVE_STDLIB_H=1
+> > -DHAVE_STRING_H=1 -DHAVE_MEMORY_H=1 -DHAVE_STRINGS_H=1
+> > -DHAVE_INTTYPES_H=1 -DHAVE_STDINT_H=1 -DHAVE_UNISTD_H=1
+> > -D__EXTENSIONS__=1 -D_ALL_SOURCE=1 -D_GNU_SOURCE=1
+> > -D_POSIX_PTHREAD_SEMANTICS=1 -D_TANDEM_SOURCE=1 -DPACKAGE=\"libvtv\"
+> > -DVERSION=\"1.0\" -DHAVE_SECURE_GETENV=1 -DHAVE___FORTIFY_FAIL=1
+> > -DHAVE_DLFCN_H=1 -DLT_OBJDIR=\".libs/\" -DHAVE__OBSTACK_BEGIN=1 -I.
+> > -I../../../../../../../../work-shared/gcc-9.3.0-r0/gcc-9.3.0/libvtv
+> > -I../../../../../../../../work-shared/gcc-9.3.0-r0/gcc-9.3.0/libvtv/../include
+> >  -D_GNU_SOURCE -Wall -Wextra -fno-exceptions
+> > -I./../libstdc++-v3/include
+> > -I./../libstdc++-v3/include/aarch64-oe-linux
+> > -I../../../../../../../../work-shared/gcc-9.3.0-r0/gcc-9.3.0/libvtv/../libstdc++-v3/libsupc++
+> > -Wl,-u_vtable_map_vars_start,-u_vtable_map_vars_end -O2
+> > -fomit-frame-pointer    -Wa,--noexecstack -fexpensive-optimizations
+> > -frename-registers -ftree-vectorize   -finline-functions
+> > -finline-limit=64   -Wno-error=maybe-uninitialized
+> > -Wno-error=unused-result     -fvisibility-inlines-hidden -c -o
+> > vtv_rts.lo ../../../../../../../../work-shared/gcc-9.3.0-r0/gcc-9.3.0/libvtv/vtv_rts.cc
+> > | /bin/sh ./libtool --tag=CXX   --mode=compile  -DPACKAGE_NAME=\"GNU\
+> > Vtable\ Verification\ Runtime\ Library\" -DPACKAGE_TARNAME=\"libvtv\"
+> > -DPACKAGE_VERSION=\"1.0\" -DPACKAGE_STRING=\"GNU\ Vtable\
+> > Verification\ Runtime\ Library\ 1.0\" -DPACKAGE_BUGREPORT=\"\"
+> > -DPACKAGE_URL=\"http://www.gnu.org/software/libvtv/\" -DSTDC_HEADERS=1
+> > -DHAVE_SYS_TYPES_H=1 -DHAVE_SYS_STAT_H=1 -DHAVE_STDLIB_H=1
+> > -DHAVE_STRING_H=1 -DHAVE_MEMORY_H=1 -DHAVE_STRINGS_H=1
+> > -DHAVE_INTTYPES_H=1 -DHAVE_STDINT_H=1 -DHAVE_UNISTD_H=1
+> > -D__EXTENSIONS__=1 -D_ALL_SOURCE=1 -D_GNU_SOURCE=1
+> > -D_POSIX_PTHREAD_SEMANTICS=1 -D_TANDEM_SOURCE=1 -DPACKAGE=\"libvtv\"
+> > -DVERSION=\"1.0\" -DHAVE_SECURE_GETENV=1 -DHAVE___FORTIFY_FAIL=1
+> > -DHAVE_DLFCN_H=1 -DLT_OBJDIR=\".libs/\" -DHAVE__OBSTACK_BEGIN=1 -I.
+> > -I../../../../../../../../work-shared/gcc-9.3.0-r0/gcc-9.3.0/libvtv
+> > -I../../../../../../../../work-shared/gcc-9.3.0-r0/gcc-9.3.0/libvtv/../include
+> >  -D_GNU_SOURCE -Wall -Wextra -fno-exceptions
+> > -I./../libstdc++-v3/include
+> > -I./../libstdc++-v3/include/aarch64-oe-linux
+> > -I../../../../../../../../work-shared/gcc-9.3.0-r0/gcc-9.3.0/libvtv/../libstdc++-v3/libsupc++
+> > -Wl,-u_vtable_map_vars_start,-u_vtable_map_vars_end -O2
+> > -fomit-frame-pointer    -Wa,--noexecstack -fexpensive-optimizations
+> > -frename-registers -ftree-vectorize   -finline-functions
+> > -finline-limit=64   -Wno-error=maybe-uninitialized
+> > -Wno-error=unused-result     -fvisibility-inlines-hidden -c -o
+> > vtv_utils.lo ../../../../../../../../work-shared/gcc-9.3.0-r0/gcc-9.3.0/libvtv/vtv_utils.cc
+> > | libtool: compile: unrecognized option `-DPACKAGE_NAME="GNU Vtable
+> > Verification Runtime Library"'
+> > | libtool: compile: Try `libtool --help' for more information.
+> > | libtool: compile: unrecognized option `-DPACKAGE_NAME="GNU Vtable
+> > Verification Runtime Library"'
+> > | libtool: compile: Try `libtool --help' for more information.
+> > | Makefile:607: recipe for target 'vtv_malloc.lo' failed
+> > | libtool: compile: unrecognized option `-DPACKAGE_NAME="GNU Vtable
+> > Verification Runtime Library"'
+> > | make[2]: *** [vtv_malloc.lo] Error 1
+> > | libtool: compile: Try `libtool --help' for more information.
+> > | make[2]: *** Waiting for unfinished jobs....
+> > | Makefile:607: recipe for target 'vtv_rts.lo' failed
+> > | make[2]: *** [vtv_rts.lo] Error 1
+> > | Makefile:607: recipe for target 'vtv_utils.lo' failed
+> > | make[2]: *** [vtv_utils.lo] Error 1
+> >
+> > On Wed, Sep 27, 2023 at 9:16 PM Alex Roberts via
+> > lists.yoctoproject.org <arob109=gmail.com@lists.yoctoproject.org>
+> > wrote:
+> > >
+> > > >If libvtv is a separate library (I've not looked)
+> > >
+> > > It is a separate library whose source is inside the gcc source folder. Much of the documentation for enabling vtable verify is for compiling gcc from source outside of Yocto and just references using the flag with ./configure when building gcc from source.
+> > >
+> > > >  I suspect there are tweaks needed to the gcc-runtime recipe to build it
+> > >
+> > > I put “—enable-vtable-verify” in the gcc-common include so it should have been picked up by gcc.bb, gcc-cross and gcc-runtime. I also tried adding to just gcc cross and gcc runtime recipes. I also looked at how the sanitizer libraries were being built with gcc-sanitizers, but was unable to get a working solution. I gave up to focus on other priorities, but figured I’d ask the list in case someone had come across this before.
+> > >
+> > >
+> > > On Wednesday, September 27, 2023, Richard Purdie <richard.purdie@linuxfoundation.org> wrote:
+> > >>
+> > >> On Wed, 2023-09-27 at 09:40 -0500, Alex Roberts wrote:
+> > >> > Hello All,
+> > >> >
+> > >> > I'm having trouble getting gcc-cross-9.3.0 recipe to build libvtv. I
+> > >> > have added “—enable-vtable-verify” to EXTRA_OECONF via a .bbappend.
+> > >> > The vtable stubs are added to libstdc++ but libvtv itself is not
+> > >> > compiled. This causes recipes compiling with -fstandard-verify to fail
+> > >> > because libvtv doesn’t exist and cannot be linked in.
+> > >> >
+> > >> > Looking at the autoconf files and the resulting Makefile, libvtv
+> > >> > should be getting configured and compiled with the recipe, but I can
+> > >> > not determine why it is not.
+> > >> >
+> > >> > Does anyone have experience enabling vtable-verify to a cross-compiler
+> > >> > toolchain?
+> > >>
+> > >> If libvtv is a separate library (I've not looked), I suspect there are
+> > >> tweaks needed to the gcc-runtime recipe to build it?
+> > >>
+> > >> Cheers,
+> > >>
+> > >> Richard
+> > >
+> > >
+> > >
+> > >
+> >
+> >
+> >
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> You automatically follow any topics you start or reply to.
+> View/Reply Online (#61183): https://lists.yoctoproject.org/g/yocto/message/61183
+> Mute This Topic: https://lists.yoctoproject.org/mt/101618304/1997914
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [raj.khem@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+end of thread, other threads:[~2023-10-01 21:23 UTC | newest]
+
+Thread overview: 6+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-09-27 14:40 Trouble enabling vtable-verify for gcc-cross Alex Roberts
+2023-09-27 22:41 ` [yocto] " Richard Purdie
+2023-09-28  2:16   ` Alex Roberts
+     [not found]   ` <1788EE639287C667.1970@lists.yoctoproject.org>
+2023-09-28 19:55     ` [yocto] " Alex Roberts
+     [not found]     ` <1789283578AF2335.9230@lists.yoctoproject.org>
+2023-10-01 21:05       ` Alex Roberts
+2023-10-01 21:23         ` Khem Raj
+

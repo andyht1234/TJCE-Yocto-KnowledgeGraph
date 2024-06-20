@@ -1,0 +1,188 @@
+* Permission denied with NFS shared download and sstate-cache
+@ 2021-09-22 16:47 Bel Hadj Salem Talel
+  2021-09-22 16:51 ` [yocto] " Khem Raj
+  0 siblings, 1 reply; 3+ messages in thread
+From: Bel Hadj Salem Talel @ 2021-09-22 16:47 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2571 bytes --]
+
+Hi All,
+
+I have a server that's holding downloads and sstate-cache.
+
+I have a docker-compose file with nfs server that exposes the dowloads/sstate-cache volume.
+
+When I mount that in my PC and set the path into DL_DIR and SSTATE_DIR, I get this error :
+
+---------------
+ERROR: grub-efi-native-2.04-r0 do_configure: Build of do_configure failed
+ERROR: grub-efi-native-2.04-r0 do_configure: Traceback (most recent call last):
+File "/home/talel/Desktop/YoctoWork/sources/poky/bitbake/lib/bb/build.py", line 644, in exec_task
+return _exec_task(fn, task, d, quieterr)
+File "/home/talel/Desktop/YoctoWork/sources/poky/bitbake/lib/bb/build.py", line 618, in _exec_task
+event.fire(TaskSucceeded(task, fn, logfn, localdata), localdata)
+File "/home/talel/Desktop/YoctoWork/sources/poky/bitbake/lib/bb/event.py", line 215, in fire
+fire_class_handlers(event, d)
+File "/home/talel/Desktop/YoctoWork/sources/poky/bitbake/lib/bb/event.py", line 122, in fire_class_handlers
+execute_handler(name, handler, event, d)
+File "/home/talel/Desktop/YoctoWork/sources/poky/bitbake/lib/bb/event.py", line 94, in execute_handler
+ret = handler(event)
+File "/home/talel/Desktop/YoctoWork/sources/poky/meta/classes/sstate.bbclass", line 1094, in sstate_eventhandler
+bb.siggen.dump_this_task(sstatepkg + '_' + taskname + ".tgz" ".siginfo", d)
+File "/home/talel/Desktop/YoctoWork/sources/poky/bitbake/lib/bb/siggen.py", line 648, in dump_this_task
+bb.parse.siggen.dump_sigtask(fn, task, outfile, "customfile:" + referencestamp)
+File "/home/talel/Desktop/YoctoWork/sources/poky/meta/lib/oe/sstatesig.py", line 202, in dump_sigtask
+super(bb.siggen.SignatureGeneratorBasicHash, self).dump_sigtask(fn, task, stampbase, runtime)
+File "/home/talel/Desktop/YoctoWork/sources/poky/bitbake/lib/bb/siggen.py", line 362, in dump_sigtask
+fd, tmpfile = tempfile.mkstemp(dir=os.path.dirname(sigfile), prefix="sigtask.")
+File "/usr/lib/python3.8/tempfile.py", line 470, in mkstemp
+return _mkstemp_inner(dir, prefix, suffix, flags, output_type)
+File "/usr/lib/python3.8/tempfile.py", line 389, in _mkstemp_inner
+fd = _os.open(file, flags, 0o600)
+PermissionError: [Errno 13] Permission denied: '/home/talel/Desktop/YoctoShare/tethys-cache/ubuntu-20.04/dd/sigtask.dgjx7ngq'
+
+ERROR: Task (virtual:native:/home/talel/Desktop/YoctoWork/sources/poky/meta/recipes-bsp/grub/grub-efi_2.04.bb:do_configure) failed with exit code '1'
+---------------
+
+I can modify the mounted folder by creating a directory or a file, but it fails with yocto.
+
+How can I solve the issue?
+
+Thanks,
+Talel
+
+[-- Attachment #2: Type: text/html, Size: 3029 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] Permission denied with NFS shared download and sstate-cache
+  2021-09-22 16:47 Permission denied with NFS shared download and sstate-cache Bel Hadj Salem Talel
+@ 2021-09-22 16:51 ` Khem Raj
+  2021-09-22 17:43   ` Richard Purdie
+  0 siblings, 1 reply; 3+ messages in thread
+From: Khem Raj @ 2021-09-22 16:51 UTC (permalink / raw)
+  To: Bel Hadj Salem Talel; +Cc: Yocto-mailing-list
+
+On Wed, Sep 22, 2021 at 9:47 AM Bel Hadj Salem Talel <bhstalel@gmail.com> wrote:
+>
+> Hi All,
+>
+> I have a server that's holding downloads and sstate-cache.
+>
+> I have a docker-compose file with nfs server that exposes the dowloads/sstate-cache volume.
+>
+> When I mount that in my PC and set the path into DL_DIR and SSTATE_DIR, I get this error :
+>
+> ---------------
+> ERROR: grub-efi-native-2.04-r0 do_configure: Build of do_configure failed
+> ERROR: grub-efi-native-2.04-r0 do_configure: Traceback (most recent call last):
+>   File "/home/talel/Desktop/YoctoWork/sources/poky/bitbake/lib/bb/build.py", line 644, in exec_task
+>     return _exec_task(fn, task, d, quieterr)
+>   File "/home/talel/Desktop/YoctoWork/sources/poky/bitbake/lib/bb/build.py", line 618, in _exec_task
+>     event.fire(TaskSucceeded(task, fn, logfn, localdata), localdata)
+>   File "/home/talel/Desktop/YoctoWork/sources/poky/bitbake/lib/bb/event.py", line 215, in fire
+>     fire_class_handlers(event, d)
+>   File "/home/talel/Desktop/YoctoWork/sources/poky/bitbake/lib/bb/event.py", line 122, in fire_class_handlers
+>     execute_handler(name, handler, event, d)
+>   File "/home/talel/Desktop/YoctoWork/sources/poky/bitbake/lib/bb/event.py", line 94, in execute_handler
+>     ret = handler(event)
+>   File "/home/talel/Desktop/YoctoWork/sources/poky/meta/classes/sstate.bbclass", line 1094, in sstate_eventhandler
+>     bb.siggen.dump_this_task(sstatepkg + '_' + taskname + ".tgz" ".siginfo", d)
+>   File "/home/talel/Desktop/YoctoWork/sources/poky/bitbake/lib/bb/siggen.py", line 648, in dump_this_task
+>     bb.parse.siggen.dump_sigtask(fn, task, outfile, "customfile:" + referencestamp)
+>   File "/home/talel/Desktop/YoctoWork/sources/poky/meta/lib/oe/sstatesig.py", line 202, in dump_sigtask
+>     super(bb.siggen.SignatureGeneratorBasicHash, self).dump_sigtask(fn, task, stampbase, runtime)
+>   File "/home/talel/Desktop/YoctoWork/sources/poky/bitbake/lib/bb/siggen.py", line 362, in dump_sigtask
+>     fd, tmpfile = tempfile.mkstemp(dir=os.path.dirname(sigfile), prefix="sigtask.")
+>   File "/usr/lib/python3.8/tempfile.py", line 470, in mkstemp
+>     return _mkstemp_inner(dir, prefix, suffix, flags, output_type)
+>   File "/usr/lib/python3.8/tempfile.py", line 389, in _mkstemp_inner
+>     fd = _os.open(file, flags, 0o600)
+
+its trying to create the file with 0600 mask. I wonder whats your
+global umask set to. and perhaps the user is not same when bitbake it
+running ?
+
+> PermissionError: [Errno 13] Permission denied: '/home/talel/Desktop/YoctoShare/tethys-cache/ubuntu-20.04/dd/sigtask.dgjx7ngq'
+>
+> ERROR: Task (virtual:native:/home/talel/Desktop/YoctoWork/sources/poky/meta/recipes-bsp/grub/grub-efi_2.04.bb:do_configure) failed with exit code '1'
+> ---------------
+>
+> I can modify the mounted folder by creating a directory or a file, but it fails with yocto.
+>
+> How can I solve the issue?
+>
+> Thanks,
+> Talel
+> 
+>
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] Permission denied with NFS shared download and sstate-cache
+  2021-09-22 16:51 ` [yocto] " Khem Raj
+@ 2021-09-22 17:43   ` Richard Purdie
+  0 siblings, 0 replies; 3+ messages in thread
+From: Richard Purdie @ 2021-09-22 17:43 UTC (permalink / raw)
+  To: Khem Raj, Bel Hadj Salem Talel; +Cc: Yocto-mailing-list
+
+On Wed, 2021-09-22 at 09:51 -0700, Khem Raj wrote:
+> On Wed, Sep 22, 2021 at 9:47 AM Bel Hadj Salem Talel <bhstalel@gmail.com> wrote:
+> > 
+> > Hi All,
+> > 
+> > I have a server that's holding downloads and sstate-cache.
+> > 
+> > I have a docker-compose file with nfs server that exposes the dowloads/sstate-cache volume.
+> > 
+> > When I mount that in my PC and set the path into DL_DIR and SSTATE_DIR, I get this error :
+> > 
+> > ---------------
+> > ERROR: grub-efi-native-2.04-r0 do_configure: Build of do_configure failed
+> > ERROR: grub-efi-native-2.04-r0 do_configure: Traceback (most recent call last):
+> >   File "/home/talel/Desktop/YoctoWork/sources/poky/bitbake/lib/bb/build.py", line 644, in exec_task
+> >     return _exec_task(fn, task, d, quieterr)
+> >   File "/home/talel/Desktop/YoctoWork/sources/poky/bitbake/lib/bb/build.py", line 618, in _exec_task
+> >     event.fire(TaskSucceeded(task, fn, logfn, localdata), localdata)
+> >   File "/home/talel/Desktop/YoctoWork/sources/poky/bitbake/lib/bb/event.py", line 215, in fire
+> >     fire_class_handlers(event, d)
+> >   File "/home/talel/Desktop/YoctoWork/sources/poky/bitbake/lib/bb/event.py", line 122, in fire_class_handlers
+> >     execute_handler(name, handler, event, d)
+> >   File "/home/talel/Desktop/YoctoWork/sources/poky/bitbake/lib/bb/event.py", line 94, in execute_handler
+> >     ret = handler(event)
+> >   File "/home/talel/Desktop/YoctoWork/sources/poky/meta/classes/sstate.bbclass", line 1094, in sstate_eventhandler
+> >     bb.siggen.dump_this_task(sstatepkg + '_' + taskname + ".tgz" ".siginfo", d)
+> >   File "/home/talel/Desktop/YoctoWork/sources/poky/bitbake/lib/bb/siggen.py", line 648, in dump_this_task
+> >     bb.parse.siggen.dump_sigtask(fn, task, outfile, "customfile:" + referencestamp)
+> >   File "/home/talel/Desktop/YoctoWork/sources/poky/meta/lib/oe/sstatesig.py", line 202, in dump_sigtask
+> >     super(bb.siggen.SignatureGeneratorBasicHash, self).dump_sigtask(fn, task, stampbase, runtime)
+> >   File "/home/talel/Desktop/YoctoWork/sources/poky/bitbake/lib/bb/siggen.py", line 362, in dump_sigtask
+> >     fd, tmpfile = tempfile.mkstemp(dir=os.path.dirname(sigfile), prefix="sigtask.")
+> >   File "/usr/lib/python3.8/tempfile.py", line 470, in mkstemp
+> >     return _mkstemp_inner(dir, prefix, suffix, flags, output_type)
+> >   File "/usr/lib/python3.8/tempfile.py", line 389, in _mkstemp_inner
+> >     fd = _os.open(file, flags, 0o600)
+> 
+> its trying to create the file with 0600 mask. I wonder whats your
+> global umask set to. and perhaps the user is not same when bitbake it
+> running ?
+
+The file is being created with python's tempfile function which will make it
+secure. Secure in this context means 00600...
+
+I suspect you're right that creating a file securely here with this permissions
+likely can't work.
+
+Cheers,
+
+Richard
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2021-09-22 17:43 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-09-22 16:47 Permission denied with NFS shared download and sstate-cache Bel Hadj Salem Talel
+2021-09-22 16:51 ` [yocto] " Khem Raj
+2021-09-22 17:43   ` Richard Purdie
+

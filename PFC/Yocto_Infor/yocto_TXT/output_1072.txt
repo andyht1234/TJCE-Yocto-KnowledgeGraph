@@ -1,0 +1,550 @@
+* Remove kernel image and modules from rootfs
+@ 2022-12-21 21:13 Konstantin Kletschke
+  2023-01-02 16:11 ` [yocto] " Quentin Schulz
+  0 siblings, 1 reply; 5+ messages in thread
+From: Konstantin Kletschke @ 2022-12-21 21:13 UTC (permalink / raw)
+  To: yocto
+
+Hi,
+
+I am creating a rootfs/bootloader/kernel to run on a beaglebone black
+usually and it works great.
+
+So I have in conf/local.conf
+
+MACHINE ?= "beaglebone-yocto"
+
+and an own layer meta-insidem2m which defines some image settings in
+recipes-core/images/insidem2m-s.bb among other recipes for packages and
+package modification.
+
+Now I wan't to create a rootfs without the kernel image and the kernel
+modules to make it as small as possible to use it as a basis to run as a
+docker image.
+
+Now I wonder how to instruct bitbake to not put the kernel image (and
+modules) into the rootfs.
+
+I read this was done by 
+
+RDEPENDS_${KERNEL_PACKAGE_NAME}-base = "" 
+
+but this is now deprecated for kirkstone and should be done this way:
+
+RRECOMMENDS:${KERNEL_PACKAGE_NAME}-base = ""
+
+But rootfs always still is equipped with kernel and modules.
+I tried all permutations of
+
+#RDEPENDS_kernel-base = ""
+#MACHINE_ESSENTIAL_EXTRA_RDEPENDS = ""
+#RDEPENDS_kernel-base = ""
+#PREFERRED_PROVIDER_virtual/kernel = "linux-dummy"
+# Don't include kernels in standard images
+##RDEPENDS:kernel-base = ""
+#RRECOMMENDS:${KERNEL_PACKAGE_NAME}-base = ""
+#MACHINE_EXTRA_RRECOMMENDS = ""
+#RDEPENDS_${KERNEL_PACKAGE_NAME}-base = ""
+
+in my conf/local.conf but no avail...
+
+How is this done correctly?
+Are there any variables to check I might have (being) set preventing me
+to do this? Or is it necessary to split out a new MACHINE, i.e. can this
+only be done in an own created machine which has to be split out?
+
+I thought setting such at the bottom of conf/local.conf always "wins".
+
+Kind Regards
+Konstantin
+
+-- 
+INSIDE M2M GmbH
+Konstantin Kletschke
+Berenbosteler Straße 76 B
+30823 Garbsen
+
+Telefon: +49 (0) 5137 90950136
+Mobil: +49 (0) 151 15256238
+Fax: +49 (0) 5137 9095010
+
+konstantin.kletschke@inside-m2m.de
+http://www.inside-m2m.de 
+
+Geschäftsführung: Michael Emmert, Ingo Haase, Dr. Fred Könemann, Derek Uhlig
+HRB: 111204, AG Hannover
+
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] Remove kernel image and modules from rootfs
+  2022-12-21 21:13 Remove kernel image and modules from rootfs Konstantin Kletschke
+@ 2023-01-02 16:11 ` Quentin Schulz
+  2023-01-03 15:58   ` Konstantin Kletschke
+  0 siblings, 1 reply; 5+ messages in thread
+From: Quentin Schulz @ 2023-01-02 16:11 UTC (permalink / raw)
+  To: Konstantin Kletschke, yocto
+
+Hi Konstantin,
+
+On 12/21/22 22:13, Konstantin Kletschke wrote:
+> Hi,
+> 
+> I am creating a rootfs/bootloader/kernel to run on a beaglebone black
+> usually and it works great.
+> 
+> So I have in conf/local.conf
+> 
+> MACHINE ?= "beaglebone-yocto"
+> 
+> and an own layer meta-insidem2m which defines some image settings in
+> recipes-core/images/insidem2m-s.bb among other recipes for packages and
+> package modification.
+> 
+> Now I wan't to create a rootfs without the kernel image and the kernel
+> modules to make it as small as possible to use it as a basis to run as a
+> docker image.
+> 
+> Now I wonder how to instruct bitbake to not put the kernel image (and
+> modules) into the rootfs.
+> 
+> I read this was done by
+> 
+> RDEPENDS_${KERNEL_PACKAGE_NAME}-base = ""
+> 
+> but this is now deprecated for kirkstone and should be done this way:
+> 
+> RRECOMMENDS:${KERNEL_PACKAGE_NAME}-base = ""
+> 
+
+This makes sense, I'll send a patch updating the documentation to 
+reflect this change. I thought we already had discussed about this and 
+someone sent a patch but doesn't seem so :/
+
+> But rootfs always still is equipped with kernel and modules.
+> I tried all permutations of
+> 
+> #RDEPENDS_kernel-base = ""
+> #MACHINE_ESSENTIAL_EXTRA_RDEPENDS = ""
+> #RDEPENDS_kernel-base = ""
+> #PREFERRED_PROVIDER_virtual/kernel = "linux-dummy"
+> # Don't include kernels in standard images
+> ##RDEPENDS:kernel-base = ""
+> #RRECOMMENDS:${KERNEL_PACKAGE_NAME}-base = ""
+> #MACHINE_EXTRA_RRECOMMENDS = ""
+> #RDEPENDS_${KERNEL_PACKAGE_NAME}-base = ""
+> 
+> in my conf/local.conf but no avail...
+> 
+> How is this done correctly?
+> Are there any variables to check I might have (being) set preventing me
+> to do this? Or is it necessary to split out a new MACHINE, i.e. can this
+> only be done in an own created machine which has to be split out?
+> 
+> I thought setting such at the bottom of conf/local.conf always "wins".
+> 
+
+No.
+
+So I believe you need to add:
+MACHINE_EXTRA_RRECOMMENDS:beaglebone-yocto = ""
+MACHINE_ESSENTIAL_EXTRA_RDEPENDS:remove:beaglebone-yocto = "kernel-image 
+kernel-devicetree"
+RRECOMMENDS:${KERNEL_PACKAGE_NAME}-base = ""
+to your local.conf
+
+I suggest you create your own machine configuration file which requires 
+beaglebone-yocto.conf where you'll be able to set:
+MACHINE_EXTRA_RRECOMMENDS = ""
+MACHINE_ESSENTIAL_EXTRA_RDEPENDS = ""
+RRECOMMENDS:${KERNEL_PACKAGE_NAME}-base = ""
+
+since one is not supposed to share their local.conf :)
+
+You can check the value of a variable by running bitbake-getvar -r 
+virtual/kernel MACHINE_EXTRA_RRECOMMENDS for example.
+
+Cheers,
+Quentin
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] Remove kernel image and modules from rootfs
+  2023-01-02 16:11 ` [yocto] " Quentin Schulz
+@ 2023-01-03 15:58   ` Konstantin Kletschke
+  2023-01-03 16:16     ` Quentin Schulz
+  0 siblings, 1 reply; 5+ messages in thread
+From: Konstantin Kletschke @ 2023-01-03 15:58 UTC (permalink / raw)
+  To: Quentin Schulz; +Cc: yocto
+
+On Mon, Jan 02, 2023 at 05:11:35PM +0100, Quentin Schulz wrote:
+
+> > but this is now deprecated for kirkstone and should be done this way:
+> > 
+> > RRECOMMENDS:${KERNEL_PACKAGE_NAME}-base = ""
+> > 
+> 
+> This makes sense, I'll send a patch updating the documentation to reflect
+> this change. I thought we already had discussed about this and someone sent
+> a patch but doesn't seem so :/
+
+Thank you :-)
+
+> So I believe you need to add:
+> MACHINE_EXTRA_RRECOMMENDS:beaglebone-yocto = ""
+> MACHINE_ESSENTIAL_EXTRA_RDEPENDS:remove:beaglebone-yocto = "kernel-image
+> kernel-devicetree"
+> RRECOMMENDS:${KERNEL_PACKAGE_NAME}-base = ""
+> to your local.conf
+
+Dear Quentin, this is correct. It worked this way.
+I admit, I was not aware the config snippets I copied need to be
+modified for the local.conf in a way the machine name has to be
+appended!
+
+> I suggest you create your own machine configuration file which requires
+> beaglebone-yocto.conf where you'll be able to set:
+> MACHINE_EXTRA_RRECOMMENDS = ""
+> MACHINE_ESSENTIAL_EXTRA_RDEPENDS = ""
+> RRECOMMENDS:${KERNEL_PACKAGE_NAME}-base = ""
+
+Meanwhile I did something similair, I cloned the machine
+beaglebone-yocto into my tree with thos modifications on top and this
+works too.
+
+Thanks for your enormous useful hint to the modification needed for
+local.conf and the tip to create a machine, inherit beaglebone-yocto and
+modify those three variables.
+
+> You can check the value of a variable by running bitbake-getvar -r
+> virtual/kernel MACHINE_EXTRA_RRECOMMENDS for example.
+
+Thank you, very useful.
+
+Meanwhile I found out, for my puspose it could be useful to do something
+like 
+
+CORE_IMAGE_BASE_INSTALL:remove = " packagegroup-core-boot packagegroup-base-extended"
+
+in the image config, which might be even more useful for my approach to
+my use case.
+
+I now can approch my goal with local.conf, an additional machine or the
+CORE_IMAGE_BASE_INSTALL modification.
+
+One question though:
+
+can the MACHINE variable only be modified in the local.conf (the
+reference manual - glossary does not mention other places)?
+
+If I go with the additional machine approach I am searching for a way to
+build different images in my distro based on different machines. Is that
+possible?
+
+
+Kind Regards
+Konstantin Kletschke
+
+
+
+
+-- 
+INSIDE M2M GmbH
+Konstantin Kletschke
+Berenbosteler Straße 76 B
+30823 Garbsen
+
+Telefon: +49 (0) 5137 90950136
+Mobil: +49 (0) 151 15256238
+Fax: +49 (0) 5137 9095010
+
+konstantin.kletschke@inside-m2m.de
+http://www.inside-m2m.de 
+
+Geschäftsführung: Michael Emmert, Ingo Haase, Dr. Fred Könemann, Derek Uhlig
+HRB: 111204, AG Hannover
+
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] Remove kernel image and modules from rootfs
+  2023-01-03 15:58   ` Konstantin Kletschke
+@ 2023-01-03 16:16     ` Quentin Schulz
+  2023-01-05 16:00       ` Konstantin Kletschke
+  0 siblings, 1 reply; 5+ messages in thread
+From: Quentin Schulz @ 2023-01-03 16:16 UTC (permalink / raw)
+  To: Konstantin Kletschke; +Cc: yocto
+
+Hi Konstantin,
+
+On 1/3/23 16:58, Konstantin Kletschke wrote:
+> On Mon, Jan 02, 2023 at 05:11:35PM +0100, Quentin Schulz wrote:
+> 
+>>> but this is now deprecated for kirkstone and should be done this way:
+>>>
+>>> RRECOMMENDS:${KERNEL_PACKAGE_NAME}-base = ""
+>>>
+>>
+>> This makes sense, I'll send a patch updating the documentation to reflect
+>> this change. I thought we already had discussed about this and someone sent
+>> a patch but doesn't seem so :/
+> 
+> Thank you :-)
+> 
+>> So I believe you need to add:
+>> MACHINE_EXTRA_RRECOMMENDS:beaglebone-yocto = ""
+>> MACHINE_ESSENTIAL_EXTRA_RDEPENDS:remove:beaglebone-yocto = "kernel-image
+>> kernel-devicetree"
+>> RRECOMMENDS:${KERNEL_PACKAGE_NAME}-base = ""
+>> to your local.conf
+> 
+> Dear Quentin, this is correct. It worked this way.
+> I admit, I was not aware the config snippets I copied need to be
+> modified for the local.conf in a way the machine name has to be
+> appended!
+> 
+
+So, you needed the extra :beaglebone-yocto because the machine 
+configuration file is parsed after local.conf, therefore since 
+beaglebone-yocto.conf file has:
+MACHINE_EXTRA_RRECOMMENDS = "kernel-modules kernel-devicetree"
+MACHINE_ESSENTIAL_EXTRA_RDEPENDS += "kernel-image kernel-devicetree"
+your local.conf changes would be overridden while parsing the machine 
+configuration file.
+
+By using the OVERRIDE mechanism, we kinda cheat this by making the 
+variables in local.conf "more important" than the machine conf file's.
+
+You don't need the :beaglebone-yocto OVERRIDE for the :remove but it's 
+"better" this way so that if you build multiple machines with the same 
+local.conf, you don't impact other machines as well.
+
+>> I suggest you create your own machine configuration file which requires
+>> beaglebone-yocto.conf where you'll be able to set:
+>> MACHINE_EXTRA_RRECOMMENDS = ""
+>> MACHINE_ESSENTIAL_EXTRA_RDEPENDS = ""
+>> RRECOMMENDS:${KERNEL_PACKAGE_NAME}-base = ""
+> 
+> Meanwhile I did something similair, I cloned the machine
+> beaglebone-yocto into my tree with thos modifications on top and this
+> works too.
+> 
+
+Would highly recommend not doing that though, having two configruation 
+files with the same filename is not nice to your users, because then the 
+order of inclusion of the layers will decide which file gets picked.
+
+Create your own my-beaglebone and in there have:
+MACHINEOVERRIDES =. "beaglebone-yocto:"
+require conf/machine/beaglebone-yocto.conf
+
+The first line will allow recipes to use the :beaglebone-yocto OVERRIDE 
+to match both the original beaglebone-yocto and your my-beaglebone machines.
+
+> Thanks for your enormous useful hint to the modification needed for
+> local.conf and the tip to create a machine, inherit beaglebone-yocto and
+> modify those three variables.
+> 
+>> You can check the value of a variable by running bitbake-getvar -r
+>> virtual/kernel MACHINE_EXTRA_RRECOMMENDS for example.
+> 
+> Thank you, very useful.
+> 
+> Meanwhile I found out, for my puspose it could be useful to do something
+> like
+> 
+> CORE_IMAGE_BASE_INSTALL:remove = " packagegroup-core-boot packagegroup-base-extended"
+> 
+
+Be careful, :remove are final, you cannot re-add its content later on. 
+SO if you expect users to reuse and extend your image recipe while 
+having :remove in there, you'll have unhappy users :)
+
+> in the image config, which might be even more useful for my approach to
+> my use case.
+> 
+> I now can approch my goal with local.conf, an additional machine or the
+> CORE_IMAGE_BASE_INSTALL modification.
+> 
+> One question though:
+> 
+> can the MACHINE variable only be modified in the local.conf (the
+> reference manual - glossary does not mention other places)?
+> 
+
+It can be modified in any configuration file I believe, though 
+local.conf is the only one that makes sense to me, anything else is bad 
+practice.
+
+However, you can pass MACHINE=my-beaglebone to bitbake, e.g.:
+MACHINE=my-beaglebone bitbake my-image
+
+would build my-image for this machine specifically.
+
+> If I go with the additional machine approach I am searching for a way to
+> build different images in my distro based on different machines. Is that
+> possible?
+> 
+
+What exactly should be different between your images per machines? If 
+we're talking about some specific BSP components differing (e.g. kernel, 
+bootloader, tf-a, op-tee, etc... basically anything NOT userspace), it's 
+better IMHO to specify those machine specific packages as 
+MACHINE_EXTRA_RRECOMMENDS or MACHINE_ESSENTIAL_EXTRA_RDEPENDS in your 
+machine configuration file. If it's something else, you can either 
+(ab)use the OVERRIDE mechanism (:my-beaglebone) to specify packages to 
+install only for one machine. E.g. in your image recipe:
+IMAGE_INSTALL:append:my-beaglebone = " some-my-beaglebone-package"
+
+If you want the same package but in different version or a different 
+implementation (e.g. dropbear vs openssh, barebox vs uboot), have a look 
+at virtual recipes (you can find consumers of those virtual recipes 
+where virtual/somthing is used).
+
+Finally, it might make more sense to just have multiple image recipes, 
+each machine having its own image recipe for example.
+
+Remember, distro is for policy (should my system be configured to run 
+with x11, wayland, alsa, whatever), machine is for HW and recipes are 
+for SW applications configured for a given policy and compiled for a 
+given machine. If your HW is identical but you want some differences in 
+your images, you might want to have a look at distro configruation files 
+rather than different machines (at least on the theoretical and best 
+practice level, it's the preferred way).
+
+Cheers,
+Quentin
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] Remove kernel image and modules from rootfs
+  2023-01-03 16:16     ` Quentin Schulz
+@ 2023-01-05 16:00       ` Konstantin Kletschke
+  0 siblings, 0 replies; 5+ messages in thread
+From: Konstantin Kletschke @ 2023-01-05 16:00 UTC (permalink / raw)
+  To: Quentin Schulz; +Cc: yocto
+
+Hi Quentin,
+
+On Tue, Jan 03, 2023 at 05:16:09PM +0100, Quentin Schulz wrote:
+
+> So, you needed the extra :beaglebone-yocto because the machine configuration
+> file is parsed after local.conf, therefore since beaglebone-yocto.conf file
+
+I was not aware of that, thaught always local.conf is master/last.
+
+> > Meanwhile I did something similair, I cloned the machine
+> > beaglebone-yocto into my tree with thos modifications on top and this
+> > works too.
+
+> Would highly recommend not doing that though, having two configruation files
+> with the same filename is not nice to your users, because then the order of
+> inclusion of the layers will decide which file gets picked.
+
+I fully agree, this felt strange from the beginning to me and I wondered
+why I had the luck that ot worked. Indeed my meta-insidem2m layer is
+ordered last. 
+
+> Create your own my-beaglebone and in there have:
+> MACHINEOVERRIDES =. "beaglebone-yocto:"
+> require conf/machine/beaglebone-yocto.conf
+> 
+> The first line will allow recipes to use the :beaglebone-yocto OVERRIDE to
+> match both the original beaglebone-yocto and your my-beaglebone machines.
+
+Thanks for this really nice and useful advice!
+
+> > CORE_IMAGE_BASE_INSTALL:remove = " packagegroup-core-boot packagegroup-base-extended"
+> > 
+> 
+> Be careful, :remove are final, you cannot re-add its content later on. SO if
+> you expect users to reuse and extend your image recipe while having :remove
+> in there, you'll have unhappy users :)
+
+You are right, I reread the part in the reference manual and played
+around with it utilizing the bitbake-getvar you showed to me. I did not
+really have understood this before. Additionally removeing thos
+packagegroups probably removes too much from the image. This is what I
+meanwhile realized - regarding our pretended use case.
+
+> What exactly should be different between your images per machines? If we're
+
+I have a meta-insidem2m layer which up until now contains all my stuff I
+need to cope with yocto and requires no modifications to upstream stuff.
+Additionally it contains one bblayers.conf and local.conf, which are
+placed in build/config but not modified.
+This meta-insidem2m has a distro and 3 images configured. The MACHINE is
+beaglebone-yocto for all the same. The images only differ in the
+IMAGE_INSTALL set, they are insidem2m-s insidem2m-m and insidem2m-xl. I
+use the -s as a NFS rootfs for our Bealgsbone  Blacks and the -xl
+variant is the one which gets installed on them for production use. All
+from one tree w/o further configuration.
+
+Now I have a customer's requirement for use to live from a docker
+container and to utilize a self compiled rootfs in that to have full
+control over this regarding content and availability.
+
+So I thougt I need a insidem2m-xs variant additionally like the already
+existing ones (processor architecure matches regarding userspace) and
+now I need insidem2m-s minus kernel, bootloader and init system.
+
+And this in a way like making this right and not abusing mechanisms. 
+
+I learned removing bootloader and kernel requires an additional machine
+set up _if_ I want to use my local.conf for all images.
+I have to do this smart (renaming with MACHINEOVERRIDES and require),
+check.
+Then I can call "bitabke insidem2m-[s|m|xl]" for my normal images,
+"MACHINE=my-bbb bitbake insidem2m-xs" for an image w/o kernel and stuff
+for my docker filesystem. as said, this way local.conf is fixed,
+everything else also.
+
+This is the smartest approach, right? 
+
+> IMAGE_INSTALL:append:my-beaglebone = " some-my-beaglebone-package"
+
+I think, this will become useful also to my use case. I do not yet know,
+which packages in the end are required in our resulting rootfs. This
+will become handy...
+
+> Finally, it might make more sense to just have multiple image recipes, each
+> machine having its own image recipe for example.
+
+May be this is most importand for me and not covered from my
+understanding,yet : Can a machine[.conf] have its onw own image[.bb]? In a
+single meta-xyz layer?
+This way "bitbake image" would autoselect a proper machine.
+
+Kind Regards
+Konstantin
+
+
+-- 
+INSIDE M2M GmbH
+Konstantin Kletschke
+Berenbosteler Straße 76 B
+30823 Garbsen
+
+Telefon: +49 (0) 5137 90950136
+Mobil: +49 (0) 151 15256238
+Fax: +49 (0) 5137 9095010
+
+konstantin.kletschke@inside-m2m.de
+http://www.inside-m2m.de 
+
+Geschäftsführung: Michael Emmert, Ingo Haase, Dr. Fred Könemann, Derek Uhlig
+HRB: 111204, AG Hannover
+
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+end of thread, other threads:[~2023-01-05 16:00 UTC | newest]
+
+Thread overview: 5+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-12-21 21:13 Remove kernel image and modules from rootfs Konstantin Kletschke
+2023-01-02 16:11 ` [yocto] " Quentin Schulz
+2023-01-03 15:58   ` Konstantin Kletschke
+2023-01-03 16:16     ` Quentin Schulz
+2023-01-05 16:00       ` Konstantin Kletschke
+

@@ -1,0 +1,209 @@
+* Enabling tk for Python tkinter module
+@ 2021-09-28 21:58 Chris Tapp
+  2021-09-29  1:21 ` [yocto] " Tim Orling
+  0 siblings, 1 reply; 3+ messages in thread
+From: Chris Tapp @ 2021-09-28 21:58 UTC (permalink / raw)
+  To: yocto
+
+I am trying to get PySimpleGUI running on an RPi4 using meta-raspberrypi with hardknott.
+
+I have created a recipe for PySimpleGUI and added the following to my local.conf:
+
+PACKAGECONFIG_pn-python3 = “tk”
+IMAGE_INSTALL_append = " python3 python3-modules python3-pysimplegui tk"
+
+However, the tkinter module fails to load, reporting “No module named _tkinter”, with a note above saying that Python may not be configured for Tk.
+
+Looking on the target, /usr/lib/libtk.8.so is present.
+
+It looks as if there is something else I need to do to get Python to build correctly, but I’m out of ideas ;-)
+
+I’ve found a few bits on the internet that seem related, but they haven’t helped me get things going:
+ https://www.mail-archive.com/yocto@yoctoproject.org/msg18232.html
+ https://www.yoctoproject.org/pipermail/yocto/2014-July/020547.html
+
+Any pointers on where to look would be appreciated.
+
+--
+
+Chris Tapp
+opensource@keylevel.com
+www.keylevel.com
+
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] Enabling tk for Python tkinter module
+  2021-09-28 21:58 Enabling tk for Python tkinter module Chris Tapp
+@ 2021-09-29  1:21 ` Tim Orling
+  2021-09-29  9:47   ` Chris Tapp
+  0 siblings, 1 reply; 3+ messages in thread
+From: Tim Orling @ 2021-09-29  1:21 UTC (permalink / raw)
+  To: Chris Tapp; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2274 bytes --]
+
+On Tue, Sep 28, 2021 at 2:58 PM Chris Tapp <opensource@keylevel.com> wrote:
+
+> I am trying to get PySimpleGUI running on an RPi4 using meta-raspberrypi
+> with hardknott.
+>
+> I have created a recipe for PySimpleGUI and added the following to my
+> local.conf:
+>
+> PACKAGECONFIG_pn-python3 = “tk”
+> IMAGE_INSTALL_append = " python3 python3-modules python3-pysimplegui tk"
+>
+> However, the tkinter module fails to load, reporting “No module named
+> _tkinter”, with a note above saying that Python may not be configured for
+> Tk.
+>
+> Looking on the target, /usr/lib/libtk.8.so is present.
+>
+> It looks as if there is something else I need to do to get Python to build
+> correctly, but I’m out of ideas ;-)
+>
+
+You need to add “tk” to the package config for python3
+http://git.yoctoproject.org/cgit/cgit.cgi/poky/tree/meta/recipes-devtools/python/python3_3.9.6.bb#n110
+
+Add the following to your distro|site|local.conf (or a python3_%.bbappend)
+
+PACKAGECONFIG:append:pn-python3 = “ tk”
+
+( replace : with _ if you are on old release that doesn’t support the new
+override syntax)
+
+(This assumes you have meta-oe in your bblayers.conf so you can build tk,
+which it sounds like you do)
+
+This is because the _tkinter .so built by python3 is dynamically loaded
+only if present
+http://git.yoctoproject.org/cgit/cgit.cgi/poky/tree/meta/recipes-devtools/python/python3/python3-manifest.json#n1161
+
+—Tim “moto-timo” Orling
+
+
+> I’ve found a few bits on the internet that seem related, but they haven’t
+> helped me get things going:
+>  https://www.mail-archive.com/yocto@yoctoproject.org/msg18232.html
+>  https://www.yoctoproject.org/pipermail/yocto/2014-July/020547.html
+>
+> Any pointers on where to look would be appreciated.
+>
+> --
+>
+> Chris Tapp
+> opensource@keylevel.com
+> www.keylevel.com
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#54893):
+> https://lists.yoctoproject.org/g/yocto/message/54893
+> Mute This Topic: https://lists.yoctoproject.org/mt/85935979/924729
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> ticotimo@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 4282 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] Enabling tk for Python tkinter module
+  2021-09-29  1:21 ` [yocto] " Tim Orling
+@ 2021-09-29  9:47   ` Chris Tapp
+  0 siblings, 0 replies; 3+ messages in thread
+From: Chris Tapp @ 2021-09-29  9:47 UTC (permalink / raw)
+  To: Tim Orling; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 3412 bytes --]
+
+Hi Tim,
+
+Thanks, that’s got it going. I was close, but didn’t quite cast the correct spell ;-)
+
+Next is to work out why the display is black when I create a window...
+
+--
+
+Chris Tapp
+opensource@keylevel.com
+www.keylevel.com
+
+----
+You can tell you're getting older when your car insurance gets real cheap!
+
+> On 29 Sep 2021, at 02:21, Tim Orling <ticotimo@gmail.com> wrote:
+> 
+> 
+> 
+> On Tue, Sep 28, 2021 at 2:58 PM Chris Tapp <opensource@keylevel.com <mailto:opensource@keylevel.com>> wrote:
+> I am trying to get PySimpleGUI running on an RPi4 using meta-raspberrypi with hardknott.
+> 
+> I have created a recipe for PySimpleGUI and added the following to my local.conf:
+> 
+> PACKAGECONFIG_pn-python3 = “tk”
+> IMAGE_INSTALL_append = " python3 python3-modules python3-pysimplegui tk"
+> 
+> However, the tkinter module fails to load, reporting “No module named _tkinter”, with a note above saying that Python may not be configured for Tk.
+> 
+> Looking on the target, /usr/lib/libtk.8.so <http://libtk.8.so/> is present.
+> 
+> It looks as if there is something else I need to do to get Python to build correctly, but I’m out of ideas ;-)
+> 
+> You need to add “tk” to the package config for python3
+> http://git.yoctoproject.org/cgit/cgit.cgi/poky/tree/meta/recipes-devtools/python/python3_3.9.6.bb#n110 <http://git.yoctoproject.org/cgit/cgit.cgi/poky/tree/meta/recipes-devtools/python/python3_3.9.6.bb#n110>
+> 
+> Add the following to your distro|site|local.conf (or a python3_%.bbappend)
+> 
+> PACKAGECONFIG:append:pn-python3 = “ tk”
+> 
+> ( replace : with _ if you are on old release that doesn’t support the new override syntax)
+> 
+> (This assumes you have meta-oe in your bblayers.conf so you can build tk, which it sounds like you do)
+> 
+> This is because the _tkinter .so built by python3 is dynamically loaded only if present 
+> http://git.yoctoproject.org/cgit/cgit.cgi/poky/tree/meta/recipes-devtools/python/python3/python3-manifest.json#n1161 <http://git.yoctoproject.org/cgit/cgit.cgi/poky/tree/meta/recipes-devtools/python/python3/python3-manifest.json#n1161>
+> —Tim “moto-timo” Orling
+> 
+> 
+> I’ve found a few bits on the internet that seem related, but they haven’t helped me get things going:
+>  https://www.mail-archive.com/yocto@yoctoproject.org/msg18232.html <https://www.mail-archive.com/yocto@yoctoproject.org/msg18232.html>
+>  https://www.yoctoproject.org/pipermail/yocto/2014-July/020547.html <https://www.yoctoproject.org/pipermail/yocto/2014-July/020547.html>
+> 
+> Any pointers on where to look would be appreciated.
+> 
+> --
+> 
+> Chris Tapp
+> opensource@keylevel.com <mailto:opensource@keylevel.com>
+> www.keylevel.com <http://www.keylevel.com/>
+> 
+> 
+> 
+> 
+> 
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#54900): https://lists.yoctoproject.org/g/yocto/message/54900 <https://lists.yoctoproject.org/g/yocto/message/54900>
+> Mute This Topic: https://lists.yoctoproject.org/mt/85935979/3617534 <https://lists.yoctoproject.org/mt/85935979/3617534>
+> Group Owner: yocto+owner@lists.yoctoproject.org <mailto:yocto+owner@lists.yoctoproject.org>
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub <https://lists.yoctoproject.org/g/yocto/unsub> [opensource@keylevel.com <mailto:opensource@keylevel.com>]
+> -=-=-=-=-=-=-=-=-=-=-=-
+
+
+[-- Attachment #2: Type: text/html, Size: 15997 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2021-09-29  9:47 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-09-28 21:58 Enabling tk for Python tkinter module Chris Tapp
+2021-09-29  1:21 ` [yocto] " Tim Orling
+2021-09-29  9:47   ` Chris Tapp
+

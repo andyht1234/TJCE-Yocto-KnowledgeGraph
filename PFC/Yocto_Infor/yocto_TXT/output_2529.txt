@@ -1,0 +1,63 @@
+* Bad ownership of directory in WIC generated partition
+@ 2021-12-01  1:26 taylor.winning
+  0 siblings, 0 replies; only message in thread
+From: taylor.winning @ 2021-12-01  1:26 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2870 bytes --]
+
+Hi,
+
+I'm using dunfell branch 3.1.11. My wks file is generating a 4th partition which is being mounted to /data via the --rootfs-dir argument. All directories within the mounted /data are owned 1000:1000 which I believe is a contamination via my host user running the build.
+
+I've looked around online and haven't been able to ascertain the cause, although there are a few others which seem to be the same problem:
+https://www.yoctoproject.org/pipermail/yocto/2019-August/046378.html
+
+I've seen some patches addressing similar behavior in the wks files:
+[v7,02/10] wic: Fix multi images .wks with bitbake ( https://patchwork.openembedded.org/patch/172025/ )
+[v2,1/2] wic: Fix permissions when using exclude or include path ( https://patchwork.openembedded.org/patch/170778/ )
+
+I've also found this post from a user that says "Just saw that the issue is that you can't use rootfs-dir with a subfolder" ( https://www.mail-archive.com/yocto@lists.yoctoproject.org/msg05717.html ). I am at a complete loss for where they have seen that information... perhaps I can't see the forest for the trees.
+
+So I'm wondering if this is a bug, or if I have done something drastically incorrect? I have thrown a fair chunk of time at the issue, and in the end all I could do is write a script that runs on first boot to chown the directories and set permissions as we need. Could someone weigh in please? I'd love to assist in writing a patch but looking at some of the code, I literally have no idea where to start...
+
+My wks file:
+
+part /boot --source bootimg-partition --fstype=vfat --label boot --active --align 1024  --use-uuid
+part / --source rootfs --fstype=ext4 --label A --align 1024 --use-uuid
+part --source rootfs --fstype=ext4 --label B --align 1024 --use-uuid
+part /data --source rootfs --rootfs-dir=${IMAGE_ROOTFS}/data --fstype=ext4 --label data --align 1024  --use-uuid --size 10
+
+Image recipe excerpt, I realize this shouldn't go in a ROOTFS_POSTPROCESS_COMMAND necessarily, this is just an artifact of my testing:
+
+ROOTFS_POSTPROCESS_COMMAND += " chmod_dirs;"
+
+chmod_dirs() {
+mkdir -p ${IMAGE_ROOTFS}/data/firmware
+chown 0:421 ${IMAGE_ROOTFS}/data/firmware
+chmod 0770  ${IMAGE_ROOTFS}/data/firmware
+lnr ${IMAGE_ROOTFS}/data/firmware ${IMAGE_ROOTFS}/opt/Firmware
+}
+
+Resulting folder in image:
+root@sgc30cube:~# ls -la /data
+drwxr-xr-x    4 root     root          1024 Nov 30 09:00 .
+drwxr-xr-x   21 root     root          1024 Nov 30 09:00 ..
+drwxr-x---    2 1000     1000          1024 Mar  9  2018 firmware
+drwx------    2 root     root         12288 Nov 30 09:00 lost+found
+
+Is there a more elegant way to work around this issue, rather than scripted chmod/chown on the target?
+
+Please let me know if I could provide more useful information.
+
+Thank you,
+
+[-- Attachment #2: Type: text/html, Size: 4710 bytes --]
+
+^ permalink raw reply	[flat|nested] only message in thread
+only message in thread, other threads:[~2021-12-01  1:26 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-12-01  1:26 Bad ownership of directory in WIC generated partition taylor.winning
+

@@ -1,0 +1,66 @@
+* SDK missing qemu 'user' backend type. #kirkstone #sdk
+@ 2022-12-14  9:37 Jeffrey Simons
+  2022-12-15  6:57 ` Jeffrey Simons
+  0 siblings, 1 reply; 2+ messages in thread
+From: Jeffrey Simons @ 2022-12-14  9:37 UTC (permalink / raw)
+  To: yocto
+
+Hi Yocto community,
+
+I run into an issue where I can't use the runqemu command by use of the SDK. It reports the following:
+    "runqemu - ERROR - Failed to run qemu: qemu-system-arm: -netdev user,id=net0,hostfwd=tcp::2222-:22,hostfwd=tcp::2323-:23,tftp=<path>: Parameter 'type' expects a netdev backend type"
+I start qemu with: "runqemu qemuarm nographic slirp <some-name>qemuarm.qemuboot.conf", it works correctly when running with the native tools from the Yocto env.
+The difference between the Yocto env and the SDK is that the netdev reports 'user' to be present within the Yocto env but is missing in the SDK.
+
+I've already asked around on IRC and "rburton" suggested to look into commit "2d96d3f5ace29bb886d825609bd042310019a620", that commit has already been backported to the Yocto kirkstone branch
+and is included in my build. I've cleaned qemu (cleanall) from my system but I still face this issue.
+
+Does anyone have any suggestions in how to solve this?
+
+Thank you.
+
+-- 
+With kind regards,
+
+Jeffrey Simons
+
+Software Engineer
+Royal Boon Edam International B.V.
+
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+* Re: SDK missing qemu 'user' backend type. #kirkstone #sdk
+  2022-12-14  9:37 SDK missing qemu 'user' backend type. #kirkstone #sdk Jeffrey Simons
+@ 2022-12-15  6:57 ` Jeffrey Simons
+  0 siblings, 0 replies; 2+ messages in thread
+From: Jeffrey Simons @ 2022-12-15  6:57 UTC (permalink / raw)
+  To: yocto
+
+Hi Yocto community,
+
+I figured out what happened, hopefully this is useful to anyone.
+
+We did use parts from the meta-cloud-service repository, to be specific the meta-openstack. That layer has a qemu_6.%.bbappend file which assigns the qemu packageconfig.
+(that append file only includes the qemu inc file if the openstack is enabled in the distro features).
+The Yocto qemu recipe only has a soft assignment to the packageconfig so the one from the meta-openstack layer is getting used which did not include slirp and other options.
+So I removed the openstack from the distro features and behold, it works as expected.
+
+I don't know if this is a bug or just a feature, but I leave that up to you (perhaps Yocto can assign the packageconfig a bit stronger?).
+
+-- 
+With kind regards,
+
+Jeffrey Simons
+
+Software Engineer
+Royal Boon Edam International B.V.
+
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2022-12-15  6:58 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-12-14  9:37 SDK missing qemu 'user' backend type. #kirkstone #sdk Jeffrey Simons
+2022-12-15  6:57 ` Jeffrey Simons
+

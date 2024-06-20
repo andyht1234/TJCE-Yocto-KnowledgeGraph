@@ -1,0 +1,499 @@
+* Adding systemd to yocto
+@ 2022-04-28 17:19 Edgar Mobile
+  2022-04-29  6:27 ` [yocto] " Joel Winarske
+  0 siblings, 1 reply; 10+ messages in thread
+From: Edgar Mobile @ 2022-04-28 17:19 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 793 bytes --]
+
+Greetings,
+
+I tried to add systemd to weston-image-core by adding the following lines in local.conf:
+
+DISTRO_FEATURES:append = " systemd" VIRTUAL-RUNTIME_init_manager = "systemd"
+
+And indeed, bitbake seems to use them in somve way:
+
+DISTRO_FEATURES="acl alsa argp bluetooth debuginfod ext2 ipv4 ipv6 largefile pcmcia usbgadget usbhost wifi xattr nfs zeroconf pci 3g nfc x11 vfat seccomp largefile opengl ptest multiarch wayland vulkan systemd\" VIRTUAL-RUNTIME_init_manager = \"systemd pulseaudio sysvinit gobject-introspection-data ldconfig"
+POKY_DEFAULT_DISTRO_FEATURES="largefile opengl ptest multiarch wayland vulkan"
+
+However, if I start the system in qemu none of  the expected systemd binaries like systemd, systemd-journal etc. is present. Did I miss something?
+
+Regards
+
+[-- Attachment #2: Type: text/html, Size: 3146 bytes --]
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+* Re: [yocto] Adding systemd to yocto
+  2022-04-28 17:19 Adding systemd to yocto Edgar Mobile
+@ 2022-04-29  6:27 ` Joel Winarske
+  2022-04-29 15:07   ` Scott Murray
+  0 siblings, 1 reply; 10+ messages in thread
+From: Joel Winarske @ 2022-04-29  6:27 UTC (permalink / raw)
+  To: Edgar Mobile; +Cc: Yocto-mailing-list
+
+[-- Attachment #1: Type: text/plain, Size: 1445 bytes --]
+
+Line 30-36 include changes to convert a sysvinit image to systemd.
+https://github.com/jwinarske/manifests/blob/honister/conf/rpi64_config#L30
+
+
+
+On Thu, Apr 28, 2022, 10:19 AM Edgar Mobile <heideggm@hotmail.com> wrote:
+
+> Greetings,
+>
+> I tried to add systemd to weston-image-core by adding the following lines
+> in local.conf:
+>
+> DISTRO_FEATURES:append = " systemd" VIRTUAL-RUNTIME_init_manager =
+> "systemd"
+>
+> And indeed, bitbake seems to use them in somve way:
+>
+> DISTRO_FEATURES="acl alsa argp bluetooth debuginfod ext2 ipv4 ipv6
+> largefile pcmcia usbgadget usbhost wifi xattr nfs zeroconf pci 3g nfc x11
+> vfat seccomp largefile opengl ptest multiarch wayland vulkan systemd\"
+> VIRTUAL-RUNTIME_init_manager = \"systemd pulseaudio sysvinit
+> gobject-introspection-data ldconfig"
+> POKY_DEFAULT_DISTRO_FEATURES="largefile opengl ptest multiarch wayland
+> vulkan"
+>
+> However, if I start the system in qemu none of  the expected systemd
+> binaries like systemd, systemd-journal etc. is present. Did I miss
+> something?
+>
+> Regards
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#56947):
+> https://lists.yoctoproject.org/g/yocto/message/56947
+> Mute This Topic: https://lists.yoctoproject.org/mt/90758452/2167248
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> joel.winarske@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 3954 bytes --]
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+* Re: [yocto] Adding systemd to yocto
+  2022-04-29  6:27 ` [yocto] " Joel Winarske
+@ 2022-04-29 15:07   ` Scott Murray
+  2022-05-02  7:47     ` Edgar Mobile
+  0 siblings, 1 reply; 10+ messages in thread
+From: Scott Murray @ 2022-04-29 15:07 UTC (permalink / raw)
+  To: Joel Winarske, Edgar Mobile; +Cc: Yocto-mailing-list
+
+On Thu, 28 Apr 2022, Joel Winarske wrote:
+
+> Line 30-36 include changes to convert a sysvinit image to systemd.
+> https://github.com/jwinarske/manifests/blob/honister/conf/rpi64_config#L30
+
+The INIT_MANAGER variable added in zeus removes the need to tinker with
+DISTRO_FEATURES and VIRTUAL-RUNTIME* variables, all it takes to use
+systemd is INIT_MANAGER = "systemd". See:
+
+meta/conf/distro/include/init-manager-systemd.inc
+
+for what it tweaks.
+
+Scott
+
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+* Re: [yocto] Adding systemd to yocto
+  2022-04-29 15:07   ` Scott Murray
+@ 2022-05-02  7:47     ` Edgar Mobile
+  2022-05-02  7:56       ` Edgar Mobile
+  0 siblings, 1 reply; 10+ messages in thread
+From: Edgar Mobile @ 2022-05-02  7:47 UTC (permalink / raw)
+  To: Scott Murray, Joel Winarske; +Cc: Yocto-mailing-list
+
+[-- Attachment #1: Type: text/plain, Size: 953 bytes --]
+
+I added
+
+INIT_MANAGER="systemd"
+
+To local.conf. Now it complains that weston-xwayland is missing which sounds weird for core-image-weston.
+Am I missing something?
+
+Regardss
+
+________________________________
+From: Scott Murray <scott.murray@konsulko.com>
+Sent: Friday, April 29, 2022 3:07 PM
+To: Joel Winarske <joel.winarske@gmail.com>; Edgar Mobile <heideggm@hotmail.com>
+Cc: Yocto-mailing-list <yocto@lists.yoctoproject.org>
+Subject: Re: [yocto] Adding systemd to yocto
+
+On Thu, 28 Apr 2022, Joel Winarske wrote:
+
+> Line 30-36 include changes to convert a sysvinit image to systemd.
+> https://github.com/jwinarske/manifests/blob/honister/conf/rpi64_config#L30
+
+The INIT_MANAGER variable added in zeus removes the need to tinker with
+DISTRO_FEATURES and VIRTUAL-RUNTIME* variables, all it takes to use
+systemd is INIT_MANAGER = "systemd". See:
+
+meta/conf/distro/include/init-manager-systemd.inc
+
+for what it tweaks.
+
+Scott
+
+[-- Attachment #2: Type: text/html, Size: 2745 bytes --]
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+* Re: [yocto] Adding systemd to yocto
+  2022-05-02  7:47     ` Edgar Mobile
+@ 2022-05-02  7:56       ` Edgar Mobile
+  2022-05-02 14:32         ` Scott Murray
+  0 siblings, 1 reply; 10+ messages in thread
+From: Edgar Mobile @ 2022-05-02  7:56 UTC (permalink / raw)
+  To: Scott Murray, Joel Winarske; +Cc: Yocto-mailing-list
+
+[-- Attachment #1: Type: text/plain, Size: 1305 bytes --]
+
+Ok, correction: I complains about pam missing.
+
+________________________________
+From: Edgar Mobile <heideggm@hotmail.com>
+Sent: Monday, May 2, 2022 7:47 AM
+To: Scott Murray <scott.murray@konsulko.com>; Joel Winarske <joel.winarske@gmail.com>
+Cc: Yocto-mailing-list <yocto@lists.yoctoproject.org>
+Subject: Re: [yocto] Adding systemd to yocto
+
+I added
+
+INIT_MANAGER="systemd"
+
+To local.conf. Now it complains that weston-xwayland is missing which sounds weird for core-image-weston.
+Am I missing something?
+
+Regardss
+
+________________________________
+From: Scott Murray <scott.murray@konsulko.com>
+Sent: Friday, April 29, 2022 3:07 PM
+To: Joel Winarske <joel.winarske@gmail.com>; Edgar Mobile <heideggm@hotmail.com>
+Cc: Yocto-mailing-list <yocto@lists.yoctoproject.org>
+Subject: Re: [yocto] Adding systemd to yocto
+
+On Thu, 28 Apr 2022, Joel Winarske wrote:
+
+> Line 30-36 include changes to convert a sysvinit image to systemd.
+> https://github.com/jwinarske/manifests/blob/honister/conf/rpi64_config#L30
+
+The INIT_MANAGER variable added in zeus removes the need to tinker with
+DISTRO_FEATURES and VIRTUAL-RUNTIME* variables, all it takes to use
+systemd is INIT_MANAGER = "systemd". See:
+
+meta/conf/distro/include/init-manager-systemd.inc
+
+for what it tweaks.
+
+Scott
+
+[-- Attachment #2: Type: text/html, Size: 3563 bytes --]
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+* Re: [yocto] Adding systemd to yocto
+  2022-05-02  7:56       ` Edgar Mobile
+@ 2022-05-02 14:32         ` Scott Murray
+  2022-05-03 10:57           ` Edgar Mobile
+  0 siblings, 1 reply; 10+ messages in thread
+From: Scott Murray @ 2022-05-02 14:32 UTC (permalink / raw)
+  To: Edgar Mobile; +Cc: Joel Winarske, Yocto-mailing-list
+
+On Mon, 2 May 2022, Edgar Mobile wrote:
+
+> Ok, correction: I complains about pam missing.
+
+My apologies, I'd forgotten that wrinkle as we'd been sidestepping it for
+a while in AGL with some custom Weston startup.  There are a few recipes
+in the Weston stuff that explicitly mark pam as a required feature when
+using systemd, so you'll also need to have:
+
+DISTRO_FEATURES:append = " pam"
+
+Scott
+
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+* Re: [yocto] Adding systemd to yocto
+  2022-05-02 14:32         ` Scott Murray
+@ 2022-05-03 10:57           ` Edgar Mobile
+  2022-05-03 12:45             ` Jack Mitchell
+  2022-05-03 12:53             ` Scott Murray
+  0 siblings, 2 replies; 10+ messages in thread
+From: Edgar Mobile @ 2022-05-03 10:57 UTC (permalink / raw)
+  To: Scott Murray; +Cc: Joel Winarske, Yocto-mailing-list
+
+[-- Attachment #1: Type: text/plain, Size: 1925 bytes --]
+
+Apparently, this is not enough:
+
+bitbake core-image-weston
+/usr/lib/python3.6/importlib/_bootstrap.py:219: ImportWarning: can't resolve package from __spec__ or __package__, falling back on __name__ and __path__
+  return f(*args, **kwds)
+Loading cache: 100% |############################################| Time: 0:00:00
+Loaded 1472 entries from dependency cache.
+NOTE: Resolving any missing task queue dependencies
+ERROR: Nothing RPROVIDES 'pam' (but /media/user/SSD1TB/yoctoqemu/poky/meta/recipes-graphics/images/core-image-weston.bb RDEPENDS on or otherwise requires it)
+NOTE: Runtime target 'pam' is unbuildable, removing...
+Missing or unbuildable dependency chain was: ['pam']
+ERROR: Required build target 'core-image-weston' has no buildable providers.
+Missing or unbuildable dependency chain was: ['core-image-weston', 'pam']
+
+These are my current additions to local.conf:
+
+INIT_MANAGER="systemd"
+CORE_IMAGE_EXTRA_INSTALL += " mesa-demos gdb"
+IMAGE_INSTALL:append += " pam"
+DISTRO_FEATURES:append = " systemd wayland pam x11" VIRTUAL-RUNTIME_init_manager = "systemd"
+DISTRO_FEATURES_BACKFILL_CONSIDERED = "sysvinit"VIRTUAL-RUNTIME_initscripts = ""
+IMAGE_ROOTFS_EXTRA_SPACE = "38048576"
+
+
+________________________________
+From: Scott Murray <scott.murray@konsulko.com>
+Sent: Monday, May 2, 2022 2:32 PM
+To: Edgar Mobile <heideggm@hotmail.com>
+Cc: Joel Winarske <joel.winarske@gmail.com>; Yocto-mailing-list <yocto@lists.yoctoproject.org>
+Subject: Re: [yocto] Adding systemd to yocto
+
+On Mon, 2 May 2022, Edgar Mobile wrote:
+
+> Ok, correction: I complains about pam missing.
+
+My apologies, I'd forgotten that wrinkle as we'd been sidestepping it for
+a while in AGL with some custom Weston startup.  There are a few recipes
+in the Weston stuff that explicitly mark pam as a required feature when
+using systemd, so you'll also need to have:
+
+DISTRO_FEATURES:append = " pam"
+
+Scott
+
+[-- Attachment #2: Type: text/html, Size: 5692 bytes --]
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+* Re: [yocto] Adding systemd to yocto
+  2022-05-03 10:57           ` Edgar Mobile
+@ 2022-05-03 12:45             ` Jack Mitchell
+  2022-05-03 12:53             ` Scott Murray
+  1 sibling, 0 replies; 10+ messages in thread
+From: Jack Mitchell @ 2022-05-03 12:45 UTC (permalink / raw)
+  To: Edgar Mobile, Scott Murray; +Cc: Joel Winarske, Yocto-mailing-list
+
+On 03/05/2022 11:57, Edgar Mobile wrote:
+> Apparently, this is not enough:
+> 
+> bitbake core-image-weston
+> /usr/lib/python3.6/importlib/_bootstrap.py:219: ImportWarning: can't
+> resolve package from __spec__ or __package__, falling back on __name__
+> and __path__
+>   return f(*args, **kwds)
+> Loading cache: 100% |############################################| Time:
+> 0:00:00
+> Loaded 1472 entries from dependency cache.
+> NOTE: Resolving any missing task queue dependencies
+> ERROR: Nothing RPROVIDES 'pam' (but
+> /media/user/SSD1TB/yoctoqemu/poky/meta/recipes-graphics/images/core-image-weston.bb
+> RDEPENDS on or otherwise requires it)
+> NOTE: Runtime target 'pam' is unbuildable, removing...
+> Missing or unbuildable dependency chain was: ['pam']
+> ERROR: Required build target 'core-image-weston' has no buildable providers.
+> Missing or unbuildable dependency chain was: ['core-image-weston', 'pam']
+> 
+> These are my current additions to local.conf:
+> 
+> INIT_MANAGER="systemd"
+> CORE_IMAGE_EXTRA_INSTALL += " mesa-demos gdb"
+> IMAGE_INSTALL:append += " pam"
+
+pam is a DISTRO_FEATURE as below, not a package as you've added above.
+
+> DISTRO_FEATURES:append = " systemd wayland pam x11"
+> VIRTUAL-RUNTIME_init_manager = "systemd" 
+> DISTRO_FEATURES_BACKFILL_CONSIDERED =
+> "sysvinit"VIRTUAL-RUNTIME_initscripts = ""
+> IMAGE_ROOTFS_EXTRA_SPACE = "38048576"
+> 
+> 
+> ------------------------------------------------------------------------
+> *From:* Scott Murray <scott.murray@konsulko.com>
+> *Sent:* Monday, May 2, 2022 2:32 PM
+> *To:* Edgar Mobile <heideggm@hotmail.com>
+> *Cc:* Joel Winarske <joel.winarske@gmail.com>; Yocto-mailing-list
+> <yocto@lists.yoctoproject.org>
+> *Subject:* Re: [yocto] Adding systemd to yocto
+>  
+> On Mon, 2 May 2022, Edgar Mobile wrote:
+> 
+>> Ok, correction: I complains about pam missing.
+> 
+> My apologies, I'd forgotten that wrinkle as we'd been sidestepping it for
+> a while in AGL with some custom Weston startup.  There are a few recipes
+> in the Weston stuff that explicitly mark pam as a required feature when
+> using systemd, so you'll also need to have:
+> 
+> DISTRO_FEATURES:append = " pam"
+> 
+> Scott
+> 
+> 
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#56975): https://lists.yoctoproject.org/g/yocto/message/56975
+> Mute This Topic: https://lists.yoctoproject.org/mt/90758452/3618454
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [ml@embed.me.uk]
+> -=-=-=-=-=-=-=-=-=-=-=-
+> 
+
+-- 
+Jack Mitchell, Consultant
+https://www.tuxable.co.uk
+
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+* Re: [yocto] Adding systemd to yocto
+  2022-05-03 10:57           ` Edgar Mobile
+  2022-05-03 12:45             ` Jack Mitchell
+@ 2022-05-03 12:53             ` Scott Murray
+  2022-05-04  9:39               ` Edgar Mobile
+  1 sibling, 1 reply; 10+ messages in thread
+From: Scott Murray @ 2022-05-03 12:53 UTC (permalink / raw)
+  To: Edgar Mobile; +Cc: Yocto-mailing-list
+
+On Tue, 3 May 2022, Edgar Mobile wrote:
+
+> Apparently, this is not enough:
+>
+> bitbake core-image-weston
+> /usr/lib/python3.6/importlib/_bootstrap.py:219: ImportWarning: can't resolve package from __spec__ or __package__, falling back on __name__ and __path__
+>   return f(*args, **kwds)
+> Loading cache: 100% |############################################| Time: 0:00:00
+> Loaded 1472 entries from dependency cache.
+> NOTE: Resolving any missing task queue dependencies
+> ERROR: Nothing RPROVIDES 'pam' (but /media/user/SSD1TB/yoctoqemu/poky/meta/recipes-graphics/images/core-image-weston.bb RDEPENDS on or otherwise requires it)
+> NOTE: Runtime target 'pam' is unbuildable, removing...
+> Missing or unbuildable dependency chain was: ['pam']
+> ERROR: Required build target 'core-image-weston' has no buildable providers.
+> Missing or unbuildable dependency chain was: ['core-image-weston', 'pam']
+>
+> These are my current additions to local.conf:
+>
+> INIT_MANAGER="systemd"
+> CORE_IMAGE_EXTRA_INSTALL += " mesa-demos gdb"
+> IMAGE_INSTALL:append += " pam"
+
+^ This line what is causing your error, remove it.  With pam in
+DISTRO_FEATURES the required packages will get pulled in via dependencies.
+
+> DISTRO_FEATURES:append = " systemd wayland pam x11"
+
+If you specify INIT_MANAGER = "systemd", then you do not need to add
+systemd here.
+
+> VIRTUAL-RUNTIME_init_manager = "systemd"
+> DISTRO_FEATURES_BACKFILL_CONSIDERED = "sysvinit"
+> VIRTUAL-RUNTIME_initscripts = ""
+
+Similarly, with INIT_MANAGER = "systemd" these 3 lines are not required.
+If you look at meta/conf/distro/include/init-manager-systemd.inc you can
+see what INIT_MANAGER = "systemd" tweaks.
+
+> IMAGE_ROOTFS_EXTRA_SPACE = "38048576"
+[snip]
+
+Scott
+
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+* Re: [yocto] Adding systemd to yocto
+  2022-05-03 12:53             ` Scott Murray
+@ 2022-05-04  9:39               ` Edgar Mobile
+  0 siblings, 0 replies; 10+ messages in thread
+From: Edgar Mobile @ 2022-05-04  9:39 UTC (permalink / raw)
+  To: Scott Murray; +Cc: Yocto-mailing-list
+
+[-- Attachment #1: Type: text/plain, Size: 2049 bytes --]
+
+Ok, that worked thanks everyone!
+
+________________________________
+From: Scott Murray <scott.murray@konsulko.com>
+Sent: Tuesday, May 3, 2022 12:53 PM
+To: Edgar Mobile <heideggm@hotmail.com>
+Cc: Yocto-mailing-list <yocto@lists.yoctoproject.org>
+Subject: Re: [yocto] Adding systemd to yocto
+
+On Tue, 3 May 2022, Edgar Mobile wrote:
+
+> Apparently, this is not enough:
+>
+> bitbake core-image-weston
+> /usr/lib/python3.6/importlib/_bootstrap.py:219: ImportWarning: can't resolve package from __spec__ or __package__, falling back on __name__ and __path__
+>   return f(*args, **kwds)
+> Loading cache: 100% |############################################| Time: 0:00:00
+> Loaded 1472 entries from dependency cache.
+> NOTE: Resolving any missing task queue dependencies
+> ERROR: Nothing RPROVIDES 'pam' (but /media/user/SSD1TB/yoctoqemu/poky/meta/recipes-graphics/images/core-image-weston.bb RDEPENDS on or otherwise requires it)
+> NOTE: Runtime target 'pam' is unbuildable, removing...
+> Missing or unbuildable dependency chain was: ['pam']
+> ERROR: Required build target 'core-image-weston' has no buildable providers.
+> Missing or unbuildable dependency chain was: ['core-image-weston', 'pam']
+>
+> These are my current additions to local.conf:
+>
+> INIT_MANAGER="systemd"
+> CORE_IMAGE_EXTRA_INSTALL += " mesa-demos gdb"
+> IMAGE_INSTALL:append += " pam"
+
+^ This line what is causing your error, remove it.  With pam in
+DISTRO_FEATURES the required packages will get pulled in via dependencies.
+
+> DISTRO_FEATURES:append = " systemd wayland pam x11"
+
+If you specify INIT_MANAGER = "systemd", then you do not need to add
+systemd here.
+
+> VIRTUAL-RUNTIME_init_manager = "systemd"
+> DISTRO_FEATURES_BACKFILL_CONSIDERED = "sysvinit"
+> VIRTUAL-RUNTIME_initscripts = ""
+
+Similarly, with INIT_MANAGER = "systemd" these 3 lines are not required.
+If you look at meta/conf/distro/include/init-manager-systemd.inc you can
+see what INIT_MANAGER = "systemd" tweaks.
+
+> IMAGE_ROOTFS_EXTRA_SPACE = "38048576"
+[snip]
+
+Scott
+
+[-- Attachment #2: Type: text/html, Size: 3255 bytes --]
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+end of thread, other threads:[~2022-05-04  9:39 UTC | newest]
+
+Thread overview: 10+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-04-28 17:19 Adding systemd to yocto Edgar Mobile
+2022-04-29  6:27 ` [yocto] " Joel Winarske
+2022-04-29 15:07   ` Scott Murray
+2022-05-02  7:47     ` Edgar Mobile
+2022-05-02  7:56       ` Edgar Mobile
+2022-05-02 14:32         ` Scott Murray
+2022-05-03 10:57           ` Edgar Mobile
+2022-05-03 12:45             ` Jack Mitchell
+2022-05-03 12:53             ` Scott Murray
+2022-05-04  9:39               ` Edgar Mobile
+

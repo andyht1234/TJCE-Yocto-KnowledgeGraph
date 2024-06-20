@@ -1,0 +1,389 @@
+* Adding and using user in more than one recipe
+@ 2022-07-22 21:23 Greg Wilson-Lindberg
+  2022-07-23  0:37 ` [yocto] " Khem Raj
+  0 siblings, 1 reply; 5+ messages in thread
+From: Greg Wilson-Lindberg @ 2022-07-22 21:23 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 638 bytes --]
+
+Hello list,
+I'm trying to understand how the extrauser and adduser packages are used and interact in kirkstone.
+
+I need to add a user and I would like to also use this user in another recipe. This had been working in our previous builds using version of Yocto up to hardnot. We are in the process of updating to kirkstone and the user stuff has now broken and I am not making any sense out of the documentation.
+
+How do I create a user in one recipe and then use that user in another recipe? Can I even do that, or do I need to create the user in more than one recipe with a hard coded UID, GID?
+
+Regards,
+Greg Wilson-LIndberg
+
+
+[-- Attachment #2: Type: text/html, Size: 2437 bytes --]
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] Adding and using user in more than one recipe
+  2022-07-22 21:23 Adding and using user in more than one recipe Greg Wilson-Lindberg
+@ 2022-07-23  0:37 ` Khem Raj
+  2022-07-23 15:03   ` Greg Wilson-Lindberg
+       [not found]   ` <17047D93444A051F.4676@lists.yoctoproject.org>
+  0 siblings, 2 replies; 5+ messages in thread
+From: Khem Raj @ 2022-07-23  0:37 UTC (permalink / raw)
+  To: Greg Wilson-Lindberg; +Cc: yocto
+
+On Fri, Jul 22, 2022 at 5:23 PM Greg Wilson-Lindberg
+<gwilson@sakuraus.com> wrote:
+>
+> Hello list,
+>
+> I’m trying to understand how the extrauser and adduser packages are used and interact in kirkstone.
+>
+>
+>
+> I need to add a user and I would like to also use this user in another recipe. This had been working in our previous builds using version of Yocto up to hardnot. We are in the process of updating to kirkstone and the user stuff has now broken and I am not making any sense out of the documentation.
+>
+>
+>
+> How do I create a user in one recipe and then use that user in another recipe? Can I even do that, or do I need to create the user in more than one recipe with a hard coded UID, GID?
+>
+>
+
+you can do it in image recipe
+
+inherit extrausers
+
+IMAGE_FEATURES:remove = "debug-tweaks"
+
+EXTRA_USERS_PARAMS += "\
+    useradd scribbledeedoo; \
+    usermod -p '$(openssl passwd -6 diddleDoo5)' scribbledeedoo; \
+    usermod -a -G adm scribbledeedoo; \
+    usermod -a -G video scribbledeedoo; \
+    usermod -a -G audio scribbledeedoo; \
+    usermod -a -G systemd-journal scribbledeedoo; \
+"
+
+HTH
+
+-Khem
+
+
+>
+> Regards,
+>
+> Greg Wilson-LIndberg
+>
+>
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> You automatically follow any topics you start or reply to.
+> View/Reply Online (#57628): https://lists.yoctoproject.org/g/yocto/message/57628
+> Mute This Topic: https://lists.yoctoproject.org/mt/92557070/1997914
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [raj.khem@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* RE: [yocto] Adding and using user in more than one recipe
+  2022-07-23  0:37 ` [yocto] " Khem Raj
+@ 2022-07-23 15:03   ` Greg Wilson-Lindberg
+       [not found]   ` <17047D93444A051F.4676@lists.yoctoproject.org>
+  1 sibling, 0 replies; 5+ messages in thread
+From: Greg Wilson-Lindberg @ 2022-07-23 15:03 UTC (permalink / raw)
+  To: Khem Raj; +Cc: yocto
+
+Hi Khem,
+That's originally what I had, but for some reason I hadn't put in the useradd line. I'm assuming that then because this is at the beginning of the image generation, I can then use the new user in any other recipe. Is there anything that I need to do to inherit the new user, or is it just there?
+
+Thanks,
+Greg
+
+> -----Original Message-----
+> From: Khem Raj <raj.khem@gmail.com>
+> Sent: Friday, July 22, 2022 17:38
+> To: Greg Wilson-Lindberg <GWilson@sakuraus.com>
+> Cc: yocto@lists.yoctoproject.org
+> Subject: Re: [yocto] Adding and using user in more than one recipe
+> 
+> On Fri, Jul 22, 2022 at 5:23 PM Greg Wilson-Lindberg
+> <gwilson@sakuraus.com> wrote:
+> >
+> > Hello list,
+> >
+> > I’m trying to understand how the extrauser and adduser packages are used
+> and interact in kirkstone.
+> >
+> >
+> >
+> > I need to add a user and I would like to also use this user in another recipe.
+> This had been working in our previous builds using version of Yocto up to
+> hardnot. We are in the process of updating to kirkstone and the user stuff
+> has now broken and I am not making any sense out of the documentation.
+> >
+> >
+> >
+> > How do I create a user in one recipe and then use that user in another
+> recipe? Can I even do that, or do I need to create the user in more than one
+> recipe with a hard coded UID, GID?
+> >
+> >
+> 
+> you can do it in image recipe
+> 
+> inherit extrausers
+> 
+> IMAGE_FEATURES:remove = "debug-tweaks"
+> 
+> EXTRA_USERS_PARAMS += "\
+>     useradd scribbledeedoo; \
+>     usermod -p '$(openssl passwd -6 diddleDoo5)' scribbledeedoo; \
+>     usermod -a -G adm scribbledeedoo; \
+>     usermod -a -G video scribbledeedoo; \
+>     usermod -a -G audio scribbledeedoo; \
+>     usermod -a -G systemd-journal scribbledeedoo; \ "
+> 
+> HTH
+> 
+> -Khem
+> 
+> 
+> >
+> > Regards,
+> >
+> > Greg Wilson-LIndberg
+> >
+> >
+> >
+> >
+> > -=-=-=-=-=-=-=-=-=-=-=-
+> > Links: You receive all messages sent to this group.
+> > You automatically follow any topics you start or reply to.
+> > View/Reply Online (#57628):
+> > https://lists.yoctoproject.org/g/yocto/message/57628
+> > Mute This Topic: https://lists.yoctoproject.org/mt/92557070/1997914
+> > Group Owner: yocto+owner@lists.yoctoproject.org
+> > Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub
+> > [raj.khem@gmail.com]
+> > -=-=-=-=-=-=-=-=-=-=-=-
+> >
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] Adding and using user in more than one recipe
+       [not found]   ` <17047D93444A051F.4676@lists.yoctoproject.org>
+@ 2022-07-25 18:08     ` Greg Wilson-Lindberg
+  2022-07-25 18:12       ` Khem Raj
+  0 siblings, 1 reply; 5+ messages in thread
+From: Greg Wilson-Lindberg @ 2022-07-25 18:08 UTC (permalink / raw)
+  To: Khem Raj; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 3007 bytes --]
+
+Hello Khem,
+I've added in the useradd line in my image recipe:
+
+EXTRA_USERS_PARAMS = "\
+    useradd -d /home/${SAKURA_USER} -r -s /bin/bash -U ${SAKURA_USER}; \
+    usermod -p '${SAKURA_PASS}' ${SAKURA_USER}; \
+    usermod -a -G sudo,dialout,video,input,audio,disk,shutdown,datetime ${SAKURA_USER}; \
+    "
+
+
+But I am still getting errors in the two recipes that I try to use the new user. How do I tell them that I need to inherit the added user, do I add a DEPEND or RDEPEND on the top level image recipe? Is there some other way?
+
+I saw a previous thread somewhere that suggested making a separate recipe to create the user in and then making the recipes that use that user DEPEND on the creation recipe.
+
+Regards,
+Greg
+________________________________
+From: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org> on behalf of Greg Wilson-Lindberg <gwilson@sakuraus.com>
+Sent: Saturday, July 23, 2022 8:03 AM
+To: Khem Raj <raj.khem@gmail.com>
+Cc: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+Subject: Re: [yocto] Adding and using user in more than one recipe
+
+Hi Khem,
+That's originally what I had, but for some reason I hadn't put in the useradd line. I'm assuming that then because this is at the beginning of the image generation, I can then use the new user in any other recipe. Is there anything that I need to do to inherit the new user, or is it just there?
+
+Thanks,
+Greg
+
+> -----Original Message-----
+> From: Khem Raj <raj.khem@gmail.com>
+> Sent: Friday, July 22, 2022 17:38
+> To: Greg Wilson-Lindberg <GWilson@sakuraus.com>
+> Cc: yocto@lists.yoctoproject.org
+> Subject: Re: [yocto] Adding and using user in more than one recipe
+>
+> On Fri, Jul 22, 2022 at 5:23 PM Greg Wilson-Lindberg
+> <gwilson@sakuraus.com> wrote:
+> >
+> > Hello list,
+> >
+> > I’m trying to understand how the extrauser and adduser packages are used
+> and interact in kirkstone.
+> >
+> >
+> >
+> > I need to add a user and I would like to also use this user in another recipe.
+> This had been working in our previous builds using version of Yocto up to
+> hardnot. We are in the process of updating to kirkstone and the user stuff
+> has now broken and I am not making any sense out of the documentation.
+> >
+> >
+> >
+> > How do I create a user in one recipe and then use that user in another
+> recipe? Can I even do that, or do I need to create the user in more than one
+> recipe with a hard coded UID, GID?
+> >
+> >
+>
+> you can do it in image recipe
+>
+> inherit extrausers
+>
+> IMAGE_FEATURES:remove = "debug-tweaks"
+>
+> EXTRA_USERS_PARAMS += "\
+>     useradd scribbledeedoo; \
+>     usermod -p '$(openssl passwd -6 diddleDoo5)' scribbledeedoo; \
+>     usermod -a -G adm scribbledeedoo; \
+>     usermod -a -G video scribbledeedoo; \
+>     usermod -a -G audio scribbledeedoo; \
+>     usermod -a -G systemd-journal scribbledeedoo; \ "
+>
+> HTH
+>
+> -Khem
+>
+>
+> >
+> > Regards,
+> >
+> > Greg Wilson-LIndberg
+> >
+> >
+> >
+> >
+> >
+> >
+
+[-- Attachment #2: Type: text/html, Size: 5536 bytes --]
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] Adding and using user in more than one recipe
+  2022-07-25 18:08     ` Greg Wilson-Lindberg
+@ 2022-07-25 18:12       ` Khem Raj
+  0 siblings, 0 replies; 5+ messages in thread
+From: Khem Raj @ 2022-07-25 18:12 UTC (permalink / raw)
+  To: Greg Wilson-Lindberg; +Cc: yocto
+
+On Mon, Jul 25, 2022 at 2:08 PM Greg Wilson-Lindberg
+<GWilson@sakuraus.com> wrote:
+>
+> Hello Khem,
+> I've added in the useradd line in my image recipe:
+>
+> EXTRA_USERS_PARAMS = "\
+>     useradd -d /home/${SAKURA_USER} -r -s /bin/bash -U ${SAKURA_USER}; \
+>     usermod -p '${SAKURA_PASS}' ${SAKURA_USER}; \
+>     usermod -a -G sudo,dialout,video,input,audio,disk,shutdown,datetime ${SAKURA_USER}; \
+>     "
+>
+> But I am still getting errors in the two recipes that I try to use the new user. How do I tell them that I need to inherit the added user, do I add a DEPEND or RDEPEND on the top level image recipe? Is there some other way?
+>
+> I saw a previous thread somewhere that suggested making a separate recipe to create the user in and then making the recipes that use that user DEPEND on the creation recipe.
+>
+
+if you need it in a recipe then perhaps that maybe a good approach.
+
+> Regards,
+> Greg
+> ________________________________
+> From: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org> on behalf of Greg Wilson-Lindberg <gwilson@sakuraus.com>
+> Sent: Saturday, July 23, 2022 8:03 AM
+> To: Khem Raj <raj.khem@gmail.com>
+> Cc: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+> Subject: Re: [yocto] Adding and using user in more than one recipe
+>
+> Hi Khem,
+> That's originally what I had, but for some reason I hadn't put in the useradd line. I'm assuming that then because this is at the beginning of the image generation, I can then use the new user in any other recipe. Is there anything that I need to do to inherit the new user, or is it just there?
+>
+> Thanks,
+> Greg
+>
+> > -----Original Message-----
+> > From: Khem Raj <raj.khem@gmail.com>
+> > Sent: Friday, July 22, 2022 17:38
+> > To: Greg Wilson-Lindberg <GWilson@sakuraus.com>
+> > Cc: yocto@lists.yoctoproject.org
+> > Subject: Re: [yocto] Adding and using user in more than one recipe
+> >
+> > On Fri, Jul 22, 2022 at 5:23 PM Greg Wilson-Lindberg
+> > <gwilson@sakuraus.com> wrote:
+> > >
+> > > Hello list,
+> > >
+> > > I’m trying to understand how the extrauser and adduser packages are used
+> > and interact in kirkstone.
+> > >
+> > >
+> > >
+> > > I need to add a user and I would like to also use this user in another recipe.
+> > This had been working in our previous builds using version of Yocto up to
+> > hardnot. We are in the process of updating to kirkstone and the user stuff
+> > has now broken and I am not making any sense out of the documentation.
+> > >
+> > >
+> > >
+> > > How do I create a user in one recipe and then use that user in another
+> > recipe? Can I even do that, or do I need to create the user in more than one
+> > recipe with a hard coded UID, GID?
+> > >
+> > >
+> >
+> > you can do it in image recipe
+> >
+> > inherit extrausers
+> >
+> > IMAGE_FEATURES:remove = "debug-tweaks"
+> >
+> > EXTRA_USERS_PARAMS += "\
+> >     useradd scribbledeedoo; \
+> >     usermod -p '$(openssl passwd -6 diddleDoo5)' scribbledeedoo; \
+> >     usermod -a -G adm scribbledeedoo; \
+> >     usermod -a -G video scribbledeedoo; \
+> >     usermod -a -G audio scribbledeedoo; \
+> >     usermod -a -G systemd-journal scribbledeedoo; \ "
+> >
+> > HTH
+> >
+> > -Khem
+> >
+> >
+> > >
+> > > Regards,
+> > >
+> > > Greg Wilson-LIndberg
+> > >
+> > >
+> > >
+> > >
+> > >
+> > >
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+end of thread, other threads:[~2022-07-25 18:12 UTC | newest]
+
+Thread overview: 5+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-07-22 21:23 Adding and using user in more than one recipe Greg Wilson-Lindberg
+2022-07-23  0:37 ` [yocto] " Khem Raj
+2022-07-23 15:03   ` Greg Wilson-Lindberg
+     [not found]   ` <17047D93444A051F.4676@lists.yoctoproject.org>
+2022-07-25 18:08     ` Greg Wilson-Lindberg
+2022-07-25 18:12       ` Khem Raj
+

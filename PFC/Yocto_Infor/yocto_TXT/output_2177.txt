@@ -1,0 +1,113 @@
+* [PATCH yocto-autobuilder-helper] scripts: run-docs-build: do not turn sphinx warnings into errors
+@ 2022-02-23 14:46 Quentin Schulz
+  0 siblings, 0 replies; only message in thread
+From: Quentin Schulz @ 2022-02-23 14:46 UTC (permalink / raw)
+  To: yocto; +Cc: Quentin Schulz, Quentin Schulz
+
+From: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+
+Default flags for sphinx-build contain -W which turns warnings into
+errors. This is really helpful during debugging and could be used for
+continuous integration though we do not have such a thing separate from
+the continuous delivery in place currently. Nowadays, the docs files
+served at docs.yoctoproject.com are actually removed before being
+updated from the newly built docs. If the `html` target, a dependency of
+`publish` target is failing, the docs aren't copied over to the `final`
+temporary directory. Therefore it'll be missing in the rsync upload to
+docs.yoctoproject.org.
+
+Instead, let's disable the turning of warnings into errors so that the
+`html` make target can finish successfully and the `publish` make target
+to finish successfully too.
+
+Cc: Quentin Schulz <foss+yocto@0leil.net>
+Signed-off-by: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+---
+ scripts/run-docs-build | 16 ++++++++--------
+ 1 file changed, 8 insertions(+), 8 deletions(-)
+
+diff --git a/scripts/run-docs-build b/scripts/run-docs-build
+index 3bc35b3..d9c4bc1 100755
+--- a/scripts/run-docs-build
++++ b/scripts/run-docs-build
+@@ -27,14 +27,14 @@ cd $bbdocs
+ echo Building bitbake master branch
+ git checkout master
+ make clean
+-make publish
++SPHINXOPTS="-j auto" make publish
+ mkdir $outputdir/bitbake
+ cp -r ./_build/final/* $outputdir/bitbake
+ 
+ git checkout master-next
+ echo Building bitbake master-next branch
+ make clean
+-make publish
++SPHINXOPTS="-j auto" make publish
+ mkdir $outputdir/bitbake/next
+ cp -r ./_build/final/* $outputdir/bitbake/next
+ 
+@@ -49,7 +49,7 @@ for branch in 1.46 1.48 1.50 1.52; do
+     git checkout $branch
+     git checkout master releases.rst
+     make clean
+-    make publish
++    SPHINXOPTS="-j auto" make publish
+     mkdir $outputdir/bitbake/$branch
+     cp -r ./_build/final/* $outputdir/bitbake/$branch
+     git reset --hard
+@@ -64,21 +64,21 @@ cd $ypdocs
+ echo Building master branch
+ git checkout master
+ make clean
+-make publish
++SPHINXOPTS="-j auto" make publish
+ cp -r ./_build/final/* $outputdir
+ 
+ cd $ypdocs
+ echo Building transition branch
+ git checkout transition
+ make clean
+-make publish
++SPHINXOPTS="-j auto" make publish
+ cp -r ./_build/final/* $outputdir/
+ 
+ cd $ypdocs
+ echo Building master-next branch
+ git checkout master-next
+ make clean
+-make publish
++SPHINXOPTS="-j auto" make publish
+ mkdir $outputdir/next
+ cp -r ./_build/final/* $outputdir/next
+ 
+@@ -90,7 +90,7 @@ for branch in dunfell gatesgarth hardknott honister; do
+     git checkout $branch
+     git checkout master releases.rst
+     make clean
+-    make publish
++    SPHINXOPTS="-j auto" make publish
+     mkdir $outputdir/$branch
+     cp -r ./_build/final/* $outputdir/$branch
+     git reset --hard
+@@ -115,7 +115,7 @@ for tag in $(git tag --list 'yocto-*'); do
+         fi
+         git checkout master releases.rst
+         make clean
+-        make publish
++        SPHINXOPTS="-j auto" make publish
+         version=$(echo $tag | cut -c7-)
+         mkdir $outputdir/$version
+         cp -r ./_build/final/* $outputdir/$version
+-- 
+2.35.1
+
+
+
+^ permalink raw reply related	[flat|nested] only message in thread
+only message in thread, other threads:[~2022-02-23 14:46 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-02-23 14:46 [PATCH yocto-autobuilder-helper] scripts: run-docs-build: do not turn sphinx warnings into errors Quentin Schulz
+

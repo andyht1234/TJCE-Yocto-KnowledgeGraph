@@ -1,0 +1,187 @@
+* libubootenv setup
+@ 2023-06-03 10:29 Vipin Vijayan
+  2023-06-03 12:07 ` [yocto] " Stefano Babic
+  0 siblings, 1 reply; 2+ messages in thread
+From: Vipin Vijayan @ 2023-06-03 10:29 UTC (permalink / raw)
+  To: yocto
+
+
+[-- Attachment #1.1: Type: text/plain, Size: 1405 bytes --]
+
+Hi,
+I am working on our custom board with dunfell version and we are using a
+custom u-boot for the board. But when i try to use fw_printenv and
+fw_setenv iam not being able to access those functionalities. Iam using
+libubootenv for those specific functionalities .
+
+iam adding libubootenv-bin in image_install and iam getting the fw_printenv
+and fw_setenv in the /usr/bin folder
+
+But when i use fw_printenv and fw_setenv iam getting an error,
+Can't read from default
+Can't read from file.
+
+We are storing the environment variables in the spi flash /dev/mtd3
+
+When i try hexdump i can find the variables present
+But iam not being able to access it with fw_printenv and fw_setenv any
+variable using fw_setenv
+
+I should mention that fw_env.config is perfect and does not have any error
+in it, because when we try to access those variables using another
+fw_printenv, which we got from executing make in the git source , we are
+getting the variables printed.
+
+Also during build of the u-boot we are using a patch file which we got from
+internet for its build succession, I dont know whether that patch
+interferes with anything that hinders its function.
+
+Iam attaching my fw_env.config and also the patch file i used for u-boot
+along with this
+
+As iam a beginner in this field, Iam not much aware of these
+functionalities in detail. Please look in to the issue and any helps are
+appreciated.
+
+Regards,
+*Vipin*
+
+[-- Attachment #1.2: Type: text/html, Size: 1843 bytes --]
+
+[-- Attachment #2: fw_env.config --]
+[-- Type: application/xml, Size: 1359 bytes --]
+
+[-- Attachment #3: test.patch --]
+[-- Type: application/octet-stream, Size: 1605 bytes --]
+
+From bdaa73a5b3923257add182b4ab8058dbfa33421b Mon Sep 17 00:00:00 2001
+From: Stefano Babic <sbabic@denx.de>
+Date: Wed, 13 Mar 2019 09:46:45 +0100
+Subject: [PATCH] Add target to generate initial environment
+
+The initial environment is linked to the u-boot binary. Modifying the
+environment from User Space with the env tools requires that the tools
+are always built together with the bootloader to be sure that they
+contain the initial environment in case no environment is stored into
+persistent storage or when a board boots with just the default
+environment. This makes difficult for distros to provide a general
+package to access the environment. A simpler way is if the tools are
+generic for all boards and a configuration file is given to provide the
+initial environment.
+
+The patch just generates the initial environment by extracting it from
+the compiled object. This file can then be used for tools in user space
+to initialize the environment.
+
+Signed-off-by: Stefano Babic <sbabic@denx.de>
+---
+ Makefile | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/Makefile b/Makefile
+index 66a09ac900c3..f2c7bb6041a2 100644
+--- a/Makefile
++++ b/Makefile
+@@ -1977,6 +1977,13 @@ endif
+ 	$(build)=$(build-dir) $(@:.ko=.o)
+ 	$(Q)$(MAKE) -f $(srctree)/scripts/Makefile.modpost
+ 
++quiet_cmd_genenv = GENENV $@
++cmd_genenv = $(OBJCOPY) --dump-section .rodata.default_environment=$@ env/common.o; \
++	sed --in-place -e 's/\x00/\x0A/g' $@
++
++u-boot-initial-env: u-boot.bin
++	$(call if_changed,genenv)
++
+ # Consistency checks
+ # ---------------------------------------------------------------------------
+ 
+
+^ permalink raw reply related	[flat|nested] 2+ messages in thread
+* Re: [yocto] libubootenv setup
+  2023-06-03 10:29 libubootenv setup Vipin Vijayan
+@ 2023-06-03 12:07 ` Stefano Babic
+  0 siblings, 0 replies; 2+ messages in thread
+From: Stefano Babic @ 2023-06-03 12:07 UTC (permalink / raw)
+  To: Vipin Vijayan, yocto
+
+Hi Vipin,
+
+On 03.06.23 12:29, Vipin Vijayan wrote:
+> Hi,
+> I am working on our custom board with dunfell version and we are using a 
+> custom u-boot for the board. But when i try to use fw_printenv and 
+> fw_setenv iam not being able to access those functionalities. Iam using 
+> libubootenv for those specific functionalities .
+> 
+> iam adding libubootenv-bin in image_install and iam getting the 
+> fw_printenv and fw_setenv in the /usr/bin folder
+> 
+> But when i use fw_printenv and fw_setenv iam getting an error,
+> Can't read from default
+> Can't read from file.
+> 
+> We are storing the environment variables in the spi flash /dev/mtd3
+> 
+> When i try hexdump i can find the variables present
+> But iam not being able to access it with fw_printenv and fw_setenv any 
+> variable using fw_setenv
+> 
+> I should mention that fw_env.config is perfect and does not have any 
+> error in it, because when we try to access those variables using another 
+> fw_printenv,
+
+This is not a valid proof. Old tools have linked-in environment, and 
+fw_printenv prints variables even if fw_env.config is not correct. If 
+libuboot does not report the variables, the main reason is that your 
+fw_env.config does not match the configuration in U-Boot.
+
+To check this, you can set with old tool some variables, reboot your 
+board and check if the variable can be read by U-Boot. If not, your 
+fw_env.config is far away to be perfect.
+
+> which we got from executing make in the git source , we are 
+> getting the variables printed.
+> 
+> Also during build of the u-boot we are using a patch file which we got 
+> from internet for its build succession, I dont know whether that patch 
+> interferes with anything that hinders its function.
+
+Patch was merged into U-Boot some years ago and you do not need it if 
+your u-boot is not too old. You need to install u-boot-initial-env as 
+well (this replaces the linked-in environment from old tool), it is part 
+of u-boot-env package.
+
+> 
+> Iam attaching my fw_env.config
+
+Only you can check if fw_env.config is correct.
+
+> and also the patch file i used for u-boot 
+> along with this
+
+Patch was merged and part of U-Boot since 2019.07
+
+> 
+> As iam a beginner in this field, Iam not much aware of these 
+> functionalities in detail. Please look in to the issue and any helps are 
+> appreciated.
+Best regards,
+Stefano Babic
+
+-- 
+=====================================================================
+DENX Software Engineering GmbH,        Managing Director: Erika Unter
+HRB 165235 Munich,   Office: Kirchenstr.5, 82194 Groebenzell, Germany
+Phone: +49-8142-66989-53 Fax: +49-8142-66989-80 Email: sbabic@denx.de
+=====================================================================
+
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2023-06-03 12:07 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-06-03 10:29 libubootenv setup Vipin Vijayan
+2023-06-03 12:07 ` [yocto] " Stefano Babic
+

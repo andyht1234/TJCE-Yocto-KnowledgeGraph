@@ -1,0 +1,159 @@
+* SSTATE corruption
+@ 2022-03-22 13:48 Rusty Howell
+  2022-03-22 14:13 ` [yocto] " Alexander Kanavin
+  0 siblings, 1 reply; 4+ messages in thread
+From: Rusty Howell @ 2022-03-22 13:48 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 419 bytes --]
+
+Is the sstate cache sensitive to different releases and or the ordering of
+the bblayers?   We are upgrading our Yocto-based distro from dunfell to
+hardknott.  So for a while we will be building our distro on both releases.
+  Do we need to keep the sstate caches separate for these builds?
+
+Another related question... Does changing the order of the bblayers corrupt
+the sstate cache (ie require a fresh sstate)?
+Thanks
+
+[-- Attachment #2: Type: text/html, Size: 502 bytes --]
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] SSTATE corruption
+  2022-03-22 13:48 SSTATE corruption Rusty Howell
+@ 2022-03-22 14:13 ` Alexander Kanavin
+  2022-03-22 17:54   ` Chuck Wolber
+  0 siblings, 1 reply; 4+ messages in thread
+From: Alexander Kanavin @ 2022-03-22 14:13 UTC (permalink / raw)
+  To: Rusty Howell; +Cc: yocto
+
+No and no.
+
+Alex
+
+On Tue, 22 Mar 2022 at 14:48, Rusty Howell <rustyhowell@gmail.com> wrote:
+>
+> Is the sstate cache sensitive to different releases and or the ordering of the bblayers?   We are upgrading our Yocto-based distro from dunfell to hardknott.  So for a while we will be building our distro on both releases.   Do we need to keep the sstate caches separate for these builds?
+>
+> Another related question... Does changing the order of the bblayers corrupt the sstate cache (ie require a fresh sstate)?
+> Thanks
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#56526): https://lists.yoctoproject.org/g/yocto/message/56526
+> Mute This Topic: https://lists.yoctoproject.org/mt/89952176/1686489
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] SSTATE corruption
+  2022-03-22 14:13 ` [yocto] " Alexander Kanavin
+@ 2022-03-22 17:54   ` Chuck Wolber
+  2022-03-23 12:49     ` Richard Purdie
+  0 siblings, 1 reply; 4+ messages in thread
+From: Chuck Wolber @ 2022-03-22 17:54 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: Rusty Howell, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1896 bytes --]
+
+Alex is very much correct, you should not see corruption. But I think more
+detail is in order.
+
+If your distro repository is a "garden variety" set of image recipes and
+recipe overrides that pull upstream source bundles, then your SSTATE cache
+should age nicely from release to release.
+
+However, if your source code and associated application files ride along in
+the same repository as your recipes, or you add your own bbclass
+functionality, you may want to reconsider keeping SSTATE cache around for
+too long. There are still some issues to be worked out to make the local
+file fetcher as reliable as the other fetchers when it comes to keeping
+your distro buttoned up into one monolithic repository with application
+level source code trees.
+
+..Ch:W..
+
+
+On Tue, Mar 22, 2022 at 7:13 AM Alexander Kanavin <alex.kanavin@gmail.com>
+wrote:
+
+> No and no.
+>
+> Alex
+>
+> On Tue, 22 Mar 2022 at 14:48, Rusty Howell <rustyhowell@gmail.com> wrote:
+> >
+> > Is the sstate cache sensitive to different releases and or the ordering
+> of the bblayers?   We are upgrading our Yocto-based distro from dunfell to
+> hardknott.  So for a while we will be building our distro on both
+> releases.   Do we need to keep the sstate caches separate for these builds?
+> >
+> > Another related question... Does changing the order of the bblayers
+> corrupt the sstate cache (ie require a fresh sstate)?
+> > Thanks
+> >
+> >
+> >
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#56527):
+> https://lists.yoctoproject.org/g/yocto/message/56527
+> Mute This Topic: https://lists.yoctoproject.org/mt/89952176/894569
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> chuckwolber@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+-- 
+*"Perfection must be reached by degrees; she requires the slow hand of
+time." - Voltaire*
+
+[-- Attachment #2: Type: text/html, Size: 3017 bytes --]
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] SSTATE corruption
+  2022-03-22 17:54   ` Chuck Wolber
+@ 2022-03-23 12:49     ` Richard Purdie
+  0 siblings, 0 replies; 4+ messages in thread
+From: Richard Purdie @ 2022-03-23 12:49 UTC (permalink / raw)
+  To: Chuck Wolber, Alexander Kanavin; +Cc: Rusty Howell, yocto
+
+On Tue, 2022-03-22 at 10:54 -0700, Chuck Wolber wrote:
+> Alex is very much correct, you should not see corruption. But I think more
+> detail is in order.
+> 
+> If your distro repository is a "garden variety" set of image recipes and
+> recipe overrides that pull upstream source bundles, then your SSTATE cache
+> should age nicely from release to release.
+> 
+> However, if your source code and associated application files ride along in
+> the same repository as your recipes, or you add your own bbclass
+> functionality, you may want to reconsider keeping SSTATE cache around for too
+> long. There are still some issues to be worked out to make the local file
+> fetcher as reliable as the other fetchers
+
+Did we get that solved on master or not? I can't remember if there were
+remaining issues or not?
+
+Cheers,
+
+Richard
+
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+end of thread, other threads:[~2022-03-23 12:50 UTC | newest]
+
+Thread overview: 4+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-03-22 13:48 SSTATE corruption Rusty Howell
+2022-03-22 14:13 ` [yocto] " Alexander Kanavin
+2022-03-22 17:54   ` Chuck Wolber
+2022-03-23 12:49     ` Richard Purdie
+

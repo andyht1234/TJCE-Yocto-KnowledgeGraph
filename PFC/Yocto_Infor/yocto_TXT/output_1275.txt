@@ -1,0 +1,160 @@
+* EXTRA_IMAGECMD:squashfs-xz support
+@ 2022-09-29 21:26 Bills, Jason M
+  2022-10-18 22:48 ` Bills, Jason M
+  0 siblings, 1 reply; 4+ messages in thread
+From: Bills, Jason M @ 2022-09-29 21:26 UTC (permalink / raw)
+  To: yocto
+
+Hello,
+
+I work on OpenBMC and am having an issue with EXTRA_IMAGECMD:squashfs-xz.
+
+There was a recent change pulled into OpenBMC in image_types.bbclass. In 
+the old file, IMAGE_CMD:squashfs-xz was defined directly:
+
+IMAGE_CMD:squashfs-xz = "mksquashfs ${IMAGE_ROOTFS} 
+${IMGDEPLOYDIR}/${IMAGE_NAME}${IMAGE_NAME_SUFFIX}.squashfs-xz 
+${EXTRA_IMAGECMD} -noappend -comp xz"
+
+In the new file, it is defined using a method:
+
+oe_mksquashfs () {
+     local comp=$1
+     local suffix=$2
+
+     # Use the bitbake reproducible timestamp instead of the hardcoded 
+squashfs one
+     export SOURCE_DATE_EPOCH=$(stat -c '%Y' ${IMAGE_ROOTFS})
+     mksquashfs ${IMAGE_ROOTFS} 
+${IMGDEPLOYDIR}/${IMAGE_NAME}${IMAGE_NAME_SUFFIX}.squashfs${comp:+-}${suffix:-$comp} 
+${EXTRA_IMAGECMD} -noappend ${comp:+-comp }$comp
+}
+IMAGE_CMD:squashfs-xz = "oe_mksquashfs xz"
+
+In my build we append to EXTRA_IMAGECMD:squashfs-xz to add parameters to 
+the mksquashfs commmand like this:
+EXTRA_IMAGECMD:squashfs-xz:append = "-processors ${BB_NUMBER_THREADS} -b 
+262144 -Xdict-size 100% -Xbcj arm"
+
+With the old file, the EXTRA_IMAGECMD:squashfs-xz parameters are added 
+to the mksquashfs command. But with the new file, they don't get added 
+anymore. I wonder if the method loses the squashfs-xz context so the 
+empty EXTRA_IMAGECMD is used instead of EXTRA_IMAGECMD:squashfs-xz.
+
+Should my EXTRA_IMAGECMD:squashfs-xz:append still work, or is there a 
+different way to add parameters to the IMAGE_CMD:squashfs-xz command 
+with the new approach?
+
+Thanks!
+-Jason
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: EXTRA_IMAGECMD:squashfs-xz support
+  2022-09-29 21:26 EXTRA_IMAGECMD:squashfs-xz support Bills, Jason M
+@ 2022-10-18 22:48 ` Bills, Jason M
+  2022-10-27 15:53   ` [yocto] " Quentin Schulz
+  0 siblings, 1 reply; 4+ messages in thread
+From: Bills, Jason M @ 2022-10-18 22:48 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 142 bytes --]
+
+Hello,
+
+Just checking if EXTRA_IMAGECMD:squashfs-xz:append failing to apply is expected or if it should be fixed?
+
+Thanks again,
+-Jason
+
+[-- Attachment #2: Type: text/html, Size: 211 bytes --]
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] EXTRA_IMAGECMD:squashfs-xz support
+  2022-10-18 22:48 ` Bills, Jason M
+@ 2022-10-27 15:53   ` Quentin Schulz
+  2022-11-01 22:02     ` Bills, Jason M
+  0 siblings, 1 reply; 4+ messages in thread
+From: Quentin Schulz @ 2022-10-27 15:53 UTC (permalink / raw)
+  To: Bills, Jason M, yocto
+
+Hi Jason,
+
+Sorry for the delay, your mail got lost in my pile of to-answer that 
+never slims down apparently.
+
+On 10/19/22 00:48, Bills, Jason M wrote:
+> Hello,
+> 
+> Just checking if EXTRA_IMAGECMD:squashfs-xz:append failing to apply is expected or if it should be fixed?
+> 
+
+I just tested on Kirkstone release, yocto-4.0.4 tag. It works as expected.
+
+Did you end up finding the issue or are you still after it?
+
+Would you be able to give us more info? Which version of Yocto are you 
+using? Can you try to find a small reproducer with ideally only poky (or 
+at the very least public layers)?
+
+Cheers,
+Quentin
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: EXTRA_IMAGECMD:squashfs-xz support
+  2022-10-27 15:53   ` [yocto] " Quentin Schulz
+@ 2022-11-01 22:02     ` Bills, Jason M
+  0 siblings, 0 replies; 4+ messages in thread
+From: Bills, Jason M @ 2022-11-01 22:02 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 3814 bytes --]
+
+Hi Quentin,
+
+Thanks for the reply!  Sorry for my delay back. :)  I haven't been able to fully reproduce this on poky, but I got a little more info.
+
+First, we are still seeing the issue with EXTRA_IMAGECMD:squashfs-xz:append failing to apply. We are using Langdale and Kirkstone worked fine for us. I think I narrowed it down to this change: https://github.com/yoctoproject/poky/commit/924854accc46f254b6399fc3cf2613a6597410e3.
+
+Using just poky, I add ` EXTRA_IMAGECMD:squashfs-xz:append = "-processors ${BB_NUMBER_THREADS} -b 262144 -Xdict-size 100%"` to my local.conf and run `bitbake -e core-image-minimal` to check the environment.
+
+At the ` kirkstone-4.0.1` tag, I see
+# $EXTRA_IMAGECMD [8 operations] # set /home/jmbills/temp/poky/meta/classes/image_types.bbclass:224 # "" # override[squashfs-xz]::append /home/jmbills/temp/poky/build/conf/local.conf:41 # "-processors ${BB_NUMBER_THREADS} -b 262144 -Xdict-size 100%"
+So, the override is correctly set.
+
+And I see
+# $IMAGE_CMD:squashfs-xz # set /home/jmbills/temp/poky/meta/classes/image_types.bbclass:107 # "mksquashfs ${IMAGE_ROOTFS} ${IMGDEPLOYDIR}/${IMAGE_NAME}${IMAGE_NAME_SUFFIX}.squashfs-xz ${EXTRA_IMAGECMD} -noappend -comp xz" IMAGE_CMD:squashfs-xz="mksquashfs /home/jmbills/temp/poky/build/tmp/work/qemux86_64-poky-linux/core-image-minimal/1.0-r0/rootfs /home/jmbills/temp/poky/build/tmp/work/qemux86_64-poky-linux/core-image-minimal/1.0-r0/deploy-core-image-minimal-image-complete/core-image-minimal-qemux86-64-20221101211323.rootfs.squashfs-xz -noappend -comp xz"
+
+In this case ` ${EXTRA_IMAGECMD}` appears to be empty.
+
+If I then change my local.conf to `EXTRA_IMAGECMD:append = "-processors ${BB_NUMBER_THREADS} -b 262144 -Xdict-size 100%"` and run `bitbake -e core-image-minimal`, I see nothing for the override and
+# $IMAGE_CMD:squashfs-xz # set /home/jmbills/temp/poky/meta/classes/image_types.bbclass:107 # "mksquashfs ${IMAGE_ROOTFS} ${IMGDEPLOYDIR}/${IMAGE_NAME}${IMAGE_NAME_SUFFIX}.squashfs-xz ${EXTRA_IMAGECMD} -noappend -comp xz" IMAGE_CMD:squashfs-xz="mksquashfs /home/jmbills/temp/poky/build/tmp/work/qemux86_64-poky-linux/core-image-minimal/1.0-r0/rootfs /home/jmbills/temp/poky/build/tmp/work/qemux86_64-poky-linux/core-image-minimal/1.0-r0/deploy-core-image-minimal-image-complete/core-image-minimal-qemux86-64-20221101211620.rootfs.squashfs-xz -processors 64 -b 262144 -Xdict-size 100% -noappend -comp xz"
+
+In this case ` ${EXTRA_IMAGECMD}` contained my parameters.
+
+If I check out `master`, change my local.conf to `EXTRA_IMAGECMD:squashfs-xz:append = "-processors ${BB_NUMBER_THREADS} -b 262144 -Xdict-size 100%"` to my local.conf and run `bitbake -e core-image-minimal`, I see the override again
+# $EXTRA_IMAGECMD [8 operations] # set /home/jmbills/temp/poky/meta/classes-recipe/image_types.bbclass:245 # "" # override[squashfs-xz]::append /home/jmbills/temp/poky/build/conf/local.conf:41 # "-processors ${BB_NUMBER_THREADS} -b 262144 -Xdict-size 100%"
+
+And for IMAGE_CMD, I see
+# $IMAGE_CMD:squashfs-xz # set /home/jmbills/temp/poky/meta/classes-recipe/image_types.bbclass:121 # "oe_mksquashfs xz" IMAGE_CMD:squashfs-xz="oe_mksquashfs xz"
+
+I don't know how to confirm this with poky, but from this it appears that the override for squashfs-xz (which is correct in both versions) gets applied later during bitbake execution. I don't know how that override gets applied, but if it gets appended to IMAGE_CMD:squashfs-xz, then with Kirkstone, the parameters would be applied to the end of the mksquashfs command and would work correctly.
+
+But in master, if those parameters get appended, would they be passed to "oe_mksquashfs"? Or could they be dropped during the override step since they are applied onto "oe_mksquashfs" rather than mksquashfs directly?
+
+Thanks again for your help!
+-Jason
+
+[-- Attachment #2: Type: text/html, Size: 5215 bytes --]
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+end of thread, other threads:[~2022-11-01 22:02 UTC | newest]
+
+Thread overview: 4+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-09-29 21:26 EXTRA_IMAGECMD:squashfs-xz support Bills, Jason M
+2022-10-18 22:48 ` Bills, Jason M
+2022-10-27 15:53   ` [yocto] " Quentin Schulz
+2022-11-01 22:02     ` Bills, Jason M
+

@@ -1,0 +1,255 @@
+* How does SOURCEFORGE_MIRROR work?
+@ 2023-07-14 19:24 Tom Isaacson
+  2023-07-14 19:28 ` [yocto] " Alexander Kanavin
+  0 siblings, 1 reply; 6+ messages in thread
+From: Tom Isaacson @ 2023-07-14 19:24 UTC (permalink / raw)
+  To: yocto
+
+I'm looking at the Kirkstone recipe for gsoap
+http://cgit.openembedded.org/meta-openembedded/tree/meta-oe/recipes-support/gsoap/gsoap_2.8.106.bb?h=kirkstone
+and it downloads from:
+SRC_URI = "${SOURCEFORGE_MIRROR}/${BPN}2/${BPN}_${PV}.zip
+
+SOURCEFORGE_MIRROR is defined in poky/meta/conf/bitbake.conf:
+SOURCEFORGE_MIRROR = "https://downloads.sourceforge.net"
+BPN = "gsoap"
+so the URL is:
+https://downloads.sourceforge.net/gsoap2/gsoap_2.8.106.zip
+
+But this doesn't exist:
+$ wget https://downloads.sourceforge.net/gsoap2/gsoap_2.8.106.zip
+--2023-07-15 07:23:40--
+https://downloads.sourceforge.net/gsoap2/gsoap_2.8.106.zip
+Resolving downloads.sourceforge.net (downloads.sourceforge.net)...
+204.68.111.105
+Connecting to downloads.sourceforge.net
+(downloads.sourceforge.net)|204.68.111.105|:443... connected.
+HTTP request sent, awaiting response... 404 Not Found
+2023-07-15 07:23:40 ERROR 404: Not Found.
+
+So where is the build getting the file? Does SOURCEFORGE_MIRROR fall
+back to a different location?
+
+-- 
+Tom Isaacson
+
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] How does SOURCEFORGE_MIRROR work?
+  2023-07-14 19:24 How does SOURCEFORGE_MIRROR work? Tom Isaacson
+@ 2023-07-14 19:28 ` Alexander Kanavin
+  2023-07-14 20:08   ` Tom Isaacson
+  0 siblings, 1 reply; 6+ messages in thread
+From: Alexander Kanavin @ 2023-07-14 19:28 UTC (permalink / raw)
+  To: Tom Isaacson; +Cc: yocto
+
+You perhaps could check log.do_fetch to see precisely where the file
+is being downloaded from.
+
+Alex
+
+On Fri, 14 Jul 2023 at 21:24, Tom Isaacson <tom.isaacson@teknique.com> wrote:
+>
+> I'm looking at the Kirkstone recipe for gsoap
+> http://cgit.openembedded.org/meta-openembedded/tree/meta-oe/recipes-support/gsoap/gsoap_2.8.106.bb?h=kirkstone
+> and it downloads from:
+> SRC_URI = "${SOURCEFORGE_MIRROR}/${BPN}2/${BPN}_${PV}.zip
+>
+> SOURCEFORGE_MIRROR is defined in poky/meta/conf/bitbake.conf:
+> SOURCEFORGE_MIRROR = "https://downloads.sourceforge.net"
+> BPN = "gsoap"
+> so the URL is:
+> https://downloads.sourceforge.net/gsoap2/gsoap_2.8.106.zip
+>
+> But this doesn't exist:
+> $ wget https://downloads.sourceforge.net/gsoap2/gsoap_2.8.106.zip
+> --2023-07-15 07:23:40--
+> https://downloads.sourceforge.net/gsoap2/gsoap_2.8.106.zip
+> Resolving downloads.sourceforge.net (downloads.sourceforge.net)...
+> 204.68.111.105
+> Connecting to downloads.sourceforge.net
+> (downloads.sourceforge.net)|204.68.111.105|:443... connected.
+> HTTP request sent, awaiting response... 404 Not Found
+> 2023-07-15 07:23:40 ERROR 404: Not Found.
+>
+> So where is the build getting the file? Does SOURCEFORGE_MIRROR fall
+> back to a different location?
+>
+> --
+> Tom Isaacson
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#60580): https://lists.yoctoproject.org/g/yocto/message/60580
+> Mute This Topic: https://lists.yoctoproject.org/mt/100148132/1686489
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] How does SOURCEFORGE_MIRROR work?
+  2023-07-14 19:28 ` [yocto] " Alexander Kanavin
+@ 2023-07-14 20:08   ` Tom Isaacson
+  2023-07-17  8:21     ` Ross Burton
+  0 siblings, 1 reply; 6+ messages in thread
+From: Tom Isaacson @ 2023-07-14 20:08 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: yocto
+
+Ah, I didn't realise there was a logfile for that.
+
+For future reference, it uses
+https://github.com/yoctoproject/poky/blob/kirkstone/bitbake/lib/bb/fetch2/__init__.py#L1116
+to run through a list of atlernates, eventually settling on
+http://downloads.yoctoproject.org/mirror/sources/gsoap_2.8.106.zip
+
+Thanks.
+
+On Sat, Jul 15, 2023 at 7:29 AM Alexander Kanavin
+<alex.kanavin@gmail.com> wrote:
+>
+> You perhaps could check log.do_fetch to see precisely where the file
+> is being downloaded from.
+>
+> Alex
+>
+> On Fri, 14 Jul 2023 at 21:24, Tom Isaacson <tom.isaacson@teknique.com> wrote:
+> >
+> > I'm looking at the Kirkstone recipe for gsoap
+> > http://cgit.openembedded.org/meta-openembedded/tree/meta-oe/recipes-support/gsoap/gsoap_2.8.106.bb?h=kirkstone
+> > and it downloads from:
+> > SRC_URI = "${SOURCEFORGE_MIRROR}/${BPN}2/${BPN}_${PV}.zip
+> >
+> > SOURCEFORGE_MIRROR is defined in poky/meta/conf/bitbake.conf:
+> > SOURCEFORGE_MIRROR = "https://downloads.sourceforge.net"
+> > BPN = "gsoap"
+> > so the URL is:
+> > https://downloads.sourceforge.net/gsoap2/gsoap_2.8.106.zip
+> >
+> > But this doesn't exist:
+> > $ wget https://downloads.sourceforge.net/gsoap2/gsoap_2.8.106.zip
+> > --2023-07-15 07:23:40--
+> > https://downloads.sourceforge.net/gsoap2/gsoap_2.8.106.zip
+> > Resolving downloads.sourceforge.net (downloads.sourceforge.net)...
+> > 204.68.111.105
+> > Connecting to downloads.sourceforge.net
+> > (downloads.sourceforge.net)|204.68.111.105|:443... connected.
+> > HTTP request sent, awaiting response... 404 Not Found
+> > 2023-07-15 07:23:40 ERROR 404: Not Found.
+> >
+> > So where is the build getting the file? Does SOURCEFORGE_MIRROR fall
+> > back to a different location?
+> >
+> > --
+> > Tom Isaacson
+> >
+> > -=-=-=-=-=-=-=-=-=-=-=-
+> > Links: You receive all messages sent to this group.
+> > View/Reply Online (#60580): https://lists.yoctoproject.org/g/yocto/message/60580
+> > Mute This Topic: https://lists.yoctoproject.org/mt/100148132/1686489
+> > Group Owner: yocto+owner@lists.yoctoproject.org
+> > Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com]
+> > -=-=-=-=-=-=-=-=-=-=-=-
+> >
+
+
+
+-- 
+Tom Isaacson
+
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] How does SOURCEFORGE_MIRROR work?
+  2023-07-14 20:08   ` Tom Isaacson
+@ 2023-07-17  8:21     ` Ross Burton
+  2023-07-17 21:44       ` Tom Isaacson
+  0 siblings, 1 reply; 6+ messages in thread
+From: Ross Burton @ 2023-07-17  8:21 UTC (permalink / raw)
+  To: tom.isaacson; +Cc: Yocto-mailing-list
+
+On 14 Jul 2023, at 21:08, Tom Isaacson via lists.yoctoproject.org <tom.isaacson=teknique.com@lists.yoctoproject.org> wrote:
+> 
+> Ah, I didn't realise there was a logfile for that.
+> 
+> For future reference, it uses
+> https://github.com/yoctoproject/poky/blob/kirkstone/bitbake/lib/bb/fetch2/__init__.py#L1116
+> to run through a list of atlernates, eventually settling on
+> http://downloads.yoctoproject.org/mirror/sources/gsoap_2.8.106.zip
+
+
+A patch to set a working URL would be much appreciated.
+
+Thanks,
+Ross
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] How does SOURCEFORGE_MIRROR work?
+  2023-07-17  8:21     ` Ross Burton
+@ 2023-07-17 21:44       ` Tom Isaacson
+  2023-07-18 14:11         ` Ross Burton
+  0 siblings, 1 reply; 6+ messages in thread
+From: Tom Isaacson @ 2023-07-17 21:44 UTC (permalink / raw)
+  To: Ross Burton; +Cc: Yocto-mailing-list
+
+[-- Attachment #1: Type: text/plain, Size: 674 bytes --]
+
+For gSOAP?
+
+
+On Mon, Jul 17, 2023 at 8:21 PM Ross Burton <Ross.Burton@arm.com> wrote:
+
+> On 14 Jul 2023, at 21:08, Tom Isaacson via lists.yoctoproject.org
+> <tom.isaacson=teknique.com@lists.yoctoproject.org> wrote:
+> >
+> > Ah, I didn't realise there was a logfile for that.
+> >
+> > For future reference, it uses
+> >
+> https://github.com/yoctoproject/poky/blob/kirkstone/bitbake/lib/bb/fetch2/__init__.py#L1116
+> > to run through a list of atlernates, eventually settling on
+> > http://downloads.yoctoproject.org/mirror/sources/gsoap_2.8.106.zip
+>
+>
+> A patch to set a working URL would be much appreciated.
+>
+> Thanks,
+> Ross
+
+
+
+-- 
+Tom Isaacson
+
+[-- Attachment #2: Type: text/html, Size: 1567 bytes --]
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] How does SOURCEFORGE_MIRROR work?
+  2023-07-17 21:44       ` Tom Isaacson
+@ 2023-07-18 14:11         ` Ross Burton
+  0 siblings, 0 replies; 6+ messages in thread
+From: Ross Burton @ 2023-07-18 14:11 UTC (permalink / raw)
+  To: tom.isaacson; +Cc: Yocto-mailing-list
+
+On 17 Jul 2023, at 22:44, Tom Isaacson via lists.yoctoproject.org <tom.isaacson=teknique.com@lists.yoctoproject.org> wrote:
+> 
+> For gSOAP?
+
+
+Yes.
+
+Cheers,
+Ross
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+end of thread, other threads:[~2023-07-18 14:11 UTC | newest]
+
+Thread overview: 6+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-07-14 19:24 How does SOURCEFORGE_MIRROR work? Tom Isaacson
+2023-07-14 19:28 ` [yocto] " Alexander Kanavin
+2023-07-14 20:08   ` Tom Isaacson
+2023-07-17  8:21     ` Ross Burton
+2023-07-17 21:44       ` Tom Isaacson
+2023-07-18 14:11         ` Ross Burton
+

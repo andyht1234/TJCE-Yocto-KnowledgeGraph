@@ -1,0 +1,232 @@
+* [meta-zephyr][PATCH 0/3] Add Arduino Nano 33 BLE and BLE Sense support
+@ 2021-06-11  8:52 Wojciech Zmuda
+  2021-06-11  8:52 ` [meta-zephyr][PATCH 1/3] zephyr-kernel: install .bin image if available Wojciech Zmuda
+                   ` (2 more replies)
+  0 siblings, 3 replies; 4+ messages in thread
+From: Wojciech Zmuda @ 2021-06-11  8:52 UTC (permalink / raw)
+  To: yocto; +Cc: Wojciech Zmuda
+
+From: Wojciech Zmuda <wojciech.zmuda@huawei.com>
+
+This patch set adds support for nRF52-based Arduino boards - Nano 33 BLE and BLE Sense - to
+both build and flash Zephyr applications.
+
+The board support itself is a trivial MACHINE config. Flashing is done with a new bbclass, that
+is a wrapper around `bossac` flashing tool. One general kernel recipe fix was necessary to produce
+and copy over the .bin file, as the flasher requires input in that format. This does not affect
+scenarios where .elf file is required.
+
+Tested on an actual Arduino Nano 33 BLE dev board.
+
+Nagesh Shamnur (3):
+  zephyr-kernel: install .bin image if available
+  arduino-nano-33-ble.conf: Add Arduino Nano 33 BLE and BLE Sense
+    support
+  zephyr-flash-bossac.bbclass: Enable board flashing via bossac
+
+ classes/zephyr-flash-bossac.bbclass           | 50 +++++++++++++++++++
+ conf/machine/arduino-nano-33-ble.conf         |  9 ++++
+ .../zephyr-kernel/zephyr-kernel-common.inc    |  1 +
+ .../zephyr-kernel/zephyr-sample.inc           |  4 ++
+ 4 files changed, 64 insertions(+)
+ create mode 100644 classes/zephyr-flash-bossac.bbclass
+ create mode 100644 conf/machine/arduino-nano-33-ble.conf
+
+-- 
+2.25.1
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* [meta-zephyr][PATCH 1/3] zephyr-kernel: install .bin image if available
+  2021-06-11  8:52 [meta-zephyr][PATCH 0/3] Add Arduino Nano 33 BLE and BLE Sense support Wojciech Zmuda
+@ 2021-06-11  8:52 ` Wojciech Zmuda
+  2021-06-11  8:52 ` [meta-zephyr][PATCH 2/3] arduino-nano-33-ble.conf: Add Arduino Nano 33 BLE and BLE Sense support Wojciech Zmuda
+  2021-06-11  8:52 ` [meta-zephyr][PATCH 3/3] zephyr-flash-bossac.bbclass: Enable board flashing via bossac Wojciech Zmuda
+  2 siblings, 0 replies; 4+ messages in thread
+From: Wojciech Zmuda @ 2021-06-11  8:52 UTC (permalink / raw)
+  To: yocto; +Cc: Nagesh Shamnur, Stefan Schmidt
+
+From: Nagesh Shamnur <nagesh.shamnur@huawei.com>
+
+Some boards (e.g. Arduino Nano 33 BLE) require image in bin format
+for flashing with `-c flash_usb`. Provide that image along with ELF
+image on do_deploy step.
+
+Signed-off-by: Nagesh Shamnur <nagesh.shamnur@huawei.com>
+Signed-off-by: Stefan Schmidt <stefan.schmidt@huawei.com>
+---
+ recipes-kernel/zephyr-kernel/zephyr-kernel-common.inc | 1 +
+ recipes-kernel/zephyr-kernel/zephyr-sample.inc        | 4 ++++
+ 2 files changed, 5 insertions(+)
+
+diff --git a/recipes-kernel/zephyr-kernel/zephyr-kernel-common.inc b/recipes-kernel/zephyr-kernel/zephyr-kernel-common.inc
+index 330fe59..46f19e2 100644
+--- a/recipes-kernel/zephyr-kernel/zephyr-kernel-common.inc
++++ b/recipes-kernel/zephyr-kernel/zephyr-kernel-common.inc
+@@ -12,6 +12,7 @@ ZEPHYR_GCC_VARIANT="yocto"
+ ZEPHYR_SYSROOT="${STAGING_DIR_TARGET}"
+ 
+ ZEPHYR_MAKE_OUTPUT = "zephyr.elf"
++ZEPHYR_MAKE_BIN_OUTPUT = "zephyr.bin"
+ 
+ EXTRA_OECMAKE = "\
+     -DZEPHYR_BASE=${S} \
+diff --git a/recipes-kernel/zephyr-kernel/zephyr-sample.inc b/recipes-kernel/zephyr-kernel/zephyr-sample.inc
+index f7621d1..7b49611 100644
+--- a/recipes-kernel/zephyr-kernel/zephyr-sample.inc
++++ b/recipes-kernel/zephyr-kernel/zephyr-sample.inc
+@@ -9,5 +9,9 @@ do_install[noexec] = "1"
+ 
+ do_deploy () {
+     install -D ${B}/zephyr/${ZEPHYR_MAKE_OUTPUT} ${DEPLOYDIR}/${PN}.elf
++    if [ -f ${B}/zephyr/${ZEPHYR_MAKE_BIN_OUTPUT} ]
++    then
++      install -D ${B}/zephyr/${ZEPHYR_MAKE_BIN_OUTPUT} ${DEPLOYDIR}/${PN}.bin
++    fi
+ }
+ addtask deploy after do_compile
+-- 
+2.25.1
+
+
+^ permalink raw reply related	[flat|nested] 4+ messages in thread
+* [meta-zephyr][PATCH 2/3] arduino-nano-33-ble.conf: Add Arduino Nano 33 BLE and BLE Sense support
+  2021-06-11  8:52 [meta-zephyr][PATCH 0/3] Add Arduino Nano 33 BLE and BLE Sense support Wojciech Zmuda
+  2021-06-11  8:52 ` [meta-zephyr][PATCH 1/3] zephyr-kernel: install .bin image if available Wojciech Zmuda
+@ 2021-06-11  8:52 ` Wojciech Zmuda
+  2021-06-11  8:52 ` [meta-zephyr][PATCH 3/3] zephyr-flash-bossac.bbclass: Enable board flashing via bossac Wojciech Zmuda
+  2 siblings, 0 replies; 4+ messages in thread
+From: Wojciech Zmuda @ 2021-06-11  8:52 UTC (permalink / raw)
+  To: yocto; +Cc: Nagesh Shamnur
+
+From: Nagesh Shamnur <nagesh.shamnur@huawei.com>
+
+Signed-off-by: Nagesh Shamnur <nagesh.shamnur@huawei.com>
+---
+ conf/machine/arduino-nano-33-ble.conf | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+ create mode 100644 conf/machine/arduino-nano-33-ble.conf
+
+diff --git a/conf/machine/arduino-nano-33-ble.conf b/conf/machine/arduino-nano-33-ble.conf
+new file mode 100644
+index 0000000..e45cfc2
+--- /dev/null
++++ b/conf/machine/arduino-nano-33-ble.conf
+@@ -0,0 +1,8 @@
++#@TYPE: Machine
++#@NAME: arduino-nano-33-ble
++
++#@DESCRIPTION: Machine configuration for Arudino nano 33 ble and Arduino nano 33 ble sense
++
++require conf/machine/include/nrf52.inc
++ARCH_arduino-nano-33-ble = "arm"
++
+-- 
+2.25.1
+
+
+^ permalink raw reply related	[flat|nested] 4+ messages in thread
+* [meta-zephyr][PATCH 3/3] zephyr-flash-bossac.bbclass: Enable board flashing via bossac
+  2021-06-11  8:52 [meta-zephyr][PATCH 0/3] Add Arduino Nano 33 BLE and BLE Sense support Wojciech Zmuda
+  2021-06-11  8:52 ` [meta-zephyr][PATCH 1/3] zephyr-kernel: install .bin image if available Wojciech Zmuda
+  2021-06-11  8:52 ` [meta-zephyr][PATCH 2/3] arduino-nano-33-ble.conf: Add Arduino Nano 33 BLE and BLE Sense support Wojciech Zmuda
+@ 2021-06-11  8:52 ` Wojciech Zmuda
+  2 siblings, 0 replies; 4+ messages in thread
+From: Wojciech Zmuda @ 2021-06-11  8:52 UTC (permalink / raw)
+  To: yocto; +Cc: Nagesh Shamnur
+
+From: Nagesh Shamnur <nagesh.shamnur@huawei.com>
+
+Currently only dfu and pyocd flashing are supported. Some boards
+such as Arduino Nano 33 BLE can be flashed via bossac which is
+released by Arduino repo. Find the installed Arudino version of
+bossac and flash using that tool.
+
+Signed-off-by: Nagesh Shamnur <nagesh.shamnur@huawei.com>
+---
+ classes/zephyr-flash-bossac.bbclass   | 50 +++++++++++++++++++++++++++
+ conf/machine/arduino-nano-33-ble.conf |  1 +
+ 2 files changed, 51 insertions(+)
+ create mode 100644 classes/zephyr-flash-bossac.bbclass
+
+diff --git a/classes/zephyr-flash-bossac.bbclass b/classes/zephyr-flash-bossac.bbclass
+new file mode 100644
+index 0000000..50222d5
+--- /dev/null
++++ b/classes/zephyr-flash-bossac.bbclass
+@@ -0,0 +1,50 @@
++#@DESCRIPTION: class file to flash boards like Arduino Nano BLE which depends on bossac for flashing
++
++python do_flash_usb() {
++    import shutil
++    import subprocess
++    import serial.tools.list_ports
++
++    # Note: make sure the installed bossac is set to PATH before running flash_usb()
++    # Check if bossac is avaiable for flashing
++    origbbenv = d.getVar("BB_ORIGENV", False)
++    bossac_path = shutil.which("bossac", path=origbbenv.getVar('PATH'))
++
++    if not bossac_path:
++       bb.fatal("ERROR: bossac not found, please install first and add to PATH")
++
++    board = d.getVar('BOARD')
++
++    if board == 'arduino_nano_33_ble':
++        # find the serial port to which board is connected to
++        for port in serial.tools.list_ports.comports():
++            if 'Arduino Nano 33 BLE' in port.description:
++                serial_port = port.device
++                break
++        else:
++            bb.fatal("ERROR: board not connected for flashing. Connect via USB and enable permission to connected port")
++
++        image = "%s/%s.bin" % (d.getVar('DEPLOY_DIR_IMAGE'), d.getVar('PN'))
++
++        command = [bossac_path, '-p', serial_port , '-R', '-e', '-w', '-v', '-b', image]
++    else:
++        bb.fatal("ERROR: Unsupported board %s" % board)
++
++    bb.note("command: %s" % command)
++    bb.plain("Attempting to flash board: %s" % board)
++
++    # Random failure are a possibility here, retry till there is a success for finite times
++    for _ in range(10, 0, -1):
++        try:
++            subprocess.check_call(command)
++            bb.plain("Bossac Flashing board: %s Success " % board)
++            break
++        except subprocess.CalledProcessError as e:
++            bb.warn("Failed to flash %s (error code: %s). Retrying after 1 second..." % (board, e.returncode))
++            time.sleep(1)
++}
++
++addtask do_flash_usb after do_deploy
++
++do_flash_usb[nostamp] = "1"
++do_flash_usb[vardepsexclude] = "BB_ORIGENV"
+diff --git a/conf/machine/arduino-nano-33-ble.conf b/conf/machine/arduino-nano-33-ble.conf
+index e45cfc2..18ba056 100644
+--- a/conf/machine/arduino-nano-33-ble.conf
++++ b/conf/machine/arduino-nano-33-ble.conf
+@@ -4,5 +4,6 @@
+ #@DESCRIPTION: Machine configuration for Arudino nano 33 ble and Arduino nano 33 ble sense
+ 
+ require conf/machine/include/nrf52.inc
++ZEPHYR_INHERIT_CLASSES += "zephyr-flash-bossac"
+ ARCH_arduino-nano-33-ble = "arm"
+ 
+-- 
+2.25.1
+
+
+^ permalink raw reply related	[flat|nested] 4+ messages in thread
+end of thread, other threads:[~2021-06-11  8:52 UTC | newest]
+
+Thread overview: 4+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-06-11  8:52 [meta-zephyr][PATCH 0/3] Add Arduino Nano 33 BLE and BLE Sense support Wojciech Zmuda
+2021-06-11  8:52 ` [meta-zephyr][PATCH 1/3] zephyr-kernel: install .bin image if available Wojciech Zmuda
+2021-06-11  8:52 ` [meta-zephyr][PATCH 2/3] arduino-nano-33-ble.conf: Add Arduino Nano 33 BLE and BLE Sense support Wojciech Zmuda
+2021-06-11  8:52 ` [meta-zephyr][PATCH 3/3] zephyr-flash-bossac.bbclass: Enable board flashing via bossac Wojciech Zmuda
+

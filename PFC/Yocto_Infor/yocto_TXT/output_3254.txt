@@ -1,0 +1,98 @@
+* Empty source package when using devtool
+@ 2021-06-18  5:30 Frederic Martinsons
+  2021-06-18  5:41 ` Frederic Martinsons
+  0 siblings, 1 reply; 3+ messages in thread
+From: Frederic Martinsons @ 2021-06-18  5:30 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 989 bytes --]
+
+Hello,
+
+I currently used yocto warrior and I encounter an issue during packaging of recipes.
+I would like to embed some source package (to be able to run coverage on target) , this work without issues and places the source of the package in ${ROOTFS}/usr/src/debug, but when I 'devtool modify' a recipe to work on , the source package is totally empty.
+
+First, I suspected that was my various recipe customization so I tried the same method (devtool modify then packing it and look at content of -src package) for more standard package, here are my results:
+- glib-2.0 -> ok
+- networkmanager -> ok
+- dnsmasq -> empty source
+- zlib -> empty source
+
+I try to look at log.do_package but I didn't see any warning nor error there.
+
+Since warrior is EOL, I tried a fresh poky on dunfell and hardknott, I got the exact same results. Is anybody here have experienced this ? Is this bug or did I miss some configuration ?
+
+Thank you very much in advance for any help you can bring.
+
+[-- Attachment #2: Type: text/html, Size: 1141 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: Empty source package when using devtool
+  2021-06-18  5:30 Empty source package when using devtool Frederic Martinsons
+@ 2021-06-18  5:41 ` Frederic Martinsons
+  2021-06-22  8:52   ` Frederic Martinsons
+  0 siblings, 1 reply; 3+ messages in thread
+From: Frederic Martinsons @ 2021-06-18  5:41 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 314 bytes --]
+
+It it can help to understand, I rechecked the full content of source packages and glib-2.0 / networkamanager are not ok like I said earlire.
+There are not empty but they seem to contain only build generated files (for example glib/glibconfig.h which, in the glib source repository, is glib/glibconfig.h. *in* ).
+
+[-- Attachment #2: Type: text/html, Size: 331 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: Empty source package when using devtool
+  2021-06-18  5:41 ` Frederic Martinsons
+@ 2021-06-22  8:52   ` Frederic Martinsons
+  0 siblings, 0 replies; 3+ messages in thread
+From: Frederic Martinsons @ 2021-06-22  8:52 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1992 bytes --]
+
+Hello, I dug further into yocto classes and I think I found what is going on.
+
+All seems to come from the fact that gcc debug-prefix-map and macro-prefix-map options are statically defined in bitbake.conf to
+
+> 
+> DEBUG_PREFIX_MAP ?=
+> "-fmacro-prefix-map=${WORKDIR}=/usr/src/debug/${PN}/${EXTENDPE}${PV}-${PR}
+> \
+> -fdebug-prefix-map=${WORKDIR}=/usr/src/debug/${PN}/${EXTENDPE}${PV}-${PR}
+> \
+> -fdebug-prefix-map=${STAGING_DIR_HOST}= \
+> -fdebug-prefix-map=${STAGING_DIR_NATIVE}= \
+> "
+> 
+> 
+> 
+
+I'll took an example to try to be clearer. Let's say that I devtool modify the glib-2.0 package. Without any configuration, sources will be extracted in ${BDIR}/workspace/sources/glib-2.0.
+Build directory is set by externalsrc.bbclass to ${BDIR}/tmp/work/${arch}-${distro}/glib-2.0/${PN}/${EXTENDPE}${PV}-${PR}/${BPN}/${BPN}-${PV} (the real path doesn't matter, what is matter is that B is not under devtool spaces).
+
+This lead to have pretty long relative path in gcc compilation line (sotheming like  -c ../../../../../../../../worspace/sources/glib-2.0/glib/gmain.c for example). Hence the debug-prefix-map could not be appplied.
+After the compilation stage, package.bbclass (via splitdebuginfo), there is an extraction of sources path via dwarf format parsing. We ended up parsing something like
+
+- /workspace/sources/glib-2.0/glib/gmain.c
+
+instead of
+
+- /usr/src/debug/glib-2.0/1_2.58.3-r0.2/glib-2.58.3/glib/gmain.c
+
+I patch externalsrc.bbclass to dynamically caculate correct debug-prefix-map and prepend to DEBUG_PREFIX_MAP variable, I also patch the package.bbclass to add a condition when EXTERNALSRC is defined to change the way the sources are found and copied to packages-split/${pkg}-src.
+
+I would greatly appreciate if there is a yocto guru around there to tell me what he thinks about all of this (bug or wrong configuration ?) and if my assumptions are correct (I assume this was a compiling/packaging problem instead of a pure devtool one)
+
+[-- Attachment #2: Type: text/html, Size: 2381 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2021-06-22  8:52 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-06-18  5:30 Empty source package when using devtool Frederic Martinsons
+2021-06-18  5:41 ` Frederic Martinsons
+2021-06-22  8:52   ` Frederic Martinsons
+

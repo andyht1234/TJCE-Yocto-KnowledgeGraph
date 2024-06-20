@@ -1,0 +1,195 @@
+* [meta-security] proper place for recipes for kernel fuzzing
+@ 2023-05-19 13:18 Weiß, Simone
+  2023-05-19 14:59 ` akuster808
+  0 siblings, 1 reply; 3+ messages in thread
+From: Weiß, Simone @ 2023-05-19 13:18 UTC (permalink / raw)
+  To: yocto; +Cc: akuster808
+
+Hi,
+
+
+I want to upstream recipes for syzkaller to provide an easy option to fuzz
+yocto-based kernel. I would like to check if meta-security could be a good
+place to add this.
+
+Let me sketch the intended change-set:
+
+1) DISTRO_FEATURE: Add a syzkaller distribution feature. 
+
+2) Recipes for syzkaller: Of course shared code should be in an *.inc file
+- recipe for host:  This recipe builds and deploys host binaries and needed
+configuration for syzkaller. In general the host that is connected to the
+fuzzing target could be of any architecture. If the fuzzing hosts architecture
+equals your build hosts architecture, the native variant of this recipe can be
+used. If the fuzzing hosts architecture equals the fuzzing targets architecture,
+but not the build machine architecture the cross-compiled variant can be used.
+That should be a rare situation though...
+- recipe for target: the needed target part of course.
+
+Those recipes should be added to the security-*-image.bb recipes. 
+
+- kernel configuration
+Syzkaller needs certain kernel configuration like CONFIG_KCOV,
+CONFIG_DEBUGS_FS,... enabled. Add those in a fragment and provide a scc.
+
+
+Would you be fine with adding sth like this to meta-security? Do you
+have any additional/other suggestions?
+
+Of course I would also be willing to maintain this recipe then
+
+Thanks,
+Simone
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [meta-security] proper place for recipes for kernel fuzzing
+  2023-05-19 13:18 [meta-security] proper place for recipes for kernel fuzzing Weiß, Simone
+@ 2023-05-19 14:59 ` akuster808
+  2023-05-19 17:19   ` Weiß, Simone
+  0 siblings, 1 reply; 3+ messages in thread
+From: akuster808 @ 2023-05-19 14:59 UTC (permalink / raw)
+  To: Weiß, Simone, yocto
+
+
+Hello,
+
+On 5/19/23 9:18 AM, Weiß, Simone wrote:
+> Hi,
+>
+>
+> I want to upstream recipes for syzkaller to provide an easy option to fuzz
+> yocto-based kernel. I would like to check if meta-security could be a good
+> place to add this.
+
+The syzkaller recipe itself is in meta-oe. Are talking about adding additional recipes to enhance syzkaller?
+
+BR,
+Armin
+
+> Let me sketch the intended change-set:
+>
+> 1) DISTRO_FEATURE: Add a syzkaller distribution feature.
+>
+> 2) Recipes for syzkaller: Of course shared code should be in an *.inc file
+> - recipe for host:  This recipe builds and deploys host binaries and needed
+> configuration for syzkaller. In general the host that is connected to the
+> fuzzing target could be of any architecture. If the fuzzing hosts architecture
+> equals your build hosts architecture, the native variant of this recipe can be
+> used. If the fuzzing hosts architecture equals the fuzzing targets architecture,
+> but not the build machine architecture the cross-compiled variant can be used.
+> That should be a rare situation though...
+> - recipe for target: the needed target part of course.
+>
+> Those recipes should be added to the security-*-image.bb recipes.
+>
+> - kernel configuration
+> Syzkaller needs certain kernel configuration like CONFIG_KCOV,
+> CONFIG_DEBUGS_FS,... enabled. Add those in a fragment and provide a scc.
+>
+>
+> Would you be fine with adding sth like this to meta-security?
+
+
+
+> Do you
+> have any additional/other suggestions?
+>
+> Of course I would also be willing to maintain this recipe then
+>
+> Thanks,
+> Simone
+>
+
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [meta-security] proper place for recipes for kernel fuzzing
+  2023-05-19 14:59 ` akuster808
+@ 2023-05-19 17:19   ` Weiß, Simone
+  0 siblings, 0 replies; 3+ messages in thread
+From: Weiß, Simone @ 2023-05-19 17:19 UTC (permalink / raw)
+  To: yocto, akuster808
+
+Hello,
+
+On Fri, 2023-05-19 at 10:59 -0400, akuster808 wrote:
+> CAUTION: This email originated from outside of the Elektrobit organization. Do
+> not click links or open attachments unless you recognize the sender and know
+> the content is safe.
+> 
+> 
+> Hello,
+> 
+> On 5/19/23 9:18 AM, Weiß, Simone wrote:
+> > Hi,
+> > 
+> > 
+> > I want to upstream recipes for syzkaller to provide an easy option to fuzz
+> > yocto-based kernel. I would like to check if meta-security could be a good
+> > place to add this.
+> 
+> The syzkaller recipe itself is in meta-oe. Are talking about adding additional
+> recipes to enhance syzkaller?
+> 
+
+I see, my bad. When we originally worked on it, it was not available yet in
+meta-oe. I should have rechecked... I'll take a look at the recipes there.
+
+Sorry for the confusion.
+
+Kind Regards,
+Simone
+
+> BR,
+> Armin
+> 
+> > Let me sketch the intended change-set:
+> > 
+> > 1) DISTRO_FEATURE: Add a syzkaller distribution feature.
+> > 
+> > 2) Recipes for syzkaller: Of course shared code should be in an *.inc file
+> > - recipe for host:  This recipe builds and deploys host binaries and needed
+> > configuration for syzkaller. In general the host that is connected to the
+> > fuzzing target could be of any architecture. If the fuzzing hosts
+> > architecture
+> > equals your build hosts architecture, the native variant of this recipe can
+> > be
+> > used. If the fuzzing hosts architecture equals the fuzzing targets
+> > architecture,
+> > but not the build machine architecture the cross-compiled variant can be
+> > used.
+> > That should be a rare situation though...
+> > - recipe for target: the needed target part of course.
+> > 
+> > Those recipes should be added to the security-*-image.bb recipes.
+> > 
+> > - kernel configuration
+> > Syzkaller needs certain kernel configuration like CONFIG_KCOV,
+> > CONFIG_DEBUGS_FS,... enabled. Add those in a fragment and provide a scc.
+> > 
+> > 
+> > Would you be fine with adding sth like this to meta-security?
+> 
+> 
+> 
+> > Do you
+> > have any additional/other suggestions?
+> > 
+> > Of course I would also be willing to maintain this recipe then
+> > 
+> > Thanks,
+> > Simone
+> > 
+> 
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2023-05-19 17:20 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-05-19 13:18 [meta-security] proper place for recipes for kernel fuzzing Weiß, Simone
+2023-05-19 14:59 ` akuster808
+2023-05-19 17:19   ` Weiß, Simone
+

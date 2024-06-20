@@ -1,0 +1,679 @@
+* On managing debug and production builds
+@ 2022-03-01  5:06 Vinayak Menon
+  2022-03-01  7:04 ` tomzy
+  0 siblings, 1 reply; 8+ messages in thread
+From: Vinayak Menon @ 2022-03-01  5:06 UTC (permalink / raw)
+  To: yocto
+
+I have a requirement to create production and release builds for the
+same machine. Debug build would use most of the production recipes,
+except few images like Linux kernel that will have debug configs
+enabled and a separate debug image is created.  Also debug images will
+have few extra debug packages and image features like debug-tweaks
+enabled. What is the standard way of managing this ?
+One other requirement is that for e.g. I do not want both debug and
+production linux images to be created in one build. That increases the
+build time. i.e. just adding debug variant recipes alone does not
+suffice.
+Also the debug and production variants are not specific to a machine,
+i.e. tomorrow if I add another machine, I should be able to generate
+both variants for that machine too without any machine conf changes.
+
+What I have tried right now is to create 2 local.conf, one in
+meta/conf and other in meta/conf/debug. The debug conf has an
+IMAGE_FEATURE indicating that it is a debug variant. I am using the
+debug-tweaks image feature as of now. And then I switch the confs with
+TEMPLATECONF. Now, for recipes, I have not created separate debug
+recipes. For e.g. in the linux recipe I am just looking for the
+debug-tweaks feature to pick the right config fragments.
+
+Thanks,
+Vinayak
+
+
+^ permalink raw reply	[flat|nested] 8+ messages in thread
+* Re: On managing debug and production builds
+  2022-03-01  5:06 On managing debug and production builds Vinayak Menon
+@ 2022-03-01  7:04 ` tomzy
+  2022-03-01  8:52   ` [yocto] " Vinayak Menon
+  0 siblings, 1 reply; 8+ messages in thread
+From: tomzy @ 2022-03-01  7:04 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 956 bytes --]
+
+Hi Vinayak
+
+I believe that the best way to prepare debug and prod images is to create
+include file (.inc) with base set of packages and features and then add two
+.bb recipes, one for prod and one for debug - every of this recipes will need
+to include the `.inc` file. You could name them `base-image-prod.bb` and
+`base-image-debug.bb`. This way you could run either prod or debug builds
+by running `bitbake base-image-debug` or `bitbake base-image-prod`.
+
+As for the machine, this would need to be set in local.conf every time you want
+to switch the machine. To simplify this process, for the management of the
+configuration of the entire build (including the selection of debug / prod image
+or machine configuration), I recommend the kas[1] project with the very helpful
+kas-container tool.
+
+[1] https://github.com/siemens/kas
+
+Regards,
+Tomasz Żyjewski
+Embedded Systems Engineer
+GPG: 5C495EA3EBEECA59
+https://3mdeb.com | @3mdeb_com
+
+[-- Attachment #2: Type: text/html, Size: 1536 bytes --]
+
+^ permalink raw reply	[flat|nested] 8+ messages in thread
+* Re: [yocto] On managing debug and production builds
+  2022-03-01  7:04 ` tomzy
+@ 2022-03-01  8:52   ` Vinayak Menon
+  2022-03-01  8:58     ` Alexander Kanavin
+  2022-03-01  9:26     ` tomzy
+  0 siblings, 2 replies; 8+ messages in thread
+From: Vinayak Menon @ 2022-03-01  8:52 UTC (permalink / raw)
+  To: tomzy; +Cc: yocto
+
+On Tue, Mar 1, 2022 at 12:34 PM tomzy <tomasz.zyjewski@3mdeb.com> wrote:
+>
+> Hi Vinayak
+>
+> I believe that the best way to prepare debug and prod images is to create
+> include file (.inc) with base set of packages and features and then add two
+> .bb recipes, one for prod and one for debug - every of this recipes will need
+> to include the `.inc` file. You could name them `base-image-prod.bb` and
+> `base-image-debug.bb`. This way you could run either prod or debug builds
+> by running `bitbake base-image-debug` or `bitbake base-image-prod`.
+>
+> As for the machine, this would need to be set in local.conf every time you want
+> to switch the machine.To simplify this process, for the management of the
+> configuration of the entire build (including the selection of debug / prod image
+> or machine configuration), I recommend the kas[1] project with the very helpful
+> kas-container tool.
+
+
+Thanks Tomasz. I will check kas.
+Yes, for selecting some of the packages I have created prod and debug
+image recipes.
+But this did not work for the kernel as the kernel recipe is picked as
+part of PROVIDER
+in machine conf. SoI had to use 2 conf to have the IMAGE_FEATURES (or
+any other var)
+set differently for prod and debug. This is for building the kernel
+recipie differently for prod
+and debug. Setting the IMAGE_FEATURES in the image recipe (and not in
+conf) causes
+2 problems. One is that kernel and other bootloaders recipes are
+picked early via PROVIDER
+ in conf and not as packages included in image recipe. Secondly,
+setting the var in the image
+recipe breaks this command for e.g. "bitbake base-image-prod.bb
+base-image-debug.bb".
+Since the command parses the recipes only once for both image creation.
+
+
+
+>
+> [1] https://github.com/siemens/kas
+>
+> Regards,
+> Tomasz Żyjewski
+> Embedded Systems Engineer
+> GPG: 5C495EA3EBEECA59
+> https://3mdeb.com | @3mdeb_com
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#56332): https://lists.yoctoproject.org/g/yocto/message/56332
+> Mute This Topic: https://lists.yoctoproject.org/mt/89469781/6783826
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [menon.vinayak@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+-- 
+vinayak
+
+
+^ permalink raw reply	[flat|nested] 8+ messages in thread
+* Re: [yocto] On managing debug and production builds
+  2022-03-01  8:52   ` [yocto] " Vinayak Menon
+@ 2022-03-01  8:58     ` Alexander Kanavin
+  2022-03-01  9:26     ` tomzy
+  1 sibling, 0 replies; 8+ messages in thread
+From: Alexander Kanavin @ 2022-03-01  8:58 UTC (permalink / raw)
+  To: Vinayak Menon; +Cc: tomzy, Yocto-mailing-list
+
+If you can't do what you need with only image recipes, then the only
+option is to create an additional DISTRO config I'm afraid. Putting
+these tweaks into machine config or local.conf is not correct.
+
+Alex
+
+On Tue, 1 Mar 2022 at 09:52, Vinayak Menon <menon.vinayak@gmail.com> wrote:
+>
+> On Tue, Mar 1, 2022 at 12:34 PM tomzy <tomasz.zyjewski@3mdeb.com> wrote:
+> >
+> > Hi Vinayak
+> >
+> > I believe that the best way to prepare debug and prod images is to create
+> > include file (.inc) with base set of packages and features and then add two
+> > .bb recipes, one for prod and one for debug - every of this recipes will need
+> > to include the `.inc` file. You could name them `base-image-prod.bb` and
+> > `base-image-debug.bb`. This way you could run either prod or debug builds
+> > by running `bitbake base-image-debug` or `bitbake base-image-prod`.
+> >
+> > As for the machine, this would need to be set in local.conf every time you want
+> > to switch the machine.To simplify this process, for the management of the
+> > configuration of the entire build (including the selection of debug / prod image
+> > or machine configuration), I recommend the kas[1] project with the very helpful
+> > kas-container tool.
+>
+>
+> Thanks Tomasz. I will check kas.
+> Yes, for selecting some of the packages I have created prod and debug
+> image recipes.
+> But this did not work for the kernel as the kernel recipe is picked as
+> part of PROVIDER
+> in machine conf. SoI had to use 2 conf to have the IMAGE_FEATURES (or
+> any other var)
+> set differently for prod and debug. This is for building the kernel
+> recipie differently for prod
+> and debug. Setting the IMAGE_FEATURES in the image recipe (and not in
+> conf) causes
+> 2 problems. One is that kernel and other bootloaders recipes are
+> picked early via PROVIDER
+>  in conf and not as packages included in image recipe. Secondly,
+> setting the var in the image
+> recipe breaks this command for e.g. "bitbake base-image-prod.bb
+> base-image-debug.bb".
+> Since the command parses the recipes only once for both image creation.
+>
+>
+>
+> >
+> > [1] https://github.com/siemens/kas
+> >
+> > Regards,
+> > Tomasz Żyjewski
+> > Embedded Systems Engineer
+> > GPG: 5C495EA3EBEECA59
+> > https://3mdeb.com | @3mdeb_com
+> >
+> >
+> >
+> >
+>
+>
+> --
+> vinayak
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#56333): https://lists.yoctoproject.org/g/yocto/message/56333
+> Mute This Topic: https://lists.yoctoproject.org/mt/89469781/1686489
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 8+ messages in thread
+* Re: On managing debug and production builds
+  2022-03-01  8:52   ` [yocto] " Vinayak Menon
+  2022-03-01  8:58     ` Alexander Kanavin
+@ 2022-03-01  9:26     ` tomzy
+  2022-03-02  3:22       ` [yocto] " Karthik Poduval
+       [not found]       ` <CAH9dsRgmBt-Y-P0P+1o1u6RC2WqFXH03nURMnaDpZJjNH_nE0Q@mail.gmail.com>
+  1 sibling, 2 replies; 8+ messages in thread
+From: tomzy @ 2022-03-01  9:26 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1696 bytes --]
+
+> 
+> Thanks Tomasz. I will check kas.
+
+No problem
+
+> 
+> Yes, for selecting some of the packages I have created prod and debug
+> image
+> recipes.But this did not work for the kernel as the kernel recipe is
+> picked
+> as part of PROVIDERin machine conf.
+
+What are the difference there? You want to use different config on prod and debug images?
+Maybe add it as config fragments? Then you would need to add some global variable to
+distinguish when use given .cfg file.
+
+[1] https://docs.yoctoproject.org/singleindex.html#creating-configuration-fragments
+
+> 
+> SoI had to use 2 conf to have the
+> IMAGE_FEATURES (orany other var)set differently for prod and debug. This
+> is for
+> building the kernelrecipie differently for prodand debug. Setting the
+> IMAGE_FEATURES in the image recipe (and not inconf) causes2 problems. One
+> is
+> that kernel and other bootloaders recipes arepicked early via PROVIDER in
+> conf
+> and not as packages included in image recipe.
+
+Is that a problem?
+
+> 
+> Secondly,setting the var in the
+> image recipe breaks this command for e.g.
+> "bitbake base-image-prod.bbbase-image-debug.bb".
+
+Didn't you want to distinguish this to builds to be able to run `bitbake base-image-prod` or
+`bitbake base-image-debug`?
+
+> 
+> Since the command parses the recipes only once for both image creation.
+
+Nevertheless I would greatly recommend you to use kas. In simple .yml file you
+could prepare different `local.conf` per configuration prod/debug.
+
+[2] https://kas.readthedocs.io/en/latest/userguide.html#project-configuration
+
+Regards,
+Tomasz Żyjewski
+Embedded Systems Engineer
+GPG: 5C495EA3EBEECA59
+https://3mdeb.com | @3mdeb_com
+
+[-- Attachment #2: Type: text/html, Size: 2377 bytes --]
+
+^ permalink raw reply	[flat|nested] 8+ messages in thread
+* Re: [yocto] On managing debug and production builds
+  2022-03-01  9:26     ` tomzy
+@ 2022-03-02  3:22       ` Karthik Poduval
+  2022-03-02  6:50         ` Josef Holzmayr
+       [not found]       ` <CAH9dsRgmBt-Y-P0P+1o1u6RC2WqFXH03nURMnaDpZJjNH_nE0Q@mail.gmail.com>
+  1 sibling, 1 reply; 8+ messages in thread
+From: Karthik Poduval @ 2022-03-02  3:22 UTC (permalink / raw)
+  To: tomzy; +Cc: yocto
+
+This concept of user vs debug builds is there in Android and any
+Android developer who gets introduced to yocto may look for these
+options. There seem to be many implementation choices here, trying to
+summarize some of the options here.
+
+1. use different image recipes example-image-user.bb vs
+example-image-debug.bb but this still poses a problem for kernel
+recipes as kernel needs to have different config fragments or
+different defconfig for debug vs user variants. One possible option is
+to use KTYPE to select tiny vs standard or define own for custom BSP
+layers. What about other recipes like u-boot or firmware for other
+remote processors, how to percolate the debug vs user options to those
+recipes via just an image recipe ?
+2. use different configs using multiconfig. Base config (which is
+debug) also selects the user config hence always building both build
+variants in different tmp directories. Kernel, remote firmware and
+image recipes use variables from the multiconfig cof files to decide
+whether to build debug or user variants.
+3. use different distros. DSITRO=user bitbake example-image,
+DISTRO=debug example-image. Kernel and remote firmware recipes use
+variables from the distro to decide whether to build debug or user
+variants.
+
+Which is the best method ?
+All these options seem very BSP layer specific, is there something
+more generic and better than the above options ?
+If not, should this be a feature request to the Yocto project ?
+
+NOTE: debug variants may include the following.
+- more debug related kernel configs and security loosened and UART
+ports disabled
+- image recipe debug variant may include debug utilities absent from
+the user variant
+
+There could be more than just debug and user variants. Android has
+engineering, tests, user, tiny and user-debug.
+
+--
+Regards,
+Karthik Poduval
+
+On Tue, Mar 1, 2022 at 1:26 AM tomzy <tomasz.zyjewski@3mdeb.com> wrote:
+>
+> Thanks Tomasz. I will check kas.
+>
+> No problem
+>
+> Yes, for selecting some of the packages I have created prod and debug image
+> recipes.But this did not work for the kernel as the kernel recipe is picked
+> as part of PROVIDERin machine conf.
+>
+> What are the difference there? You want to use different config on prod and debug images?
+> Maybe add it as config fragments? Then you would need to add some global variable to
+> distinguish when use given .cfg file.
+>
+> [1] https://docs.yoctoproject.org/singleindex.html#creating-configuration-fragments
+>
+> SoI had to use 2 conf to have the
+> IMAGE_FEATURES (orany other var)set differently for prod and debug. This is for
+> building the kernelrecipie differently for prodand debug. Setting the
+> IMAGE_FEATURES in the image recipe (and not inconf) causes2 problems. One is
+> that kernel and other bootloaders recipes arepicked early via PROVIDER in conf
+> and not as packages included in image recipe.
+>
+> Is that a problem?
+>
+> Secondly,setting the var in the
+> image recipe breaks this command for e.g.
+> "bitbake base-image-prod.bbbase-image-debug.bb".
+>
+> Didn't you want to distinguish this to builds to be able to run `bitbake base-image-prod` or
+> `bitbake base-image-debug`?
+>
+> Since the command parses the recipes only once for both image creation.
+>
+>
+> Nevertheless I would greatly recommend you to use kas. In simple .yml file you
+> could prepare different `local.conf` per configuration prod/debug.
+>
+> [2] https://kas.readthedocs.io/en/latest/userguide.html#project-configuration
+>
+> Regards,
+> Tomasz Żyjewski
+> Embedded Systems Engineer
+> GPG: 5C495EA3EBEECA59
+> https://3mdeb.com | @3mdeb_com
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#56335): https://lists.yoctoproject.org/g/yocto/message/56335
+> Mute This Topic: https://lists.yoctoproject.org/mt/89469781/3618339
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [karthik.poduval@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 8+ messages in thread
+* Re: [yocto] On managing debug and production builds
+       [not found]       ` <CAH9dsRgmBt-Y-P0P+1o1u6RC2WqFXH03nURMnaDpZJjNH_nE0Q@mail.gmail.com>
+@ 2022-03-02  6:29         ` Vinayak Menon
+  0 siblings, 0 replies; 8+ messages in thread
+From: Vinayak Menon @ 2022-03-02  6:29 UTC (permalink / raw)
+  To: tomzy, yocto
+
+Add list. missed earlier.
+
+On Wed, Mar 2, 2022 at 8:11 AM Vinayak Menon <menon.vinayak@gmail.com> wrote:
+>
+> On Tue, Mar 1, 2022 at 2:56 PM tomzy <tomasz.zyjewski@3mdeb.com> wrote:
+> >
+> > Thanks Tomasz. I will check kas.
+> >
+> > No problem
+> >
+> > Yes, for selecting some of the packages I have created prod and debug image
+> > recipes.But this did not work for the kernel as the kernel recipe is picked
+> > as part of PROVIDERin machine conf.
+> >
+> > What are the difference there? You want to use different config on prod and debug images?
+> > Maybe add it as config fragments? Then you would need to add some global variable to
+> > distinguish when use given .cfg file.
+>
+> Ya, and I am using exisitng IMAGE_FEATURE instead of the global var. I
+> can use global var too.
+> The only thing is that I am setting the global var from a conf and not
+> image recipe.
+>
+> >
+> > [1] https://docs.yoctoproject.org/singleindex.html#creating-configuration-fragments
+> >
+> > SoI had to use 2 conf to have the
+> > IMAGE_FEATURES (orany other var)set differently for prod and debug. This is for
+> > building the kernelrecipie differently for prodand debug. Setting the
+> > IMAGE_FEATURES in the image recipe (and not inconf) causes2 problems. One is
+> > that kernel and other bootloaders recipes are picked early via PROVIDER in conf
+> > and not as packages included in image recipe.
+> >
+> > Is that a problem?
+>
+> Ya you are right, that is not a problem as such. But I have seen in the yocto
+> documentation that IMAGE_FEATURES are recommended to be set from conf.
+> Is there any reason for such a recommendation ?
+>
+> >
+> > Secondly,setting the var in the
+> > image recipe breaks this command for e.g.
+> > "bitbake base-image-prod.bbbase-image-debug.bb".
+> >
+> > Didn't you want to distinguish this to builds to be able to run `bitbake base-image-prod` or
+> > `bitbake base-image-debug`?
+>
+> Yes I want to distinguish, and as a developer I can give separate
+> bitbake commands. But the
+> thought was that later the user can issue commands the way they want.
+> And if they use it in
+> combined manner described above, expecting 2 images with different
+> kernels, it does not work.
+>
+>
+> >
+> > Since the command parses the recipes only once for both image creation.
+> >
+> >
+> > Nevertheless I would greatly recommend you to use kas. In simple .yml file you
+> > could prepare different `local.conf` per configuration prod/debug.
+>
+> Sure, I will explore this.
+>
+>
+> >
+> > [2] https://kas.readthedocs.io/en/latest/userguide.html#project-configuration
+> >
+> > Regards,
+> > Tomasz Żyjewski
+> > Embedded Systems Engineer
+> > GPG: 5C495EA3EBEECA59
+> > https://3mdeb.com | @3mdeb_com
+> >
+> >
+> > -=-=-=-=-=-=-=-=-=-=-=-
+> > Links: You receive all messages sent to this group.
+> > View/Reply Online (#56335): https://lists.yoctoproject.org/g/yocto/message/56335
+> > Mute This Topic: https://lists.yoctoproject.org/mt/89469781/6783826
+> > Group Owner: yocto+owner@lists.yoctoproject.org
+> > Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [menon.vinayak@gmail.com]
+> > -=-=-=-=-=-=-=-=-=-=-=-
+> >
+>
+>
+> --
+> vinayak
+
+
+
+-- 
+vinayak
+
+
+^ permalink raw reply	[flat|nested] 8+ messages in thread
+* Re: [yocto] On managing debug and production builds
+  2022-03-02  3:22       ` [yocto] " Karthik Poduval
+@ 2022-03-02  6:50         ` Josef Holzmayr
+  0 siblings, 0 replies; 8+ messages in thread
+From: Josef Holzmayr @ 2022-03-02  6:50 UTC (permalink / raw)
+  To: Karthik Poduval; +Cc: tomzy, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 4855 bytes --]
+
+Howdy!
+
+Karthik Poduval <karthik.poduval@gmail.com> schrieb am Mi. 2. März 2022 um
+04:23:
+
+> This concept of user vs debug builds is there in Android and any
+> Android developer who gets introduced to yocto may look for these
+> options. There seem to be many implementation choices here, trying to
+> summarize some of the options here.
+>
+> 1. use different image recipes example-image-user.bb vs
+> example-image-debug.bb but this still poses a problem for kernel
+> recipes as kernel needs to have different config fragments or
+> different defconfig for debug vs user variants. One possible option is
+> to use KTYPE to select tiny vs standard or define own for custom BSP
+> layers. What about other recipes like u-boot or firmware for other
+> remote processors, how to percolate the debug vs user options to those
+> recipes via just an image recipe ?
+
+
+As a recipe cannot affect another recipe, and image recipes are obviously
+recipes too, this is usually not useful.
+
+
+> 2. use different configs using multiconfig. Base config (which is
+> debug) also selects the user config hence always building both build
+> variants in different tmp directories. Kernel, remote firmware and
+> image recipes use variables from the multiconfig cof files to decide
+> whether to build debug or user variants.
+
+
+The whole point of multiconfig is builds depending on each other. I don’t
+think it applies here.
+
+
+> 3. use different distros. DSITRO=user bitbake example-image,
+> DISTRO=debug example-image. Kernel and remote firmware recipes use
+> variables from the distro to decide whether to build debug or user
+> variants.
+
+
+This is clearly the standard way.
+
+
+>
+> Which is the best method ?
+> All these options seem very BSP layer specific, is there something
+> more generic and better than the above options ?
+> If not, should this be a feature request to the Yocto project ?
+>
+> NOTE: debug variants may include the following.
+> - more debug related kernel configs and security loosened and UART
+> ports disabled
+> - image recipe debug variant may include debug utilities absent from
+> the user variant
+
+
+Easily archived with 3.
+
+
+>
+> There could be more than just debug and user variants. Android has
+> engineering, tests, user, tiny and user-debug.
+
+
+See 3. You can have an arbitrary number of distros, interrelated however
+you wish.
+
+Greetz
+
+
+> --
+> Regards,
+> Karthik Poduval
+>
+> On Tue, Mar 1, 2022 at 1:26 AM tomzy <tomasz.zyjewski@3mdeb.com> wrote:
+> >
+> > Thanks Tomasz. I will check kas.
+> >
+> > No problem
+> >
+> > Yes, for selecting some of the packages I have created prod and debug
+> image
+> > recipes.But this did not work for the kernel as the kernel recipe is
+> picked
+> > as part of PROVIDERin machine conf.
+> >
+> > What are the difference there? You want to use different config on prod
+> and debug images?
+> > Maybe add it as config fragments? Then you would need to add some global
+> variable to
+> > distinguish when use given .cfg file.
+> >
+> > [1]
+> https://docs.yoctoproject.org/singleindex.html#creating-configuration-fragments
+> >
+> > SoI had to use 2 conf to have the
+> > IMAGE_FEATURES (orany other var)set differently for prod and debug. This
+> is for
+> > building the kernelrecipie differently for prodand debug. Setting the
+> > IMAGE_FEATURES in the image recipe (and not inconf) causes2 problems.
+> One is
+> > that kernel and other bootloaders recipes arepicked early via PROVIDER
+> in conf
+> > and not as packages included in image recipe.
+> >
+> > Is that a problem?
+> >
+> > Secondly,setting the var in the
+> > image recipe breaks this command for e.g.
+> > "bitbake base-image-prod.bbbase-image-debug.bb".
+> >
+> > Didn't you want to distinguish this to builds to be able to run `bitbake
+> base-image-prod` or
+> > `bitbake base-image-debug`?
+> >
+> > Since the command parses the recipes only once for both image creation.
+> >
+> >
+> > Nevertheless I would greatly recommend you to use kas. In simple .yml
+> file you
+> > could prepare different `local.conf` per configuration prod/debug.
+> >
+> > [2]
+> https://kas.readthedocs.io/en/latest/userguide.html#project-configuration
+> >
+> > Regards,
+> > Tomasz Żyjewski
+> > Embedded Systems Engineer
+> > GPG: 5C495EA3EBEECA59
+> > https://3mdeb.com | @3mdeb_com
+> >
+> >
+> >
+> >
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> You automatically follow any topics you start or reply to.
+> View/Reply Online (#56346):
+> https://lists.yoctoproject.org/g/yocto/message/56346
+> Mute This Topic: https://lists.yoctoproject.org/mt/89469781/4689568
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> jester@theyoctojester.info]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 8422 bytes --]
+
+^ permalink raw reply	[flat|nested] 8+ messages in thread
+end of thread, other threads:[~2022-03-02  6:50 UTC | newest]
+
+Thread overview: 8+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-03-01  5:06 On managing debug and production builds Vinayak Menon
+2022-03-01  7:04 ` tomzy
+2022-03-01  8:52   ` [yocto] " Vinayak Menon
+2022-03-01  8:58     ` Alexander Kanavin
+2022-03-01  9:26     ` tomzy
+2022-03-02  3:22       ` [yocto] " Karthik Poduval
+2022-03-02  6:50         ` Josef Holzmayr
+     [not found]       ` <CAH9dsRgmBt-Y-P0P+1o1u6RC2WqFXH03nURMnaDpZJjNH_nE0Q@mail.gmail.com>
+2022-03-02  6:29         ` Vinayak Menon
+

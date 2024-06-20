@@ -1,0 +1,84 @@
+* [WIC] bootimg-partition plugin
+@ 2021-09-22 18:31 Rudolf J Streif
+  0 siblings, 0 replies; only message in thread
+From: Rudolf J Streif @ 2021-09-22 18:31 UTC (permalink / raw)
+  To: Yocto
+
+
+[-- Attachment #1.1.1: Type: text/plain, Size: 2224 bytes --]
+
+A not so well-known feature of the WIC bootimg-partition plugin is that 
+it can install files into different partitions. For that the variable 
+IMAGE_BOOT_FILES has to be defined as one of the following:
+
+IMAGE_BOOT_FILES_label-<partlabel> = "..."
+
+IMAGE_BOOT_FILES_uuid-<partuuid> = "..."
+
+The plugin will then use either the partition label or the partition 
+uuid from the WKS file "part" directive to look up the correct file list 
+variable.
+
+This code snippet from the plugin 
+(poky/scripts/lib/wic/plugins/source/bootimg-partition.py) is supposed 
+to do the trick:
+
+ >>>>>
+
+  50         boot_files = None
+  51         for (fmt, id) in (("_uuid-%s", part.uuid), ("_label-%s", 
+part.label), (None, None)):
+  52             if fmt:
+  53                 var = fmt % id
+  54             else:
+  55                 var = ""
+  56
+  57             print('var: ', var)
+  58
+  59             boot_files = get_bitbake_var("IMAGE_BOOT_FILES" + var)
+  60             if boot_files is not None:
+  61                 break
+
+<<<<<
+
+However, the function get_bitbake_var() from 
+poky/scripts/lib/wic/misc.py uses the the WIC environment which is 
+created from the WICVARS variable by the 
+poky/meta/classes/image_types_wic.bbclass. WICVARS is defined at the 
+beginning of the class and contains all bitbake variables relevant to 
+WIC. It of course includes the plain IMAGE_BOOT_FILES. When the class 
+creates the environment (do_rootfs_wicenv) is simply splits WICVARS and 
+looks up the variables one-by-one in the DataSmart dictionary 
+(d.getVar(<varname>). Since this is a key lookup it will not match any 
+variables for IMAGE_BOOT_FILES_label-<partlabel> and/or 
+IMAGE_BOOT_FILES_uuid-<partuuid>.
+
+For this to work there should be a lookup in DataSmart that supports 
+getVar() with a wildcard or "starts with". I am not all into the details 
+of DataSmart and maybe there is something like this already and I just 
+don't know about it. Hence the question here before I start hacking a 
+kludge into the image_types_wic class.
+
+Thanks,
+
+Rudi
+
+-- 
+Rudolf J Streif
+CEO/CTO ibeeto
++1.855.442.3386 x700
+
+
+[-- Attachment #1.1.2: OpenPGP public key --]
+[-- Type: application/pgp-keys, Size: 1717 bytes --]
+
+[-- Attachment #2: OpenPGP digital signature --]
+[-- Type: application/pgp-signature, Size: 505 bytes --]
+
+^ permalink raw reply	[flat|nested] only message in thread
+only message in thread, other threads:[~2021-09-22 18:31 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-09-22 18:31 [WIC] bootimg-partition plugin Rudolf J Streif
+

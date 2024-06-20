@@ -1,0 +1,607 @@
+* Help with setting up a PREEMPT_RT image for BeagleBone Black #yocto
+@ 2022-10-27 17:51 mpham20
+  2022-10-27 20:49 ` [yocto] " Alexander Kanavin
+  2022-11-01 12:54 ` Bruce Ashfield
+  0 siblings, 2 replies; 7+ messages in thread
+From: mpham20 @ 2022-10-27 17:51 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2883 bytes --]
+
+Hello all,
+
+I am new to Yocto and would like to seek assistance for setting up a PREEMPT_RT image for BeagleBone Black.
+
+Here is what I have tried so far. First I followed the Yocto Project Quick Build tutorial in the documentation.
+
+1)
+sudo apt install gawk wget git diffstat unzip texinfo gcc build-essential chrpath socat cpio python3 python3-pip python3-pexpect xz-utils debianutils iputils-ping python3-git python3-jinja2 libegl1-mesa libsdl1.2-dev pylint xterm python3-subunit mesa-common-dev zstd liblz4-tool
+
+2)
+git clone git://git.yoctoproject.org/poky
+
+3)
+cd poky
+
+4)
+git checkout -t origin/langdale -b my-langdale
+
+5)
+git pull
+
+6)
+source oe-init-build-env
+
+7) Then I went to poky/build/conf and edited local.conf by uncommenting
+MACHINE ?= "beaglebone-yocto"
+and commenting out
+#MACHINE ??= "qemux86-64"
+Then I added these two lines at the bottom of the file:
+PREFERRED_PROVIDER_virtual/kernel = "linux-yocto-rt"
+COMPATIBLE_MACHINE_beaglebone-yocto = "beaglebone-yocto"
+
+8) Next I ran this command:
+bitbake core-image-minimal
+
+9) Then I get errors at this point.
+ERROR: Nothing PROVIDES 'virtual/kernel'
+linux-yocto-upstream PROVIDES virtual/kernel but was skipped: Set PREFERRED_PROVIDER_virtual/kernel to linux-yocto-upstream to enable it
+linux-yocto PROVIDES virtual/kernel but was skipped: Set PREFERRED_PROVIDER_virtual/kernel to linux-yocto to enable it
+linux-yocto-rt PROVIDES virtual/kernel but was skipped: incompatible with machine beaglebone-yocto (not in COMPATIBLE_MACHINE)
+linux-yocto-dev PROVIDES virtual/kernel but was skipped: Set PREFERRED_PROVIDER_virtual/kernel to linux-yocto-dev to enable it
+linux-yocto-rt PROVIDES virtual/kernel but was skipped: incompatible with machine beaglebone-yocto (not in COMPATIBLE_MACHINE)
+linux-yocto-upstream PROVIDES virtual/kernel but was skipped: Set PREFERRED_PROVIDER_virtual/kernel to linux-yocto-upstream to enable it
+linux-yocto PROVIDES virtual/kernel but was skipped: Set PREFERRED_PROVIDER_virtual/kernel to linux-yocto to enable it
+linux-yocto-tiny PROVIDES virtual/kernel but was skipped: incompatible with machine beaglebone-yocto (not in COMPATIBLE_MACHINE)
+linux-dummy PROVIDES virtual/kernel but was skipped: PREFERRED_PROVIDER_virtual/kernel set to linux-yocto-rt, not linux-dummy
+linux-yocto-tiny PROVIDES virtual/kernel but was skipped: incompatible with machine beaglebone-yocto (not in COMPATIBLE_MACHINE)
+ERROR: Required build target 'core-image-minimal' has no buildable providers.
+Missing or unbuildable dependency chain was: ['core-image-minimal', 'virtual/kernel']
+
+Summary: There was 1 WARNING message.
+Summary: There were 2 ERROR messages, returning a non-zero exit code.
+
+I've tried a variety of ways and read lots of links but still no luck. Can someone tell me the best way to accomplish my goal?
+Thank you for any help.
+
+Michael
+
+[-- Attachment #2: Type: text/html, Size: 3295 bytes --]
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] Help with setting up a PREEMPT_RT image for BeagleBone Black #yocto
+  2022-10-27 17:51 Help with setting up a PREEMPT_RT image for BeagleBone Black #yocto mpham20
+@ 2022-10-27 20:49 ` Alexander Kanavin
+  2022-10-29 18:08   ` Michael T Pham
+  2022-11-01 12:54 ` Bruce Ashfield
+  1 sibling, 1 reply; 7+ messages in thread
+From: Alexander Kanavin @ 2022-10-27 20:49 UTC (permalink / raw)
+  To: mpham20, Bruce Ashfield; +Cc: yocto
+
+On Thu, 27 Oct 2022 at 19:51, <mpham20@gmu.edu> wrote:
+> linux-yocto-rt PROVIDES virtual/kernel but was skipped: incompatible with machine beaglebone-yocto (not in COMPATIBLE_MACHINE)
+
+This is the key piece. Beaglebone target only allows a standard non-rt
+kernel. Perhaps Bruce can clarify the steps needed to add
+linux-yocto-rt? This is not something newcomers are expected to handle
+without assistance.
+
+Alex
+
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] Help with setting up a PREEMPT_RT image for BeagleBone Black #yocto
+  2022-10-27 20:49 ` [yocto] " Alexander Kanavin
+@ 2022-10-29 18:08   ` Michael T Pham
+  0 siblings, 0 replies; 7+ messages in thread
+From: Michael T Pham @ 2022-10-29 18:08 UTC (permalink / raw)
+  To: Alexander Kanavin, Bruce Ashfield; +Cc: yocto
+
+
+>On Thu, 27 Oct 2022 at 19:51, <mpham20@gmu.edu> wrote:
+>> linux-yocto-rt PROVIDES virtual/kernel but was skipped: incompatible with machine beaglebone-yocto (not in COMPATIBLE_MACHINE)
+>
+>This is the key piece. Beaglebone target only allows a standard non-rt
+>kernel. Perhaps Bruce can clarify the steps needed to add
+>linux-yocto-rt? This is not something newcomers are expected to handle
+>without assistance.
+>
+>Alex
+
+Just a friendly bump, hopefully people don't mind :)
+
+And thank you Alex for mentioning Bruce. Maybe I can get some help.
+
+Michael
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] Help with setting up a PREEMPT_RT image for BeagleBone Black #yocto
+  2022-10-27 17:51 Help with setting up a PREEMPT_RT image for BeagleBone Black #yocto mpham20
+  2022-10-27 20:49 ` [yocto] " Alexander Kanavin
+@ 2022-11-01 12:54 ` Bruce Ashfield
+  2022-11-01 19:33   ` Zoran Stojsavljevic
+  2022-11-01 21:09   ` Michael T Pham
+  1 sibling, 2 replies; 7+ messages in thread
+From: Bruce Ashfield @ 2022-11-01 12:54 UTC (permalink / raw)
+  To: mpham20; +Cc: yocto
+
+In message: [yocto] Help with setting up a PREEMPT_RT image for BeagleBone Black #yocto
+on 27/10/2022 mpham20@gmu.edu wrote:
+
+> Hello all,
+> 
+> I am new to Yocto and would like to seek assistance for setting up a PREEMPT_RT
+> image for BeagleBone Black.
+> 
+> Here is what I have tried so far. First I followed the Yocto Project Quick
+> Build tutorial in the documentation.
+> 
+> 1)
+> sudo apt install gawk wget git diffstat unzip texinfo gcc build-essential
+> chrpath socat cpio python3 python3-pip python3-pexpect xz-utils debianutils
+> iputils-ping python3-git python3-jinja2 libegl1-mesa libsdl1.2-dev pylint xterm
+> python3-subunit mesa-common-dev zstd liblz4-tool
+> 
+> 2)
+> git clone git://git.yoctoproject.org/poky
+> 
+> 3)
+> cd poky
+> 
+> 4)
+> git checkout -t origin/langdale -b my-langdale
+> 
+> 5)
+> git pull
+> 
+> 6)
+> source oe-init-build-env
+> 
+> 7) Then I went to poky/build/conf and edited local.conf by uncommenting
+> MACHINE ?= "beaglebone-yocto"
+> and commenting out
+> #MACHINE ??= "qemux86-64"
+> Then I added these two lines at the bottom of the file:
+> PREFERRED_PROVIDER_virtual/kernel = "linux-yocto-rt"
+> COMPATIBLE_MACHINE_beaglebone-yocto = "beaglebone-yocto"
+> 
+> 8) Next I ran this command:
+> bitbake core-image-minimal
+> 
+> 9) Then I get errors at this point.
+> ERROR: Nothing PROVIDES 'virtual/kernel'
+> linux-yocto-upstream PROVIDES virtual/kernel but was skipped: Set
+> PREFERRED_PROVIDER_virtual/kernel to linux-yocto-upstream to enable it
+> linux-yocto PROVIDES virtual/kernel but was skipped: Set
+> PREFERRED_PROVIDER_virtual/kernel to linux-yocto to enable it
+> linux-yocto-rt PROVIDES virtual/kernel but was skipped: incompatible with
+> machine beaglebone-yocto (not in COMPATIBLE_MACHINE)
+> linux-yocto-dev PROVIDES virtual/kernel but was skipped: Set
+> PREFERRED_PROVIDER_virtual/kernel to linux-yocto-dev to enable it
+> linux-yocto-rt PROVIDES virtual/kernel but was skipped: incompatible with
+> machine beaglebone-yocto (not in COMPATIBLE_MACHINE)
+> linux-yocto-upstream PROVIDES virtual/kernel but was skipped: Set
+> PREFERRED_PROVIDER_virtual/kernel to linux-yocto-upstream to enable it
+> linux-yocto PROVIDES virtual/kernel but was skipped: Set
+> PREFERRED_PROVIDER_virtual/kernel to linux-yocto to enable it
+> linux-yocto-tiny PROVIDES virtual/kernel but was skipped: incompatible with
+> machine beaglebone-yocto (not in COMPATIBLE_MACHINE)
+> linux-dummy PROVIDES virtual/kernel but was skipped: PREFERRED_PROVIDER_virtual
+> /kernel set to linux-yocto-rt, not linux-dummy
+> linux-yocto-tiny PROVIDES virtual/kernel but was skipped: incompatible with
+> machine beaglebone-yocto (not in COMPATIBLE_MACHINE)
+> ERROR: Required build target 'core-image-minimal' has no buildable providers.
+> Missing or unbuildable dependency chain was: ['core-image-minimal', 'virtual/
+> kernel']
+>  
+> Summary: There was 1 WARNING message.
+> Summary: There were 2 ERROR messages, returning a non-zero exit code.
+> 
+> I've tried a variety of ways and read lots of links but still no luck. Can
+> someone tell me the best way to accomplish my goal?
+> Thank you for any help.
+
+To build a kernel recipe (not just linux-yocto), it must be marked
+as compatible with your machine. The messages you are seeing are
+telling you that, by indicating that the recipes were skipped (since
+they are not compatible) and once they are all skipped you get a failure
+as nothing provides virtual/kernel.
+
+For linux-yocto, you also need a BSP description that the tooling
+uses to create the kernel configuration.
+
+We haven't been testing the beaglebone-yocto reference against -rt,
+so it isn't marked as compatible by default. That being said, it
+can be easily made compatible via a bbappend. Look at the
+meta-yocto-bsp layer, and the bbappends in there. We are adding
+the reference boards as compatible with linux-yocto. A similar
+bbappend would work for linux-yocto-rt, and you'd solve that first
+issue of not having a compatible machine.
+
+For the BSP description, it does happen that we have one in the
+linux-yocto configuration meta-data, so one doesn't need to be
+created. The tools would find that description during the build
+and use it accordingly. The default KBRANCH should aslo be fine
+for the beaglebone-yocto, as we aren't carrying any extra patches
+for the board, so the linux-yocto-rt recipe's default values will
+get the right branch checked out and built.
+
+Whether it builds (it should), boots (it should) or gives you
+appropriate -rt performance (unknown) .. are other questions
+that are to be answered :)
+
+Bruce
+
+
+> 
+> Michael
+
+> 
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#58426): https://lists.yoctoproject.org/g/yocto/message/58426
+> Mute This Topic: https://lists.yoctoproject.org/mt/94609944/1050810
+> Mute #yocto:https://lists.yoctoproject.org/g/yocto/mutehashtag/yocto
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [bruce.ashfield@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+> 
+
+
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] Help with setting up a PREEMPT_RT image for BeagleBone Black #yocto
+  2022-11-01 12:54 ` Bruce Ashfield
+@ 2022-11-01 19:33   ` Zoran Stojsavljevic
+  2022-11-01 21:09   ` Michael T Pham
+  1 sibling, 0 replies; 7+ messages in thread
+From: Zoran Stojsavljevic @ 2022-11-01 19:33 UTC (permalink / raw)
+  To: Bruce Ashfield; +Cc: mpham20, yocto
+
+Michael,
+
+I am not sure what you are trying to achieve, but I have some advice for you.
+
+Here is what you need to do in local.conf:
+
+MACHINE ?= "beaglebone"
+PREFERRED_PROVIDER_virtual/kernel = "linux-yocto"
+COMPATIBLE_MACHINE_beaglebone-yocto = "beaglebone-yocto"
+
+Not sure what the last two commands should be, but you should NOT
+mention any rt.
+
+For -rt bbb you should set following options in virtual/kernel make menuconfig:
+
+    # CONFIG_SMP is not set
+    # CONFIG_MODULES is not set
+
+    CONFIG_DEBUG_ATOMIC_SLEEP=y
+    # CONFIG_DEBUG_LOCK_ALLOC is not set
+    # CONFIG_PROVE_LOCKING is not set
+    # CONFIG_LOCKDEP is not set
+
+    # CONFIG_CPU_FREQ is not set
+    # CONFIG_CPU_IDLE is not set
+
+    # CONFIG_NO_HZ is not set
+    CONFIG_HZ_PERIODIC=y
+
+    CONFIG_HZ_250=y
+    CONFIG_HZ=250
+
+    # CONFIG_SUSPEND is not set
+    # CONFIG_HIBERNATION is not set
+    # CONFIG_PM is not set
+
+    # CONFIG_FTRACE is not set
+
+    CONFIG_PREEMPT_RT_FULL=y
+
+The commands to setup the menuconfig are the following:
+
+[1] Run menuconfig and configure the kernel:
+     $ bitbake -c menuconfig virtual/kernel
+
+[2] To save the configuration in a defconfig format:
+      $  bitbake -c savedefconfig virtual/kernel
+
+https://variwiki.com/index.php?title=Yocto_Customizing_the_Linux_kernel
+
+Then, you should have a bbb-rt kernel. With some tweaks and some
+tricks... You'll find these for yourself!
+
+Please, use the rt-tests package for testing kernel-bbb-rt.
+
+My two cent worth answer,
+Zee
+_______
+
+On Tue, Nov 1, 2022 at 1:54 PM Bruce Ashfield <bruce.ashfield@gmail.com> wrote:
+>
+> In message: [yocto] Help with setting up a PREEMPT_RT image for BeagleBone Black #yocto
+> on 27/10/2022 mpham20@gmu.edu wrote:
+>
+> > Hello all,
+> >
+> > I am new to Yocto and would like to seek assistance for setting up a PREEMPT_RT
+> > image for BeagleBone Black.
+> >
+> > Here is what I have tried so far. First I followed the Yocto Project Quick
+> > Build tutorial in the documentation.
+> >
+> > 1)
+> > sudo apt install gawk wget git diffstat unzip texinfo gcc build-essential
+> > chrpath socat cpio python3 python3-pip python3-pexpect xz-utils debianutils
+> > iputils-ping python3-git python3-jinja2 libegl1-mesa libsdl1.2-dev pylint xterm
+> > python3-subunit mesa-common-dev zstd liblz4-tool
+> >
+> > 2)
+> > git clone git://git.yoctoproject.org/poky
+> >
+> > 3)
+> > cd poky
+> >
+> > 4)
+> > git checkout -t origin/langdale -b my-langdale
+> >
+> > 5)
+> > git pull
+> >
+> > 6)
+> > source oe-init-build-env
+> >
+> > 7) Then I went to poky/build/conf and edited local.conf by uncommenting
+> > MACHINE ?= "beaglebone-yocto"
+> > and commenting out
+> > #MACHINE ??= "qemux86-64"
+> > Then I added these two lines at the bottom of the file:
+> > PREFERRED_PROVIDER_virtual/kernel = "linux-yocto-rt"
+> > COMPATIBLE_MACHINE_beaglebone-yocto = "beaglebone-yocto"
+> >
+> > 8) Next I ran this command:
+> > bitbake core-image-minimal
+> >
+> > 9) Then I get errors at this point.
+> > ERROR: Nothing PROVIDES 'virtual/kernel'
+> > linux-yocto-upstream PROVIDES virtual/kernel but was skipped: Set
+> > PREFERRED_PROVIDER_virtual/kernel to linux-yocto-upstream to enable it
+> > linux-yocto PROVIDES virtual/kernel but was skipped: Set
+> > PREFERRED_PROVIDER_virtual/kernel to linux-yocto to enable it
+> > linux-yocto-rt PROVIDES virtual/kernel but was skipped: incompatible with
+> > machine beaglebone-yocto (not in COMPATIBLE_MACHINE)
+> > linux-yocto-dev PROVIDES virtual/kernel but was skipped: Set
+> > PREFERRED_PROVIDER_virtual/kernel to linux-yocto-dev to enable it
+> > linux-yocto-rt PROVIDES virtual/kernel but was skipped: incompatible with
+> > machine beaglebone-yocto (not in COMPATIBLE_MACHINE)
+> > linux-yocto-upstream PROVIDES virtual/kernel but was skipped: Set
+> > PREFERRED_PROVIDER_virtual/kernel to linux-yocto-upstream to enable it
+> > linux-yocto PROVIDES virtual/kernel but was skipped: Set
+> > PREFERRED_PROVIDER_virtual/kernel to linux-yocto to enable it
+> > linux-yocto-tiny PROVIDES virtual/kernel but was skipped: incompatible with
+> > machine beaglebone-yocto (not in COMPATIBLE_MACHINE)
+> > linux-dummy PROVIDES virtual/kernel but was skipped: PREFERRED_PROVIDER_virtual
+> > /kernel set to linux-yocto-rt, not linux-dummy
+> > linux-yocto-tiny PROVIDES virtual/kernel but was skipped: incompatible with
+> > machine beaglebone-yocto (not in COMPATIBLE_MACHINE)
+> > ERROR: Required build target 'core-image-minimal' has no buildable providers.
+> > Missing or unbuildable dependency chain was: ['core-image-minimal', 'virtual/
+> > kernel']
+> >
+> > Summary: There was 1 WARNING message.
+> > Summary: There were 2 ERROR messages, returning a non-zero exit code.
+> >
+> > I've tried a variety of ways and read lots of links but still no luck. Can
+> > someone tell me the best way to accomplish my goal?
+> > Thank you for any help.
+>
+> To build a kernel recipe (not just linux-yocto), it must be marked
+> as compatible with your machine. The messages you are seeing are
+> telling you that, by indicating that the recipes were skipped (since
+> they are not compatible) and once they are all skipped you get a failure
+> as nothing provides virtual/kernel.
+>
+> For linux-yocto, you also need a BSP description that the tooling
+> uses to create the kernel configuration.
+>
+> We haven't been testing the beaglebone-yocto reference against -rt,
+> so it isn't marked as compatible by default. That being said, it
+> can be easily made compatible via a bbappend. Look at the
+> meta-yocto-bsp layer, and the bbappends in there. We are adding
+> the reference boards as compatible with linux-yocto. A similar
+> bbappend would work for linux-yocto-rt, and you'd solve that first
+> issue of not having a compatible machine.
+>
+> For the BSP description, it does happen that we have one in the
+> linux-yocto configuration meta-data, so one doesn't need to be
+> created. The tools would find that description during the build
+> and use it accordingly. The default KBRANCH should aslo be fine
+> for the beaglebone-yocto, as we aren't carrying any extra patches
+> for the board, so the linux-yocto-rt recipe's default values will
+> get the right branch checked out and built.
+>
+> Whether it builds (it should), boots (it should) or gives you
+> appropriate -rt performance (unknown) .. are other questions
+> that are to be answered :)
+>
+> Bruce
+>
+>
+> >
+> > Michael
+>
+> >
+> >
+> >
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#58457): https://lists.yoctoproject.org/g/yocto/message/58457
+> Mute This Topic: https://lists.yoctoproject.org/mt/94609944/3618681
+> Mute #yocto:https://lists.yoctoproject.org/g/yocto/mutehashtag/yocto
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [zoran.stojsavljevic@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] Help with setting up a PREEMPT_RT image for BeagleBone Black #yocto
+  2022-11-01 12:54 ` Bruce Ashfield
+  2022-11-01 19:33   ` Zoran Stojsavljevic
+@ 2022-11-01 21:09   ` Michael T Pham
+  2022-11-01 22:13     ` Bruce Ashfield
+  1 sibling, 1 reply; 7+ messages in thread
+From: Michael T Pham @ 2022-11-01 21:09 UTC (permalink / raw)
+  To: Bruce Ashfield; +Cc: yocto
+
+
+>To build a kernel recipe (not just linux-yocto), it must be marked
+>as compatible with your machine. The messages you are seeing are
+>telling you that, by indicating that the recipes were skipped (since
+>they are not compatible) and once they are all skipped you get a failure
+>as nothing provides virtual/kernel.
+>
+>For linux-yocto, you also need a BSP description that the tooling
+>uses to create the kernel configuration.
+
+I am not sure what is meant by this. Sorry, I'm a complete newbie ':)
+
+>We haven't been testing the beaglebone-yocto reference against -rt,
+>so it isn't marked as compatible by default. That being said, it
+>can be easily made compatible via a bbappend. Look at the
+>meta-yocto-bsp layer, and the bbappends in there. We are adding
+>the reference boards as compatible with linux-yocto. A similar
+>bbappend would work for linux-yocto-rt, and you'd solve that first
+>issue of not having a compatible machine.
+
+I think I see what you're saying. So I would copy the contents of 
+/poky/meta-yocto-bsp/recipes-kernel/linux/linux-yocto_5.19.bbappend
+for linux-yocto-rt? Where is the location to place this?
+
+>For the BSP description, it does happen that we have one in the
+>linux-yocto configuration meta-data, so one doesn't need to be
+>created. The tools would find that description during the build
+>and use it accordingly. The default KBRANCH should aslo be fine
+>for the beaglebone-yocto, as we aren't carrying any extra patches
+>for the board, so the linux-yocto-rt recipe's default values will
+>get the right branch checked out and built.
+
+Forgive me for not understanding but at first it sounds like you are
+saying I need to create something and then you are saying I don't 
+need to?
+
+Michael
+
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] Help with setting up a PREEMPT_RT image for BeagleBone Black #yocto
+  2022-11-01 21:09   ` Michael T Pham
+@ 2022-11-01 22:13     ` Bruce Ashfield
+  0 siblings, 0 replies; 7+ messages in thread
+From: Bruce Ashfield @ 2022-11-01 22:13 UTC (permalink / raw)
+  To: Michael T Pham; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 3192 bytes --]
+
+On Tue, Nov 1, 2022 at 5:10 PM Michael T Pham <mpham20@gmu.edu> wrote:
+
+>
+> >To build a kernel recipe (not just linux-yocto), it must be marked
+> >as compatible with your machine. The messages you are seeing are
+> >telling you that, by indicating that the recipes were skipped (since
+> >they are not compatible) and once they are all skipped you get a failure
+> >as nothing provides virtual/kernel.
+> >
+> >For linux-yocto, you also need a BSP description that the tooling
+> >uses to create the kernel configuration.
+>
+> I am not sure what is meant by this. Sorry, I'm a complete newbie ':)
+>
+
+You can find the details in the yocto manuals, but I'm describing how
+the standard/tiny/preempt-rt reference kernels have their configurations
+constructed using the kernel-yocto tooling.
+
+For each kernel type, there's a matching config that has the MACHINE
++ kernel type in it. The tools find that description and use it to pull all
+the common configs, kernel type specifics and machine fragments into
+a final config.
+
+If one doesn't exist, you either need to have your own defconfig, or you
+can create one. In this case, you don't need to create one, as it
+exists.
+i.e.:
+https://git.yoctoproject.org/yocto-kernel-cache/tree/bsp/beaglebone/beaglebone-preempt-rt.scc?h=yocto-5.15
+
+
+>
+> >We haven't been testing the beaglebone-yocto reference against -rt,
+> >so it isn't marked as compatible by default. That being said, it
+> >can be easily made compatible via a bbappend. Look at the
+> >meta-yocto-bsp layer, and the bbappends in there. We are adding
+> >the reference boards as compatible with linux-yocto. A similar
+> >bbappend would work for linux-yocto-rt, and you'd solve that first
+> >issue of not having a compatible machine.
+>
+> I think I see what you're saying. So I would copy the contents of
+> /poky/meta-yocto-bsp/recipes-kernel/linux/linux-yocto_5.19.bbappend
+> for linux-yocto-rt? Where is the location to place this?
+>
+
+You'd only need to have the beaglebone yocto bits in the new bbappend,
+and it would be placed in any layer, in the appropriate subdirectory. This
+bappend is no different than any other.
+
+I'm being intentionally terse there, since it is best to read the docs for
+this, as I won't do it justice.
+
+
+>
+> >For the BSP description, it does happen that we have one in the
+> >linux-yocto configuration meta-data, so one doesn't need to be
+> >created. The tools would find that description during the build
+> >and use it accordingly. The default KBRANCH should aslo be fine
+> >for the beaglebone-yocto, as we aren't carrying any extra patches
+> >for the board, so the linux-yocto-rt recipe's default values will
+> >get the right branch checked out and built.
+>
+> Forgive me for not understanding but at first it sounds like you are
+> saying I need to create something and then you are saying I don't
+> need to?
+>
+
+I was describing the general case, and then commenting on this specific
+one. I don't want someone to read this later and maybe think that any
+machine + linux-yocto-rt combination will "just work".
+
+Bruce
+
+
+
+>
+> Michael
+>
+
+
+-- 
+- Thou shalt not follow the NULL pointer, for chaos and madness await thee
+at its end
+- "Use the force Harry" - Gandalf, Star Trek II
+
+[-- Attachment #2: Type: text/html, Size: 5970 bytes --]
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+end of thread, other threads:[~2022-11-01 22:13 UTC | newest]
+
+Thread overview: 7+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-10-27 17:51 Help with setting up a PREEMPT_RT image for BeagleBone Black #yocto mpham20
+2022-10-27 20:49 ` [yocto] " Alexander Kanavin
+2022-10-29 18:08   ` Michael T Pham
+2022-11-01 12:54 ` Bruce Ashfield
+2022-11-01 19:33   ` Zoran Stojsavljevic
+2022-11-01 21:09   ` Michael T Pham
+2022-11-01 22:13     ` Bruce Ashfield
+

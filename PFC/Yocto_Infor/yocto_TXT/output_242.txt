@@ -1,0 +1,145 @@
+* linux-firmware-mt7601u-license missing - all fw installed not only selected
+@ 2023-08-24 16:00 Konstantin Kletschke
+  2023-08-24 17:43 ` Konstantin Kletschke
+  0 siblings, 1 reply; 2+ messages in thread
+From: Konstantin Kletschke @ 2023-08-24 16:00 UTC (permalink / raw)
+  To: yocto
+
+
+Today I updated my kirkstone poky (git pull) to today's version, I do
+not know when the last time was, though (winter?)...
+
+I have
+
+IMAGE_INSTALL += " \
+    kernel-module-rtl8812au \
+    linux-firmware-ralink \
+    linux-firmware-rtl8168 \
+    linux-firmware-rtl8188 \
+    linux-firmware-rtl8192ce \
+    linux-firmware-rtl8192cu \
+    linux-firmware-rtl8192su \
+    linux-firmware-rtl8723 \
+    linux-firmware-rtl8821 \
+    linux-firmware-mt7662 \
+    util-linux-sfdisk \
+    blspec \
+    e2fsprogs-resize2fs e2fsprogs-mke2fs xfsprogs \
+    rauc barebox-utils dt-utils"
+
+in my image config and only those firmware packages got installed.
+
+To create linux-firmware-mt7662 I have a 
+meta-insidem2m/recipes-kernel/linux-firmware/linux-firmware_%.bbappend
+containing this:
+
+PACKAGES =+ "${PN}-mt7662-license ${PN}-mt7662"
+
+LICENSE:${PN}-mt7662 = "Firmware-ralink_a_mediatek_company_firmware"
+LICENSE:${PN}-mt7662-license = "Firmware-ralink_a_mediatek_company_firmware"
+
+FILES:${PN}-mt7662-license = "${nonarch_base_libdir}/firmware/LICENCE.ralink_a_mediatek_company_firmware"
+FILES:${PN}-mt7662 = "${nonarch_base_libdir}/firmware/mt7662.bin ${nonarch_base_libdir}/firmware/mt7662_rom_patch.bin"
+
+RDEPENDS:${PN}-mt7662 += "${PN}-mt7662-license"
+
+
+Worked fine, after today's update I got:
+
+The following packages have unmet dependencies:
+ linux-firmware-mt7601u : Depends: linux-firmware-mt7601u-license but it is not installable
+E: Unable to correct problems, you have held broken packages.
+
+Why could that be?
+
+I read there was a fix in November:
+https://git.yoctoproject.org/poky/commit/meta/recipes-kernel/linux-firmware/linux-firmware_20230625.bb?id=b4b218b0699490765459995f43e945ceea6c32c1
+
+By accident I found out if I rape my bbappend file to look so:
+
+PACKAGES =+ "${PN}-mt7662-license ${PN}-mt7662"
+
+LICENSE:${PN}-mt7662 = "Firmware-ralink_a_mediatek_company_firmware"
+LICENSE:${PN}-mt7662-license = "Firmware-ralink_a_mediatek_company_firmware"
+
+FILES:${PN}-mt7662-license = "${nonarch_base_libdir}/firmware/LICENCE.ralink_a_mediatek_company_firmware"
+FILES:${PN}-mt7662 = "${nonarch_base_libdir}/firmware/mt7662.bin ${nonarch_base_libdir}/firmware/mt7662_rom_patch.bin"
+
+RDEPENDS:${PN}-mt7662 += "${PN}-mt7662-license"
+
+
+LICENSE:${PN}-mt7601u = "Firmware-ralink_a_mediatek_company_firmware"
+LICENSE:${PN}-mt7601u-license = "Firmware-ralink_a_mediatek_company_firmware"
+
+FILES:${PN}-mt7601u-license = "${nonarch_base_libdir}/firmware/LICENCE.ralink_a_mediatek_company_firmware"
+
+FILES:${PN}-mt7601u = "${nonarch_base_libdir}/firmware/mt7662.bin ${nonarch_base_libdir}/firmware/mt7662_rom_patch.bin"
+#FILES:${PN}-mt7601u = " \ 
+#  ${nonarch_base_libdir}/firmware/mediatek/mt7601u.bin \
+#"
+
+RDEPENDS:${PN}-mt7601u += "${PN}-mt7601u-license"
+
+The image gets created successfully, but now it has ALL firmware
+packages installed (900MB). The commented out FILES:${PN}-mt7601u is the
+original actual recipe part.
+
+What's going on here?
+
+Generally the Problem looks similair to this one:
+
+https://lore.kernel.org/all/20767.1677381945442913809@lists.openembedded.org/T/#md2177072e60f8a737f0db0ef267d75596b34cb89
+
+Was there ever a fix? Despite of that, why is mt7601u failing?
+
+Regards
+Konstantin
+
+
+
+
+
+
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+* Re: linux-firmware-mt7601u-license missing - all fw installed not only selected
+  2023-08-24 16:00 linux-firmware-mt7601u-license missing - all fw installed not only selected Konstantin Kletschke
+@ 2023-08-24 17:43 ` Konstantin Kletschke
+  0 siblings, 0 replies; 2+ messages in thread
+From: Konstantin Kletschke @ 2023-08-24 17:43 UTC (permalink / raw)
+  To: yocto
+
+On Thu, Aug 24, 2023 at 06:00:06PM +0200, Konstantin Kletschke wrote:
+
+> meta-insidem2m/recipes-kernel/linux-firmware/linux-firmware_%.bbappend
+> containing this:
+
+> FILES:${PN}-mt7662 = "${nonarch_base_libdir}/firmware/mt7662.bin ${nonarch_base_libdir}/firmware/mt7662_rom_patch.bin"
+
+Nooooooooooooooooooooooooooooo!
+
+I had to do the firmware -> firmware/mediatek move in my own bbappend
+too, of course!
+I did it but not for both entries so I was mislead thinking that is not
+the problem. Noooooooooo!
+
+So in my bbappend I changed to
+
+FILES:${PN}-mt7662 = "${nonarch_base_libdir}/firmware/mediatek/mt7662.bin ${nonarch_base_libdir}/firmware/mediatek/mt7662_rom_patch.bin"
+
+also. Problem solved!
+
+The error message was a _bit_ misleading, though!
+
+Regards
+Konsti
+
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2023-08-24 17:43 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-08-24 16:00 linux-firmware-mt7601u-license missing - all fw installed not only selected Konstantin Kletschke
+2023-08-24 17:43 ` Konstantin Kletschke
+

@@ -1,0 +1,55 @@
+* [meta-security][PATCH] Add EROFS support to dm-verity-img class
+@ 2022-04-20 10:05 Josh Harley
+  0 siblings, 0 replies; only message in thread
+From: Josh Harley @ 2022-04-20 10:05 UTC (permalink / raw)
+  To: yocto; +Cc: Josh Harley
+
+Add support for the EROFS image, and it's compressed options, to the
+dm-verity-img.bbclass setup, theoretically this is a simple addition to
+the list of types however there is a quirk in how Poky handles the
+filesystems in poky/meta/classes/image_types.bbclass.
+
+Specifically the 'IMAGE_CMD' and 'IMAGE_FSTYPES' use a hyphen, e.g.
+erofs-lz4, however in the image_type bbclass the task for that would be
+"do_image_erofs_lz4", replacing the hyphen with an underscore.
+
+As the dm-verity-img.bbclass adds a dependency to the wic image creation
+on the do_image_* task then it fails as there is no
+"do_image_erofs-lz4", so simply replace the hypen with an underscore.
+---
+ classes/dm-verity-img.bbclass | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/classes/dm-verity-img.bbclass b/classes/dm-verity-img.bbclass
+index 16d395b..cc6a7f5 100644
+--- a/classes/dm-verity-img.bbclass
++++ b/classes/dm-verity-img.bbclass
+@@ -60,7 +60,7 @@ verity_setup() {
+     veritysetup --data-block-size=1024 --hash-offset=$SIZE format $OUTPUT $OUTPUT | tail -n +2 | process_verity
+ }
+ 
+-VERITY_TYPES = "ext2.verity ext3.verity ext4.verity btrfs.verity"
++VERITY_TYPES = "ext2.verity ext3.verity ext4.verity btrfs.verity erofs.verity erofs-lz4.verity erofs-lz4hc.verity"
+ IMAGE_TYPES += "${VERITY_TYPES}"
+ CONVERSIONTYPES += "verity"
+ CONVERSION_CMD_verity = "verity_setup ${type}"
+@@ -87,6 +87,6 @@ python __anonymous() {
+     # If we're using wic: we'll have to use partition images and not the rootfs
+     # source plugin so add the appropriate dependency.
+     if 'wic' in image_fstypes:
+-        dep = ' %s:do_image_%s' % (pn, verity_type)
++        dep = ' %s:do_image_%s' % (pn, verity_type.replace("-", "_"))
+         d.appendVarFlag('do_image_wic', 'depends', dep)
+ }
+-- 
+2.26.2
+
+
+
+^ permalink raw reply related	[flat|nested] only message in thread
+only message in thread, other threads:[~2022-04-21 16:46 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-04-20 10:05 [meta-security][PATCH] Add EROFS support to dm-verity-img class Josh Harley
+

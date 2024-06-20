@@ -1,0 +1,221 @@
+* [PATCH 1/3] util.py: Fix for removing non-existed dependencies
+@ 2022-12-21  3:56 Robert Yang
+  2022-12-21  3:56 ` [PATCH 2/3] recipeparse.py: Checkout deplayerbranch before parsing Robert Yang
+  2022-12-21  3:56 ` [PATCH 3/3] utils.py: Prefer the one which matches branchname for depends layer Robert Yang
+  0 siblings, 2 replies; 3+ messages in thread
+From: Robert Yang @ 2022-12-21  3:56 UTC (permalink / raw)
+  To: yocto; +Cc: tim.orling
+
+The previous code didn't work when there is no deps or recs, it would return
+immediately without removing the on-existed dependencies, this patch fixes the
+problem.
+
+Signed-off-by: Robert Yang <liezhi.yang@windriver.com>
+---
+ layerindex/utils.py | 30 +++++++++++++++++++-----------
+ 1 file changed, 19 insertions(+), 11 deletions(-)
+
+diff --git a/layerindex/utils.py b/layerindex/utils.py
+index 9d94015..4b6aeca 100644
+--- a/layerindex/utils.py
++++ b/layerindex/utils.py
+@@ -109,6 +109,18 @@ def get_dependency_layer(depname, version_str=None, logger=None):
+ 
+     return None
+ 
++def remove_layerdeps(layer_name, need_remove, logger):
++    if need_remove:
++        import settings
++        remove_layer_dependencies = getattr(settings, 'REMOVE_LAYER_DEPENDENCIES', False)
++        if remove_layer_dependencies:
++            logger.info('Removing obsolete dependencies "%s" for layer %s' % (need_remove, layer_name))
++            need_remove.delete()
++        else:
++            logger.warn('Dependencies "%s" are not in %s\'s conf/layer.conf' % (need_remove, layer_name))
++            logger.warn('Either set REMOVE_LAYER_DEPENDENCIES to remove them from the database, or fix conf/layer.conf')
++
++
+ def add_dependencies(layerbranch, config_data, logger=None):
+     _add_dependency("LAYERDEPENDS", 'dependency', layerbranch, config_data, logger=logger)
+ 
+@@ -124,10 +136,15 @@ def _add_dependency(var, name, layerbranch, config_data, logger=None, required=T
+     if layerbranch.collection:
+         var_name = layerbranch.collection
+ 
+-
+     dep_list = config_data.getVar("%s_%s" % (var, var_name), True)
+ 
++    need_remove = LayerDependency.objects.filter(layerbranch=layerbranch).filter(required=required)
++
+     if not dep_list:
++        # The need_remove contains all of the deps or recs according to
++        # required is True or False, remove deps or recs immediately if
++        # there are no deps or recs in conf/layer.conf
++        remove_layerdeps(layer_name, need_remove, logger)
+         return
+ 
+     try:
+@@ -136,7 +153,6 @@ def _add_dependency(var, name, layerbranch, config_data, logger=None, required=T
+         logger.debug('Error parsing %s_%s for %s\n%s' % (var, var_name, layer_name, str(vse)))
+         return
+ 
+-    need_remove = LayerDependency.objects.filter(layerbranch=layerbranch).filter(required=required)
+     for dep, ver_list in list(dep_dict.items()):
+         ver_str = None
+         if ver_list:
+@@ -177,15 +193,7 @@ def _add_dependency(var, name, layerbranch, config_data, logger=None, required=T
+         layerdep.required = required
+         layerdep.save()
+ 
+-    if need_remove:
+-        import settings
+-        remove_layer_dependencies = getattr(settings, 'REMOVE_LAYER_DEPENDENCIES', False)
+-        if remove_layer_dependencies:
+-            logger.info('Removing obsolete dependencies "%s" for layer %s' % (need_remove, layer_name))
+-            need_remove.delete()
+-        else:
+-            logger.warn('Dependencies "%s" are not in %s\'s conf/layer.conf' % (need_remove, layer_name))
+-            logger.warn('Either set REMOVE_LAYER_DEPENDENCIES to remove them from the database, or fix conf/layer.conf')
++        remove_layerdeps(layer_name, need_remove, logger)
+ 
+ def set_layerbranch_collection_version(layerbranch, config_data, logger=None):
+     layerbranch.collection = get_layer_var(config_data, 'BBFILE_COLLECTIONS', logger)
+-- 
+2.37.1
+
+
+
+^ permalink raw reply related	[flat|nested] 3+ messages in thread
+* [PATCH 2/3] recipeparse.py: Checkout deplayerbranch before parsing
+  2022-12-21  3:56 [PATCH 1/3] util.py: Fix for removing non-existed dependencies Robert Yang
+@ 2022-12-21  3:56 ` Robert Yang
+  2022-12-21  3:56 ` [PATCH 3/3] utils.py: Prefer the one which matches branchname for depends layer Robert Yang
+  1 sibling, 0 replies; 3+ messages in thread
+From: Robert Yang @ 2022-12-21  3:56 UTC (permalink / raw)
+  To: yocto; +Cc: tim.orling
+
+Fixed:
+$ ./update.py -b hardknott,master
+
+ERROR: Variable PREMIRRORS_append contains an operation using the old override syntax. Please convert this layer/metadata before attempting to use with a newer bitbake.
+
+This is because it doesn't checkout master branch when parse it, this patch
+fixed the problem.
+
+Signed-off-by: Robert Yang <liezhi.yang@windriver.com>
+---
+ layerindex/recipeparse.py | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/layerindex/recipeparse.py b/layerindex/recipeparse.py
+index 6202745..6f2da0a 100644
+--- a/layerindex/recipeparse.py
++++ b/layerindex/recipeparse.py
+@@ -124,6 +124,7 @@ def setup_layer(config_data, fetchdir, layerdir, layer, layerbranch, logger):
+                 logger.warning('Recommends %s of layer %s does not have branch record for branch %s - ignoring' % (dep.dependency.name, layer.name, layerbranch.branch.name))
+                 continue
+         deplayerdir = os.path.join(deprepodir, deplayerbranch.vcs_subdir)
++        utils.checkout_layer_branch(deplayerbranch, deprepodir, logger)
+         utils.parse_layer_conf(deplayerdir, config_data_copy)
+     config_data_copy.delVar('LAYERDIR')
+     return config_data_copy
+-- 
+2.37.1
+
+
+
+^ permalink raw reply related	[flat|nested] 3+ messages in thread
+* [PATCH 3/3] utils.py: Prefer the one which matches branchname for depends layer
+  2022-12-21  3:56 [PATCH 1/3] util.py: Fix for removing non-existed dependencies Robert Yang
+  2022-12-21  3:56 ` [PATCH 2/3] recipeparse.py: Checkout deplayerbranch before parsing Robert Yang
+@ 2022-12-21  3:56 ` Robert Yang
+  1 sibling, 0 replies; 3+ messages in thread
+From: Robert Yang @ 2022-12-21  3:56 UTC (permalink / raw)
+  To: yocto; +Cc: tim.orling
+
+The meta-xilinx was mata-xilinx/meta-xilinx-bsps, and now upstream has changed
+it to mata-xilinx/meta-xilinx-core, but get_dependency_layer always returns the
+first one (mata-xilinx/meta-xilinx-bsps) found, which causes errors like:
+
+$ ./update.py -b master-wr -l meta-xilinx-bsp
+ERROR: Dependency meta-xilinx of layer meta-xilinx-bsp does not have branch record for branch master-wr
+
+And for build:
+Layer 'wr-xilinx-zynqmp' depends on layer 'xilinx', but this layer is not enabled in your configuration
+
+Prefer the one which matches branchname to fix the problem
+
+Signed-off-by: Robert Yang <liezhi.yang@windriver.com>
+---
+ layerindex/utils.py | 19 +++++++++++++------
+ 1 file changed, 13 insertions(+), 6 deletions(-)
+
+diff --git a/layerindex/utils.py b/layerindex/utils.py
+index 4b6aeca..a1f689d 100644
+--- a/layerindex/utils.py
++++ b/layerindex/utils.py
+@@ -75,7 +75,7 @@ def is_deps_satisfied(req_col, req_ver, collections):
+     # Return False when not found
+     return False
+ 
+-def get_dependency_layer(depname, version_str=None, logger=None):
++def get_dependency_layer(depname, layerbranch, version_str=None, logger=None):
+     from layerindex.models import LayerItem, LayerBranch
+ 
+     # Get any LayerBranch with a layer that has a name that matches depmod, or
+@@ -87,13 +87,20 @@ def get_dependency_layer(depname, version_str=None, logger=None):
+     if not res:
+         return None
+ 
+-    # If there is no version constraint, return the first one found.
++    # If there is no version constraint:
+     if not version_str:
++        # Prefer the one which matches branchname
++        required_branchname = layerbranch.branch.name
++        for lb in res:
++            if required_branchname == lb.branch.name:
++                return lb.layer
++
++        # Or return the first one found.
+         return res[0].layer
+ 
+     (operator, dep_version) = version_str.split()
+-    for layerbranch in res:
+-        layer_ver = layerbranch.version
++    for lb in res:
++        layer_ver = lb.version
+ 
+         # If there is no version in the found layer, then don't use this layer.
+         if not layer_ver:
+@@ -105,7 +112,7 @@ def get_dependency_layer(depname, version_str=None, logger=None):
+             raise vse
+ 
+         if success:
+-            return layerbranch.layer
++            return lb.layer
+ 
+     return None
+ 
+@@ -159,7 +166,7 @@ def _add_dependency(var, name, layerbranch, config_data, logger=None, required=T
+             ver_str = ver_list[0]
+ 
+         try:
+-            dep_layer = get_dependency_layer(dep, ver_str, logger)
++            dep_layer = get_dependency_layer(dep, layerbranch, ver_str, logger)
+         except bb.utils.VersionStringException as vse:
+             if logger:
+                 logger.error('Error getting %s %s for %s\n%s' %(name, dep. layer_name, str(vse)))
+-- 
+2.37.1
+
+
+
+^ permalink raw reply related	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2022-12-21  3:57 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-12-21  3:56 [PATCH 1/3] util.py: Fix for removing non-existed dependencies Robert Yang
+2022-12-21  3:56 ` [PATCH 2/3] recipeparse.py: Checkout deplayerbranch before parsing Robert Yang
+2022-12-21  3:56 ` [PATCH 3/3] utils.py: Prefer the one which matches branchname for depends layer Robert Yang
+

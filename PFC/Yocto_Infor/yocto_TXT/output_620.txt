@@ -1,0 +1,266 @@
+* [yocto][meta-python2] Kirkstone EXTRANATIVEPATH is not in effect
+@ 2023-05-15  8:24 Jiliang Cai
+  2023-05-15  8:40 ` Martin Jansa
+  0 siblings, 1 reply; 5+ messages in thread
+From: Jiliang Cai @ 2023-05-15  8:24 UTC (permalink / raw)
+  To: yocto
+
+I have a bb file abc_1.0.bb:
+DEPENDS += "python3-native"
+And EXTRANATIVEPATH contains "python3-native" as expected, so command 'python3'
+can be searched.
+
+Then I add DEPENDS += "python-native", but EXTRANATIVEPATH doesn't contains
+"python-native", so command 'python' can not be searched.
+
+python3native.bbclass  has a line:
+EXTRANATIVEPATH += "python3-native"
+So python3 can be searched when bitbake this recipe. I saw similar codes in the
+pythonnative.bbclass file, but why didn't it take effect?
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto][meta-python2] Kirkstone EXTRANATIVEPATH is not in effect
+  2023-05-15  8:24 [yocto][meta-python2] Kirkstone EXTRANATIVEPATH is not in effect Jiliang Cai
+@ 2023-05-15  8:40 ` Martin Jansa
+  2023-05-15  9:39   ` Jiliang Cai
+  0 siblings, 1 reply; 5+ messages in thread
+From: Martin Jansa @ 2023-05-15  8:40 UTC (permalink / raw)
+  To: Jiliang Cai; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1137 bytes --]
+
+Did you add "inherit pythonnative" or DEPENDS += "python-native"?
+
+You need just the inherit line.
+
+On Mon, May 15, 2023 at 10:23 AM Jiliang Cai <tyrocjl@gmail.com> wrote:
+
+> I have a bb file abc_1.0.bb:
+> DEPENDS += "python3-native"
+> And EXTRANATIVEPATH contains "python3-native" as expected, so command
+> 'python3'
+> can be searched.
+>
+> Then I add DEPENDS += "python-native", but EXTRANATIVEPATH doesn't contains
+> "python-native", so command 'python' can not be searched.
+>
+> python3native.bbclass  has a line:
+> EXTRANATIVEPATH += "python3-native"
+> So python3 can be searched when bitbake this recipe. I saw similar codes
+> in the
+> pythonnative.bbclass file, but why didn't it take effect?
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#60018):
+> https://lists.yoctoproject.org/g/yocto/message/60018
+> Mute This Topic: https://lists.yoctoproject.org/mt/98899140/3617156
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> Martin.Jansa@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 2165 bytes --]
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto][meta-python2] Kirkstone EXTRANATIVEPATH is not in effect
+  2023-05-15  8:40 ` Martin Jansa
+@ 2023-05-15  9:39   ` Jiliang Cai
+  2023-05-15  9:46     ` Martin Jansa
+  0 siblings, 1 reply; 5+ messages in thread
+From: Jiliang Cai @ 2023-05-15  9:39 UTC (permalink / raw)
+  To: Martin Jansa; +Cc: yocto
+
+I added:
+DEPENDS += "python-native python-setuptools-native".
+
+I think it should work just fine, because:
+python-setuptools.bb    inherit setuptools      -->
+setuptools.bbclass      inherit distutils       -->
+distutils.bbclass       inherit distutils-base  -->
+distutils-base.bbclass  inherit pythonnative    -->
+pythonnative.bbclass   contains 'EXTRANATIVEPATH += "python-native"'
+
+I don't know why my EXTRANATIVEPATH doesn't contain python-native when I run
+'bitbake -e <my_package_name>'. And this causes my bitbake can not search
+'python2'.
+
+Martin Jansa <martin.jansa@gmail.com> 于2023年5月15日周一 16:40写道：
+>
+> Did you add "inherit pythonnative" or DEPENDS += "python-native"?
+>
+> You need just the inherit line.
+>
+> On Mon, May 15, 2023 at 10:23 AM Jiliang Cai <tyrocjl@gmail.com> wrote:
+>>
+>> I have a bb file abc_1.0.bb:
+>> DEPENDS += "python3-native"
+>> And EXTRANATIVEPATH contains "python3-native" as expected, so command 'python3'
+>> can be searched.
+>>
+>> Then I add DEPENDS += "python-native", but EXTRANATIVEPATH doesn't contains
+>> "python-native", so command 'python' can not be searched.
+>>
+>> python3native.bbclass  has a line:
+>> EXTRANATIVEPATH += "python3-native"
+>> So python3 can be searched when bitbake this recipe. I saw similar codes in the
+>> pythonnative.bbclass file, but why didn't it take effect?
+>>
+>> -=-=-=-=-=-=-=-=-=-=-=-
+>> Links: You receive all messages sent to this group.
+>> View/Reply Online (#60018): https://lists.yoctoproject.org/g/yocto/message/60018
+>> Mute This Topic: https://lists.yoctoproject.org/mt/98899140/3617156
+>> Group Owner: yocto+owner@lists.yoctoproject.org
+>> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [Martin.Jansa@gmail.com]
+>> -=-=-=-=-=-=-=-=-=-=-=-
+>>
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto][meta-python2] Kirkstone EXTRANATIVEPATH is not in effect
+  2023-05-15  9:39   ` Jiliang Cai
+@ 2023-05-15  9:46     ` Martin Jansa
+  2023-05-15 10:09       ` Jiliang Cai
+  0 siblings, 1 reply; 5+ messages in thread
+From: Martin Jansa @ 2023-05-15  9:46 UTC (permalink / raw)
+  To: Jiliang Cai; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2093 bytes --]
+
+> I don't know why my EXTRANATIVEPATH doesn't contain python-native
+
+Because you didn't inherit pythonnative?
+
+On Mon, May 15, 2023 at 11:38 AM Jiliang Cai <tyrocjl@gmail.com> wrote:
+
+> I added:
+> DEPENDS += "python-native python-setuptools-native".
+>
+> I think it should work just fine, because:
+> python-setuptools.bb    inherit setuptools      -->
+> setuptools.bbclass      inherit distutils       -->
+> distutils.bbclass       inherit distutils-base  -->
+> distutils-base.bbclass  inherit pythonnative    -->
+> pythonnative.bbclass   contains 'EXTRANATIVEPATH += "python-native"'
+>
+> I don't know why my EXTRANATIVEPATH doesn't contain python-native when I
+> run
+> 'bitbake -e <my_package_name>'. And this causes my bitbake can not search
+> 'python2'.
+>
+> Martin Jansa <martin.jansa@gmail.com> 于2023年5月15日周一 16:40写道：
+> >
+> > Did you add "inherit pythonnative" or DEPENDS += "python-native"?
+> >
+> > You need just the inherit line.
+> >
+> > On Mon, May 15, 2023 at 10:23 AM Jiliang Cai <tyrocjl@gmail.com> wrote:
+> >>
+> >> I have a bb file abc_1.0.bb:
+> >> DEPENDS += "python3-native"
+> >> And EXTRANATIVEPATH contains "python3-native" as expected, so command
+> 'python3'
+> >> can be searched.
+> >>
+> >> Then I add DEPENDS += "python-native", but EXTRANATIVEPATH doesn't
+> contains
+> >> "python-native", so command 'python' can not be searched.
+> >>
+> >> python3native.bbclass  has a line:
+> >> EXTRANATIVEPATH += "python3-native"
+> >> So python3 can be searched when bitbake this recipe. I saw similar
+> codes in the
+> >> pythonnative.bbclass file, but why didn't it take effect?
+> >>
+> >> -=-=-=-=-=-=-=-=-=-=-=-
+> >> Links: You receive all messages sent to this group.
+> >> View/Reply Online (#60018):
+> https://lists.yoctoproject.org/g/yocto/message/60018
+> >> Mute This Topic: https://lists.yoctoproject.org/mt/98899140/3617156
+> >> Group Owner: yocto+owner@lists.yoctoproject.org
+> >> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> Martin.Jansa@gmail.com]
+> >> -=-=-=-=-=-=-=-=-=-=-=-
+> >>
+>
+
+[-- Attachment #2: Type: text/html, Size: 3498 bytes --]
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto][meta-python2] Kirkstone EXTRANATIVEPATH is not in effect
+  2023-05-15  9:46     ` Martin Jansa
+@ 2023-05-15 10:09       ` Jiliang Cai
+  0 siblings, 0 replies; 5+ messages in thread
+From: Jiliang Cai @ 2023-05-15 10:09 UTC (permalink / raw)
+  To: Martin Jansa; +Cc: yocto
+
+Yes. Everything works fine after I inherit pythonnative. I mistakenly
+thought that there was no need to inhert it manually.
+
+Martin Jansa <martin.jansa@gmail.com> 于2023年5月15日周一 17:46写道：
+>
+> > I don't know why my EXTRANATIVEPATH doesn't contain python-native
+>
+> Because you didn't inherit pythonnative?
+>
+> On Mon, May 15, 2023 at 11:38 AM Jiliang Cai <tyrocjl@gmail.com> wrote:
+>>
+>> I added:
+>> DEPENDS += "python-native python-setuptools-native".
+>>
+>> I think it should work just fine, because:
+>> python-setuptools.bb    inherit setuptools      -->
+>> setuptools.bbclass      inherit distutils       -->
+>> distutils.bbclass       inherit distutils-base  -->
+>> distutils-base.bbclass  inherit pythonnative    -->
+>> pythonnative.bbclass   contains 'EXTRANATIVEPATH += "python-native"'
+>>
+>> I don't know why my EXTRANATIVEPATH doesn't contain python-native when I run
+>> 'bitbake -e <my_package_name>'. And this causes my bitbake can not search
+>> 'python2'.
+>>
+>> Martin Jansa <martin.jansa@gmail.com> 于2023年5月15日周一 16:40写道：
+>> >
+>> > Did you add "inherit pythonnative" or DEPENDS += "python-native"?
+>> >
+>> > You need just the inherit line.
+>> >
+>> > On Mon, May 15, 2023 at 10:23 AM Jiliang Cai <tyrocjl@gmail.com> wrote:
+>> >>
+>> >> I have a bb file abc_1.0.bb:
+>> >> DEPENDS += "python3-native"
+>> >> And EXTRANATIVEPATH contains "python3-native" as expected, so command 'python3'
+>> >> can be searched.
+>> >>
+>> >> Then I add DEPENDS += "python-native", but EXTRANATIVEPATH doesn't contains
+>> >> "python-native", so command 'python' can not be searched.
+>> >>
+>> >> python3native.bbclass  has a line:
+>> >> EXTRANATIVEPATH += "python3-native"
+>> >> So python3 can be searched when bitbake this recipe. I saw similar codes in the
+>> >> pythonnative.bbclass file, but why didn't it take effect?
+>> >>
+>> >> -=-=-=-=-=-=-=-=-=-=-=-
+>> >> Links: You receive all messages sent to this group.
+>> >> View/Reply Online (#60018): https://lists.yoctoproject.org/g/yocto/message/60018
+>> >> Mute This Topic: https://lists.yoctoproject.org/mt/98899140/3617156
+>> >> Group Owner: yocto+owner@lists.yoctoproject.org
+>> >> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [Martin.Jansa@gmail.com]
+>> >> -=-=-=-=-=-=-=-=-=-=-=-
+>> >>
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+end of thread, other threads:[~2023-05-15 10:08 UTC | newest]
+
+Thread overview: 5+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-05-15  8:24 [yocto][meta-python2] Kirkstone EXTRANATIVEPATH is not in effect Jiliang Cai
+2023-05-15  8:40 ` Martin Jansa
+2023-05-15  9:39   ` Jiliang Cai
+2023-05-15  9:46     ` Martin Jansa
+2023-05-15 10:09       ` Jiliang Cai
+

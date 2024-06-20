@@ -1,0 +1,975 @@
+* Dependency for binary package
+@ 2022-08-25 14:30 Rudolf J Streif
+  2022-08-25 14:45 ` [yocto] " Quentin Schulz
+  2022-08-25 23:27 ` Khem Raj
+  0 siblings, 2 replies; 10+ messages in thread
+From: Rudolf J Streif @ 2022-08-25 14:30 UTC (permalink / raw)
+  To: Yocto
+
+
+[-- Attachment #1.1.1: Type: text/plain, Size: 786 bytes --]
+
+I am packaging a binary package that has been built with the SDK created 
+with the exact same configuration.
+
+During do_package I am getting an error that a dependency on 
+libGLESv2.so()(64bit) cannot be met. Adding mesa to RDEPENDS does not 
+resolve the issue. I can bypass it in the recipe by adding file-rdeps to 
+INSANE_SKIP. However, then when the rootfs is created libdnf complains 
+that the dependency on libGLES is not met and aborts.
+
+The application works just fine on the target if I copy it manually to 
+the rootfs but that's not the best thing to do. It should be packaged 
+and installed.
+
+Unfortunately I don't understand well enough how these checks work and 
+why they are complaining about it. Maybe somebody can shed some light on it.
+
+Thanks,
+Rudi
+
+
+[-- Attachment #1.1.2: OpenPGP public key --]
+[-- Type: application/pgp-keys, Size: 1717 bytes --]
+
+[-- Attachment #2: OpenPGP digital signature --]
+[-- Type: application/pgp-signature, Size: 495 bytes --]
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+* Re: [yocto] Dependency for binary package
+  2022-08-25 14:30 Dependency for binary package Rudolf J Streif
+@ 2022-08-25 14:45 ` Quentin Schulz
+  2022-08-25 16:45   ` Rudolf J Streif
+  2022-08-25 23:27 ` Khem Raj
+  1 sibling, 1 reply; 10+ messages in thread
+From: Quentin Schulz @ 2022-08-25 14:45 UTC (permalink / raw)
+  To: Rudolf J Streif, Yocto
+
+Hi Rudolf,
+
+On 8/25/22 16:30, Rudolf J Streif wrote:
+> I am packaging a binary package that has been built with the SDK created 
+> with the exact same configuration.
+> 
+> During do_package I am getting an error that a dependency on 
+> libGLESv2.so()(64bit) cannot be met. Adding mesa to RDEPENDS does not 
+> resolve the issue. I can bypass it in the recipe by adding file-rdeps to 
+> INSANE_SKIP. However, then when the rootfs is created libdnf complains 
+> that the dependency on libGLES is not met and aborts.
+> 
+> The application works just fine on the target if I copy it manually to 
+> the rootfs but that's not the best thing to do. It should be packaged 
+> and installed.
+> 
+> Unfortunately I don't understand well enough how these checks work and 
+> why they are complaining about it. Maybe somebody can shed some light on 
+> it.
+> 
+
+Bitbake versions its shared libraries. So a binary built by Bitbake will 
+link against libGLESv2.so.1.3 (or whatever the version of the lib 
+actually is).
+
+This also means that the only shared library that can be used for 
+linking is the versioned one.
+
+Bitbake reads the NEEDED section from objdump to identify the runtime 
+dependencies and automatically add the packages providing those 
+libraries to your image. This is the reason why you do not need to 
+explicit RDEPENDS for packages created by recipes in DEPENDS.
+
+The issue here is that Bitbake creates a package which provides 
+libGLESv2.so.1.3 but your binary requires libGLESv2.so and Bitbake 
+cannot find a package for it.
+
+Usually the way to do it is to ignore the warning like you did, or build 
+the binary in Yocto directly. I assume the latter is not possible 
+because it is proprietary software compiled by a third-party and you 
+don't have access to the source code.
+
+As to how to fix this issue with dnf, I do not know.
+
+One possibility could be to patchelf your binary in Yocto directly but 
+you'll need to update this patchelf line every time you update libGLESv2 
+version because it is not possible to get the version from one recipe in 
+another.
+
+Cheers,
+Quentin
+
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+* Re: [yocto] Dependency for binary package
+  2022-08-25 14:45 ` [yocto] " Quentin Schulz
+@ 2022-08-25 16:45   ` Rudolf J Streif
+  0 siblings, 0 replies; 10+ messages in thread
+From: Rudolf J Streif @ 2022-08-25 16:45 UTC (permalink / raw)
+  To: Quentin Schulz, Yocto
+
+
+[-- Attachment #1.1.1.1: Type: text/plain, Size: 3804 bytes --]
+
+Thank you, Quentin.
+
+On 8/25/22 7:45 AM, Quentin Schulz wrote:
+> Hi Rudolf,
+>
+> On 8/25/22 16:30, Rudolf J Streif wrote:
+>> I am packaging a binary package that has been built with the SDK 
+>> created with the exact same configuration.
+>>
+>> During do_package I am getting an error that a dependency on 
+>> libGLESv2.so()(64bit) cannot be met. Adding mesa to RDEPENDS does not 
+>> resolve the issue. I can bypass it in the recipe by adding file-rdeps 
+>> to INSANE_SKIP. However, then when the rootfs is created libdnf 
+>> complains that the dependency on libGLES is not met and aborts.
+>>
+>> The application works just fine on the target if I copy it manually 
+>> to the rootfs but that's not the best thing to do. It should be 
+>> packaged and installed.
+>>
+>> Unfortunately I don't understand well enough how these checks work 
+>> and why they are complaining about it. Maybe somebody can shed some 
+>> light on it.
+>>
+>
+> Bitbake versions its shared libraries. So a binary built by Bitbake 
+> will link against libGLESv2.so.1.3 (or whatever the version of the lib 
+> actually is).
+>
+> This also means that the only shared library that can be used for 
+> linking is the versioned one.
+>
+> Bitbake reads the NEEDED section from objdump to identify the runtime 
+> dependencies and automatically add the packages providing those 
+> libraries to your image. This is the reason why you do not need to 
+> explicit RDEPENDS for packages created by recipes in DEPENDS.
+>
+> The issue here is that Bitbake creates a package which provides 
+> libGLESv2.so.1.3 but your binary requires libGLESv2.so and Bitbake 
+> cannot find a package for it.
+
+Yes, that is exactly the issue:
+
+  0x0000000000000001 (NEEDED)             Shared library: [libQt5Quick.so.5]
+  0x0000000000000001 (NEEDED)             Shared library: [libQt5Gui.so.5]
+  0x0000000000000001 (NEEDED)             Shared library: [libQt5Qml.so.5]
+  0x0000000000000001 (NEEDED)             Shared library: 
+[libQt5Network.so.5]
+  0x0000000000000001 (NEEDED)             Shared library: 
+[libQt5SerialPort.so.5]
+  0x0000000000000001 (NEEDED)             Shared library: [libQt5Core.so.5]
+  0x0000000000000001 (NEEDED)             Shared library: [librt.so.1]
+  0x0000000000000001 (NEEDED)             Shared library: [libdl.so.2]
+  0x0000000000000001 (NEEDED)             Shared library: [libatomic.so.1]
+  0x0000000000000001 (NEEDED) Shared library: [libGLESv2.so]
+  0x0000000000000001 (NEEDED)             Shared library: [libpthread.so.0]
+  0x0000000000000001 (NEEDED)             Shared library: [libstdc++.so.6]
+  0x0000000000000001 (NEEDED)             Shared library: [libm.so.6]
+  0x0000000000000001 (NEEDED)             Shared library: [libgcc_s.so.1]
+  0x0000000000000001 (NEEDED)             Shared library: [libc.so.6]
+
+The question is what causes this if the application is built with the 
+toolchain and against the rootfs that YP produces.
+
+>
+> Usually the way to do it is to ignore the warning like you did, or 
+> build the binary in Yocto directly. I assume the latter is not 
+> possible because it is proprietary software compiled by a third-party 
+> and you don't have access to the source code.
+>
+> As to how to fix this issue with dnf, I do not know.
+>
+> One possibility could be to patchelf your binary in Yocto directly but 
+> you'll need to update this patchelf line every time you update 
+> libGLESv2 version because it is not possible to get the version from 
+> one recipe in another.
+>
+> Cheers,
+> Quentin
+
+-- 
+Rudolf J Streif
+CEO/CTO ibeeto
++1.855.442.3386 x700
+
+
+[-- Attachment #1.1.1.2: Type: text/html, Size: 5145 bytes --]
+
+[-- Attachment #1.1.2: OpenPGP public key --]
+[-- Type: application/pgp-keys, Size: 1717 bytes --]
+
+[-- Attachment #2: OpenPGP digital signature --]
+[-- Type: application/pgp-signature, Size: 495 bytes --]
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+* Re: [yocto] Dependency for binary package
+  2022-08-25 14:30 Dependency for binary package Rudolf J Streif
+  2022-08-25 14:45 ` [yocto] " Quentin Schulz
+@ 2022-08-25 23:27 ` Khem Raj
+  2022-08-25 23:44   ` Rudolf J Streif
+  1 sibling, 1 reply; 10+ messages in thread
+From: Khem Raj @ 2022-08-25 23:27 UTC (permalink / raw)
+  To: Rudolf J Streif; +Cc: Yocto
+
+On Thu, Aug 25, 2022 at 7:30 AM Rudolf J Streif
+<rudolf.streif@ibeeto.com> wrote:
+>
+> I am packaging a binary package that has been built with the SDK created
+> with the exact same configuration.
+>
+> During do_package I am getting an error that a dependency on
+> libGLESv2.so()(64bit) cannot be met. Adding mesa to RDEPENDS does not
+> resolve the issue. I can bypass it in the recipe by adding file-rdeps to
+> INSANE_SKIP. However, then when the rootfs is created libdnf complains
+> that the dependency on libGLES is not met and aborts.
+>
+> The application works just fine on the target if I copy it manually to
+> the rootfs but that's not the best thing to do. It should be packaged
+> and installed.
+>
+> Unfortunately I don't understand well enough how these checks work and
+> why they are complaining about it. Maybe somebody can shed some light on it.
+
+some libraries do not set SONAME in them, which can trip the shlibs
+code. Can you
+check if libgles in question has SONAME encoded in its ELF header
+
+ readelf -d <lib> | grep SONAME
+
+might be what you can use to deduce it.
+
+>
+> Thanks,
+> Rudi
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> You automatically follow any topics you start or reply to.
+> View/Reply Online (#57898): https://lists.yoctoproject.org/g/yocto/message/57898
+> Mute This Topic: https://lists.yoctoproject.org/mt/93249287/1997914
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [raj.khem@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+* Re: [yocto] Dependency for binary package
+  2022-08-25 23:27 ` Khem Raj
+@ 2022-08-25 23:44   ` Rudolf J Streif
+  2022-08-25 23:49     ` Khem Raj
+  0 siblings, 1 reply; 10+ messages in thread
+From: Rudolf J Streif @ 2022-08-25 23:44 UTC (permalink / raw)
+  To: Khem Raj; +Cc: Yocto
+
+
+[-- Attachment #1.1.1: Type: text/plain, Size: 2012 bytes --]
+
+Thanks, Khem.
+
+On 8/25/22 4:27 PM, Khem Raj wrote:
+> On Thu, Aug 25, 2022 at 7:30 AM Rudolf J Streif
+> <rudolf.streif@ibeeto.com> wrote:
+>> I am packaging a binary package that has been built with the SDK created
+>> with the exact same configuration.
+>>
+>> During do_package I am getting an error that a dependency on
+>> libGLESv2.so()(64bit) cannot be met. Adding mesa to RDEPENDS does not
+>> resolve the issue. I can bypass it in the recipe by adding file-rdeps to
+>> INSANE_SKIP. However, then when the rootfs is created libdnf complains
+>> that the dependency on libGLES is not met and aborts.
+>>
+>> The application works just fine on the target if I copy it manually to
+>> the rootfs but that's not the best thing to do. It should be packaged
+>> and installed.
+>>
+>> Unfortunately I don't understand well enough how these checks work and
+>> why they are complaining about it. Maybe somebody can shed some light on it.
+> some libraries do not set SONAME in them, which can trip the shlibs
+> code. Can you
+> check if libgles in question has SONAME encoded in its ELF header
+>
+>   readelf -d <lib> | grep SONAME
+>
+> might be what you can use to deduce it.
+
+libGLESv2 in question on the target was built with YP:
+
+  0x000000000000000e (SONAME)             Library soname: [libGLESv2.so.2]
+
+The SDK that builds the application was built with the same YP setup. 
+That's why I am scratching my head.
+
+>
+>> Thanks,
+>> Rudi
+>>
+>>
+>> -=-=-=-=-=-=-=-=-=-=-=-
+>> Links: You receive all messages sent to this group.
+>> You automatically follow any topics you start or reply to.
+>> View/Reply Online (#57898): https://lists.yoctoproject.org/g/yocto/message/57898
+>> Mute This Topic: https://lists.yoctoproject.org/mt/93249287/1997914
+>> Group Owner: yocto+owner@lists.yoctoproject.org
+>> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [raj.khem@gmail.com]
+>> -=-=-=-=-=-=-=-=-=-=-=-
+>>
+-- 
+Rudolf J Streif
+CEO/CTO ibeeto
++1.855.442.3386 x700
+
+
+[-- Attachment #1.1.2: OpenPGP public key --]
+[-- Type: application/pgp-keys, Size: 1717 bytes --]
+
+[-- Attachment #2: OpenPGP digital signature --]
+[-- Type: application/pgp-signature, Size: 495 bytes --]
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+* Re: [yocto] Dependency for binary package
+  2022-08-25 23:44   ` Rudolf J Streif
+@ 2022-08-25 23:49     ` Khem Raj
+  2022-08-25 23:56       ` Rudolf J Streif
+  0 siblings, 1 reply; 10+ messages in thread
+From: Khem Raj @ 2022-08-25 23:49 UTC (permalink / raw)
+  To: Rudolf J Streif; +Cc: Yocto
+
+On Thu, Aug 25, 2022 at 4:44 PM Rudolf J Streif
+<rudolf.streif@ibeeto.com> wrote:
+>
+> Thanks, Khem.
+>
+> On 8/25/22 4:27 PM, Khem Raj wrote:
+> > On Thu, Aug 25, 2022 at 7:30 AM Rudolf J Streif
+> > <rudolf.streif@ibeeto.com> wrote:
+> >> I am packaging a binary package that has been built with the SDK created
+> >> with the exact same configuration.
+> >>
+> >> During do_package I am getting an error that a dependency on
+> >> libGLESv2.so()(64bit) cannot be met. Adding mesa to RDEPENDS does not
+> >> resolve the issue. I can bypass it in the recipe by adding file-rdeps to
+> >> INSANE_SKIP. However, then when the rootfs is created libdnf complains
+> >> that the dependency on libGLES is not met and aborts.
+> >>
+> >> The application works just fine on the target if I copy it manually to
+> >> the rootfs but that's not the best thing to do. It should be packaged
+> >> and installed.
+> >>
+> >> Unfortunately I don't understand well enough how these checks work and
+> >> why they are complaining about it. Maybe somebody can shed some light on it.
+> > some libraries do not set SONAME in them, which can trip the shlibs
+> > code. Can you
+> > check if libgles in question has SONAME encoded in its ELF header
+> >
+> >   readelf -d <lib> | grep SONAME
+> >
+> > might be what you can use to deduce it.
+>
+> libGLESv2 in question on the target was built with YP:
+>
+>   0x000000000000000e (SONAME)             Library soname: [libGLESv2.so.2]
+>
+> The SDK that builds the application was built with the same YP setup.
+> That's why I am scratching my head.
+
+interesting, are you adding RDEPENDS on libgles2-mesa ?
+
+>
+> >
+> >> Thanks,
+> >> Rudi
+> >>
+> >>
+> >> -=-=-=-=-=-=-=-=-=-=-=-
+> >> Links: You receive all messages sent to this group.
+> >> You automatically follow any topics you start or reply to.
+> >> View/Reply Online (#57898): https://lists.yoctoproject.org/g/yocto/message/57898
+> >> Mute This Topic: https://lists.yoctoproject.org/mt/93249287/1997914
+> >> Group Owner: yocto+owner@lists.yoctoproject.org
+> >> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [raj.khem@gmail.com]
+> >> -=-=-=-=-=-=-=-=-=-=-=-
+> >>
+> --
+> Rudolf J Streif
+> CEO/CTO ibeeto
+> +1.855.442.3386 x700
+>
+
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+* Re: [yocto] Dependency for binary package
+  2022-08-25 23:49     ` Khem Raj
+@ 2022-08-25 23:56       ` Rudolf J Streif
+  2022-08-26  0:44         ` Khem Raj
+  0 siblings, 1 reply; 10+ messages in thread
+From: Rudolf J Streif @ 2022-08-25 23:56 UTC (permalink / raw)
+  To: Khem Raj; +Cc: Yocto
+
+
+[-- Attachment #1.1.1: Type: text/plain, Size: 2896 bytes --]
+
+
+On 8/25/22 4:49 PM, Khem Raj wrote:
+> On Thu, Aug 25, 2022 at 4:44 PM Rudolf J Streif
+> <rudolf.streif@ibeeto.com> wrote:
+>> Thanks, Khem.
+>>
+>> On 8/25/22 4:27 PM, Khem Raj wrote:
+>>> On Thu, Aug 25, 2022 at 7:30 AM Rudolf J Streif
+>>> <rudolf.streif@ibeeto.com> wrote:
+>>>> I am packaging a binary package that has been built with the SDK created
+>>>> with the exact same configuration.
+>>>>
+>>>> During do_package I am getting an error that a dependency on
+>>>> libGLESv2.so()(64bit) cannot be met. Adding mesa to RDEPENDS does not
+>>>> resolve the issue. I can bypass it in the recipe by adding file-rdeps to
+>>>> INSANE_SKIP. However, then when the rootfs is created libdnf complains
+>>>> that the dependency on libGLES is not met and aborts.
+>>>>
+>>>> The application works just fine on the target if I copy it manually to
+>>>> the rootfs but that's not the best thing to do. It should be packaged
+>>>> and installed.
+>>>>
+>>>> Unfortunately I don't understand well enough how these checks work and
+>>>> why they are complaining about it. Maybe somebody can shed some light on it.
+>>> some libraries do not set SONAME in them, which can trip the shlibs
+>>> code. Can you
+>>> check if libgles in question has SONAME encoded in its ELF header
+>>>
+>>>    readelf -d <lib> | grep SONAME
+>>>
+>>> might be what you can use to deduce it.
+>> libGLESv2 in question on the target was built with YP:
+>>
+>>    0x000000000000000e (SONAME)             Library soname: [libGLESv2.so.2]
+>>
+>> The SDK that builds the application was built with the same YP setup.
+>> That's why I am scratching my head.
+> interesting, are you adding RDEPENDS on libgles2-mesa ?
+
+Yes, but that does not satisfy the dependency:
+
+ERROR: virtuoso-0.1-r0 do_package_qa: QA Issue: /opt/virtuoso/virtuoso 
+contained in package virtuoso requires libGLESv2.so()(64bit), but no 
+providers found in RDEPENDS:virtuoso? [file-rdeps]
+
+I can SKIP_INSANE file-rdeps but then I am getting the same issue when 
+creating the rootfs with dnf.
+
+But in all fairness, I don't have control over the entire process. The 
+customer builds the executable with the SDK I gave them. They give me 
+the executable to put in the rootfs.
+
+>
+>>>> Thanks,
+>>>> Rudi
+>>>>
+>>>>
+>>>> -=-=-=-=-=-=-=-=-=-=-=-
+>>>> Links: You receive all messages sent to this group.
+>>>> You automatically follow any topics you start or reply to.
+>>>> View/Reply Online (#57898): https://lists.yoctoproject.org/g/yocto/message/57898
+>>>> Mute This Topic: https://lists.yoctoproject.org/mt/93249287/1997914
+>>>> Group Owner: yocto+owner@lists.yoctoproject.org
+>>>> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [raj.khem@gmail.com]
+>>>> -=-=-=-=-=-=-=-=-=-=-=-
+>>>>
+>> --
+>> Rudolf J Streif
+>> CEO/CTO ibeeto
+>> +1.855.442.3386 x700
+>>
+-- 
+Rudolf J Streif
+CEO/CTO ibeeto
++1.855.442.3386 x700
+
+
+[-- Attachment #1.1.2: OpenPGP public key --]
+[-- Type: application/pgp-keys, Size: 1717 bytes --]
+
+[-- Attachment #2: OpenPGP digital signature --]
+[-- Type: application/pgp-signature, Size: 495 bytes --]
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+* Re: [yocto] Dependency for binary package
+  2022-08-25 23:56       ` Rudolf J Streif
+@ 2022-08-26  0:44         ` Khem Raj
+  2022-08-26 17:38           ` Rudolf J Streif
+  0 siblings, 1 reply; 10+ messages in thread
+From: Khem Raj @ 2022-08-26  0:44 UTC (permalink / raw)
+  To: Rudolf J Streif; +Cc: Yocto
+
+On Thu, Aug 25, 2022 at 4:56 PM Rudolf J Streif
+<rudolf.streif@ibeeto.com> wrote:
+>
+>
+> On 8/25/22 4:49 PM, Khem Raj wrote:
+> > On Thu, Aug 25, 2022 at 4:44 PM Rudolf J Streif
+> > <rudolf.streif@ibeeto.com> wrote:
+> >> Thanks, Khem.
+> >>
+> >> On 8/25/22 4:27 PM, Khem Raj wrote:
+> >>> On Thu, Aug 25, 2022 at 7:30 AM Rudolf J Streif
+> >>> <rudolf.streif@ibeeto.com> wrote:
+> >>>> I am packaging a binary package that has been built with the SDK created
+> >>>> with the exact same configuration.
+> >>>>
+> >>>> During do_package I am getting an error that a dependency on
+> >>>> libGLESv2.so()(64bit) cannot be met. Adding mesa to RDEPENDS does not
+> >>>> resolve the issue. I can bypass it in the recipe by adding file-rdeps to
+> >>>> INSANE_SKIP. However, then when the rootfs is created libdnf complains
+> >>>> that the dependency on libGLES is not met and aborts.
+> >>>>
+> >>>> The application works just fine on the target if I copy it manually to
+> >>>> the rootfs but that's not the best thing to do. It should be packaged
+> >>>> and installed.
+> >>>>
+> >>>> Unfortunately I don't understand well enough how these checks work and
+> >>>> why they are complaining about it. Maybe somebody can shed some light on it.
+> >>> some libraries do not set SONAME in them, which can trip the shlibs
+> >>> code. Can you
+> >>> check if libgles in question has SONAME encoded in its ELF header
+> >>>
+> >>>    readelf -d <lib> | grep SONAME
+> >>>
+> >>> might be what you can use to deduce it.
+> >> libGLESv2 in question on the target was built with YP:
+> >>
+> >>    0x000000000000000e (SONAME)             Library soname: [libGLESv2.so.2]
+> >>
+> >> The SDK that builds the application was built with the same YP setup.
+> >> That's why I am scratching my head.
+> > interesting, are you adding RDEPENDS on libgles2-mesa ?
+>
+> Yes, but that does not satisfy the dependency:
+>
+> ERROR: virtuoso-0.1-r0 do_package_qa: QA Issue: /opt/virtuoso/virtuoso
+> contained in package virtuoso requires libGLESv2.so()(64bit), but no
+> providers found in RDEPENDS:virtuoso? [file-rdeps]
+
+I see a potential problem here, the soname is libGLESv2.so.2 but the
+dependency its
+complaining about is libGLESv2.so()(64bit), ( you see the missing
+version number ?)
+
+Can you run
+
+readelf -d <binary name>  | grep NEEDED
+
+and see what libs are encoded in the ELF
+
+>
+> I can SKIP_INSANE file-rdeps but then I am getting the same issue when
+> creating the rootfs with dnf.
+>
+> But in all fairness, I don't have control over the entire process. The
+> customer builds the executable with the SDK I gave them. They give me
+> the executable to put in the rootfs.
+>
+> >
+> >>>> Thanks,
+> >>>> Rudi
+> >>>>
+> >>>>
+> >>>> -=-=-=-=-=-=-=-=-=-=-=-
+> >>>> Links: You receive all messages sent to this group.
+> >>>> You automatically follow any topics you start or reply to.
+> >>>> View/Reply Online (#57898): https://lists.yoctoproject.org/g/yocto/message/57898
+> >>>> Mute This Topic: https://lists.yoctoproject.org/mt/93249287/1997914
+> >>>> Group Owner: yocto+owner@lists.yoctoproject.org
+> >>>> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [raj.khem@gmail.com]
+> >>>> -=-=-=-=-=-=-=-=-=-=-=-
+> >>>>
+> >> --
+> >> Rudolf J Streif
+> >> CEO/CTO ibeeto
+> >> +1.855.442.3386 x700
+> >>
+> --
+> Rudolf J Streif
+> CEO/CTO ibeeto
+> +1.855.442.3386 x700
+>
+
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+* Re: [yocto] Dependency for binary package
+  2022-08-26  0:44         ` Khem Raj
+@ 2022-08-26 17:38           ` Rudolf J Streif
+  2022-08-26 21:03             ` Khem Raj
+  0 siblings, 1 reply; 10+ messages in thread
+From: Rudolf J Streif @ 2022-08-26 17:38 UTC (permalink / raw)
+  To: Khem Raj; +Cc: Yocto
+
+
+[-- Attachment #1.1.1: Type: text/plain, Size: 6380 bytes --]
+
+
+On 8/25/22 5:44 PM, Khem Raj wrote:
+> On Thu, Aug 25, 2022 at 4:56 PM Rudolf J Streif
+> <rudolf.streif@ibeeto.com> wrote:
+>>
+>> On 8/25/22 4:49 PM, Khem Raj wrote:
+>>> On Thu, Aug 25, 2022 at 4:44 PM Rudolf J Streif
+>>> <rudolf.streif@ibeeto.com> wrote:
+>>>> Thanks, Khem.
+>>>>
+>>>> On 8/25/22 4:27 PM, Khem Raj wrote:
+>>>>> On Thu, Aug 25, 2022 at 7:30 AM Rudolf J Streif
+>>>>> <rudolf.streif@ibeeto.com> wrote:
+>>>>>> I am packaging a binary package that has been built with the SDK created
+>>>>>> with the exact same configuration.
+>>>>>>
+>>>>>> During do_package I am getting an error that a dependency on
+>>>>>> libGLESv2.so()(64bit) cannot be met. Adding mesa to RDEPENDS does not
+>>>>>> resolve the issue. I can bypass it in the recipe by adding file-rdeps to
+>>>>>> INSANE_SKIP. However, then when the rootfs is created libdnf complains
+>>>>>> that the dependency on libGLES is not met and aborts.
+>>>>>>
+>>>>>> The application works just fine on the target if I copy it manually to
+>>>>>> the rootfs but that's not the best thing to do. It should be packaged
+>>>>>> and installed.
+>>>>>>
+>>>>>> Unfortunately I don't understand well enough how these checks work and
+>>>>>> why they are complaining about it. Maybe somebody can shed some light on it.
+>>>>> some libraries do not set SONAME in them, which can trip the shlibs
+>>>>> code. Can you
+>>>>> check if libgles in question has SONAME encoded in its ELF header
+>>>>>
+>>>>>     readelf -d <lib> | grep SONAME
+>>>>>
+>>>>> might be what you can use to deduce it.
+>>>> libGLESv2 in question on the target was built with YP:
+>>>>
+>>>>     0x000000000000000e (SONAME)             Library soname: [libGLESv2.so.2]
+>>>>
+>>>> The SDK that builds the application was built with the same YP setup.
+>>>> That's why I am scratching my head.
+>>> interesting, are you adding RDEPENDS on libgles2-mesa ?
+>> Yes, but that does not satisfy the dependency:
+>>
+>> ERROR: virtuoso-0.1-r0 do_package_qa: QA Issue: /opt/virtuoso/virtuoso
+>> contained in package virtuoso requires libGLESv2.so()(64bit), but no
+>> providers found in RDEPENDS:virtuoso? [file-rdeps]
+> I see a potential problem here, the soname is libGLESv2.so.2 but the
+> dependency its
+> complaining about is libGLESv2.so()(64bit), ( you see the missing
+> version number ?)
+>
+> Can you run
+>
+> readelf -d <binary name>  | grep NEEDED
+>
+> and see what libs are encoded in the ELF
+
+Yes, I have. These are the libs:
+
+  0x0000000000000001 (NEEDED) Shared library: [libQt5Quick.so.5]
+  0x0000000000000001 (NEEDED)             Shared library: [libQt5Gui.so.5]
+  0x0000000000000001 (NEEDED)             Shared library: [libQt5Qml.so.5]
+  0x0000000000000001 (NEEDED)             Shared library: 
+[libQt5Network.so.5]
+  0x0000000000000001 (NEEDED)             Shared library: 
+[libQt5SerialPort.so.5]
+  0x0000000000000001 (NEEDED)             Shared library: [libQt5Core.so.5]
+  0x0000000000000001 (NEEDED)             Shared library: [librt.so.1]
+  0x0000000000000001 (NEEDED)             Shared library: [libdl.so.2]
+  0x0000000000000001 (NEEDED)             Shared library: [libatomic.so.1]
+  0x0000000000000001 (NEEDED)             Shared library: [libGLESv2.so]
+  0x0000000000000001 (NEEDED)             Shared library: [libpthread.so.0]
+  0x0000000000000001 (NEEDED)             Shared library: [libstdc++.so.6]
+  0x0000000000000001 (NEEDED)             Shared library: [libm.so.6]
+  0x0000000000000001 (NEEDED)             Shared library: [libgcc_s.so.1]
+  0x0000000000000001 (NEEDED)             Shared library: [libc.so.6]
+
+It's asking for libGLESv2.so. It's no problem on the target since it's 
+correctly resolved by ldd:
+
+root@tgt-lcd7:/usr/lib# ldconfig -p |grep libGLES
+     libGLESv2.so.2 (libc6,x86-64) => /lib64/libGLESv2.so.2
+     libGLESv2.so.2 (libc6) => /lib/libGLESv2.so.2
+     libGLESv2.so (libc6,x86-64) => /lib64/libGLESv2.so
+     libGLESv1_CM.so.1 (libc6,x86-64) => /lib64/libGLESv1_CM.so.1
+     libGLESv1_CM.so.1 (libc6) => /lib/libGLESv1_CM.so.1
+     libGLESv1_CM.so (libc6,x86-64) => /lib64/libGLESv1_CM.so
+
+However, I cannot wrap my head around why this would happen with a 
+binary that has been compiled and linked with the YP SDK that exactly 
+matches the rootfs of the target:
+
+Target:
+
+root@tgt-lcd7:/usr/lib# ls -l libGLES*
+lrwxrwxrwx 1 root root    14 Mar  9  2018 libGLESv2.so -> libGLESv2.so.2
+lrwxrwxrwx 1 root root    18 Mar  9  2018 libGLESv2.so.2 -> 
+libGLESv2.so.2.0.0
+-rwxr-xr-x 1 root root 46792 Mar  9  2018 libGLESv2.so.2.0.0
+
+SDK:
+
+[rstreif@threaddy lib]$ ls -l libGLES*
+lrwxrwxrwx. 1 rstreif rstreif    14 Aug 25 11:35 libGLESv2.so -> 
+libGLESv2.so.2
+lrwxrwxrwx. 1 rstreif rstreif    18 Aug 25 11:36 libGLESv2.so.2 -> 
+libGLESv2.so.2.0.0
+-rwxr-xr-x. 1 rstreif rstreif 46792 Aug 25 11:36 libGLESv2.so.2.0.0
+
+Unfortunately I don't have the sources of the application otherwise I 
+would have YP build it. But the customer claims they are building it 
+with the SDK. I am trying to get to the bottom of their end too.
+
+
+>
+>> I can SKIP_INSANE file-rdeps but then I am getting the same issue when
+>> creating the rootfs with dnf.
+>>
+>> But in all fairness, I don't have control over the entire process. The
+>> customer builds the executable with the SDK I gave them. They give me
+>> the executable to put in the rootfs.
+>>
+>>>>>> Thanks,
+>>>>>> Rudi
+>>>>>>
+>>>>>>
+>>>>>> -=-=-=-=-=-=-=-=-=-=-=-
+>>>>>> Links: You receive all messages sent to this group.
+>>>>>> You automatically follow any topics you start or reply to.
+>>>>>> View/Reply Online (#57898): https://lists.yoctoproject.org/g/yocto/message/57898
+>>>>>> Mute This Topic: https://lists.yoctoproject.org/mt/93249287/1997914
+>>>>>> Group Owner: yocto+owner@lists.yoctoproject.org
+>>>>>> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [raj.khem@gmail.com]
+>>>>>> -=-=-=-=-=-=-=-=-=-=-=-
+>>>>>>
+>>>> --
+>>>> Rudolf J Streif
+>>>> CEO/CTO ibeeto
+>>>> +1.855.442.3386 x700
+>>>>
+>> --
+>> Rudolf J Streif
+>> CEO/CTO ibeeto
+>> +1.855.442.3386 x700
+>>
+-- 
+Rudolf J Streif
+CEO/CTO ibeeto
++1.855.442.3386 x700
+
+
+[-- Attachment #1.1.2: OpenPGP public key --]
+[-- Type: application/pgp-keys, Size: 1717 bytes --]
+
+[-- Attachment #2: OpenPGP digital signature --]
+[-- Type: application/pgp-signature, Size: 495 bytes --]
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+* Re: [yocto] Dependency for binary package
+  2022-08-26 17:38           ` Rudolf J Streif
+@ 2022-08-26 21:03             ` Khem Raj
+  0 siblings, 0 replies; 10+ messages in thread
+From: Khem Raj @ 2022-08-26 21:03 UTC (permalink / raw)
+  To: Rudolf J Streif; +Cc: Yocto
+
+[-- Attachment #1: Type: text/plain, Size: 6811 bytes --]
+
+On Fri, Aug 26, 2022 at 10:38 AM Rudolf J Streif <rudolf.streif@ibeeto.com>
+wrote:
+
+>
+> On 8/25/22 5:44 PM, Khem Raj wrote:
+> > On Thu, Aug 25, 2022 at 4:56 PM Rudolf J Streif
+> > <rudolf.streif@ibeeto.com> wrote:
+> >>
+> >> On 8/25/22 4:49 PM, Khem Raj wrote:
+> >>> On Thu, Aug 25, 2022 at 4:44 PM Rudolf J Streif
+> >>> <rudolf.streif@ibeeto.com> wrote:
+> >>>> Thanks, Khem.
+> >>>>
+> >>>> On 8/25/22 4:27 PM, Khem Raj wrote:
+> >>>>> On Thu, Aug 25, 2022 at 7:30 AM Rudolf J Streif
+> >>>>> <rudolf.streif@ibeeto.com> wrote:
+> >>>>>> I am packaging a binary package that has been built with the SDK
+> created
+> >>>>>> with the exact same configuration.
+> >>>>>>
+> >>>>>> During do_package I am getting an error that a dependency on
+> >>>>>> libGLESv2.so()(64bit) cannot be met. Adding mesa to RDEPENDS does
+> not
+> >>>>>> resolve the issue. I can bypass it in the recipe by adding
+> file-rdeps to
+> >>>>>> INSANE_SKIP. However, then when the rootfs is created libdnf
+> complains
+> >>>>>> that the dependency on libGLES is not met and aborts.
+> >>>>>>
+> >>>>>> The application works just fine on the target if I copy it manually
+> to
+> >>>>>> the rootfs but that's not the best thing to do. It should be
+> packaged
+> >>>>>> and installed.
+> >>>>>>
+> >>>>>> Unfortunately I don't understand well enough how these checks work
+> and
+> >>>>>> why they are complaining about it. Maybe somebody can shed some
+> light on it.
+> >>>>> some libraries do not set SONAME in them, which can trip the shlibs
+> >>>>> code. Can you
+> >>>>> check if libgles in question has SONAME encoded in its ELF header
+> >>>>>
+> >>>>>     readelf -d <lib> | grep SONAME
+> >>>>>
+> >>>>> might be what you can use to deduce it.
+> >>>> libGLESv2 in question on the target was built with YP:
+> >>>>
+> >>>>     0x000000000000000e (SONAME)             Library soname:
+> [libGLESv2.so.2]
+> >>>>
+> >>>> The SDK that builds the application was built with the same YP setup.
+> >>>> That's why I am scratching my head.
+> >>> interesting, are you adding RDEPENDS on libgles2-mesa ?
+> >> Yes, but that does not satisfy the dependency:
+> >>
+> >> ERROR: virtuoso-0.1-r0 do_package_qa: QA Issue: /opt/virtuoso/virtuoso
+> >> contained in package virtuoso requires libGLESv2.so()(64bit), but no
+> >> providers found in RDEPENDS:virtuoso? [file-rdeps]
+> > I see a potential problem here, the soname is libGLESv2.so.2 but the
+> > dependency its
+> > complaining about is libGLESv2.so()(64bit), ( you see the missing
+> > version number ?)
+> >
+> > Can you run
+> >
+> > readelf -d <binary name>  | grep NEEDED
+> >
+> > and see what libs are encoded in the ELF
+>
+> Yes, I have. These are the libs:
+>
+>   0x0000000000000001 (NEEDED) Shared library: [libQt5Quick.so.5]
+>   0x0000000000000001 (NEEDED)             Shared library: [libQt5Gui.so.5]
+>   0x0000000000000001 (NEEDED)             Shared library: [libQt5Qml.so.5]
+>   0x0000000000000001 (NEEDED)             Shared library:
+> [libQt5Network.so.5]
+>   0x0000000000000001 (NEEDED)             Shared library:
+> [libQt5SerialPort.so.5]
+>   0x0000000000000001 (NEEDED)             Shared library: [libQt5Core.so.5]
+>   0x0000000000000001 (NEEDED)             Shared library: [librt.so.1]
+>   0x0000000000000001 (NEEDED)             Shared library: [libdl.so.2]
+>   0x0000000000000001 (NEEDED)             Shared library: [libatomic.so.1]
+>   0x0000000000000001 (NEEDED)             Shared library: [libGLESv2.so]
+
+
+This is the problem link. So either the sdk has provided them faulty
+install or they have replaced some stuff knowiingly or unknowingly or they
+have environment issues where their make system is finding this library
+elsewhere during their app build
+
+You can ask them for content of Usr/lib of their sdk instAll If you do then
+it would be interesting to see if the library and its corresponding links
+are intact
+
+
+>   0x0000000000000001 (NEEDED)             Shared library: [libpthread.so.0]
+>   0x0000000000000001 (NEEDED)             Shared library: [libstdc++.so.6]
+>   0x0000000000000001 (NEEDED)             Shared library: [libm.so.6]
+>   0x0000000000000001 (NEEDED)             Shared library: [libgcc_s.so.1]
+>   0x0000000000000001 (NEEDED)             Shared library: [libc.so.6]
+>
+> It's asking for libGLESv2.so. It's no problem on the target since it's
+> correctly resolved by ldd:
+>
+> root@tgt-lcd7:/usr/lib# ldconfig -p |grep libGLES
+>      libGLESv2.so.2 (libc6,x86-64) => /lib64/libGLESv2.so.2
+>      libGLESv2.so.2 (libc6) => /lib/libGLESv2.so.2
+>      libGLESv2.so (libc6,x86-64) => /lib64/libGLESv2.so
+>      libGLESv1_CM.so.1 (libc6,x86-64) => /lib64/libGLESv1_CM.so.1
+>      libGLESv1_CM.so.1 (libc6) => /lib/libGLESv1_CM.so.1
+>      libGLESv1_CM.so (libc6,x86-64) => /lib64/libGLESv1_CM.so
+>
+> However, I cannot wrap my head around why this would happen with a
+> binary that has been compiled and linked with the YP SDK that exactly
+> matches the rootfs of the target:
+>
+> Target:
+>
+> root@tgt-lcd7:/usr/lib# ls -l libGLES*
+> lrwxrwxrwx 1 root root    14 Mar  9  2018 libGLESv2.so -> libGLESv2.so.2
+> lrwxrwxrwx 1 root root    18 Mar  9  2018 libGLESv2.so.2 ->
+> libGLESv2.so.2.0.0
+> -rwxr-xr-x 1 root root 46792 Mar  9  2018 libGLESv2.so.2.0.0
+>
+> SDK:
+>
+> [rstreif@threaddy lib]$ ls -l libGLES*
+> lrwxrwxrwx. 1 rstreif rstreif    14 Aug 25 11:35 libGLESv2.so ->
+> libGLESv2.so.2
+> lrwxrwxrwx. 1 rstreif rstreif    18 Aug 25 11:36 libGLESv2.so.2 ->
+> libGLESv2.so.2.0.0
+> -rwxr-xr-x. 1 rstreif rstreif 46792 Aug 25 11:36 libGLESv2.so.2.0.0
+>
+> Unfortunately I don't have the sources of the application otherwise I
+> would have YP build it. But the customer claims they are building it
+> with the SDK. I am trying to get to the bottom of their end too.
+>
+>
+> >
+> >> I can SKIP_INSANE file-rdeps but then I am getting the same issue when
+> >> creating the rootfs with dnf.
+> >>
+> >> But in all fairness, I don't have control over the entire process. The
+> >> customer builds the executable with the SDK I gave them. They give me
+> >> the executable to put in the rootfs.
+> >>
+> >>>>>> Thanks,
+> >>>>>> Rudi
+> >>>>>>
+> >>>>>>
+> >>>>>> -=-=-=-=-=-=-=-=-=-=-=-
+> >>>>>> Links: You receive all messages sent to this group.
+> >>>>>> You automatically follow any topics you start or reply to.
+> >>>>>> View/Reply Online (#57898):
+> https://lists.yoctoproject.org/g/yocto/message/57898
+> >>>>>> Mute This Topic: https://lists.yoctoproject.org/mt/93249287/1997914
+> >>>>>> Group Owner: yocto+owner@lists.yoctoproject.org
+> >>>>>> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> raj.khem@gmail.com]
+> >>>>>> -=-=-=-=-=-=-=-=-=-=-=-
+> >>>>>>
+> >>>> --
+> >>>> Rudolf J Streif
+> >>>> CEO/CTO ibeeto
+> >>>> +1.855.442.3386 x700
+> >>>>
+> >> --
+> >> Rudolf J Streif
+> >> CEO/CTO ibeeto
+> >> +1.855.442.3386 x700
+> >>
+> --
+> Rudolf J Streif
+> CEO/CTO ibeeto
+> +1.855.442.3386 x700
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 9724 bytes --]
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+end of thread, other threads:[~2022-08-26 21:03 UTC | newest]
+
+Thread overview: 10+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-08-25 14:30 Dependency for binary package Rudolf J Streif
+2022-08-25 14:45 ` [yocto] " Quentin Schulz
+2022-08-25 16:45   ` Rudolf J Streif
+2022-08-25 23:27 ` Khem Raj
+2022-08-25 23:44   ` Rudolf J Streif
+2022-08-25 23:49     ` Khem Raj
+2022-08-25 23:56       ` Rudolf J Streif
+2022-08-26  0:44         ` Khem Raj
+2022-08-26 17:38           ` Rudolf J Streif
+2022-08-26 21:03             ` Khem Raj
+

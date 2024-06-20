@@ -1,0 +1,128 @@
+* How do I symbolically link /etc/resolv.conf to /var/run/systemd/resolve/stub-resolv.conf?
+@ 2023-04-02 21:25 Tom Isaacson
+  2023-04-03  1:45 ` [yocto] " Chen, Qi
+  0 siblings, 1 reply; 2+ messages in thread
+From: Tom Isaacson @ 2023-04-02 21:25 UTC (permalink / raw)
+  To: yocto
+
+I'm trying to setup a Yocto build using NetworkManager v1.22.16 and
+systemd 244.5. https://www.freedesktop.org/software/systemd/man/systemd-resolved.service.html#/etc/resolv.conf
+recommends I setup /etc/resolv.conf as a symbolic link to
+/var/run/systemd/resolve/stub-resolv.conf. Initially it was linked to
+/etc/resolv-conf.NetworkManager but I've fixed that by adding a
+networkmanager_%.bbappend file with:
+
+    ALTERNATIVE_${PN} = ""
+
+But now I find /etc/resolv.conf is a symbolic link to
+/etc/resolv-conf.systemd, which is itself a symbolic link to
+/run/systemd/resolve/resolv.conf. This seems to come from
+systemd_244.5.bb:
+http://cgit.openembedded.org/openembedded-core/tree/meta/recipes-core/systemd/systemd_244.5.bb?h=dunfell#n289
+
+    if ! ${@bb.utils.contains('PACKAGECONFIG', 'resolved', 'true',
+'false', d)}; then
+        echo 'L! ${sysconfdir}/resolv.conf - - - -
+../run/systemd/resolve/resolv.conf'
+>>${D}${exec_prefix}/lib/tmpfiles.d/etc.conf
+        echo 'd /run/systemd/resolve 0755 root root -'
+>>${D}${exec_prefix}/lib/tmpfiles.d/systemd.conf
+        echo 'f /run/systemd/resolve/resolv.conf 0644 root root'
+>>${D}${exec_prefix}/lib/tmpfiles.d/systemd.conf
+        ln -s ../run/systemd/resolve/resolv.conf
+${D}${sysconfdir}/resolv-conf.systemd
+    else
+        sed -i -e "s%^L! /etc/resolv.conf.*$%L! /etc/resolv.conf - - -
+- ../run/systemd/resolve/resolv.conf%g"
+${D}${exec_prefix}/lib/tmpfiles.d/etc.conf
+        ln -s ../run/systemd/resolve/resolv.conf
+${D}${sysconfdir}/resolv-conf.systemd
+    fi
+
+But there doesn't seem to be any support for making /etc/resolv.conf a
+symbolic link to /var/run/systemd/resolve/stub-resolv.conf. Is there
+any way of doing this that I'm missing or is this functionality just
+missing?
+
+(Apologies if this is the wrong forum for this, I'm relatively new to
+Yocto and systemd).
+
+Thanks.
+
+-- 
+Tom Isaacson
+
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+* RE: [yocto] How do I symbolically link /etc/resolv.conf to /var/run/systemd/resolve/stub-resolv.conf?
+  2023-04-02 21:25 How do I symbolically link /etc/resolv.conf to /var/run/systemd/resolve/stub-resolv.conf? Tom Isaacson
+@ 2023-04-03  1:45 ` Chen, Qi
+  0 siblings, 0 replies; 2+ messages in thread
+From: Chen, Qi @ 2023-04-03  1:45 UTC (permalink / raw)
+  To: Tom Isaacson, yocto
+
+The NM resolv.conf problem was solved by the following commit. You can cherry pick that.
+"""
+commit a8ebf23dde9c82dd9d1dcd0fa6de0b4467a0112b
+Author: Chen Qi <Qi.Chen@windriver.com>
+Date:   Tue Dec 20 02:01:38 2022 -0800
+
+    networkmanager: fix /etc/resolv.conf handling
+"""
+
+It really does not matter what the resolv.conf mode is in your case because what NM does is just to send DNS info to resolved.
+
+But if you really want to use the stub mode, a modification to the systemd recipe is needed to support it, maybe via PACKAGECONFIG. However, I don't think this is necessary for you unless you happen to make use of some features that the stub mode provides, which is unrelated to NM.
+
+Regards,
+Qi
+
+-----Original Message-----
+From: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org> On Behalf Of Tom Isaacson
+Sent: Monday, April 3, 2023 5:26 AM
+To: yocto@lists.yoctoproject.org
+Subject: [yocto] How do I symbolically link /etc/resolv.conf to /var/run/systemd/resolve/stub-resolv.conf?
+
+I'm trying to setup a Yocto build using NetworkManager v1.22.16 and systemd 244.5. https://www.freedesktop.org/software/systemd/man/systemd-resolved.service.html#/etc/resolv.conf
+recommends I setup /etc/resolv.conf as a symbolic link to /var/run/systemd/resolve/stub-resolv.conf. Initially it was linked to /etc/resolv-conf.NetworkManager but I've fixed that by adding a networkmanager_%.bbappend file with:
+
+    ALTERNATIVE_${PN} = ""
+
+But now I find /etc/resolv.conf is a symbolic link to /etc/resolv-conf.systemd, which is itself a symbolic link to /run/systemd/resolve/resolv.conf. This seems to come from
+systemd_244.5.bb:
+http://cgit.openembedded.org/openembedded-core/tree/meta/recipes-core/systemd/systemd_244.5.bb?h=dunfell#n289
+
+    if ! ${@bb.utils.contains('PACKAGECONFIG', 'resolved', 'true', 'false', d)}; then
+        echo 'L! ${sysconfdir}/resolv.conf - - - - ../run/systemd/resolve/resolv.conf'
+>>${D}${exec_prefix}/lib/tmpfiles.d/etc.conf
+        echo 'd /run/systemd/resolve 0755 root root -'
+>>${D}${exec_prefix}/lib/tmpfiles.d/systemd.conf
+        echo 'f /run/systemd/resolve/resolv.conf 0644 root root'
+>>${D}${exec_prefix}/lib/tmpfiles.d/systemd.conf
+        ln -s ../run/systemd/resolve/resolv.conf
+${D}${sysconfdir}/resolv-conf.systemd
+    else
+        sed -i -e "s%^L! /etc/resolv.conf.*$%L! /etc/resolv.conf - - -
+- ../run/systemd/resolve/resolv.conf%g"
+${D}${exec_prefix}/lib/tmpfiles.d/etc.conf
+        ln -s ../run/systemd/resolve/resolv.conf
+${D}${sysconfdir}/resolv-conf.systemd
+    fi
+
+But there doesn't seem to be any support for making /etc/resolv.conf a symbolic link to /var/run/systemd/resolve/stub-resolv.conf. Is there any way of doing this that I'm missing or is this functionality just missing?
+
+(Apologies if this is the wrong forum for this, I'm relatively new to Yocto and systemd).
+
+Thanks.
+
+--
+Tom Isaacson
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2023-04-03  1:45 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-04-02 21:25 How do I symbolically link /etc/resolv.conf to /var/run/systemd/resolve/stub-resolv.conf? Tom Isaacson
+2023-04-03  1:45 ` [yocto] " Chen, Qi
+

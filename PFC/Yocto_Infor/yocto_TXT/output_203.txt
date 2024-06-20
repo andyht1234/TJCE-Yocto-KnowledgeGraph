@@ -1,0 +1,87 @@
+* How to start application/script at startup
+@ 2023-09-07 11:38 shrikantvaishnav
+  2023-09-07 13:32 ` [yocto] " Ross Burton
+  0 siblings, 1 reply; 3+ messages in thread
+From: shrikantvaishnav @ 2023-09-07 11:38 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 286 bytes --]
+
+Hi all,
+I am using *"Mickledore 4.2.3"* for *"Raspberry-Pi2"* and for init I am using the default " *SysVinit".* I want to start my Script/Application immediately after starting and disable all logs. Please tell me how I can implement this in YOCTO. *
+*
+
+Thanks
+Shrikant Vaishnav
+
+[-- Attachment #2: Type: text/html, Size: 363 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] How to start application/script at startup
+  2023-09-07 11:38 How to start application/script at startup shrikantvaishnav
+@ 2023-09-07 13:32 ` Ross Burton
+       [not found]   ` <3255.1694104177753088113@lists.yoctoproject.org>
+  0 siblings, 1 reply; 3+ messages in thread
+From: Ross Burton @ 2023-09-07 13:32 UTC (permalink / raw)
+  To: shrikantvaishnav; +Cc: yocto
+
+On 7 Sep 2023, at 12:38, shrikantvaishnav via lists.yoctoproject.org <shrikantvaishnav=hotmail.com@lists.yoctoproject.org> wrote:
+> Hi all,
+> I am using "Mickledore 4.2.3" for "Raspberry-Pi2" and for init I am using the default "SysVinit".I want to start my Script/Application immediately after starting and disable all logs. Please tell me how I can implement this in YOCTO.
+
+First, write an init script as usual with any sysv-using Linux system (for example, https://unix.stackexchange.com/a/20361).  In your recipe install it to /etc/init.d and then use the update-rcd class to register it (https://docs.yoctoproject.org/ref-manual/classes.html#update-rc-d).
+
+Searching poky for the update-rc.d class will give you many examples.
+
+Ross
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] How to start application/script at startup
+       [not found]   ` <3255.1694104177753088113@lists.yoctoproject.org>
+@ 2023-09-08  9:56     ` Ross Burton
+  0 siblings, 0 replies; 3+ messages in thread
+From: Ross Burton @ 2023-09-08  9:56 UTC (permalink / raw)
+  To: shrikantvaishnav; +Cc: Yocto-mailing-list
+
+Copying the list, I don’t do private support.
+
+On 7 Sep 2023, at 17:29, shrikantvaishnav@hotmail.com wrote:
+> 
+> Thanks Ross sir,
+> i have some doubts regarding your answer thanks in advance.
+> 
+> (1)cant i directly modify inside "poky/meta/recipes-core/sysvinit" folder and write whatever i want is this approach ok ? i tried with inittab and then with rc but my echo "shri" script/command not displayed after startup.
+
+Editing inittab is a bad idea.
+
+> (2)Also i confuse with these two line:
+> 
+>     • In your recipe install it to /etc/init.d :where is the location inside Poky directory???
+
+That’s an on-target location.  Something like:
+
+SRC_URI = “file://myinitscript <file://myinitscript/>”
+
+do_install() {
+	mkdir —parents ${sysconfdir}/init.d
+	install ${WORKDIR}/myinitscript ${sysconfdir}/init.d
+}
+
+>     • use the update-rcd class to register it:why i need this steps
+
+Write the init script and install it in the recipe for your application, or write a new recipe if there isn’t a single obvious recipe.
+
+The update-rcd class is needed to construct the symlinks for sysv to work.  If you don’t know what I’m talking about then read up on how SysV init scripts work: this isn’t Yocto-specific but a Unix standard since 1983.
+
+Ross
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2023-09-08  9:57 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-09-07 11:38 How to start application/script at startup shrikantvaishnav
+2023-09-07 13:32 ` [yocto] " Ross Burton
+     [not found]   ` <3255.1694104177753088113@lists.yoctoproject.org>
+2023-09-08  9:56     ` Ross Burton
+

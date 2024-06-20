@@ -1,0 +1,237 @@
+* How to force build system to use a working kernel defconfig?
+@ 2022-04-26 10:58 Jupiter
+  2022-04-28  3:27 ` [yocto] " Bruce Ashfield
+  0 siblings, 1 reply; 4+ messages in thread
+From: Jupiter @ 2022-04-26 10:58 UTC (permalink / raw)
+  To: yocto
+
+Hi,
+
+I followed Yocto document 2.3.3 Changing the Configuration to set up a
+complete working Linux kernel defconfig in my kernel bbappend, I
+copied the defconfig to build/.config:
+do_compile:prepend () {
+    install -m 0644 ${WORKDIR}/defconfig ${WORKDIR}/build/.config
+}
+
+I hope the build system can just use the defconfig in build/.config,
+but that did not work, the build system still ran Restart config... to
+compare the defconfig and to generate and overwrite build/.config. How
+can I suppress the build system not to run the "Restart config"
+process, just to run the compile process using the build/.config I
+copied to build/.config?
+
+I tried to add KCONFIG_MODE = "alldefconfig" in my kernel bbappend,
+but it did not work either.
+
+Appreciate your advice.
+
+Thank you very much.
+
+Kind regards,
+
+JH
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] How to force build system to use a working kernel defconfig?
+  2022-04-26 10:58 How to force build system to use a working kernel defconfig? Jupiter
+@ 2022-04-28  3:27 ` Bruce Ashfield
+  2022-04-28  9:39   ` Jupiter
+  0 siblings, 1 reply; 4+ messages in thread
+From: Bruce Ashfield @ 2022-04-28  3:27 UTC (permalink / raw)
+  To: JH; +Cc: yocto
+
+On Tue, Apr 26, 2022 at 6:59 AM JH <jupiter.hce@gmail.com> wrote:
+>
+> Hi,
+>
+> I followed Yocto document 2.3.3 Changing the Configuration to set up a
+> complete working Linux kernel defconfig in my kernel bbappend, I
+> copied the defconfig to build/.config:
+> do_compile:prepend () {
+>     install -m 0644 ${WORKDIR}/defconfig ${WORKDIR}/build/.config
+> }
+>
+> I hope the build system can just use the defconfig in build/.config,
+> but that did not work, the build system still ran Restart config... to
+> compare the defconfig and to generate and overwrite build/.config. How
+> can I suppress the build system not to run the "Restart config"
+> process, just to run the compile process using the build/.config I
+> copied to build/.config?
+
+You can't suppress the kernel's config step, it is always going to
+run. You can't just copy over .config and have the kernel build.
+
+The behaviour of the configuration depends on the kernel recipe and
+bbclasses in play. I can answer from the context of
+linux-yocto/kernel-yocto.bbclass and the default kernel.bbclass.
+
+If you have a file called "defconfig" in your SRC_URI, it will be
+copied into the kernel's .config and then yes, the kernel
+configuration step will be run. The kernel's config subsystem will
+apply its logic, and what your final .config is .. may or may not be
+exactly what that input defconfig.
+
+If the defconfig is a full copy of a .config (which is what they used
+to be), then you can use either allnoconfig as the mode, or all
+defconfig as the mode .. it won't make much of a difference since most
+settings are fully specified. But the kernel-yocto processing assumes
+an older defconfig style, and will use allnoconfig when it sees a
+'defconfig' and the mode isn't explicitly specified.
+
+If the defconfig was created using savedefconfig or similar, then
+you'd want to specify the mode as alldefconfig, since you need those
+defaults to be used to get a functional .config created.
+
+Bruce
+
+>
+> I tried to add KCONFIG_MODE = "alldefconfig" in my kernel bbappend,
+> but it did not work either.
+>
+> Appreciate your advice.
+>
+> Thank you very much.
+>
+> Kind regards,
+>
+> JH
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#56893): https://lists.yoctoproject.org/g/yocto/message/56893
+> Mute This Topic: https://lists.yoctoproject.org/mt/90705185/1050810
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [bruce.ashfield@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+-- 
+- Thou shalt not follow the NULL pointer, for chaos and madness await
+thee at its end
+- "Use the force Harry" - Gandalf, Star Trek II
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] How to force build system to use a working kernel defconfig?
+  2022-04-28  3:27 ` [yocto] " Bruce Ashfield
+@ 2022-04-28  9:39   ` Jupiter
+  2022-04-28 11:44     ` Bruce Ashfield
+  0 siblings, 1 reply; 4+ messages in thread
+From: Jupiter @ 2022-04-28  9:39 UTC (permalink / raw)
+  To: Bruce Ashfield; +Cc: yocto, openembeded-devel
+
+Hi Bruce,
+
+Thanks for your response.
+
+> You can't suppress the kernel's config step, it is always going to
+> run. You can't just copy over .config and have the kernel build.
+
+If the OE build kernel config step can be disabled to compile kernel
+using customer defconfig, that will make users life much easier to
+disable unwanted kernel drivers and features.
+
+The customer defconfig can be certainly generated from bitbake -c
+menuconfig, but honestly, the kernel configure selection is not easier
+to understand, we have to use defconfig to disable unwanted the
+configures and tested it, inadvertently disable some configures could
+cause kernel panic regardless if the OE build system config step is
+running or not.
+
+I have searched the internet, it is not just me, there are many others
+who requested to run customer defconfig without OE build kernel config
+step.
+
+Are you a contributor in the OE dev team? Are there any reasons why
+the OE dev team won't consider this feature?
+
+Thank you very much.
+
+Kind regards,
+
+jupiter
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] How to force build system to use a working kernel defconfig?
+  2022-04-28  9:39   ` Jupiter
+@ 2022-04-28 11:44     ` Bruce Ashfield
+  0 siblings, 0 replies; 4+ messages in thread
+From: Bruce Ashfield @ 2022-04-28 11:44 UTC (permalink / raw)
+  To: Jupiter; +Cc: yocto, openembeded-devel
+
+On Thu, Apr 28, 2022 at 5:39 AM Jupiter <jupiter.hce@gmail.com> wrote:
+>
+> Hi Bruce,
+>
+> Thanks for your response.
+>
+> > You can't suppress the kernel's config step, it is always going to
+> > run. You can't just copy over .config and have the kernel build.
+>
+> If the OE build kernel config step can be disabled to compile kernel
+> using customer defconfig, that will make users life much easier to
+> disable unwanted kernel drivers and features.
+
+This has nothing to do with OE, that's what the kernel would do
+no matter how you build it.
+
+>
+> The customer defconfig can be certainly generated from bitbake -c
+> menuconfig, but honestly, the kernel configure selection is not easier
+> to understand, we have to use defconfig to disable unwanted the
+> configures and tested it, inadvertently disable some configures could
+> cause kernel panic regardless if the OE build system config step is
+> running or not.
+>
+
+There's a reason why kernel-yocto (and other frameworks) provide
+things like configuration fragments, kernel types, etc, This is a well
+explored topic. Check out my (and others) presentations about this
+throughout the years of yocto summits, etc. They can all be found
+online in various formats.
+
+> I have searched the internet, it is not just me, there are many others
+> who requested to run customer defconfig without OE build kernel config
+> step.
+
+It can already do that, just as I described in my previous response.
+The defconfig is copied in, and then the kernel *will* run its configuration
+process over it, not OE's, the kernel.
+
+>
+> Are you a contributor in the OE dev team? Are there any reasons why
+> the OE dev team won't consider this feature?
+
+See above,
+
+Bruce
+
+>
+> Thank you very much.
+>
+> Kind regards,
+>
+> jupiter
+
+
+
+-- 
+- Thou shalt not follow the NULL pointer, for chaos and madness await
+thee at its end
+- "Use the force Harry" - Gandalf, Star Trek II
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+end of thread, other threads:[~2022-04-28 11:44 UTC | newest]
+
+Thread overview: 4+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-04-26 10:58 How to force build system to use a working kernel defconfig? Jupiter
+2022-04-28  3:27 ` [yocto] " Bruce Ashfield
+2022-04-28  9:39   ` Jupiter
+2022-04-28 11:44     ` Bruce Ashfield
+

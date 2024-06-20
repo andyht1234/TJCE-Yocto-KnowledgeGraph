@@ -1,0 +1,220 @@
+* [meta-security][PATCH 1/3] oeqa/clamav drop depricated --list-mirror test
+@ 2022-06-20  3:35 Armin Kuster
+  2022-06-20  3:35 ` [meta-security][PATCH 2/3] oeqa: meta-tpm shut swtpm down before and after testing Armin Kuster
+                   ` (2 more replies)
+  0 siblings, 3 replies; 4+ messages in thread
+From: Armin Kuster @ 2022-06-20  3:35 UTC (permalink / raw)
+  To: yocto
+
+Fix download test
+
+Signed-off-by: Armin Kuster <akuster808@gmail.com>
+---
+ lib/oeqa/runtime/cases/clamav.py | 21 ++++-----------------
+ 1 file changed, 4 insertions(+), 17 deletions(-)
+
+diff --git a/lib/oeqa/runtime/cases/clamav.py b/lib/oeqa/runtime/cases/clamav.py
+index cf83937..e0cad8f 100644
+--- a/lib/oeqa/runtime/cases/clamav.py
++++ b/lib/oeqa/runtime/cases/clamav.py
+@@ -1,4 +1,4 @@
+-# Copyright (C) 2019 Armin Kuster <akuster808@gmail.com>
++# Copyright (C) 2019 - 2022 Armin Kuster <akuster808@gmail.com>
+ #
+ import re
+ from tempfile import mkstemp
+@@ -48,21 +48,8 @@ class ClamavTest(OERuntimeTestCase):
+         self.assertEqual(status, 0, msg = msg)
+ 
+     @OETestDepends(['clamav.ClamavTest.test_ping_clamav_net'])
+-    def test_freshclam_check_mirrors(self):
+-        status, output = self.target.run('freshclam --list-mirrors')
+-        match = re.search('Failures: 0', output)
+-        if not match:
+-            msg = ('freshclam --list-mirrors: failed. '
+-               'Status and output:%s and %s' % (status, output))
+-            self.assertEqual(status, 1, msg = msg)
+-
+-    @OETestDepends(['clamav.ClamavTest.test_freshclam_check_mirrors'])
+     def test_freshclam_download(self):
+         status, output = self.target.run('freshclam --show-progress')
+-        match = re.search('Database updated', output)
+-        #match = re.search('main.cvd is up to date', output)
+-        if not match:
+-            msg = ('freshclam : DB dowbload failed. '
+-               'Status and output:%s and %s' % (status, output))
+-            self.assertEqual(status, 1, msg = msg)
+-
++        msg = ('freshclam : DB dowbload failed. '
++            'Status and output:%s and %s' % (status, output))
++        self.assertEqual(status, 0, msg = msg)
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 4+ messages in thread
+* [meta-security][PATCH 2/3] oeqa: meta-tpm shut swtpm down before and after testing
+  2022-06-20  3:35 [meta-security][PATCH 1/3] oeqa/clamav drop depricated --list-mirror test Armin Kuster
+@ 2022-06-20  3:35 ` Armin Kuster
+  2022-06-20  3:35 ` [meta-security][PATCH 3/3] oeqa: shut done swtpm " Armin Kuster
+       [not found] ` <16FA36F348A4E548.32537@lists.yoctoproject.org>
+  2 siblings, 0 replies; 4+ messages in thread
+From: Armin Kuster @ 2022-06-20  3:35 UTC (permalink / raw)
+  To: yocto
+
+fixes:
+swtpm: Could not open TCP socket: Address already in use
+
+Signed-off-by: Armin Kuster <akuster808@gmail.com>
+---
+ meta-tpm/lib/oeqa/runtime/cases/swtpm.py | 2 ++
+ meta-tpm/lib/oeqa/runtime/cases/tpm2.py  | 2 ++
+ 2 files changed, 4 insertions(+)
+
+diff --git a/meta-tpm/lib/oeqa/runtime/cases/swtpm.py b/meta-tpm/lib/oeqa/runtime/cases/swtpm.py
+index df47b35..0be5c59 100644
+--- a/meta-tpm/lib/oeqa/runtime/cases/swtpm.py
++++ b/meta-tpm/lib/oeqa/runtime/cases/swtpm.py
+@@ -8,11 +8,13 @@ from oeqa.core.decorator.data import skipIfNotFeature
+ class SwTpmTest(OERuntimeTestCase):
+     @classmethod
+     def setUpClass(cls):
++        cls.tc.target.run('swtpm_ioctl -s --tcp :2322')
+         cls.tc.target.run('mkdir /tmp/myvtpm2')
+         cls.tc.target.run('chown tss:root /tmp/myvtpm2')
+ 
+     @classmethod
+     def tearDownClass(cls):
++        cls.tc.target.run('swtpm_ioctl -s --tcp :2322')
+         cls.tc.target.run('rm -fr /tmp/myvtpm2')
+ 
+     @skipIfNotFeature('tpm2','Test tpm2_swtpm_socket requires tpm2 to be in DISTRO_FEATURES')
+diff --git a/meta-tpm/lib/oeqa/runtime/cases/tpm2.py b/meta-tpm/lib/oeqa/runtime/cases/tpm2.py
+index e64d19d..8e90dc9 100644
+--- a/meta-tpm/lib/oeqa/runtime/cases/tpm2.py
++++ b/meta-tpm/lib/oeqa/runtime/cases/tpm2.py
+@@ -8,10 +8,12 @@ from oeqa.core.decorator.data import skipIfNotFeature
+ class Tpm2Test(OERuntimeTestCase):
+     @classmethod
+     def setUpClass(cls):
++        cls.tc.target.run('swtpm_ioctl -s --tcp :2322')
+         cls.tc.target.run('mkdir /tmp/myvtpm2')
+ 
+     @classmethod
+     def tearDownClass(cls):
++        cls.tc.target.run('swtpm_ioctl -s --tcp :2322')
+         cls.tc.target.run('rm -fr /tmp/myvtpm2')
+ 
+     def check_endlines(self, results,  expected_endlines): 
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 4+ messages in thread
+* [meta-security][PATCH 3/3] oeqa: shut done swtpm before and after testing
+  2022-06-20  3:35 [meta-security][PATCH 1/3] oeqa/clamav drop depricated --list-mirror test Armin Kuster
+  2022-06-20  3:35 ` [meta-security][PATCH 2/3] oeqa: meta-tpm shut swtpm down before and after testing Armin Kuster
+@ 2022-06-20  3:35 ` Armin Kuster
+       [not found] ` <16FA36F348A4E548.32537@lists.yoctoproject.org>
+  2 siblings, 0 replies; 4+ messages in thread
+From: Armin Kuster @ 2022-06-20  3:35 UTC (permalink / raw)
+  To: yocto
+
+fixes:
+swtpm: Could not open TCP socket: Address already in use
+
+Signed-off-by: Armin Kuster <akuster808@gmail.com>
+---
+ meta-parsec/lib/oeqa/runtime/cases/parsec.py | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/meta-parsec/lib/oeqa/runtime/cases/parsec.py b/meta-parsec/lib/oeqa/runtime/cases/parsec.py
+index d3d3f2e..11e5572 100644
+--- a/meta-parsec/lib/oeqa/runtime/cases/parsec.py
++++ b/meta-parsec/lib/oeqa/runtime/cases/parsec.py
+@@ -12,8 +12,13 @@ from oeqa.core.decorator.data import skipIfNotFeature
+ class ParsecTest(OERuntimeTestCase):
+     @classmethod
+     def setUpClass(cls):
++        cls.tc.target.run('swtpm_ioctl -s --tcp :2322')
+         cls.toml_file = '/etc/parsec/config.toml'
+ 
++    @classmethod
++    def tearDownClass(cls):
++        cls.tc.target.run('swtpm_ioctl -s --tcp :2322')
++
+     def setUp(self):
+         super(ParsecTest, self).setUp()
+         if 'systemd' in self.tc.td['DISTRO_FEATURES']:
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 4+ messages in thread
+* Re: [yocto] [meta-security][PATCH 3/3] oeqa: shut done swtpm before and after testing
+       [not found] ` <16FA36F348A4E548.32537@lists.yoctoproject.org>
+@ 2022-06-20  5:36   ` akuster808
+  0 siblings, 0 replies; 4+ messages in thread
+From: akuster808 @ 2022-06-20  5:36 UTC (permalink / raw)
+  To: yocto
+
+fyi:
+I started to archive some of the test runs at:
+https://github.com/akuster/meta-security-testresults
+Not sure if I am doing this correctly but is at least a snapshot.
+
+-armin
+
+On 6/19/22 20:35, Armin Kuster via lists.yoctoproject.org wrote:
+> fixes:
+> swtpm: Could not open TCP socket: Address already in use
+>
+> Signed-off-by: Armin Kuster <akuster808@gmail.com>
+> ---
+>   meta-parsec/lib/oeqa/runtime/cases/parsec.py | 5 +++++
+>   1 file changed, 5 insertions(+)
+>
+> diff --git a/meta-parsec/lib/oeqa/runtime/cases/parsec.py b/meta-parsec/lib/oeqa/runtime/cases/parsec.py
+> index d3d3f2e..11e5572 100644
+> --- a/meta-parsec/lib/oeqa/runtime/cases/parsec.py
+> +++ b/meta-parsec/lib/oeqa/runtime/cases/parsec.py
+> @@ -12,8 +12,13 @@ from oeqa.core.decorator.data import skipIfNotFeature
+>   class ParsecTest(OERuntimeTestCase):
+>       @classmethod
+>       def setUpClass(cls):
+> +        cls.tc.target.run('swtpm_ioctl -s --tcp :2322')
+>           cls.toml_file = '/etc/parsec/config.toml'
+>   
+> +    @classmethod
+> +    def tearDownClass(cls):
+> +        cls.tc.target.run('swtpm_ioctl -s --tcp :2322')
+> +
+>       def setUp(self):
+>           super(ParsecTest, self).setUp()
+>           if 'systemd' in self.tc.td['DISTRO_FEATURES']:
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#57358): https://lists.yoctoproject.org/g/yocto/message/57358
+> Mute This Topic: https://lists.yoctoproject.org/mt/91870539/3616698
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [akuster808@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+end of thread, other threads:[~2022-06-20  5:39 UTC | newest]
+
+Thread overview: 4+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-06-20  3:35 [meta-security][PATCH 1/3] oeqa/clamav drop depricated --list-mirror test Armin Kuster
+2022-06-20  3:35 ` [meta-security][PATCH 2/3] oeqa: meta-tpm shut swtpm down before and after testing Armin Kuster
+2022-06-20  3:35 ` [meta-security][PATCH 3/3] oeqa: shut done swtpm " Armin Kuster
+     [not found] ` <16FA36F348A4E548.32537@lists.yoctoproject.org>
+2022-06-20  5:36   ` [yocto] " akuster808
+

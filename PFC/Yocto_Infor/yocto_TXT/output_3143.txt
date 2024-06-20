@@ -1,0 +1,219 @@
+* [meta-zephyr][PATCH v4 1/2] zephyr-kernel-src.inc: Add backport patch for storage partition
+@ 2021-07-15 12:55 Stefan Schmidt
+  2021-07-16  6:03 ` [yocto] " Naveen Saini
+  0 siblings, 1 reply; 2+ messages in thread
+From: Stefan Schmidt @ 2021-07-15 12:55 UTC (permalink / raw)
+  To: yocto; +Cc: Stefan Schmidt, Stefan Schmidt
+
+From: Stefan Schmidt <stefan.schmidt@huawei.com>
+
+Patch already merged upstream, but after the 2.6 release we are based
+on. Taking the backport in here until we can figure out if that can go
+to the Zephyr 2.6 LTS branch.
+
+The storage partition itself is needed on the Arduino Nano e.g. for
+OpenThread or applications needed a storage space.
+
+Signed-off-by: Stefan Schmidt <stefan.schmidt@huawei.com>
+---
+since v3: Added backported patch for flash layout
+
+ ...rduino-nano-33-ble-storage-partition.patch | 46 +++++++++++++++++++
+ .../zephyr-kernel/zephyr-kernel-src.inc       |  1 +
+ 2 files changed, 47 insertions(+)
+ create mode 100644 recipes-kernel/zephyr-kernel/files/arduino-nano-33-ble-storage-partition.patch
+
+diff --git a/recipes-kernel/zephyr-kernel/files/arduino-nano-33-ble-storage-partition.patch b/recipes-kernel/zephyr-kernel/files/arduino-nano-33-ble-storage-partition.patch
+new file mode 100644
+index 0000000..fa0f27f
+--- /dev/null
++++ b/recipes-kernel/zephyr-kernel/files/arduino-nano-33-ble-storage-partition.patch
+@@ -0,0 +1,46 @@
++commit 6c9945aafa00c09149e2052a9c2bccad16dd1d8a
++Author: Stefan Schmidt <stefan.schmidt@huawei.com>
++Date:   Fri May 7 11:47:44 2021 +0200
++
++    boards/arduino_nano_33_ble: add storage partition at end of flash
++    
++    Change default partition table to allow for application which need
++    storage. One use case is running the OpenThread integration which has
++    a dependency on this.
++    
++    Signed-off-by: Stefan Schmidt <stefan.schmidt@huawei.com>
++
++diff --git a/boards/arm/arduino_nano_33_ble/arduino_nano_33_ble.dts b/boards/arm/arduino_nano_33_ble/arduino_nano_33_ble.dts
++index d09b66ec43..d11d800eb5 100644
++--- a/boards/arm/arduino_nano_33_ble/arduino_nano_33_ble.dts
+++++ b/boards/arm/arduino_nano_33_ble/arduino_nano_33_ble.dts
++@@ -44,15 +44,27 @@
++ 
++ 		boot_partition: partition@0 {
++ 			label = "sam-ba";
++-			reg = <0x0 0x10000>;
+++			reg = <0x00000000 0x00010000>;
++ 			read-only;
++ 		};
++ 
++ 		code_partition: partition@10000 {
++ 			label = "code";
++-			reg = <0x10000 0xf0000>;
+++			reg = <0x00010000 0x000e8000>;
++ 			read-only;
++ 		};
+++
+++		/*
+++		 * The flash starting at 0x000f8000 and ending at
+++		 * 0x000fffff is reserved for use by the application.
+++		 *
+++		 * Storage partition will be used by FCB/LittleFS/NVS
+++		 * if enabled.
+++		 */
+++		storage_partition: partition@f8000 {
+++			label = "storage";
+++			reg = <0x000f8000 0x00008000>;
+++		};
++ 	};
++ };
++ 
+diff --git a/recipes-kernel/zephyr-kernel/zephyr-kernel-src.inc b/recipes-kernel/zephyr-kernel/zephyr-kernel-src.inc
+index a0004ed..227c7f4 100644
+--- a/recipes-kernel/zephyr-kernel/zephyr-kernel-src.inc
++++ b/recipes-kernel/zephyr-kernel/zephyr-kernel-src.inc
+@@ -18,6 +18,7 @@ SRC_URI = "\
+     git://github.com/zephyrproject-rtos/openthread.git;protocol=https;branch=zephyr;destsuffix=git/modules/lib/openthread;name=openthread \
+     git://github.com/zephyrproject-rtos/libmetal.git;protocol=https;destsuffix=git/modules/hal/libmetal;name=libmetal \
+     git://github.com/zephyrproject-rtos/tinycrypt.git;protocol=https;destsuffix=git/modules/crypto/tinycrypt;name=tinycrypt \
++    file://arduino-nano-33-ble-storage-partition.patch \
+     "
+ S = "${WORKDIR}/git"
+ 
+-- 
+2.31.1
+
+
+^ permalink raw reply related	[flat|nested] 2+ messages in thread
+* Re: [yocto] [meta-zephyr][PATCH v4 1/2] zephyr-kernel-src.inc: Add backport patch for storage partition
+  2021-07-15 12:55 [meta-zephyr][PATCH v4 1/2] zephyr-kernel-src.inc: Add backport patch for storage partition Stefan Schmidt
+@ 2021-07-16  6:03 ` Naveen Saini
+  0 siblings, 0 replies; 2+ messages in thread
+From: Naveen Saini @ 2021-07-16  6:03 UTC (permalink / raw)
+  To: Stefan Schmidt, yocto; +Cc: Stefan Schmidt
+
+Merged after minor changes.
+
+> -----Original Message-----
+> From: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org> On
+> Behalf Of Stefan Schmidt
+> Sent: Thursday, July 15, 2021 8:55 PM
+> To: yocto@lists.yoctoproject.org
+> Cc: Stefan Schmidt <stefan@datenfreihafen.org>; Stefan Schmidt
+> <stefan.schmidt@huawei.com>
+> Subject: [yocto] [meta-zephyr][PATCH v4 1/2] zephyr-kernel-src.inc: Add
+> backport patch for storage partition
+> 
+> From: Stefan Schmidt <stefan.schmidt@huawei.com>
+> 
+> Patch already merged upstream, but after the 2.6 release we are based on.
+> Taking the backport in here until we can figure out if that can go to the
+> Zephyr 2.6 LTS branch.
+> 
+> The storage partition itself is needed on the Arduino Nano e.g. for
+> OpenThread or applications needed a storage space.
+> 
+> Signed-off-by: Stefan Schmidt <stefan.schmidt@huawei.com>
+> ---
+> since v3: Added backported patch for flash layout
+> 
+>  ...rduino-nano-33-ble-storage-partition.patch | 46 +++++++++++++++++++
+>  .../zephyr-kernel/zephyr-kernel-src.inc       |  1 +
+>  2 files changed, 47 insertions(+)
+>  create mode 100644 recipes-kernel/zephyr-kernel/files/arduino-nano-33-
+> ble-storage-partition.patch
+> 
+> diff --git a/recipes-kernel/zephyr-kernel/files/arduino-nano-33-ble-storage-
+> partition.patch b/recipes-kernel/zephyr-kernel/files/arduino-nano-33-ble-
+> storage-partition.patch
+> new file mode 100644
+> index 0000000..fa0f27f
+> --- /dev/null
+> +++ b/recipes-kernel/zephyr-kernel/files/arduino-nano-33-ble-storage-par
+> +++ tition.patch
+> @@ -0,0 +1,46 @@
+> +commit 6c9945aafa00c09149e2052a9c2bccad16dd1d8a
+> +Author: Stefan Schmidt <stefan.schmidt@huawei.com>
+> +Date:   Fri May 7 11:47:44 2021 +0200
+> +
+> +    boards/arduino_nano_33_ble: add storage partition at end of flash
+> +
+> +    Change default partition table to allow for application which need
+> +    storage. One use case is running the OpenThread integration which has
+> +    a dependency on this.
+> +
+> +    Signed-off-by: Stefan Schmidt <stefan.schmidt@huawei.com>
+> +
+> +diff --git a/boards/arm/arduino_nano_33_ble/arduino_nano_33_ble.dts
+> +b/boards/arm/arduino_nano_33_ble/arduino_nano_33_ble.dts
+> +index d09b66ec43..d11d800eb5 100644
+> +--- a/boards/arm/arduino_nano_33_ble/arduino_nano_33_ble.dts
+> ++++ b/boards/arm/arduino_nano_33_ble/arduino_nano_33_ble.dts
+> +@@ -44,15 +44,27 @@
+> +
+> + 		boot_partition: partition@0 {
+> + 			label = "sam-ba";
+> +-			reg = <0x0 0x10000>;
+> ++			reg = <0x00000000 0x00010000>;
+> + 			read-only;
+> + 		};
+> +
+> + 		code_partition: partition@10000 {
+> + 			label = "code";
+> +-			reg = <0x10000 0xf0000>;
+> ++			reg = <0x00010000 0x000e8000>;
+> + 			read-only;
+> + 		};
+> ++
+> ++		/*
+> ++		 * The flash starting at 0x000f8000 and ending at
+> ++		 * 0x000fffff is reserved for use by the application.
+> ++		 *
+> ++		 * Storage partition will be used by FCB/LittleFS/NVS
+> ++		 * if enabled.
+> ++		 */
+> ++		storage_partition: partition@f8000 {
+> ++			label = "storage";
+> ++			reg = <0x000f8000 0x00008000>;
+> ++		};
+> + 	};
+> + };
+> +
+> diff --git a/recipes-kernel/zephyr-kernel/zephyr-kernel-src.inc b/recipes-
+> kernel/zephyr-kernel/zephyr-kernel-src.inc
+> index a0004ed..227c7f4 100644
+> --- a/recipes-kernel/zephyr-kernel/zephyr-kernel-src.inc
+> +++ b/recipes-kernel/zephyr-kernel/zephyr-kernel-src.inc
+> @@ -18,6 +18,7 @@ SRC_URI = "\
+>      git://github.com/zephyrproject-
+> rtos/openthread.git;protocol=https;branch=zephyr;destsuffix=git/modules/l
+> ib/openthread;name=openthread \
+>      git://github.com/zephyrproject-
+> rtos/libmetal.git;protocol=https;destsuffix=git/modules/hal/libmetal;name=l
+> ibmetal \
+>      git://github.com/zephyrproject-
+> rtos/tinycrypt.git;protocol=https;destsuffix=git/modules/crypto/tinycrypt;na
+> me=tinycrypt \
+> +    file://arduino-nano-33-ble-storage-partition.patch \
+>      "
+>  S = "${WORKDIR}/git"
+> 
+> --
+> 2.31.1
+
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2021-07-16  6:03 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-07-15 12:55 [meta-zephyr][PATCH v4 1/2] zephyr-kernel-src.inc: Add backport patch for storage partition Stefan Schmidt
+2021-07-16  6:03 ` [yocto] " Naveen Saini
+

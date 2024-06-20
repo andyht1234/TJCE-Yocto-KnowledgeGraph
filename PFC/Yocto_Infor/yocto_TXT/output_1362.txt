@@ -1,0 +1,287 @@
+* nodejs do_compile eats all resources
+@ 2022-09-26 17:20 Westermann, Oliver
+  2022-09-26 17:32 ` [yocto] " Alexander Kanavin
+  2022-09-26 22:11 ` Khem Raj
+  0 siblings, 2 replies; 7+ messages in thread
+From: Westermann, Oliver @ 2022-09-26 17:20 UTC (permalink / raw)
+  To: yocto
+
+Hey,
+
+We recently added nodejs to our images and noticed that it's do compile process is a real memory hog. Since we planned to update the recipe anyway we didn't pay much attention, but today we updated the recipe to the current version from openembedded-core (16.14.2). Still I see that it consumes nearly all resources it can get, way more than any other package in our build process (and crashing some VMs even).
+
+On my build machine (dual Epyc, 256GB of RAM) it manages to produce nearly 100% CPU load AND eats ~90GB of RAM. Some other machines fail the build due to OOM issues.
+
+I only observed this on the nodejs build, is there a good approach to debug this (or even a known issue)?
+
+Best regards, Olli
+
+
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] nodejs do_compile eats all resources
+  2022-09-26 17:20 nodejs do_compile eats all resources Westermann, Oliver
+@ 2022-09-26 17:32 ` Alexander Kanavin
+  2022-09-27  8:34   ` [EXTERNAL] " Westermann, Oliver
+  2022-09-26 22:11 ` Khem Raj
+  1 sibling, 1 reply; 7+ messages in thread
+From: Alexander Kanavin @ 2022-09-26 17:32 UTC (permalink / raw)
+  To: oliver westermann; +Cc: yocto
+
+Anything written in C++ tends to consume 1-2 Gb of ram per compiler
+process. If that lands you in OOM, you probably should limit that with
+PARALLEL_MAKE:pn-nodejs, but otherwise that is the sad reality of C++
+builds.
+
+Alex
+
+On Mon, 26 Sept 2022 at 19:20, Oliver Westermann via
+lists.yoctoproject.org
+<oliver.westermann=cognex.com@lists.yoctoproject.org> wrote:
+>
+> Hey,
+>
+> We recently added nodejs to our images and noticed that it's do compile process is a real memory hog. Since we planned to update the recipe anyway we didn't pay much attention, but today we updated the recipe to the current version from openembedded-core (16.14.2). Still I see that it consumes nearly all resources it can get, way more than any other package in our build process (and crashing some VMs even).
+>
+> On my build machine (dual Epyc, 256GB of RAM) it manages to produce nearly 100% CPU load AND eats ~90GB of RAM. Some other machines fail the build due to OOM issues.
+>
+> I only observed this on the nodejs build, is there a good approach to debug this (or even a known issue)?
+>
+> Best regards, Olli
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#58165): https://lists.yoctoproject.org/g/yocto/message/58165
+> Mute This Topic: https://lists.yoctoproject.org/mt/93931877/1686489
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] nodejs do_compile eats all resources
+  2022-09-26 17:20 nodejs do_compile eats all resources Westermann, Oliver
+  2022-09-26 17:32 ` [yocto] " Alexander Kanavin
+@ 2022-09-26 22:11 ` Khem Raj
+  1 sibling, 0 replies; 7+ messages in thread
+From: Khem Raj @ 2022-09-26 22:11 UTC (permalink / raw)
+  To: oliver.westermann, yocto
+
+
+[-- Attachment #1.1.1: Type: text/plain, Size: 1575 bytes --]
+
+On 9/26/22 10:20 AM, Oliver Westermann via lists.yoctoproject.org wrote:
+> Hey,
+> 
+> We recently added nodejs to our images and noticed that it's do compile process is a real memory hog. Since we planned to update the recipe anyway we didn't pay much attention, but today we updated the recipe to the current version from openembedded-core (16.14.2). Still I see that it consumes nearly all resources it can get, way more than any other package in our build process (and crashing some VMs even).
+> 
+> On my build machine (dual Epyc, 256GB of RAM) it manages to produce nearly 100% CPU load AND eats ~90GB of RAM. Some other machines fail the build due to OOM issues.
+
+how many cores do you have on the dual Epyc sockets. for Mmeory., 
+usually 4GB/per-core is a safe mark for worst case scenario. nodejs 
+build does run some target binaries using qemu-usermode eg. mksnapshot
+during build, which in a threaded mode will put more pressure on memory.
+
+> 
+> I only observed this on the nodejs build, is there a good approach to debug this (or even a known issue)?
+> 
+> Best regards, Olli
+> 
+> 
+> 
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> You automatically follow any topics you start or reply to.
+> View/Reply Online (#58165): https://lists.yoctoproject.org/g/yocto/message/58165
+> Mute This Topic: https://lists.yoctoproject.org/mt/93931877/1997914
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [raj.khem@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+> 
+
+[-- Attachment #1.1.2: OpenPGP public key --]
+[-- Type: application/pgp-keys, Size: 2613 bytes --]
+
+[-- Attachment #2: OpenPGP digital signature --]
+[-- Type: application/pgp-signature, Size: 203 bytes --]
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* RE: [EXTERNAL]  Re: [yocto] nodejs do_compile eats all resources
+  2022-09-26 17:32 ` [yocto] " Alexander Kanavin
+@ 2022-09-27  8:34   ` Westermann, Oliver
+  2022-09-27  8:50     ` Alexander Kanavin
+  0 siblings, 1 reply; 7+ messages in thread
+From: Westermann, Oliver @ 2022-09-27  8:34 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: yocto
+
+> Am Montag, 26. September 2022 19:33 schrieb Alexander Kanavin <alex.kanavin@gmail.com> 
+> 
+> Anything written in C++ tends to consume 1-2 Gb of ram per compiler process. If that lands you in OOM, you probably should limit that with PARALLEL_MAKE:pn-nodejs, but otherwise that is the sad reality of C++ builds.
+
+I expected something like this. Thanks for the confirmation and I will try to play with PARALLEL_MAKE to reduce the impact.
+
+- Olli 
+
+
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [EXTERNAL] Re: [yocto] nodejs do_compile eats all resources
+  2022-09-27  8:34   ` [EXTERNAL] " Westermann, Oliver
+@ 2022-09-27  8:50     ` Alexander Kanavin
+  2022-09-27  9:02       ` Westermann, Oliver
+  0 siblings, 1 reply; 7+ messages in thread
+From: Alexander Kanavin @ 2022-09-27  8:50 UTC (permalink / raw)
+  To: Westermann, Oliver; +Cc: yocto
+
+Do keep in mind that PARALLEL_MAKE can and should be set per recipe,
+so you can make-limit only the worst items.
+
+Alex
+
+On Tue, 27 Sept 2022 at 10:34, Westermann, Oliver
+<Oliver.Westermann@cognex.com> wrote:
+>
+> > Am Montag, 26. September 2022 19:33 schrieb Alexander Kanavin <alex.kanavin@gmail.com>
+> >
+> > Anything written in C++ tends to consume 1-2 Gb of ram per compiler process. If that lands you in OOM, you probably should limit that with PARALLEL_MAKE:pn-nodejs, but otherwise that is the sad reality of C++ builds.
+>
+> I expected something like this. Thanks for the confirmation and I will try to play with PARALLEL_MAKE to reduce the impact.
+>
+> - Olli
+>
+
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* RE: [EXTERNAL] Re: [yocto] nodejs do_compile eats all resources
+  2022-09-27  8:50     ` Alexander Kanavin
+@ 2022-09-27  9:02       ` Westermann, Oliver
+  2022-09-27  9:15         ` Martin Jansa
+  0 siblings, 1 reply; 7+ messages in thread
+From: Westermann, Oliver @ 2022-09-27  9:02 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: yocto
+
+> Am Dienstag, 27. September 2022 10:50 schrieb Alexander Kanavin <alex.kanavin@gmail.com>:
+>
+> Do keep in mind that PARALLEL_MAKE can and should be set per recipe, so you can make-limit only the worst items.
+> 
+> Alex
+
+Yeah, I'm currently using
+
+PARALLEL_MAKE = "-j ${@int(oe.utils.cpu_count() / 4)}"
+
+In a .bbappend to limit it, but keep it dynamic.
+
+One question out of curiosity or lack of understanding:
+Bitbake offers BB_NUMBER_THREADS to limit (IMHO) the number of bitbake tasks, eg parallel do_compile() tasks. Each of these however spawn the compiler with several parallel threads oe.utils.cpu_count (PARALLEL_MAKE defaults to cpu_count()). Why isn't it more common that we end up in issues due to cpu_count^2 threads being spawned? Shouldn't (roughly) BB_NUMBER_THREADS * PARALLEL_MAKE fully load the CPU?
+
+Best regards, a curious Olli
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] nodejs do_compile eats all resources
+  2022-09-27  9:02       ` Westermann, Oliver
+@ 2022-09-27  9:15         ` Martin Jansa
+  0 siblings, 0 replies; 7+ messages in thread
+From: Martin Jansa @ 2022-09-27  9:15 UTC (permalink / raw)
+  To: oliver.westermann; +Cc: Alexander Kanavin, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 3091 bytes --]
+
+> PARALLEL_MAKE = "-j ${@int(oe.utils.cpu_count() / 4)}"
+
+This won't be optimal in cases where you're rebuilding just one recipe in
+incremental build which will be finished much faster if you can unleash
+whole potential of dual-epycs. Try to add -l to limit overall load instead
+and limit -j only for the biggest offenders included in your build, you
+don't need to do that in .bbappend, just use pn override, e.g. my
+local.conf has:
+
+BB_PRESSURE_MAX_CPU = "1000"
+BB_NUMBER_THREADS = "8"
+BB_NUMBER_PARSE_THREADS = "64"
+PARALLEL_MAKE = "-j 70 -l 140"
+#PARALLEL_MAKE:pn-qtwebengine = "-j 40"
+#PARALLEL_MAKE:pn-webruntime = "-j 40"
+
+On 64 thread TR 3970X with 128GB ram, the restriction for qtwebruntime and
+webruntime isn't necessary, since I've added BB_PRESSURE_MAX_CPU I haven't
+seen OOMK just from the OE builds.
+
+> Why isn't it more common that we end up in issues due to cpu_count^2
+threads being spawned?
+
+It's very common when you build some "big" images with "big" components.
+
+Many components cannot utilize very high PARALLEL_MAKE for very long or for
+demanding processes. nodejs, chromium, webkit-gtk, firefox are notable
+exceptions which take long time to build and scale very well with
+PARALLEL_MAKE (while hammering the HW as much as you let them).
+
+There is now also the pressure regulation in bitbake, which might help to
+limit overall load on the system, when too many heavy do_compile tasks get
+triggered at the same time (see
+https://git.openembedded.org/bitbake/commit/?id=502e05cbe67fb7a0e804dcc2cc0764a2e05c014f
+)
+
+See https://github.com/shr-project/test-oe-build-time and you can compare
+your dual-epyc with the entries there.
+
+Regards,
+
+On Tue, Sep 27, 2022 at 11:02 AM Oliver Westermann via
+lists.yoctoproject.org <oliver.westermann=cognex.com@lists.yoctoproject.org>
+wrote:
+
+> > Am Dienstag, 27. September 2022 10:50 schrieb Alexander Kanavin <
+> alex.kanavin@gmail.com>:
+> >
+> > Do keep in mind that PARALLEL_MAKE can and should be set per recipe, so
+> you can make-limit only the worst items.
+> >
+> > Alex
+>
+> Yeah, I'm currently using
+>
+> PARALLEL_MAKE = "-j ${@int(oe.utils.cpu_count() / 4)}"
+>
+> In a .bbappend to limit it, but keep it dynamic.
+>
+> One question out of curiosity or lack of understanding:
+> Bitbake offers BB_NUMBER_THREADS to limit (IMHO) the number of bitbake
+> tasks, eg parallel do_compile() tasks. Each of these however spawn the
+> compiler with several parallel threads oe.utils.cpu_count (PARALLEL_MAKE
+> defaults to cpu_count()). Why isn't it more common that we end up in issues
+> due to cpu_count^2 threads being spawned? Shouldn't (roughly)
+> BB_NUMBER_THREADS * PARALLEL_MAKE fully load the CPU?
+>
+> Best regards, a curious Olli
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#58179):
+> https://lists.yoctoproject.org/g/yocto/message/58179
+> Mute This Topic: https://lists.yoctoproject.org/mt/93931877/3617156
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> Martin.Jansa@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 4553 bytes --]
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+end of thread, other threads:[~2022-09-27  9:16 UTC | newest]
+
+Thread overview: 7+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-09-26 17:20 nodejs do_compile eats all resources Westermann, Oliver
+2022-09-26 17:32 ` [yocto] " Alexander Kanavin
+2022-09-27  8:34   ` [EXTERNAL] " Westermann, Oliver
+2022-09-27  8:50     ` Alexander Kanavin
+2022-09-27  9:02       ` Westermann, Oliver
+2022-09-27  9:15         ` Martin Jansa
+2022-09-26 22:11 ` Khem Raj
+

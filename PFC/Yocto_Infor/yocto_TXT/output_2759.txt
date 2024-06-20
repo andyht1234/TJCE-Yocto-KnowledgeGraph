@@ -1,0 +1,208 @@
+* Google GN support
+@ 2021-10-05 21:34 Joel Winarske
+  2021-10-05 21:42 ` [yocto] " Khem Raj
+  0 siblings, 1 reply; 4+ messages in thread
+From: Joel Winarske @ 2021-10-05 21:34 UTC (permalink / raw)
+  To: Yocto-mailing-list
+
+[-- Attachment #1: Type: text/plain, Size: 1170 bytes --]
+
+I'm looking into best practice LTS support for Google GN based projects.
+This includes Chromium, Flutter, SKIA, etc.
+
+The weakness I see today for GN projects is that it's a build system within
+a build system, and doesn't  support idiomatic download caching, download
+vs patching isn't clear as it should be, etc.
+
+Two approaches to resolve this come to mind:
+1. Do something similar to how meta-rust does it.  Pre-process GN build
+files and generate Yocto recipes using a hostside tool (similar to
+cargo-bitbake for meta-rust).  This would skip usage of gclient entirely,
+and the tradeoff is to incur download performance penalty.
+
+2. Implement build parsing in a gclient/gn fetcher class.
+
+I feel the first approach would be easier to maintain and provide better
+flexibility.  It would incur a new host dependency, and require an
+additional step to generate an updated recipe.
+
+I suspect the second approach would be an OE maintenance headache, as
+complexities would be directly exposed in OE.  Is this why gclient fetcher
+support came and went?
+
+I'm figuring/hoping there are a few opinions floating around on this
+subject.
+
+Is there a better approach?
+
+Thanks,
+Joel
+
+[-- Attachment #2: Type: text/html, Size: 1485 bytes --]
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] Google GN support
+  2021-10-05 21:34 Google GN support Joel Winarske
+@ 2021-10-05 21:42 ` Khem Raj
+  2021-10-05 22:55   ` Joel Winarske
+       [not found]   ` <16AB446BCC6816D9.20530@lists.yoctoproject.org>
+  0 siblings, 2 replies; 4+ messages in thread
+From: Khem Raj @ 2021-10-05 21:42 UTC (permalink / raw)
+  To: Joel Winarske; +Cc: Yocto-mailing-list
+
+On Tue, Oct 5, 2021 at 2:34 PM Joel Winarske <joel.winarske@gmail.com> wrote:
+>
+> I'm looking into best practice LTS support for Google GN based projects.  This includes Chromium, Flutter, SKIA, etc.
+>
+> The weakness I see today for GN projects is that it's a build system within a build system, and doesn't  support idiomatic download caching, download vs patching isn't clear as it should be, etc.
+>
+> Two approaches to resolve this come to mind:
+> 1. Do something similar to how meta-rust does it.  Pre-process GN build files and generate Yocto recipes using a hostside tool (similar to cargo-bitbake for meta-rust).  This would skip usage of gclient entirely, and the tradeoff is to incur download performance penalty.
+>
+> 2. Implement build parsing in a gclient/gn fetcher class.
+>
+> I feel the first approach would be easier to maintain and provide better flexibility.  It would incur a new host dependency, and require an additional step to generate an updated recipe.
+>
+> I suspect the second approach would be an OE maintenance headache, as complexities would be directly exposed in OE.  Is this why gclient fetcher support came and went?
+>
+> I'm figuring/hoping there are a few opinions floating around on this subject.
+>
+> Is there a better approach?
+
+look at meta-browser/meta-chromium as well.
+
+>
+> Thanks,
+> Joel
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> You automatically follow any topics you start or reply to.
+> View/Reply Online (#54971): https://lists.yoctoproject.org/g/yocto/message/54971
+> Mute This Topic: https://lists.yoctoproject.org/mt/86105559/1997914
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [raj.khem@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] Google GN support
+  2021-10-05 21:42 ` [yocto] " Khem Raj
+@ 2021-10-05 22:55   ` Joel Winarske
+       [not found]   ` <16AB446BCC6816D9.20530@lists.yoctoproject.org>
+  1 sibling, 0 replies; 4+ messages in thread
+From: Joel Winarske @ 2021-10-05 22:55 UTC (permalink / raw)
+  To: Khem Raj; +Cc: Yocto-mailing-list
+
+[-- Attachment #1: Type: text/plain, Size: 196 bytes --]
+
+> look at meta-browser/meta-chromium as well.
+
+The download archive (tar.xz) approach may be the easiest solution.  Then
+one would just need to make a versioned recipe for each LTS.
+
+Thanks Khem!
+
+[-- Attachment #2: Type: text/html, Size: 329 bytes --]
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] Google GN support
+       [not found]   ` <16AB446BCC6816D9.20530@lists.yoctoproject.org>
+@ 2022-03-09 23:49     ` Joel Winarske
+  0 siblings, 0 replies; 4+ messages in thread
+From: Joel Winarske @ 2022-03-09 23:49 UTC (permalink / raw)
+  To: Joel Winarske; +Cc: Khem Raj, Yocto-mailing-list
+
+[-- Attachment #1: Type: text/plain, Size: 3016 bytes --]
+
+I had to revisit this for Google Flutter LTS support as upstream (Google
+Flutter team) wasn't interested in providing tar.xz releases.
+
+We have two working solutions for Flutter gclient as of today.
+
+1. gclient fetcher.  This fetches the project using gclient and archives
+the whole source tree.  I call it the gclient snapshot solution.  Downside
+is initial fetch time due to archive time, but subsequent build times are
+good.  So only really useful if you don't switch versions often.
+
+2. Pre-process project using python script and add cipd fetcher support to
+layer.  This script creates an inc file that gets included by a recipe.
+Initial fetch time is about 2.5x build time, with similar build times to
+gclient fetcher; ~3 minutes, some sub 3 minutes.  The current approach
+before this method average build times were ~6 minutes.  So this approach
+improves build time, and provides LTS.  It factors out the use of
+gclient/depot_tools in the fetch process.
+
+gclient_bitbake.py.  The script generates a do_run_hooks task using gn
+conditionals.
+*
+https://github.com/meta-flutter/meta-flutter/blob/jw/lts/scripts/gclient_bitbake.py
+
+script output
+*
+https://github.com/meta-flutter/meta-flutter/blob/jw/lts/conf/include/flutter-engine_2.10.3.inc
+
+cipd:// fetcher impl:
+*
+https://github.com/meta-flutter/meta-flutter/blob/jw/lts/classes/cipd.bbclass
+* https://github.com/meta-flutter/meta-flutter/blob/jw/lts/lib/cipd.py
+
+It currently only works out of the box for the flutter project, but I did
+use it to create a recipe for luci-go -> cipd.
+*
+https://github.com/meta-flutter/meta-flutter/blob/jw/lts/recipes-devtools/luci-go/luci-go-native_git.bb
+
+I mocked up changes to support the v8 project; see gaps for generic
+support.  It does require dynamically compiling python code to manage
+conditionals, and needs a bit more work.  After which python_bitbake.py
+should work for any gclient based project.
+
+gs:// fetcher (Google Storage) support is also planned.  So in cases which
+download google storage artifacts in hook, it would allow moving that to
+SRC_URI as gs:// element for LTS scenario.
+
+If anyone finds this useful/interesting or they want to collaborate on
+improvements let me know.
+
+I do think cipd:// fetcher support would be a good addition to oe-core.
+
+
+Joel
+
+On Tue, Oct 5, 2021 at 3:55 PM Joel Winarske via lists.yoctoproject.org
+<joel.winarske=gmail.com@lists.yoctoproject.org> wrote:
+
+>
+> > look at meta-browser/meta-chromium as well.
+>
+> The download archive (tar.xz) approach may be the easiest solution.  Then
+> one would just need to make a versioned recipe for each LTS.
+>
+> Thanks Khem!
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#54974):
+> https://lists.yoctoproject.org/g/yocto/message/54974
+> Mute This Topic: https://lists.yoctoproject.org/mt/86105559/2167248
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> joel.winarske@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 4840 bytes --]
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+end of thread, other threads:[~2022-03-09 23:49 UTC | newest]
+
+Thread overview: 4+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-10-05 21:34 Google GN support Joel Winarske
+2021-10-05 21:42 ` [yocto] " Khem Raj
+2021-10-05 22:55   ` Joel Winarske
+     [not found]   ` <16AB446BCC6816D9.20530@lists.yoctoproject.org>
+2022-03-09 23:49     ` Joel Winarske
+

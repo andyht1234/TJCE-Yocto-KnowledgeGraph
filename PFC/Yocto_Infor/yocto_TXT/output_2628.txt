@@ -1,0 +1,167 @@
+* [meta-security][PATCH 1/3] sssd: Create /var/log/sssd in runtime
+@ 2021-11-05 13:25 Armin Kuster
+  2021-11-05 13:25 ` [meta-security][PATCH 2/3] bastille: Create /var/log/Bastille " Armin Kuster
+  2021-11-05 13:25 ` [meta-security][PATCH 3/3] python3-fail2ban: remove /run Armin Kuster
+  0 siblings, 2 replies; 3+ messages in thread
+From: Armin Kuster @ 2021-11-05 13:25 UTC (permalink / raw)
+  To: yocto
+
+/var/log is normally a link to /var/volatile/log and /var/volatile is a
+tmpfs mount. So anything created in /var/log will not be available when
+the tmpfs is mounted.
+
+[Thanks to Peter Kjellerstedt for example]
+
+Signed-off-by: Armin Kuster <akuster808@gmail.com>
+---
+ recipes-security/sssd/sssd_2.5.2.bb | 14 +++++++++++++-
+ 1 file changed, 13 insertions(+), 1 deletion(-)
+
+diff --git a/recipes-security/sssd/sssd_2.5.2.bb b/recipes-security/sssd/sssd_2.5.2.bb
+index ed8af5e..8bc8787 100644
+--- a/recipes-security/sssd/sssd_2.5.2.bb
++++ b/recipes-security/sssd/sssd_2.5.2.bb
+@@ -86,13 +86,23 @@ do_install () {
+     rmdir --ignore-fail-on-non-empty "${D}/${bindir}"
+     install -d ${D}/${sysconfdir}/${BPN}
+     install -m 600 ${WORKDIR}/${BPN}.conf ${D}/${sysconfdir}/${BPN}
+-    install -D -m 644 ${WORKDIR}/volatiles.99_sssd ${D}/${sysconfdir}/default/volatiles/99_sssd
++
++    # /var/log/sssd needs to be created in runtime. Use rmdir to catch if
++    # upstream stops creating /var/log/sssd, or adds something else in
++    # /var/log.
++    rmdir ${D}${localstatedir}/log/${BPN} ${D}${localstatedir}/log
++    rmdir --ignore-fail-on-non-empty ${D}${localstatedir}
+ 
+     if ${@bb.utils.contains('DISTRO_FEATURES', 'systemd', 'true', 'false', d)}; then
+         install -d ${D}${sysconfdir}/tmpfiles.d
+         echo "d /var/log/sssd 0750 - - - -" > ${D}${sysconfdir}/tmpfiles.d/sss.conf
+     fi
+ 
++    if [ "${@bb.utils.filter('DISTRO_FEATURES', 'sysvinit', d)}" ]; then
++        install -d ${D}${sysconfdir}/default/volatiles
++        echo "d ${SSSD_UID}:${SSSD_GID} 0755 ${localstatedir}/log/${BPN} none" > ${D}${sysconfdir}/default/volatiles/99_${BPN}
++    fi
++
+     # Remove /run as it is created on startup
+     rm -rf ${D}/run
+ 
+@@ -106,6 +116,8 @@ fi
+     chown ${SSSD_UID}:${SSSD_GID} ${sysconfdir}/${BPN}/${BPN}.conf
+ }
+ 
++FILES:${PN} += "${nonarch_libdir}/tmpfiles.d"
++
+ CONFFILES:${PN} = "${sysconfdir}/${BPN}/${BPN}.conf"
+ 
+ INITSCRIPT_NAME = "sssd"
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 3+ messages in thread
+* [meta-security][PATCH 2/3] bastille: Create /var/log/Bastille in runtime
+  2021-11-05 13:25 [meta-security][PATCH 1/3] sssd: Create /var/log/sssd in runtime Armin Kuster
+@ 2021-11-05 13:25 ` Armin Kuster
+  2021-11-05 13:25 ` [meta-security][PATCH 3/3] python3-fail2ban: remove /run Armin Kuster
+  1 sibling, 0 replies; 3+ messages in thread
+From: Armin Kuster @ 2021-11-05 13:25 UTC (permalink / raw)
+  To: yocto
+
+Signed-off-by: Armin Kuster <akuster808@gmail.com>
+---
+ recipes-security/bastille/bastille_3.2.1.bb | 17 +++++++++++++++--
+ 1 file changed, 15 insertions(+), 2 deletions(-)
+
+diff --git a/recipes-security/bastille/bastille_3.2.1.bb b/recipes-security/bastille/bastille_3.2.1.bb
+index 72281c5..2d82983 100644
+--- a/recipes-security/bastille/bastille_3.2.1.bb
++++ b/recipes-security/bastille/bastille_3.2.1.bb
+@@ -48,7 +48,6 @@ do_install () {
+ 	install -d ${D}${datadir}/Bastille/OSMap/Modules
+ 	install -d ${D}${datadir}/Bastille/Questions
+ 	install -d ${D}${datadir}/Bastille/FKL/configs/
+-	install -d ${D}${localstatedir}/log/Bastille
+ 	install -d ${D}${sysconfdir}/Bastille
+ 	install -m 0755 AutomatedBastille  ${D}${sbindir}
+ 	install -m 0755 BastilleBackEnd    ${D}${sbindir}
+@@ -148,6 +147,20 @@ do_install () {
+ 	${THISDIR}/files/set_required_questions.py ${D}${sysconfdir}/Bastille/config ${D}${datadir}/Bastille/Questions
+ 
+ 	ln -s RevertBastille ${D}${sbindir}/UndoBastille
++
++    # Create /var/log/Bastille in runtime.
++    if [ "${@bb.utils.filter('DISTRO_FEATURES', 'systemd', d)}" ]; then
++        install -d ${D}${nonarch_libdir}/tmpfiles.d
++        echo "d ${localstatedir}/log/Bastille - - - -" > ${D}${nonarch_libdir}/tmpfiles.d/Bastille.conf
++    fi
++    if [ "${@bb.utils.filter('DISTRO_FEATURES', 'sysvinit', d)}" ]; then
++        install -d ${D}${sysconfdir}/default/volatiles
++        echo "d root root 0755 ${localstatedir}/log/Bastille none" > ${D}${sysconfdir}/default/volatiles/99_Bastille
++    fi
+ }
+ 
+-FILES:${PN} += "${datadir}/Bastille ${libdir}/Bastille ${libdir}/perl* ${sysconfdir}/*"
++FILES:${PN} += "${datadir}/Bastille \
++                ${libdir}/Bastille \
++                ${libdir}/perl* \
++                ${sysconfdir}/* \
++                ${nonarch_libdir}/tmpfiles.d"
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 3+ messages in thread
+* [meta-security][PATCH 3/3] python3-fail2ban: remove /run
+  2021-11-05 13:25 [meta-security][PATCH 1/3] sssd: Create /var/log/sssd in runtime Armin Kuster
+  2021-11-05 13:25 ` [meta-security][PATCH 2/3] bastille: Create /var/log/Bastille " Armin Kuster
+@ 2021-11-05 13:25 ` Armin Kuster
+  1 sibling, 0 replies; 3+ messages in thread
+From: Armin Kuster @ 2021-11-05 13:25 UTC (permalink / raw)
+  To: yocto
+
+Fixes:
+
+ERROR: python3-fail2ban-0.11.2-r0 do_package_qa: QA Issue: python3-fail2ban installs files in /run, but it is expected to be empty [empty-dirs]
+
+Signed-off-by: Armin Kuster <akuster808@gmail.com>
+---
+ recipes-security/fail2ban/python3-fail2ban_0.11.2.bb | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/recipes-security/fail2ban/python3-fail2ban_0.11.2.bb b/recipes-security/fail2ban/python3-fail2ban_0.11.2.bb
+index fcf044a..4e344c8 100644
+--- a/recipes-security/fail2ban/python3-fail2ban_0.11.2.bb
++++ b/recipes-security/fail2ban/python3-fail2ban_0.11.2.bb
+@@ -30,6 +30,7 @@ do_install:append () {
+     install -d ${D}/${sysconfdir}/init.d
+     install -m 0755 ${WORKDIR}/initd ${D}${sysconfdir}/init.d/fail2ban-server
+     chown -R root:root ${D}/${bindir}
++    rm -rf ${D}/run
+ }
+ 
+ do_install_ptest:append () {
+@@ -40,7 +41,6 @@ do_install_ptest:append () {
+     rm -f ${D}${PTEST_PATH}/bin/fail2ban-python
+ }
+ 
+-FILES:${PN} += "/run"
+ 
+ INITSCRIPT_PACKAGES = "${PN}"
+ INITSCRIPT_NAME = "fail2ban-server"
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2021-11-05 13:25 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-11-05 13:25 [meta-security][PATCH 1/3] sssd: Create /var/log/sssd in runtime Armin Kuster
+2021-11-05 13:25 ` [meta-security][PATCH 2/3] bastille: Create /var/log/Bastille " Armin Kuster
+2021-11-05 13:25 ` [meta-security][PATCH 3/3] python3-fail2ban: remove /run Armin Kuster
+

@@ -1,0 +1,473 @@
+* Yocto Autobuilder: Latency Monitor and AB-INT - Meeting notes: July 8, 2021
+@ 2021-07-08 13:53 Randy MacLeod
+  2021-07-12 13:34 ` Trevor Gamblin
+  0 siblings, 1 reply; 2+ messages in thread
+From: Randy MacLeod @ 2021-07-08 13:53 UTC (permalink / raw)
+  To: Sakib Sajal, alexandre.belloni, richard.purdie, Wold, Saul,
+	Trevor Gamblin
+  Cc: Yocto discussion list, Tascioglu, Tony, Michael Halstead
+
+
+YP AB Intermittent failures meeting
+===================================
+July 1, 2021, 9 AM ET
+https://windriver.zoom.us/j/3696693975
+
+Attendees:  Tony, Richard, Trevor, Randy
+
+
+Summary:
+
+========
+
+
+
+The autobuilder RCU hang is still fixed ;-),
+    master branch builds greener.
+
+ptest failures are the top problem now.
+
+
+
+Add Michael Halstead, see questions below in section 4.
+
+
+
+If anyone wants to help, we could use more eyes on the logs,
+
+particularly the summary logs and understanding iostat #
+
+when the dd test times out.
+
+
+
+
+
+Plans for the week:
+
+
+
+===================
+
+
+
+
+
+   Richard: glibc upgrade, etc.
+
+
+
+   Alex: ?
+
+
+
+   Sakib: pub/non-release link upgrade, script clean-up.
+
+
+
+   Trevor: make job server test. Try it on YP AB!!! What type of build?
+
+
+
+   Tony: fix/work-around valgrind ptest bug:
+      none/tests/amd64/fb_test_amd64
+   Saul: nothing this week for YP.
+
+
+
+   Randy: vacation, then email catch-up!
+
+
+
+
+Meeting Notes:
+
+==============
+
+
+1, runqemu
+
+Tony having trouble with runqemu on some Wind River machine.
+
+Richard has a fix for a race in runqemu in master-next.
+
+These might be related but if not Tony should debug the
+issue/ collect logs.
+
+2. job server
+
+- Trevor has conclusive evidence that the 'make' job server is useful.
+   email summary to come. Need to fix some assumptoins in code that
+   parses PARALLEL_MAKE then send patch to yocto-autobuilder-helper.
+
+- ninja will have to be done next.
+
+
+3. AB status
+
+  generally better but...
+
+  ptests are having some recurring problems.
+  - parted - only on arm?
+  - valgrind - none/tests/amd64/fb_test_amd64
+  - gdb test failing again. - Randy!
+
+4. Richard reported
+    - something really flaky going on with serial ports.
+    - particularly bad on qemuppc but also x86.
+    - related to Saul's QMP data dump?
+
+5. Sakib needs to send patch to make testimage failures
+    generate summary logs.
+
+6. Richard says that we may need to redesign the data collection system
+    that Sakib's AB INT tests are based on.
+
+
+
+
+
+Still relevant parts of
+Previous Meeting Notes:
+=======================
+
+1. The qemu RCU hang has been fixed to not deadlock anymore!
+
+It still  hangs at times but this dramatically reduces the
+AB failures.
+
+
+
+4. bitbake server timeout.
+
+    "Timeout while waiting for a reply from the bitbake server (60s)"
+
+    Randy mentioned that the bitbake server timeouts seen in the
+    Wind River build cluster have gone away after upgrading to
+    a newer version of docker.
+
+    Old: Docker Version: Docker version 18.09.4, build d14af54266
+    New: Docker Version: Docker version 20.10.7, build f0df350
+
+
+    Clearly the YP ABs aren't running in docker but what
+    about firmware and kernel tunings.
+
+    Michael,
+
+    Is the BIOS/firmware kept up to date on most nodes?
+
+    It seems that we are running stock kernels which makes sense but
+    given that we don't have concerns about privacy since system access
+    is controlled and the nodes are being used to test open
+    source software, we might consider optimizing for performance
+    rather than security.
+
+    Alex pointed at: https://make-linux-fast-again.com/
+    Which just lists a set of kernel boot options:
+       noibrs noibpb nopti nospectre_v2 nospectre_v1  \
+       l1tf=off nospec_store_bypass_disable no_stf_barrier \
+       mds=off tsx=on tsx_async_abort=off mitigations=off
+
+    Can we enable some or all of these on a node to see what the
+    performance difference is?
+
+
+5. io stalls
+
+    Richard said that it would make sense to write an ftrace utility
+    / script to monitor io latency and we could install it with sudo
+    Ch^W mentioned ftrace on IRC.
+    Sakib and Randy will work on that but not for a week or two.
+
+6. Switch the pub/non-release links from full log to summary.
+    The host data links on:
+      https://autobuilder.yocto.io/pub/non-release/
+    should include links to the summary data. I think we have room to
+    include both links like this:
+    0 1 2 3  (Full: 0 1 2 3 )
+
+
+
+
+
+../Randy
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+* Re: Yocto Autobuilder: Latency Monitor and AB-INT - Meeting notes: July 8, 2021
+  2021-07-08 13:53 Yocto Autobuilder: Latency Monitor and AB-INT - Meeting notes: July 8, 2021 Randy MacLeod
+@ 2021-07-12 13:34 ` Trevor Gamblin
+  0 siblings, 0 replies; 2+ messages in thread
+From: Trevor Gamblin @ 2021-07-12 13:34 UTC (permalink / raw)
+  To: Randy MacLeod, Sakib Sajal, alexandre.belloni, richard.purdie,
+	Wold, Saul
+  Cc: Yocto discussion list, Tascioglu, Tony, Michael Halstead
+
+
+On 2021-07-08 9:53 a.m., Randy MacLeod wrote:
+>
+> YP AB Intermittent failures meeting
+> ===================================
+> July 1, 2021, 9 AM ET
+> https://windriver.zoom.us/j/3696693975
+>
+> Attendees:  Tony, Richard, Trevor, Randy
+>
+>
+> Summary:
+>
+> ========
+>
+>
+>
+> The autobuilder RCU hang is still fixed ;-),
+>    master branch builds greener.
+>
+> ptest failures are the top problem now.
+>
+>
+>
+> Add Michael Halstead, see questions below in section 4.
+>
+>
+>
+> If anyone wants to help, we could use more eyes on the logs,
+>
+> particularly the summary logs and understanding iostat #
+>
+> when the dd test times out.
+>
+>
+>
+>
+>
+> Plans for the week:
+>
+>
+>
+> ===================
+>
+>
+>
+>
+>
+>   Richard: glibc upgrade, etc.
+>
+>
+>
+>   Alex: ?
+>
+>
+>
+>   Sakib: pub/non-release link upgrade, script clean-up.
+>
+>
+>
+>   Trevor: make job server test. Try it on YP AB!!! What type of build?
+>
+>
+>
+>   Tony: fix/work-around valgrind ptest bug:
+>      none/tests/amd64/fb_test_amd64
+>   Saul: nothing this week for YP.
+>
+>
+>
+>   Randy: vacation, then email catch-up!
+>
+>
+>
+>
+> Meeting Notes:
+>
+> ==============
+>
+>
+> 1, runqemu
+>
+> Tony having trouble with runqemu on some Wind River machine.
+>
+> Richard has a fix for a race in runqemu in master-next.
+>
+> These might be related but if not Tony should debug the
+> issue/ collect logs.
+>
+> 2. job server
+>
+> - Trevor has conclusive evidence that the 'make' job server is useful.
+>   email summary to come. Need to fix some assumptoins in code that
+>   parses PARALLEL_MAKE then send patch to yocto-autobuilder-helper.
+>
+> - ninja will have to be done next.
+
+I've submitted an initial patch to yocto@lists.yoctoproject.org. My 
+short notes to go along with it:
+
+MAKE JOBSERVERS, SYSTEM LOADS, AND THE YOCTO AUTOBUILDER
+
+INTRO
+
+- Yocto Autobuilder has been experiencing several issues with nightly 
+builds, some intermittent
+- Previous discussions looking for ways to limit CPU/RAM loading (see " 
+[yocto] bitbake controlling memory use" on yocto@lists.yoctoproject.org 
+mailing list)
+- Source packages built as part of YP builds rely on various build 
+tools, including Make, Ninja. Can we use them to limit system resource 
+loading, and therefore reduce build failures that occur near/beyond 
+these limits?
+
+MAKE JOBSERVER
+
+- When the "-j" option is provided (e.g. by PARALLEL_MAKE and/or 
+EXTRA_OEMAKE in local.conf), this tells Make to use that many job slots, 
+e.g. PARALLEL_MAKE = "-j 10" tells make to use at most 10 job slots 
+during compilation
+- When the "-l" or "--max-load" option is provided (also via 
+PARALLEL_MAKE or EXTRA_OEMAKE in local.conf), this tells Make not to 
+start *more than one job* if the system load average (as perceived by 
+Make) exceeds that value. If the system load exceeds the average 
+specified with the "-l" argument and there is already a Make job 
+running, no new ones are started until either the existing jobs finish, 
+or the system load falls below the threshold.
+- No limit by default
+
+Sources:
+https://www.gnu.org/software/make/manual/make.html#Parallel
+http://make.mad-scientist.net/papers/jobserver-implementation/
+
+PROPOSED SOLUTION
+
+- "Just do it" - put a patch in for use with the Autobuilder and see 
+what shakes out
+- add 'PARALLEL_MAKE = "-j N -l M"' to the yocto-autobuilder-helper 
+config.json default
+- Complicated slightly by Ninja not supporting the same "--debug" 
+functionality as Make - this is what has been used to track the system 
+load in the initial testing. To get around this, we can temporarily set 
+EXTRA_OEMAKE. Without "--debug", the "-l" option still works, but there 
+is no output in the do_compile logs to tell us how the actual system 
+load compares to the percentage targeted by the "-l" option
+
+I did not see any issues in my manual testing with PARALLEL_MAKE and 
+EXTRA_OEMAKE set in the same manner. It appears from a recursive grep 
+through the poky repository that PARALLEL_MAKE gets referenced in 
+various places, but it is usually either passed directly to the build 
+tool of choice, or the argument to the "-j" flag is explicitly stripped 
+out for use. An example of the former is meta/classes/meson.bbclass:
+
+...
+
+meson_do_compile() {
+     ninja -v ${PARALLEL_MAKE}
+}
+
+...
+
+It's possible that we will run into some edge cases of course, but I 
+haven't seen them in my manual testing. Builds are running now at 
+https://autobuilder.yoctoproject.org/typhoon/#/builders/85/builds/1478 , 
+so we should have some initial results soon.
+
+- Trevor
+
+>
+>
+> 3. AB status
+>
+>  generally better but...
+>
+>  ptests are having some recurring problems.
+>  - parted - only on arm?
+>  - valgrind - none/tests/amd64/fb_test_amd64
+>  - gdb test failing again. - Randy!
+>
+> 4. Richard reported
+>    - something really flaky going on with serial ports.
+>    - particularly bad on qemuppc but also x86.
+>    - related to Saul's QMP data dump?
+>
+> 5. Sakib needs to send patch to make testimage failures
+>    generate summary logs.
+>
+> 6. Richard says that we may need to redesign the data collection system
+>    that Sakib's AB INT tests are based on.
+>
+>
+>
+>
+>
+> Still relevant parts of
+> Previous Meeting Notes:
+> =======================
+>
+> 1. The qemu RCU hang has been fixed to not deadlock anymore!
+>
+> It still  hangs at times but this dramatically reduces the
+> AB failures.
+>
+>
+>
+> 4. bitbake server timeout.
+>
+>    "Timeout while waiting for a reply from the bitbake server (60s)"
+>
+>    Randy mentioned that the bitbake server timeouts seen in the
+>    Wind River build cluster have gone away after upgrading to
+>    a newer version of docker.
+>
+>    Old: Docker Version: Docker version 18.09.4, build d14af54266
+>    New: Docker Version: Docker version 20.10.7, build f0df350
+>
+>
+>    Clearly the YP ABs aren't running in docker but what
+>    about firmware and kernel tunings.
+>
+>    Michael,
+>
+>    Is the BIOS/firmware kept up to date on most nodes?
+>
+>    It seems that we are running stock kernels which makes sense but
+>    given that we don't have concerns about privacy since system access
+>    is controlled and the nodes are being used to test open
+>    source software, we might consider optimizing for performance
+>    rather than security.
+>
+>    Alex pointed at: https://make-linux-fast-again.com/
+>    Which just lists a set of kernel boot options:
+>       noibrs noibpb nopti nospectre_v2 nospectre_v1  \
+>       l1tf=off nospec_store_bypass_disable no_stf_barrier \
+>       mds=off tsx=on tsx_async_abort=off mitigations=off
+>
+>    Can we enable some or all of these on a node to see what the
+>    performance difference is?
+>
+>
+> 5. io stalls
+>
+>    Richard said that it would make sense to write an ftrace utility
+>    / script to monitor io latency and we could install it with sudo
+>    Ch^W mentioned ftrace on IRC.
+>    Sakib and Randy will work on that but not for a week or two.
+>
+> 6. Switch the pub/non-release links from full log to summary.
+>    The host data links on:
+>      https://autobuilder.yocto.io/pub/non-release/
+>    should include links to the summary data. I think we have room to
+>    include both links like this:
+>    0 1 2 3  (Full: 0 1 2 3 )
+>
+>
+>
+>
+>
+> ../Randy
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2021-07-12 13:34 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-07-08 13:53 Yocto Autobuilder: Latency Monitor and AB-INT - Meeting notes: July 8, 2021 Randy MacLeod
+2021-07-12 13:34 ` Trevor Gamblin
+

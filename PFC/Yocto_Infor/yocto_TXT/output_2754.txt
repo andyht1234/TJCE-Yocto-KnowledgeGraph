@@ -1,0 +1,38 @@
+* #bitbake TOPDIR not evaluating on custom distro
+@ 2021-10-06 13:36 jussi.vanska
+  0 siblings, 0 replies; only message in thread
+From: jussi.vanska @ 2021-10-06 13:36 UTC (permalink / raw)
+  To: yocto
+
+I have a curious problem with TOPDIR environment variable.
+
+Running standard Poky build with 25.0.3 works as expected but when using a custom distro layer the build fails as the host tools are not visible in path. Environment is identical, not counting the different path names, after sourcing the environment and before running bitbake but when running using a custom setup the PATH contains only relative references:
+
+/home/jive/stage/yocto-25.0.3/bitbake/bin:tmp-glibc/hosttools"; export HOME="/home/jive"; /usr/bin/env wget -t 2 -T 30 --passive-ftp --no-check-certificate -P ../localmirror 'http://sources.openembedded.org/quilt-0.66.tar.gz' --progress=dot -v failed with exit code 127, output:
+/usr/bin/env: ‘wget’: No such file or directory
+
+whereas the Poky standard seems to expand the TOPDIR and TMPDIR ok
+
+/home/jive/stage/yocto-25.0.3/bitbake/bin:/home/jive/stage/build/tmp/hosttools"; export HOME="/home/jive"; /usr/bin/env wget -t 2 -T 30 --passive-ftp --no-check-certificate -P /home/jive/stage/build/downloads 'https://download.savannah.gnu.org/releases/quilt/quilt-0.66.tar.gz' --progress=dot -v
+
+I can not find a place where the TOPDIR is set in configuration or what recipe/class overrides it. I'm aware the build directory should be under the OEROOT not beside it but this used to work with 18.x versions of YPCore. 
+
+cache.py@303 sets the variable and it looks very dangerous as it is relative to recipe currently parsing. Is this really how it should work? Another thing which is confusing is copy_buildsystem.py@46 still uses COREBASE even though the release documentation says the environment variable is deprecated and should not be used anymore. What makes this curious is that the OEROOT related paths work ok so I guess problem is somehow related to OEROOT vs. COREBASE handling.
+
+There is another problem related to this as the inline python in my custom distro configuration distro/layer.conf 
+COREBASE = '${@os.path.normpath("${OEROOT}")}' does not work but complains
+
+File "/home/jive/stage/yocto-25.0.3/meta/classes/metadata_scm.bbclass", line 27, in base_get_metadata_git_branch(path='${@os.path.normpath("${OEROOT}")}/meta', d=<bb.data_smart.DataSmart object at 0x7fc9ba2e6390>):
+
+Any advice would be welcome before digging deeper into the internals of bitbake.
+
+
+
+
+^ permalink raw reply	[flat|nested] only message in thread
+only message in thread, other threads:[~2021-10-06 13:36 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-10-06 13:36 #bitbake TOPDIR not evaluating on custom distro jussi.vanska
+

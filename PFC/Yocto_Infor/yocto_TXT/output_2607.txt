@@ -1,0 +1,183 @@
+* Re: [yocto] pre-built native only tool for native and nativesdk
+       [not found] <16B60034E7406B64.3576@lists.yoctoproject.org>
+@ 2021-11-09 23:23 ` Joel Winarske
+  2021-11-09 23:32   ` Joel Winarske
+  0 siblings, 1 reply; 3+ messages in thread
+From: Joel Winarske @ 2021-11-09 23:23 UTC (permalink / raw)
+  To: Joel Winarske; +Cc: Yocto-mailing-list
+
+[-- Attachment #1: Type: text/plain, Size: 1355 bytes --]
+
+To eliminate target option from the recipe I just need to make sure the
+name of the recipe ends with -native, then removing inherit native works
+fine.
+
+On Tue, Nov 9, 2021 at 2:09 PM Joel Winarske via lists.yoctoproject.org
+<joel.winarske=gmail.com@lists.yoctoproject.org> wrote:
+
+> I'm trying to sort out how to install a pre-built host-only tool for
+> native and nativesdk only.
+>
+> Using `inherit native` my-recipe-native and nativesdk-my-recipe both build
+> fine, only -c populate_sdk generates "rdepends upon non-existent task
+> do_package_write_rpm".  Looking at native.bbclass it includes `inherit
+> nopackage` which explains the error.
+>
+> If I remove the `inherit native` and update my recipe name to not include
+> `-native` I can build the -native version, only I can't build
+> nativesdk-*-native.  A target build is invalid.
+>
+> What is the recommended pattern to do this, and is there an example of
+> this anywhere?
+>
+>
+> Thanks,
+> Joel
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#55293):
+> https://lists.yoctoproject.org/g/yocto/message/55293
+> Mute This Topic: https://lists.yoctoproject.org/mt/86943509/2167248
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> joel.winarske@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 2302 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] pre-built native only tool for native and nativesdk
+  2021-11-09 23:23 ` [yocto] pre-built native only tool for native and nativesdk Joel Winarske
+@ 2021-11-09 23:32   ` Joel Winarske
+  2021-11-10  1:18     ` Joel Winarske
+  0 siblings, 1 reply; 3+ messages in thread
+From: Joel Winarske @ 2021-11-09 23:32 UTC (permalink / raw)
+  To: Joel Winarske; +Cc: Yocto-mailing-list
+
+[-- Attachment #1: Type: text/plain, Size: 1587 bytes --]
+
+Actually by removing `inherit native` and adding -native to the recipe name
+doesn't make it build for native.
+
+On Tue, Nov 9, 2021 at 3:23 PM Joel Winarske <joel.winarske@gmail.com>
+wrote:
+
+> To eliminate target option from the recipe I just need to make sure the
+> name of the recipe ends with -native, then removing inherit native works
+> fine.
+>
+> On Tue, Nov 9, 2021 at 2:09 PM Joel Winarske via lists.yoctoproject.org
+> <joel.winarske=gmail.com@lists.yoctoproject.org> wrote:
+>
+>> I'm trying to sort out how to install a pre-built host-only tool for
+>> native and nativesdk only.
+>>
+>> Using `inherit native` my-recipe-native and nativesdk-my-recipe both
+>> build fine, only -c populate_sdk generates "rdepends upon non-existent
+>> task do_package_write_rpm".  Looking at native.bbclass it includes
+>> `inherit nopackage` which explains the error.
+>>
+>> If I remove the `inherit native` and update my recipe name to not include
+>> `-native` I can build the -native version, only I can't build
+>> nativesdk-*-native.  A target build is invalid.
+>>
+>> What is the recommended pattern to do this, and is there an example of
+>> this anywhere?
+>>
+>>
+>> Thanks,
+>> Joel
+>>
+>> -=-=-=-=-=-=-=-=-=-=-=-
+>> Links: You receive all messages sent to this group.
+>> View/Reply Online (#55293):
+>> https://lists.yoctoproject.org/g/yocto/message/55293
+>> Mute This Topic: https://lists.yoctoproject.org/mt/86943509/2167248
+>> Group Owner: yocto+owner@lists.yoctoproject.org
+>> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+>> joel.winarske@gmail.com]
+>> -=-=-=-=-=-=-=-=-=-=-=-
+>>
+>>
+
+[-- Attachment #2: Type: text/html, Size: 2822 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] pre-built native only tool for native and nativesdk
+  2021-11-09 23:32   ` Joel Winarske
+@ 2021-11-10  1:18     ` Joel Winarske
+  0 siblings, 0 replies; 3+ messages in thread
+From: Joel Winarske @ 2021-11-10  1:18 UTC (permalink / raw)
+  To: Joel Winarske; +Cc: Yocto-mailing-list
+
+[-- Attachment #1: Type: text/plain, Size: 2062 bytes --]
+
+My solution was to use recipe name without `-native`, and simply use empty
+packages (no-op) for target.  Only nativesdk- and -native variants have an
+affect.  Then add `TOOLCHAIN_HOST_TASK:append = " nativesdk-flutter-sdk"`
+to local.conf.
+
+https://github.com/meta-flutter/meta-flutter/blob/honister/recipes-graphics/flutter-apps/flutter-sdk_git.bb
+
+On Tue, Nov 9, 2021 at 3:32 PM Joel Winarske <joel.winarske@gmail.com>
+wrote:
+
+> Actually by removing `inherit native` and adding -native to the recipe
+> name doesn't make it build for native.
+>
+> On Tue, Nov 9, 2021 at 3:23 PM Joel Winarske <joel.winarske@gmail.com>
+> wrote:
+>
+>> To eliminate target option from the recipe I just need to make sure the
+>> name of the recipe ends with -native, then removing inherit native works
+>> fine.
+>>
+>> On Tue, Nov 9, 2021 at 2:09 PM Joel Winarske via lists.yoctoproject.org
+>> <joel.winarske=gmail.com@lists.yoctoproject.org> wrote:
+>>
+>>> I'm trying to sort out how to install a pre-built host-only tool for
+>>> native and nativesdk only.
+>>>
+>>> Using `inherit native` my-recipe-native and nativesdk-my-recipe both
+>>> build fine, only -c populate_sdk generates "rdepends upon non-existent
+>>> task do_package_write_rpm".  Looking at native.bbclass it includes
+>>> `inherit nopackage` which explains the error.
+>>>
+>>> If I remove the `inherit native` and update my recipe name to not
+>>> include `-native` I can build the -native version, only I can't build
+>>> nativesdk-*-native.  A target build is invalid.
+>>>
+>>> What is the recommended pattern to do this, and is there an example of
+>>> this anywhere?
+>>>
+>>>
+>>> Thanks,
+>>> Joel
+>>>
+>>> -=-=-=-=-=-=-=-=-=-=-=-
+>>> Links: You receive all messages sent to this group.
+>>> View/Reply Online (#55293):
+>>> https://lists.yoctoproject.org/g/yocto/message/55293
+>>> Mute This Topic: https://lists.yoctoproject.org/mt/86943509/2167248
+>>> Group Owner: yocto+owner@lists.yoctoproject.org
+>>> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+>>> joel.winarske@gmail.com]
+>>> -=-=-=-=-=-=-=-=-=-=-=-
+>>>
+>>>
+
+[-- Attachment #2: Type: text/html, Size: 3723 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2021-11-10  1:19 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+     [not found] <16B60034E7406B64.3576@lists.yoctoproject.org>
+2021-11-09 23:23 ` [yocto] pre-built native only tool for native and nativesdk Joel Winarske
+2021-11-09 23:32   ` Joel Winarske
+2021-11-10  1:18     ` Joel Winarske
+

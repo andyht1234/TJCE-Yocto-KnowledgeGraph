@@ -1,0 +1,617 @@
+* suricata: enable lua support
+@ 2022-03-04 19:18 Gary Huband
+  2022-03-04 20:15 ` [yocto] " Khem Raj
+  0 siblings, 1 reply; 6+ messages in thread
+From: Gary Huband @ 2022-03-04 19:18 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1141 bytes --]
+
+How can I enable lua support for suricata?  According to
+https://suricata.readthedocs.io/en/suricata-6.0.0/install.html
+I can add --enable-lua, so I created a suricata_%.bbappend file with
+
+# Add lua
+DEPENDS += "lua-native"
+RDEPENDS_${PN} += "lua"
+EXTRA_OECONF += "--enable-lua"
+
+But when I bitbake suricata I get this error
+
+| checking for magic.h... yes
+| checking for magic_open in -lmagic... yes
+| checking for LUA... no
+| checking for LUA... no
+| checking for LUA... no
+| checking for LUA... no
+| checking lualib.h usability... no
+| checking lualib.h presence... no
+| checking for lualib.h... no
+|
+|    ERROR!  liblua headers not found, go get them
+|    from http://lua.org/index.html or your distribution:
+|
+|    Ubuntu: apt-get install liblua5.1-dev
+|    Fedora: dnf install lua-devel
+|    CentOS/RHEL: yum install lua-devel
+|
+|    If you installed software in a non-standard prefix
+|    consider adjusting the PKG_CONFIG_PATH environment variable
+|    or use --with-liblua-includes and --with-liblua-libraries
+|    configure option.
+
+lua and lua-native appear to build.
+
+[-- Attachment #2: Type: text/html, Size: 1502 bytes --]
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] suricata: enable lua support
+  2022-03-04 19:18 suricata: enable lua support Gary Huband
+@ 2022-03-04 20:15 ` Khem Raj
+  2022-03-04 23:02   ` Gary Huband
+  0 siblings, 1 reply; 6+ messages in thread
+From: Khem Raj @ 2022-03-04 20:15 UTC (permalink / raw)
+  To: gary; +Cc: Yocto-mailing-list
+
+perhaps you needs to add lua to DEPENDS as well.
+
+On Fri, Mar 4, 2022 at 11:18 AM Gary Huband via lists.yoctoproject.org
+<gary=missionsecure.com@lists.yoctoproject.org> wrote:
+>
+> How can I enable lua support for suricata?  According to
+> https://suricata.readthedocs.io/en/suricata-6.0.0/install.html
+> I can add --enable-lua, so I created a suricata_%.bbappend file with
+>
+> # Add lua
+> DEPENDS += "lua-native"
+> RDEPENDS_${PN} += "lua"
+> EXTRA_OECONF += "--enable-lua"
+>
+> But when I bitbake suricata I get this error
+>
+> | checking for magic.h... yes
+> | checking for magic_open in -lmagic... yes
+> | checking for LUA... no
+> | checking for LUA... no
+> | checking for LUA... no
+> | checking for LUA... no
+> | checking lualib.h usability... no
+> | checking lualib.h presence... no
+> | checking for lualib.h... no
+> |
+> |    ERROR!  liblua headers not found, go get them
+> |    from http://lua.org/index.html or your distribution:
+> |
+> |    Ubuntu: apt-get install liblua5.1-dev
+> |    Fedora: dnf install lua-devel
+> |    CentOS/RHEL: yum install lua-devel
+> |
+> |    If you installed software in a non-standard prefix
+> |    consider adjusting the PKG_CONFIG_PATH environment variable
+> |    or use --with-liblua-includes and --with-liblua-libraries
+> |    configure option.
+>
+> lua and lua-native appear to build.
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> You automatically follow any topics you start or reply to.
+> View/Reply Online (#56368): https://lists.yoctoproject.org/g/yocto/message/56368
+> Mute This Topic: https://lists.yoctoproject.org/mt/89556445/1997914
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [raj.khem@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: suricata: enable lua support
+  2022-03-04 20:15 ` [yocto] " Khem Raj
+@ 2022-03-04 23:02   ` Gary Huband
+       [not found]     ` <d32cf394-4580-4549-0b8c-dd05a61fb1a4@gmail.com>
+  0 siblings, 1 reply; 6+ messages in thread
+From: Gary Huband @ 2022-03-04 23:02 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2469 bytes --]
+
+Adding DEPENDS += "lua"  fixed that error.  I'm assuming that allows the configure to find lua.
+
+Now I'm getting a compile error
+
+| /tmp/work/cortexa7t2hf-neon-poky-linux-gnueabi/suricata/6.0.3-r0/recipe-sysroot-native/usr/bin/arm-poky-linux-gnueabi/../../libexec/arm-poky-linux-gnueabi/gcc/arm-poky-linux-gnueabi/9.2.0/ld: util-lua-dns.o: in function `DnsGetTxid':
+| /usr/src/debug/suricata/6.0.3-r0/suricata-6.0.3/src/util-lua-dns.c:80: undefined reference to `rs_dns_lua_get_tx_id'
+| /tmp/work/cortexa7t2hf-neon-poky-linux-gnueabi/suricata/6.0.3-r0/recipe-sysroot-native/usr/bin/arm-poky-linux-gnueabi/../../libexec/arm-poky-linux-gnueabi/gcc/arm-poky-linux-gnueabi/9.2.0/ld: util-lua-dns.o: in function `DnsGetAnswerTable':
+| /usr/src/debug/suricata/6.0.3-r0/suricata-6.0.3/src/util-lua-dns.c:125: undefined reference to `rs_dns_lua_get_answer_table'
+| /tmp/work/cortexa7t2hf-neon-poky-linux-gnueabi/suricata/6.0.3-r0/recipe-sysroot-native/usr/bin/arm-poky-linux-gnueabi/../../libexec/arm-poky-linux-gnueabi/gcc/arm-poky-linux-gnueabi/9.2.0/ld: util-lua-dns.o: in function `DnsGetAuthorityTable':
+| /usr/src/debug/suricata/6.0.3-r0/suricata-6.0.3/src/util-lua-dns.c:133: undefined reference to `rs_dns_lua_get_authority_table'
+| /tmp/work/cortexa7t2hf-neon-poky-linux-gnueabi/suricata/6.0.3-r0/recipe-sysroot-native/usr/bin/arm-poky-linux-gnueabi/../../libexec/arm-poky-linux-gnueabi/gcc/arm-poky-linux-gnueabi/9.2.0/ld: util-lua-dns.o: in function `DnsGetQueryTable':
+| /usr/src/debug/suricata/6.0.3-r0/suricata-6.0.3/src/util-lua-dns.c:117: undefined reference to `rs_dns_lua_get_query_table'
+| /tmp/work/cortexa7t2hf-neon-poky-linux-gnueabi/suricata/6.0.3-r0/recipe-sysroot-native/usr/bin/arm-poky-linux-gnueabi/../../libexec/arm-poky-linux-gnueabi/gcc/arm-poky-linux-gnueabi/9.2.0/ld: util-lua-dns.o: in function `DnsGetDnsRrname':
+| /usr/src/debug/suricata/6.0.3-r0/suricata-6.0.3/src/util-lua-dns.c:69: undefined reference to `rs_dns_lua_get_rrname'
+| /tmp/work/cortexa7t2hf-neon-poky-linux-gnueabi/suricata/6.0.3-r0/recipe-sysroot-native/usr/bin/arm-poky-linux-gnueabi/../../libexec/arm-poky-linux-gnueabi/gcc/arm-poky-linux-gnueabi/9.2.0/ld: util-lua-dns.o: in function `DnsGetRcode':
+| /usr/src/debug/suricata/6.0.3-r0/suricata-6.0.3/src/util-lua-dns.c:92: undefined reference to `rs_dns_lua_get_rcode'
+| collect2: error: ld returned 1 exit status
+| Makefile:2118: recipe for target 'suricata' failed
+| make[2]: *** [suricata] Error 1
+
+[-- Attachment #2: Type: text/html, Size: 2550 bytes --]
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] suricata: enable lua support
+       [not found]     ` <d32cf394-4580-4549-0b8c-dd05a61fb1a4@gmail.com>
+@ 2022-03-05  2:23       ` Gary Huband
+  2022-03-05  7:55         ` Khem Raj
+  0 siblings, 1 reply; 6+ messages in thread
+From: Gary Huband @ 2022-03-05  2:23 UTC (permalink / raw)
+  To: akuster808, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 6505 bytes --]
+
+The Suricata install site also says to install
+
+liblua5.1-dev
+
+Does this mean that Suricata needs lua 5.1 (which is very old)?? For Zeus the lua recipe is 5.3.5.
+
+Do I need to create a recipe for lua 5.1?
+
+Gary
+________________________________
+From: akuster808 <akuster808@gmail.com>
+Sent: Friday, March 4, 2022 7:52 PM
+To: Gary Huband <Gary@MissionSecure.com>; yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+Subject: Re: [yocto] suricata: enable lua support
+
+
+
+On 3/4/22 15:02, Gary Huband via lists.yoctoproject.org wrote:
+>
+> Adding DEPENDS += "lua"  fixed that error.  I'm assuming that allows
+> the configure to find lua.
+>
+> Now I'm getting a compile error
+>
+
+I added this to the recipe and it appears the liblua it  is looking for
+does not exist.
+
+PACKAGECONFIG[lua] = "--enable-lua
+--with-liblua-includes=${STAGING_INCDIR}
+--with-liblua-libraries==${STAGING_LIBDIR}, --disable-lua,lua, lua"
+
+Error:
+
+checking for luaL_openlibs in -llua5.1... no
+|
+|    ERROR!  liblua library not found, go get it
+|    from https://nam04.safelinks.protection.outlook.com/?url=http%3A%2F%2Flua.org%2Findex.html&amp;data=04%7C01%7Cgary%40missionsecure.com%7C7f9815dcc0c142b6d92d08d9fe4262cb%7Cf0ca9611f13f4dc98e1b119172b8ec5d%7C0%7C1%7C637820383359878260%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000&amp;sdata=FdB7jyQwXX%2BVjjhLSDhKNSt41GUOgdg%2FG3ajSKIElo0%3D&amp;reserved=0 or your distribution:
+|
+|    Ubuntu: apt-get install liblua5.1-dev
+
+
+It may be  the lua recipe.  I only see the static lib 'liblua.a'
+
+-armin
+
+> |
+> /tmp/work/cortexa7t2hf-neon-poky-linux-gnueabi/suricata/6.0.3-r0/recipe-sysroot-native/usr/bin/arm-poky-linux-gnueabi/../../libexec/arm-poky-linux-gnueabi/gcc/arm-poky-linux-gnueabi/9.2.0/ld:
+> util-lua-dns.o: in function `DnsGetTxid':
+> |
+> /usr/src/debug/suricata/6.0.3-r0/suricata-6.0.3/src/util-lua-dns.c:80:
+> undefined reference to `rs_dns_lua_get_tx_id'
+> |
+> /tmp/work/cortexa7t2hf-neon-poky-linux-gnueabi/suricata/6.0.3-r0/recipe-sysroot-native/usr/bin/arm-poky-linux-gnueabi/../../libexec/arm-poky-linux-gnueabi/gcc/arm-poky-linux-gnueabi/9.2.0/ld:
+> util-lua-dns.o: in function `DnsGetAnswerTable':
+> |
+> /usr/src/debug/suricata/6.0.3-r0/suricata-6.0.3/src/util-lua-dns.c:125:
+> undefined reference to `rs_dns_lua_get_answer_table'
+> |
+> /tmp/work/cortexa7t2hf-neon-poky-linux-gnueabi/suricata/6.0.3-r0/recipe-sysroot-native/usr/bin/arm-poky-linux-gnueabi/../../libexec/arm-poky-linux-gnueabi/gcc/arm-poky-linux-gnueabi/9.2.0/ld:
+> util-lua-dns.o: in function `DnsGetAuthorityTable':
+> |
+> /usr/src/debug/suricata/6.0.3-r0/suricata-6.0.3/src/util-lua-dns.c:133:
+> undefined reference to `rs_dns_lua_get_authority_table'
+> |
+> /tmp/work/cortexa7t2hf-neon-poky-linux-gnueabi/suricata/6.0.3-r0/recipe-sysroot-native/usr/bin/arm-poky-linux-gnueabi/../../libexec/arm-poky-linux-gnueabi/gcc/arm-poky-linux-gnueabi/9.2.0/ld:
+> util-lua-dns.o: in function `DnsGetQueryTable':
+> |
+> /usr/src/debug/suricata/6.0.3-r0/suricata-6.0.3/src/util-lua-dns.c:117:
+> undefined reference to `rs_dns_lua_get_query_table'
+> |
+> /tmp/work/cortexa7t2hf-neon-poky-linux-gnueabi/suricata/6.0.3-r0/recipe-sysroot-native/usr/bin/arm-poky-linux-gnueabi/../../libexec/arm-poky-linux-gnueabi/gcc/arm-poky-linux-gnueabi/9.2.0/ld:
+> util-lua-dns.o: in function `DnsGetDnsRrname':
+> |
+> /usr/src/debug/suricata/6.0.3-r0/suricata-6.0.3/src/util-lua-dns.c:69:
+> undefined reference to `rs_dns_lua_get_rrname'
+> |
+> /tmp/work/cortexa7t2hf-neon-poky-linux-gnueabi/suricata/6.0.3-r0/recipe-sysroot-native/usr/bin/arm-poky-linux-gnueabi/../../libexec/arm-poky-linux-gnueabi/gcc/arm-poky-linux-gnueabi/9.2.0/ld:
+> util-lua-dns.o: in function `DnsGetRcode':
+> |
+> /usr/src/debug/suricata/6.0.3-r0/suricata-6.0.3/src/util-lua-dns.c:92:
+> undefined reference to `rs_dns_lua_get_rcode'
+> | collect2: error: ld returned 1 exit status
+> | Makefile:2118: recipe for target 'suricata' failed
+> | make[2]: *** [suricata] Error 1
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#56371): https://nam04.safelinks.protection.outlook.com/?url=https%3A%2F%2Flists.yoctoproject.org%2Fg%2Fyocto%2Fmessage%2F56371&amp;data=04%7C01%7Cgary%40missionsecure.com%7C7f9815dcc0c142b6d92d08d9fe4262cb%7Cf0ca9611f13f4dc98e1b119172b8ec5d%7C0%7C1%7C637820383359878260%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000&amp;sdata=vwc4qa0p9%2Bbxsfq9RFUYToQuWBvsmNvn0%2FX3%2BOgjQPo%3D&amp;reserved=0
+> Mute This Topic: https://nam04.safelinks.protection.outlook.com/?url=https%3A%2F%2Flists.yoctoproject.org%2Fmt%2F89556445%2F3616698&amp;data=04%7C01%7Cgary%40missionsecure.com%7C7f9815dcc0c142b6d92d08d9fe4262cb%7Cf0ca9611f13f4dc98e1b119172b8ec5d%7C0%7C1%7C637820383359878260%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000&amp;sdata=rJV2GkSwgJ8OcGoS6W%2FjZ9wt3OBHAyFpasJ%2F0Elpt6k%3D&amp;reserved=0
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://nam04.safelinks.protection.outlook.com/?url=https%3A%2F%2Flists.yoctoproject.org%2Fg%2Fyocto%2Funsub&amp;data=04%7C01%7Cgary%40missionsecure.com%7C7f9815dcc0c142b6d92d08d9fe4262cb%7Cf0ca9611f13f4dc98e1b119172b8ec5d%7C0%7C1%7C637820383359878260%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000&amp;sdata=44krUye0EK6%2FjOMm3P%2BEgS%2BlbWEBa4AF%2BSMjXkSzYmk%3D&amp;reserved=0 [akuster808@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+Gary Huband
+Sr. Software and Systems Engineer
+
+Office: 434.284.8071 x720
+Direct: 434.260.4995
+Gary@MissionSecure.com
+
+Follow Us!
+LinkedIn<https://www.linkedin.com/company/mission-secure-inc->  |  Blog<https://www.missionsecure.com/blog?utm_source=email-signature&utm_medium=email&utm_campaign=blog-email-sig>  |  Website<https://www.missionsecure.com/?utm_source=email-signature&utm_medium=email&utm_campaign=web-email-sig>
+
+: : : : : : : : : : : : : : : : : : : : : : : : : : :
+
+[MSi]
+
+This email and any files transmitted with it are confidential and proprietary and intended solely for the use of the individual or entity to whom they are addressed. Any dissemination, distribution or copying of this communication is strictly prohibited without our prior permission. If you received this in error, please contact the sender and delete the material from any computer.
+
+
+[-- Attachment #2: Type: text/html, Size: 11723 bytes --]
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] suricata: enable lua support
+  2022-03-05  2:23       ` [yocto] " Gary Huband
+@ 2022-03-05  7:55         ` Khem Raj
+  2022-03-08 19:15           ` Gary Huband
+  0 siblings, 1 reply; 6+ messages in thread
+From: Khem Raj @ 2022-03-05  7:55 UTC (permalink / raw)
+  To: gary; +Cc: akuster808, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 6056 bytes --]
+
+On Fri, Mar 4, 2022 at 6:23 PM Gary Huband via lists.yoctoproject.org <gary=
+missionsecure.com@lists.yoctoproject.org> wrote:
+
+> The Suricata install site also says to install
+>
+> liblua5.1-dev
+>
+> Does this mean that Suricata needs lua 5.1 (which is very old)?? For Zeus
+> the lua recipe is 5.3.5.
+>
+> Do I need to create a recipe for lua 5.1?
+>
+
+seems so, lua5.1 is not ABI compatible with newer Lua, so if an app needs
+this version then
+you will have to add it, perhaps see if you can just use internal version
+or something like that
+
+>
+> Gary
+> ------------------------------
+> *From:* akuster808 <akuster808@gmail.com>
+> *Sent:* Friday, March 4, 2022 7:52 PM
+> *To:* Gary Huband <Gary@MissionSecure.com>; yocto@lists.yoctoproject.org <
+> yocto@lists.yoctoproject.org>
+> *Subject:* Re: [yocto] suricata: enable lua support
+>
+>
+>
+> On 3/4/22 15:02, Gary Huband via lists.yoctoproject.org wrote:
+> >
+> > Adding DEPENDS += "lua"  fixed that error.  I'm assuming that allows
+> > the configure to find lua.
+> >
+> > Now I'm getting a compile error
+> >
+>
+> I added this to the recipe and it appears the liblua it  is looking for
+> does not exist.
+>
+> PACKAGECONFIG[lua] = "--enable-lua
+> --with-liblua-includes=${STAGING_INCDIR}
+> --with-liblua-libraries==${STAGING_LIBDIR}, --disable-lua,lua, lua"
+>
+> Error:
+>
+> checking for luaL_openlibs in -llua5.1... no
+> |
+> |    ERROR!  liblua library not found, go get it
+> |    from
+> https://nam04.safelinks.protection.outlook.com/?url=http%3A%2F%2Flua.org%2Findex.html&amp;data=04%7C01%7Cgary%40missionsecure.com%7C7f9815dcc0c142b6d92d08d9fe4262cb%7Cf0ca9611f13f4dc98e1b119172b8ec5d%7C0%7C1%7C637820383359878260%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000&amp;sdata=FdB7jyQwXX%2BVjjhLSDhKNSt41GUOgdg%2FG3ajSKIElo0%3D&amp;reserved=0
+> or your distribution:
+> |
+> |    Ubuntu: apt-get install liblua5.1-dev
+>
+>
+> It may be  the lua recipe.  I only see the static lib 'liblua.a'
+>
+> -armin
+>
+> > |
+> >
+> /tmp/work/cortexa7t2hf-neon-poky-linux-gnueabi/suricata/6.0.3-r0/recipe-sysroot-native/usr/bin/arm-poky-linux-gnueabi/../../libexec/arm-poky-linux-gnueabi/gcc/arm-poky-linux-gnueabi/9.2.0/ld:
+>
+> > util-lua-dns.o: in function `DnsGetTxid':
+> > |
+> > /usr/src/debug/suricata/6.0.3-r0/suricata-6.0.3/src/util-lua-dns.c:80:
+> > undefined reference to `rs_dns_lua_get_tx_id'
+> > |
+> >
+> /tmp/work/cortexa7t2hf-neon-poky-linux-gnueabi/suricata/6.0.3-r0/recipe-sysroot-native/usr/bin/arm-poky-linux-gnueabi/../../libexec/arm-poky-linux-gnueabi/gcc/arm-poky-linux-gnueabi/9.2.0/ld:
+>
+> > util-lua-dns.o: in function `DnsGetAnswerTable':
+> > |
+> > /usr/src/debug/suricata/6.0.3-r0/suricata-6.0.3/src/util-lua-dns.c:125:
+> > undefined reference to `rs_dns_lua_get_answer_table'
+> > |
+> >
+> /tmp/work/cortexa7t2hf-neon-poky-linux-gnueabi/suricata/6.0.3-r0/recipe-sysroot-native/usr/bin/arm-poky-linux-gnueabi/../../libexec/arm-poky-linux-gnueabi/gcc/arm-poky-linux-gnueabi/9.2.0/ld:
+>
+> > util-lua-dns.o: in function `DnsGetAuthorityTable':
+> > |
+> > /usr/src/debug/suricata/6.0.3-r0/suricata-6.0.3/src/util-lua-dns.c:133:
+> > undefined reference to `rs_dns_lua_get_authority_table'
+> > |
+> >
+> /tmp/work/cortexa7t2hf-neon-poky-linux-gnueabi/suricata/6.0.3-r0/recipe-sysroot-native/usr/bin/arm-poky-linux-gnueabi/../../libexec/arm-poky-linux-gnueabi/gcc/arm-poky-linux-gnueabi/9.2.0/ld:
+>
+> > util-lua-dns.o: in function `DnsGetQueryTable':
+> > |
+> > /usr/src/debug/suricata/6.0.3-r0/suricata-6.0.3/src/util-lua-dns.c:117:
+> > undefined reference to `rs_dns_lua_get_query_table'
+> > |
+> >
+> /tmp/work/cortexa7t2hf-neon-poky-linux-gnueabi/suricata/6.0.3-r0/recipe-sysroot-native/usr/bin/arm-poky-linux-gnueabi/../../libexec/arm-poky-linux-gnueabi/gcc/arm-poky-linux-gnueabi/9.2.0/ld:
+>
+> > util-lua-dns.o: in function `DnsGetDnsRrname':
+> > |
+> > /usr/src/debug/suricata/6.0.3-r0/suricata-6.0.3/src/util-lua-dns.c:69:
+> > undefined reference to `rs_dns_lua_get_rrname'
+> > |
+> >
+> /tmp/work/cortexa7t2hf-neon-poky-linux-gnueabi/suricata/6.0.3-r0/recipe-sysroot-native/usr/bin/arm-poky-linux-gnueabi/../../libexec/arm-poky-linux-gnueabi/gcc/arm-poky-linux-gnueabi/9.2.0/ld:
+>
+> > util-lua-dns.o: in function `DnsGetRcode':
+> > |
+> > /usr/src/debug/suricata/6.0.3-r0/suricata-6.0.3/src/util-lua-dns.c:92:
+> > undefined reference to `rs_dns_lua_get_rcode'
+> > | collect2: error: ld returned 1 exit status
+> > | Makefile:2118: recipe for target 'suricata' failed
+> > | make[2]: *** [suricata] Error 1
+> >
+> >
+> >
+> >
+>
+>
+> *Gary Huband*
+> *Sr. Software and Systems Engineer*
+>
+> Office: 434.284.8071 x720
+> Direct: 434.260.4995
+> Gary@MissionSecure.com
+>
+> *Follow Us!*
+> LinkedIn <https://www.linkedin.com/company/mission-secure-inc->  |  Blog
+> <https://www.missionsecure.com/blog?utm_source=email-signature&utm_medium=email&utm_campaign=blog-email-sig>
+>   |  Website
+> <https://www.missionsecure.com/?utm_source=email-signature&utm_medium=email&utm_campaign=web-email-sig>
+>
+> : : : : : : : : : : : : : : : : : : : : : : : : : : :
+>
+> [image: MSi]
+>
+> This email and any files transmitted with it are confidential and
+> proprietary and intended solely for the use of the individual or entity to
+> whom they are addressed. Any dissemination, distribution or copying of this
+> communication is strictly prohibited without our prior permission. If you
+> received this in error, please contact the sender and delete the material
+> from any computer.
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> You automatically follow any topics you start or reply to.
+> View/Reply Online (#56375):
+> https://lists.yoctoproject.org/g/yocto/message/56375
+> Unfollow This Topic: https://lists.yoctoproject.org/unft/89556445/1997914
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> raj.khem@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 10481 bytes --]
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] suricata: enable lua support
+  2022-03-05  7:55         ` Khem Raj
+@ 2022-03-08 19:15           ` Gary Huband
+  0 siblings, 0 replies; 6+ messages in thread
+From: Gary Huband @ 2022-03-08 19:15 UTC (permalink / raw)
+  To: Khem Raj; +Cc: akuster808, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 11159 bytes --]
+
+The problems is that the configure.ac file is hard coded for lua5.1.  See
+
+https://forum.suricata.io/t/lua-5-4-3-and-suricata-undefined-reference-error/1906/5
+
+I created a patch to change configure.ac to use lua5.3 (I'm using Zeus). But when I "bitbake suricata" I'm getting the same error because it's not updating the configure file.  Do I also have to fix the configure file or is there some way I can force a autoreconf?
+
+Thanks
+
+Gary
+________________________________
+From: Khem Raj <raj.khem@gmail.com>
+Sent: Saturday, March 5, 2022 2:55 AM
+To: Gary Huband <Gary@MissionSecure.com>
+Cc: akuster808 <akuster808@gmail.com>; yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+Subject: Re: [yocto] suricata: enable lua support
+
+
+
+On Fri, Mar 4, 2022 at 6:23 PM Gary Huband via lists.yoctoproject.org<https://nam04.safelinks.protection.outlook.com/?url=http%3A%2F%2Flists.yoctoproject.org%2F&data=04%7C01%7Cgary%40missionsecure.com%7Cfdd7bb729dab4632afa508d9fe7da05d%7Cf0ca9611f13f4dc98e1b119172b8ec5d%7C0%7C1%7C637820637801952624%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000&sdata=Flf1GviaQggt7vNDuC46swBvjTl1%2FJoaw4sVQ6RRDW4%3D&reserved=0> <gary=missionsecure.com@lists.yoctoproject.org<mailto:missionsecure.com@lists.yoctoproject.org>> wrote:
+The Suricata install site also says to install
+
+liblua5.1-dev
+
+Does this mean that Suricata needs lua 5.1 (which is very old)?? For Zeus the lua recipe is 5.3.5.
+
+Do I need to create a recipe for lua 5.1?
+
+seems so, lua5.1 is not ABI compatible with newer Lua, so if an app needs this version then
+you will have to add it, perhaps see if you can just use internal version or something like that
+
+Gary
+________________________________
+From: akuster808 <akuster808@gmail.com<mailto:akuster808@gmail.com>>
+Sent: Friday, March 4, 2022 7:52 PM
+To: Gary Huband <Gary@MissionSecure.com>; yocto@lists.yoctoproject.org<mailto:yocto@lists.yoctoproject.org> <yocto@lists.yoctoproject.org<mailto:yocto@lists.yoctoproject.org>>
+Subject: Re: [yocto] suricata: enable lua support
+
+
+
+On 3/4/22 15:02, Gary Huband via lists.yoctoproject.org<https://nam04.safelinks.protection.outlook.com/?url=http%3A%2F%2Flists.yoctoproject.org%2F&data=04%7C01%7Cgary%40missionsecure.com%7Cfdd7bb729dab4632afa508d9fe7da05d%7Cf0ca9611f13f4dc98e1b119172b8ec5d%7C0%7C1%7C637820637801952624%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000&sdata=Flf1GviaQggt7vNDuC46swBvjTl1%2FJoaw4sVQ6RRDW4%3D&reserved=0> wrote:
+>
+> Adding DEPENDS += "lua"  fixed that error.  I'm assuming that allows
+> the configure to find lua.
+>
+> Now I'm getting a compile error
+>
+
+I added this to the recipe and it appears the liblua it  is looking for
+does not exist.
+
+PACKAGECONFIG[lua] = "--enable-lua
+--with-liblua-includes=${STAGING_INCDIR}
+--with-liblua-libraries==${STAGING_LIBDIR}, --disable-lua,lua, lua"
+
+Error:
+
+checking for luaL_openlibs in -llua5.1... no
+|
+|    ERROR!  liblua library not found, go get it
+|    from https://nam04.safelinks.protection.outlook.com/?url=http%3A%2F%2Flua.org%2Findex.html&amp;data=04%7C01%7Cgary%40missionsecure.com%7C7f9815dcc0c142b6d92d08d9fe4262cb%7Cf0ca9611f13f4dc98e1b119172b8ec5d%7C0%7C1%7C637820383359878260%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000&amp;sdata=FdB7jyQwXX%2BVjjhLSDhKNSt41GUOgdg%2FG3ajSKIElo0%3D&amp;reserved=0<https://nam04.safelinks.protection.outlook.com/?url=http%3A%2F%2Flua.org%2Findex.html&data=04%7C01%7Cgary%40missionsecure.com%7Cfdd7bb729dab4632afa508d9fe7da05d%7Cf0ca9611f13f4dc98e1b119172b8ec5d%7C0%7C1%7C637820637802108939%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000&sdata=IIiVAzlCWInZxopdvMsLgkyuDmB5YSRF%2Fa%2FCsQAl7r0%3D&reserved=0> or your distribution:
+|
+|    Ubuntu: apt-get install liblua5.1-dev
+
+
+It may be  the lua recipe.  I only see the static lib 'liblua.a'
+
+-armin
+
+> |
+> /tmp/work/cortexa7t2hf-neon-poky-linux-gnueabi/suricata/6.0.3-r0/recipe-sysroot-native/usr/bin/arm-poky-linux-gnueabi/../../libexec/arm-poky-linux-gnueabi/gcc/arm-poky-linux-gnueabi/9.2.0/ld:
+> util-lua-dns.o: in function `DnsGetTxid':
+> |
+> /usr/src/debug/suricata/6.0.3-r0/suricata-6.0.3/src/util-lua-dns.c:80:
+> undefined reference to `rs_dns_lua_get_tx_id'
+> |
+> /tmp/work/cortexa7t2hf-neon-poky-linux-gnueabi/suricata/6.0.3-r0/recipe-sysroot-native/usr/bin/arm-poky-linux-gnueabi/../../libexec/arm-poky-linux-gnueabi/gcc/arm-poky-linux-gnueabi/9.2.0/ld:
+> util-lua-dns.o: in function `DnsGetAnswerTable':
+> |
+> /usr/src/debug/suricata/6.0.3-r0/suricata-6.0.3/src/util-lua-dns.c:125:
+> undefined reference to `rs_dns_lua_get_answer_table'
+> |
+> /tmp/work/cortexa7t2hf-neon-poky-linux-gnueabi/suricata/6.0.3-r0/recipe-sysroot-native/usr/bin/arm-poky-linux-gnueabi/../../libexec/arm-poky-linux-gnueabi/gcc/arm-poky-linux-gnueabi/9.2.0/ld:
+> util-lua-dns.o: in function `DnsGetAuthorityTable':
+> |
+> /usr/src/debug/suricata/6.0.3-r0/suricata-6.0.3/src/util-lua-dns.c:133:
+> undefined reference to `rs_dns_lua_get_authority_table'
+> |
+> /tmp/work/cortexa7t2hf-neon-poky-linux-gnueabi/suricata/6.0.3-r0/recipe-sysroot-native/usr/bin/arm-poky-linux-gnueabi/../../libexec/arm-poky-linux-gnueabi/gcc/arm-poky-linux-gnueabi/9.2.0/ld:
+> util-lua-dns.o: in function `DnsGetQueryTable':
+> |
+> /usr/src/debug/suricata/6.0.3-r0/suricata-6.0.3/src/util-lua-dns.c:117:
+> undefined reference to `rs_dns_lua_get_query_table'
+> |
+> /tmp/work/cortexa7t2hf-neon-poky-linux-gnueabi/suricata/6.0.3-r0/recipe-sysroot-native/usr/bin/arm-poky-linux-gnueabi/../../libexec/arm-poky-linux-gnueabi/gcc/arm-poky-linux-gnueabi/9.2.0/ld:
+> util-lua-dns.o: in function `DnsGetDnsRrname':
+> |
+> /usr/src/debug/suricata/6.0.3-r0/suricata-6.0.3/src/util-lua-dns.c:69:
+> undefined reference to `rs_dns_lua_get_rrname'
+> |
+> /tmp/work/cortexa7t2hf-neon-poky-linux-gnueabi/suricata/6.0.3-r0/recipe-sysroot-native/usr/bin/arm-poky-linux-gnueabi/../../libexec/arm-poky-linux-gnueabi/gcc/arm-poky-linux-gnueabi/9.2.0/ld:
+> util-lua-dns.o: in function `DnsGetRcode':
+> |
+> /usr/src/debug/suricata/6.0.3-r0/suricata-6.0.3/src/util-lua-dns.c:92:
+> undefined reference to `rs_dns_lua_get_rcode'
+> | collect2: error: ld returned 1 exit status
+> | Makefile:2118: recipe for target 'suricata' failed
+> | make[2]: *** [suricata] Error 1
+>
+>
+>
+>
+
+
+Gary Huband
+Sr. Software and Systems Engineer
+
+Office: 434.284.8071 x720
+Direct: 434.260.4995
+Gary@MissionSecure.com
+
+Follow Us!
+LinkedIn<https://nam04.safelinks.protection.outlook.com/?url=https%3A%2F%2Fwww.linkedin.com%2Fcompany%2Fmission-secure-inc-&data=04%7C01%7Cgary%40missionsecure.com%7Cfdd7bb729dab4632afa508d9fe7da05d%7Cf0ca9611f13f4dc98e1b119172b8ec5d%7C0%7C1%7C637820637802108939%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000&sdata=OG%2F50BtrZR9AjIfTtJTuropOzChcINERZyhRWyWyLGA%3D&reserved=0>  |  Blog<https://nam04.safelinks.protection.outlook.com/?url=https%3A%2F%2Fwww.missionsecure.com%2Fblog%3Futm_source%3Demail-signature%26utm_medium%3Demail%26utm_campaign%3Dblog-email-sig&data=04%7C01%7Cgary%40missionsecure.com%7Cfdd7bb729dab4632afa508d9fe7da05d%7Cf0ca9611f13f4dc98e1b119172b8ec5d%7C0%7C1%7C637820637802108939%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000&sdata=pv1FQe%2F9E0oVWISZeGtO3DCs9jWOOyXFsH1kDtruQh4%3D&reserved=0>  |  Website<https://nam04.safelinks.protection.outlook.com/?url=https%3A%2F%2Fwww.missionsecure.com%2F%3Futm_source%3Demail-signature%26utm_medium%3Demail%26utm_campaign%3Dweb-email-sig&data=04%7C01%7Cgary%40missionsecure.com%7Cfdd7bb729dab4632afa508d9fe7da05d%7Cf0ca9611f13f4dc98e1b119172b8ec5d%7C0%7C1%7C637820637802108939%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000&sdata=9wovY4656fj9McZWqGJH3ZOerurcU2Mvsgdsfd%2FNU7M%3D&reserved=0>
+
+: : : : : : : : : : : : : : : : : : : : : : : : : : :
+
+[MSi]
+
+This email and any files transmitted with it are confidential and proprietary and intended solely for the use of the individual or entity to whom they are addressed. Any dissemination, distribution or copying of this communication is strictly prohibited without our prior permission. If you received this in error, please contact the sender and delete the material from any computer.
+
+
+-=-=-=-=-=-=-=-=-=-=-=-
+Links: You receive all messages sent to this group.
+You automatically follow any topics you start or reply to.
+View/Reply Online (#56375): https://lists.yoctoproject.org/g/yocto/message/56375<https://nam04.safelinks.protection.outlook.com/?url=https%3A%2F%2Flists.yoctoproject.org%2Fg%2Fyocto%2Fmessage%2F56375&data=04%7C01%7Cgary%40missionsecure.com%7Cfdd7bb729dab4632afa508d9fe7da05d%7Cf0ca9611f13f4dc98e1b119172b8ec5d%7C0%7C1%7C637820637802108939%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000&sdata=ONpB%2FpsQmxWo%2BNvNLypGYwSKYd6NG4b7RwhiK3KHVbo%3D&reserved=0>
+Unfollow This Topic: https://lists.yoctoproject.org/unft/89556445/1997914<https://nam04.safelinks.protection.outlook.com/?url=https%3A%2F%2Flists.yoctoproject.org%2Funft%2F89556445%2F1997914&data=04%7C01%7Cgary%40missionsecure.com%7Cfdd7bb729dab4632afa508d9fe7da05d%7Cf0ca9611f13f4dc98e1b119172b8ec5d%7C0%7C1%7C637820637802108939%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000&sdata=tklYKDpkWtEyC2zgY0PeEm7UAKEyvfRtFMnp%2BWwiWxU%3D&reserved=0>
+Group Owner: yocto+owner@lists.yoctoproject.org<mailto:yocto%2Bowner@lists.yoctoproject.org>
+Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub<https://nam04.safelinks.protection.outlook.com/?url=https%3A%2F%2Flists.yoctoproject.org%2Fg%2Fyocto%2Funsub&data=04%7C01%7Cgary%40missionsecure.com%7Cfdd7bb729dab4632afa508d9fe7da05d%7Cf0ca9611f13f4dc98e1b119172b8ec5d%7C0%7C1%7C637820637802108939%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000&sdata=fU5G6GNBdRofEwQAzrv%2BRB0%2FCgayOAeqGASOjWSsUU8%3D&reserved=0> [raj.khem@gmail.com<mailto:raj.khem@gmail.com>]
+-=-=-=-=-=-=-=-=-=-=-=-
+
+
+Gary Huband
+Sr. Software and Systems Engineer
+
+Office: 434.284.8071 x720
+Direct: 434.260.4995
+Gary@MissionSecure.com
+
+Follow Us!
+LinkedIn<https://www.linkedin.com/company/mission-secure-inc->  |  Blog<https://www.missionsecure.com/blog?utm_source=email-signature&utm_medium=email&utm_campaign=blog-email-sig>  |  Website<https://www.missionsecure.com/?utm_source=email-signature&utm_medium=email&utm_campaign=web-email-sig>
+
+: : : : : : : : : : : : : : : : : : : : : : : : : : :
+
+[MSi]
+
+This email and any files transmitted with it are confidential and proprietary and intended solely for the use of the individual or entity to whom they are addressed. Any dissemination, distribution or copying of this communication is strictly prohibited without our prior permission. If you received this in error, please contact the sender and delete the material from any computer.
+
+
+[-- Attachment #2: Type: text/html, Size: 20061 bytes --]
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+end of thread, other threads:[~2022-03-08 19:15 UTC | newest]
+
+Thread overview: 6+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-03-04 19:18 suricata: enable lua support Gary Huband
+2022-03-04 20:15 ` [yocto] " Khem Raj
+2022-03-04 23:02   ` Gary Huband
+     [not found]     ` <d32cf394-4580-4549-0b8c-dd05a61fb1a4@gmail.com>
+2022-03-05  2:23       ` [yocto] " Gary Huband
+2022-03-05  7:55         ` Khem Raj
+2022-03-08 19:15           ` Gary Huband
+

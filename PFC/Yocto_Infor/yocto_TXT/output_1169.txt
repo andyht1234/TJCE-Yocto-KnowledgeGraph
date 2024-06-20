@@ -1,0 +1,121 @@
+* Fixing package dependencies across recipe versions?
+@ 2022-11-23  7:29 Heinz Wrobel
+  2022-11-30  2:07 ` [yocto] " Khem Raj
+  0 siblings, 1 reply; 2+ messages in thread
+From: Heinz Wrobel @ 2022-11-23  7:29 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1561 bytes --]
+
+Hi,
+
+In my layer I have two older versions of glibc in addition to the 2.35 provided by kirkstone, and a the global conf for the build directory sets GLIBCVERSION to select which one to use.
+
+The problem is that they don't all provide exactly the same thing and that older version appear to influence newer versions, causing warnings.
+2.27 and 2.31 build libsegfault, but 2.35 doesn't anymore. If I prefer 2.35, then I get warnings like:
+
+WARNING: preferred version 2.35 of glibc not available (for item libsegfault)
+WARNING: versions of glibc available: 2.27 2.31+gitAUTOINC+1094741224
+WARNING: preferred version 2.35 of nativesdk-glibc not available (for item nativesdk-libsegfault)
+WARNING: versions of nativesdk-glibc available: 2.27 2.31+gitAUTOINC+1094741224
+
+It seems that the unused/older recipe versions are still considered for dependencies somehow, just because they exist in the layer.
+I understand that the old glibc versions provide libsegfault and that it can't be found in the preferred version, but I really don't care about the other versions as I have not selected them.
+I could completely remove the packages from the old versions, but that seems like a brute force hack affecting what the recipes could provide when I select them.
+
+Is there a clean way to modify/bbappend the recipes to best fix, or at least suppress such warnings when the recipe versions causing them are not selected?
+Is there a way to do version based dependency declarations to be recipe version rather than recipe name specific?
+
+Thanks,
+
+Heinz
+
+[-- Attachment #2: Type: text/html, Size: 3828 bytes --]
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+* Re: [yocto] Fixing package dependencies across recipe versions?
+  2022-11-23  7:29 Fixing package dependencies across recipe versions? Heinz Wrobel
+@ 2022-11-30  2:07 ` Khem Raj
+  0 siblings, 0 replies; 2+ messages in thread
+From: Khem Raj @ 2022-11-30  2:07 UTC (permalink / raw)
+  To: Heinz Wrobel; +Cc: yocto
+
+On Tue, Nov 22, 2022 at 11:29 PM Heinz Wrobel <Heinz.Wrobel@nxp.com> wrote:
+>
+> Hi,
+>
+>
+>
+> In my layer I have two older versions of glibc in addition to the 2.35 provided by kirkstone, and a the global conf for the build directory sets GLIBCVERSION to select which one to use.
+>
+>
+>
+> The problem is that they don’t all provide exactly the same thing and that older version appear to influence newer versions, causing warnings.
+>
+> 2.27 and 2.31 build libsegfault, but 2.35 doesn’t anymore. If I prefer 2.35, then I get warnings like:
+>
+>
+>
+> WARNING: preferred version 2.35 of glibc not available (for item libsegfault)
+>
+> WARNING: versions of glibc available: 2.27 2.31+gitAUTOINC+1094741224
+>
+> WARNING: preferred version 2.35 of nativesdk-glibc not available (for item nativesdk-libsegfault)
+>
+> WARNING: versions of nativesdk-glibc available: 2.27 2.31+gitAUTOINC+1094741224
+>
+>
+>
+> It seems that the unused/older recipe versions are still considered for dependencies somehow, just because they exist in the layer.
+
+This is true and it happens because they all provide something
+commonly, perhaps virtual/libc or somesuch. However, each one of them
+does not replace exact providers
+so they must match for one to overrride other. So you might consider
+adding addtional needed PROVIDES in respective version of recipe via
+bbappends or maybe main recipe itself.
+
+>
+> I understand that the old glibc versions provide libsegfault and that it can’t be found in the preferred version, but I really don’t care about the other versions as I have not selected them.
+>
+> I could completely remove the packages from the old versions, but that seems like a brute force hack affecting what the recipes could provide when I select them.
+>
+>
+>
+> Is there a clean way to modify/bbappend the recipes to best fix, or at least suppress such warnings when the recipe versions causing them are not selected?
+>
+> Is there a way to do version based dependency declarations to be recipe version rather than recipe name specific?
+>
+
+glibc is runtime dependency so you can only have one copy systemwide.
+so having multiple recipes is only beneficial if you are building
+different distributions from same workspace with different version of
+glibc.
+>
+>
+> Thanks,
+>
+>
+>
+> Heinz
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> You automatically follow any topics you start or reply to.
+> View/Reply Online (#58621): https://lists.yoctoproject.org/g/yocto/message/58621
+> Mute This Topic: https://lists.yoctoproject.org/mt/95213713/1997914
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [raj.khem@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2022-11-30  2:07 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-11-23  7:29 Fixing package dependencies across recipe versions? Heinz Wrobel
+2022-11-30  2:07 ` [yocto] " Khem Raj
+

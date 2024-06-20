@@ -1,0 +1,104 @@
+* Questions on multiconfig
+@ 2023-08-01 19:17 Stéphane Veyret
+  0 siblings, 0 replies; only message in thread
+From: Stéphane Veyret @ 2023-08-01 19:17 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 3711 bytes --]
+
+Hello,
+
+In my rootfs, I have busybox without shell support (because I’m using
+bash), but I want an initramfs with busybox with shell support.
+
+I saw some quite old messages, saying that for this specific case, one
+should duplicate the busybox recipe. But this has caveat and does not seem
+to be a clean solution. So I decided to use a multiconfig, which seems to
+be the ideal solution for that case.
+
+Here’s what I did.
+
+First, I created a multiconfig/initramfs.conf file in my private layer
+containing:
+
+TMPDIR = "${TOPDIR}/tmp-initramfs"
+BUSYBOX_MY_INITRAMFS_CONFIG = "-initramfs"
+
+Then, I created a busybox_%.bbappend with this content:
+
+SRC_URI += "file://fragment.cfg;subdir=busybox-${PV}"
+BUSYBOX_MY_INITRAMFS_CONFIG ?= ""
+FILESEXTRAPATHS:prepend :=
+"${THISDIR}/${BPN}${BUSYBOX_MY_INITRAMFS_CONFIG}:"
+
+First question: is this the right way to create and use a custom variable?
+I want the recipe to choose the good fragment depending on
+BUSYBOX_MY_INITRAMFS_CONFIG, but I’m not sure it is really working.
+
+After that, I added the following line in distro.conf:
+
+BBMULTICONFIG = "initramfs"
+
+Second question: documents state that this variable should be in
+local.conf, but it seems to also work in distro.conf; am I correct or is it
+creating unwanted side effects?
+
+In the same distro.conf, I also added:
+
+INITRAMFS_IMAGE = "core-image-minimal-initramfs"
+INITRAMFS_IMAGE_BUNDLE = "1"
+INITRAMFS_SCRIPTS = "initramfs-module-rootfs-update"
+INITRAMFS_MULTICONFIG = "initramfs"
+INITRAMFS_DEPLOY_DIR_IMAGE =
+"${TOPDIR}/tmp-initramfs/deploy/images/${MACHINE}"
+
+If I understand well, it should make the building of the kernel depend on
+the multiconfig initramfs:core-image-minimal-initramfs. But it is not
+working.
+
+First of all, I am spammed with messages like:
+
+NOTE: Deferred task
+mc:initramfs:/home/stephane/Developpements/yocto/sources/poky/meta/recipes-devtools/qemu/qemuwrapper-cross_1.0.bb:do_package_qa
+now buildable
+NOTE: Deferred task
+mc:initramfs:virtual:native:/home/stephane/Developpements/yocto/sources/poky/meta/recipes-devtools/opkg/opkg_0.6.1.bb:do_populate_sysroot
+now buildable
+
+Other point, it seems to build a full image in the initramfs configuration,
+while I expected that it would only build the initramfs image. My first
+attempt (when the tmp-initramfs directory was empty) took ages to build and
+I saw it tried to build the Linux kernel in it.
+
+And on top of that, it fails because when building the kernel for initramfs
+configuration, it cannot find the initramfs image. Which sounds logical,
+because it is currently building the initramfs. So there seem to be a kind
+of circular dependencies…
+
+ERROR: mc:initramfs:linux-yocto-6.1.35+gitAUTOINC+b358c237cf_682b17e1d7-r0
+do_bundle_initramfs: Could not find any
+/home/stephane/Developpements/yocto/builds/mybuild-dev/tmp-initramfs/deploy/images/qemux86-64/core-image-minimal-initramfs-qemux86-64.cpio{.gz|.lz4|.lzo|.lzma|.xz|.zst)
+for bundling; INITRAMFS_IMAGE_NAME might be wrong.
+ERROR: mc:initramfs:linux-yocto-6.1.35+gitAUTOINC+b358c237cf_682b17e1d7-r0
+do_bundle_initramfs:
+ExecutionError('/home/stephane/Developpements/yocto/builds/mybuild-dev/tmp-initramfs/work/qemux86_64-mydistro-linux/linux-yocto/6.1.35+gitAUTOINC+b358c237cf_682b17e1d7-r0/temp/run.do_bundle_initramfs.6797',
+1, None, None)
+ERROR: Logfile of failure stored in:
+/home/stephane/Developpements/yocto/builds/mybuild-dev/tmp-initramfs/work/qemux86_64-mydistro-linux/linux-yocto/6.1.35+gitAUTOINC+b358c237cf_682b17e1d7-r0/temp/log.do_bundle_initramfs.6797
+
+I’d be glad if someone could tell me what I’m doing wrong.
+
+-- 
+Bien cordialement, / Plej kore,
+
+Stéphane Veyret
+
+[-- Attachment #2: Type: text/html, Size: 4444 bytes --]
+
+^ permalink raw reply	[flat|nested] only message in thread
+only message in thread, other threads:[~2023-08-01 19:17 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-08-01 19:17 Questions on multiconfig Stéphane Veyret
+

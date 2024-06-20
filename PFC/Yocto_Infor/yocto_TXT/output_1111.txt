@@ -1,0 +1,228 @@
+* [meta-zephyr][master][langdale][PATCH] zephyr-kernel/3.1: update to latest commit
+@ 2022-12-20  8:04 Naveen Saini
+  2023-01-15 20:16 ` Jon Mason
+  0 siblings, 1 reply; 2+ messages in thread
+From: Naveen Saini @ 2022-12-20  8:04 UTC (permalink / raw)
+  To: yocto
+
+Recent commits have CVE-2022-2741 fixed.
+
+Also backported CVE-2022-2993 fix.
+
+Signed-off-by: Naveen Saini <naveen.kumar.saini@intel.com>
+---
+ ...ix-SMP-local-keys-check-when-startin.patch | 51 +++++++++++++++++++
+ .../zephyr-kernel/zephyr-kernel-src-3.1.0.inc |  3 +-
+ 2 files changed, 53 insertions(+), 1 deletion(-)
+ create mode 100644 meta-zephyr-core/recipes-kernel/zephyr-kernel/files/0001-3.1-Bluetooth-host-Fix-SMP-local-keys-check-when-startin.patch
+
+diff --git a/meta-zephyr-core/recipes-kernel/zephyr-kernel/files/0001-3.1-Bluetooth-host-Fix-SMP-local-keys-check-when-startin.patch b/meta-zephyr-core/recipes-kernel/zephyr-kernel/files/0001-3.1-Bluetooth-host-Fix-SMP-local-keys-check-when-startin.patch
+new file mode 100644
+index 0000000..68650c3
+--- /dev/null
++++ b/meta-zephyr-core/recipes-kernel/zephyr-kernel/files/0001-3.1-Bluetooth-host-Fix-SMP-local-keys-check-when-startin.patch
+@@ -0,0 +1,51 @@
++From 74d26b70f080a5dc60c6a1aa2bfec38043ee30d4 Mon Sep 17 00:00:00 2001
++From: Joakim Andersson <joakim.andersson@nordicsemi.no>
++Date: Fri, 5 Aug 2022 10:50:47 +0200
++Subject: [PATCH] Bluetooth: host: Fix SMP local keys check when starting
++ encryption
++
++Fix SMP check of existing local keys when attempting to start security
++with required security mode 1 level 4. The logic for checking the
++conditions was wrong, leading to a situation where encryption would be
++attempted to be started by the central instead of initiating a new
++pairing procedure. This would fail when the connection was encrypted and
++the connection would be disconnected.
++
++Upstream-Status: Backport [https://github.com/zephyrproject-rtos/zephyr/commit/83d5402fe830973f943bde085d80f0d3643e811a]
++https://github.com/zephyrproject-rtos/zephyr/pull/52947/files
++CVE: CVE-2022-2993
++
++Signed-off-by: Joakim Andersson <joakim.andersson@nordicsemi.no>
++Signed-off-by: Naveen Saini <naveen.kumar.saini@intel.com>
++---
++ subsys/bluetooth/host/smp.c | 10 +++++-----
++ 1 file changed, 5 insertions(+), 5 deletions(-)
++
++diff --git a/subsys/bluetooth/host/smp.c b/subsys/bluetooth/host/smp.c
++index 02a847f97d..555f09fefd 100644
++--- a/subsys/bluetooth/host/smp.c
+++++ b/subsys/bluetooth/host/smp.c
++@@ -357,15 +357,15 @@ static bool smp_keys_check(struct bt_conn *conn)
++ 		return false;
++ 	}
++ 
++-	if (conn->required_sec_level > BT_SECURITY_L2 &&
+++	if (conn->required_sec_level >= BT_SECURITY_L3 &&
++ 	    !(conn->le.keys->flags & BT_KEYS_AUTHENTICATED)) {
++ 		return false;
++ 	}
++ 
++-	if (conn->required_sec_level > BT_SECURITY_L3 &&
++-	    !(conn->le.keys->flags & BT_KEYS_AUTHENTICATED) &&
++-	    !(conn->le.keys->keys & BT_KEYS_LTK_P256) &&
++-	    !(conn->le.keys->enc_size == BT_SMP_MAX_ENC_KEY_SIZE)) {
+++	if (conn->required_sec_level >= BT_SECURITY_L4 &&
+++	    !((conn->le.keys->flags & BT_KEYS_AUTHENTICATED) &&
+++	      (conn->le.keys->keys & BT_KEYS_LTK_P256) &&
+++	      (conn->le.keys->enc_size == BT_SMP_MAX_ENC_KEY_SIZE))) {
++ 		return false;
++ 	}
++ 
++-- 
++2.25.1
++
+diff --git a/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-kernel-src-3.1.0.inc b/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-kernel-src-3.1.0.inc
+index 68016e4..b3feb6a 100644
+--- a/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-kernel-src-3.1.0.inc
++++ b/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-kernel-src-3.1.0.inc
+@@ -2,7 +2,7 @@
+ 
+ SRCREV_FORMAT = "default"
+ 
+-SRCREV_default = "2ddd73feafd3316af2c547c34d6969bea637d5c6"
++SRCREV_default = "a7d946331f4f9361d1531984524dd8f151ae20b0"
+ SRCREV_canopennode = "53d3415c14d60f8f4bfca54bfbc5d5a667d7e724"
+ SRCREV_chre = "0edfe2c2ec656afb910cfab8ed59a5ffd59b87c8"
+ SRCREV_civetweb = "094aeb41bb93e9199d24d665ee43e9e05d6d7b1c"
+@@ -109,6 +109,7 @@ SRC_URI_ZSCILIB ?= "git://github.com/zephyrproject-rtos/zscilib;protocol=https"
+ SRC_URI_PATCHES ?= "\
+     file://0001-3.1-cmake-add-yocto-toolchain.patch;patchdir=zephyr \
+     file://0001-3.1-x86-fix-efi-binary-generation-issue-in-cross-compila.patch;patchdir=zephyr \
++    file://0001-3.1-Bluetooth-host-Fix-SMP-local-keys-check-when-startin.patch;patchdir=zephyr \
+ "
+ 
+ SRC_URI = "\
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 2+ messages in thread
+* Re: [meta-zephyr][master][langdale][PATCH] zephyr-kernel/3.1: update to latest commit
+  2022-12-20  8:04 [meta-zephyr][master][langdale][PATCH] zephyr-kernel/3.1: update to latest commit Naveen Saini
+@ 2023-01-15 20:16 ` Jon Mason
+  0 siblings, 0 replies; 2+ messages in thread
+From: Jon Mason @ 2023-01-15 20:16 UTC (permalink / raw)
+  To: Naveen Saini; +Cc: yocto
+
+On Tue, Dec 20, 2022 at 04:04:15PM +0800, Naveen Saini wrote:
+> Recent commits have CVE-2022-2741 fixed.
+> 
+> Also backported CVE-2022-2993 fix.
+> 
+> Signed-off-by: Naveen Saini <naveen.kumar.saini@intel.com>
+
+
+For master:
+I ran this series (batched with the other patches destined for the
+master branch) through CI and it passes (with the known qemu a9 poll
+issue).  See:
+https://gitlab.com/jonmason00/meta-zephyr/-/pipelines/747733921
+
+For langdale:
+I ran this series (batched with the other patches destined for the
+langdale branch) through CI and it passes.  See:
+https://gitlab.com/jonmason00/meta-zephyr/-/pipelines/747805268
+
+Tested-by: Jon Mason <jon.mason@arm.com>
+
+> ---
+>  ...ix-SMP-local-keys-check-when-startin.patch | 51 +++++++++++++++++++
+>  .../zephyr-kernel/zephyr-kernel-src-3.1.0.inc |  3 +-
+>  2 files changed, 53 insertions(+), 1 deletion(-)
+>  create mode 100644 meta-zephyr-core/recipes-kernel/zephyr-kernel/files/0001-3.1-Bluetooth-host-Fix-SMP-local-keys-check-when-startin.patch
+> 
+> diff --git a/meta-zephyr-core/recipes-kernel/zephyr-kernel/files/0001-3.1-Bluetooth-host-Fix-SMP-local-keys-check-when-startin.patch b/meta-zephyr-core/recipes-kernel/zephyr-kernel/files/0001-3.1-Bluetooth-host-Fix-SMP-local-keys-check-when-startin.patch
+> new file mode 100644
+> index 0000000..68650c3
+> --- /dev/null
+> +++ b/meta-zephyr-core/recipes-kernel/zephyr-kernel/files/0001-3.1-Bluetooth-host-Fix-SMP-local-keys-check-when-startin.patch
+> @@ -0,0 +1,51 @@
+> +From 74d26b70f080a5dc60c6a1aa2bfec38043ee30d4 Mon Sep 17 00:00:00 2001
+> +From: Joakim Andersson <joakim.andersson@nordicsemi.no>
+> +Date: Fri, 5 Aug 2022 10:50:47 +0200
+> +Subject: [PATCH] Bluetooth: host: Fix SMP local keys check when starting
+> + encryption
+> +
+> +Fix SMP check of existing local keys when attempting to start security
+> +with required security mode 1 level 4. The logic for checking the
+> +conditions was wrong, leading to a situation where encryption would be
+> +attempted to be started by the central instead of initiating a new
+> +pairing procedure. This would fail when the connection was encrypted and
+> +the connection would be disconnected.
+> +
+> +Upstream-Status: Backport [https://github.com/zephyrproject-rtos/zephyr/commit/83d5402fe830973f943bde085d80f0d3643e811a]
+> +https://github.com/zephyrproject-rtos/zephyr/pull/52947/files
+> +CVE: CVE-2022-2993
+> +
+> +Signed-off-by: Joakim Andersson <joakim.andersson@nordicsemi.no>
+> +Signed-off-by: Naveen Saini <naveen.kumar.saini@intel.com>
+> +---
+> + subsys/bluetooth/host/smp.c | 10 +++++-----
+> + 1 file changed, 5 insertions(+), 5 deletions(-)
+> +
+> +diff --git a/subsys/bluetooth/host/smp.c b/subsys/bluetooth/host/smp.c
+> +index 02a847f97d..555f09fefd 100644
+> +--- a/subsys/bluetooth/host/smp.c
+> ++++ b/subsys/bluetooth/host/smp.c
+> +@@ -357,15 +357,15 @@ static bool smp_keys_check(struct bt_conn *conn)
+> + 		return false;
+> + 	}
+> + 
+> +-	if (conn->required_sec_level > BT_SECURITY_L2 &&
+> ++	if (conn->required_sec_level >= BT_SECURITY_L3 &&
+> + 	    !(conn->le.keys->flags & BT_KEYS_AUTHENTICATED)) {
+> + 		return false;
+> + 	}
+> + 
+> +-	if (conn->required_sec_level > BT_SECURITY_L3 &&
+> +-	    !(conn->le.keys->flags & BT_KEYS_AUTHENTICATED) &&
+> +-	    !(conn->le.keys->keys & BT_KEYS_LTK_P256) &&
+> +-	    !(conn->le.keys->enc_size == BT_SMP_MAX_ENC_KEY_SIZE)) {
+> ++	if (conn->required_sec_level >= BT_SECURITY_L4 &&
+> ++	    !((conn->le.keys->flags & BT_KEYS_AUTHENTICATED) &&
+> ++	      (conn->le.keys->keys & BT_KEYS_LTK_P256) &&
+> ++	      (conn->le.keys->enc_size == BT_SMP_MAX_ENC_KEY_SIZE))) {
+> + 		return false;
+> + 	}
+> + 
+> +-- 
+> +2.25.1
+> +
+> diff --git a/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-kernel-src-3.1.0.inc b/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-kernel-src-3.1.0.inc
+> index 68016e4..b3feb6a 100644
+> --- a/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-kernel-src-3.1.0.inc
+> +++ b/meta-zephyr-core/recipes-kernel/zephyr-kernel/zephyr-kernel-src-3.1.0.inc
+> @@ -2,7 +2,7 @@
+>  
+>  SRCREV_FORMAT = "default"
+>  
+> -SRCREV_default = "2ddd73feafd3316af2c547c34d6969bea637d5c6"
+> +SRCREV_default = "a7d946331f4f9361d1531984524dd8f151ae20b0"
+>  SRCREV_canopennode = "53d3415c14d60f8f4bfca54bfbc5d5a667d7e724"
+>  SRCREV_chre = "0edfe2c2ec656afb910cfab8ed59a5ffd59b87c8"
+>  SRCREV_civetweb = "094aeb41bb93e9199d24d665ee43e9e05d6d7b1c"
+> @@ -109,6 +109,7 @@ SRC_URI_ZSCILIB ?= "git://github.com/zephyrproject-rtos/zscilib;protocol=https"
+>  SRC_URI_PATCHES ?= "\
+>      file://0001-3.1-cmake-add-yocto-toolchain.patch;patchdir=zephyr \
+>      file://0001-3.1-x86-fix-efi-binary-generation-issue-in-cross-compila.patch;patchdir=zephyr \
+> +    file://0001-3.1-Bluetooth-host-Fix-SMP-local-keys-check-when-startin.patch;patchdir=zephyr \
+>  "
+>  
+>  SRC_URI = "\
+> -- 
+> 2.25.1
+> 
+> 
+
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2023-01-15 20:16 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-12-20  8:04 [meta-zephyr][master][langdale][PATCH] zephyr-kernel/3.1: update to latest commit Naveen Saini
+2023-01-15 20:16 ` Jon Mason
+

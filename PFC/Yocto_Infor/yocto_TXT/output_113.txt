@@ -1,0 +1,175 @@
+* [PATCH][yocto-autobuilder-helper] config.json: add reproducible-openembedded build
+@ 2023-09-28 13:18 Fabien Thomas
+  2023-09-28 16:33 ` [yocto] " Richard Purdie
+  0 siblings, 1 reply; 2+ messages in thread
+From: Fabien Thomas @ 2023-09-28 13:18 UTC (permalink / raw)
+  To: yocto; +Cc: Fabien Thomas, Yoann Congal
+
+The purpose of this new build is to report the reproducibility status of
+all meta-openembedded recipes. It use the same reproducible selftest than
+OE-Core but setting only world as target, and excluding all oecore recipes
+from it. Also, the report output directory for meta-openembedded is
+separate from oecore's one.
+
+Signed-off-by: Fabien Thomas <fabien.thomas@smile.fr>
+Reviewed-by: Yoann Congal <yoann.congal@smile.fr>
+---
+ config.json | 31 +++++++++++++++++++++++++++++++
+ 1 file changed, 31 insertions(+)
+
+diff --git a/config.json b/config.json
+index 05c6794..fde1b1f 100644
+--- a/config.json
++++ b/config.json
+@@ -264,6 +264,34 @@
+ 
+             }
+         },
++        "reproducible-openembedded" : {
++            "MACHINE" : "qemux86-64",
++            "SDKMACHINE" : "x86_64",
++            "DISTRO" : "None",
++            "NEEDREPOS" : ["oecore", "bitbake", "meta-openembedded"],
++            "extravars" : [
++                "EXCLUDE_FROM_WORLD:layer-core = '1'",
++                "EXCLUDE_FROM_WORLD:layer-selftest = '1'",
++                "OEQA_REPRODUCIBLE_TEST_TARGET = 'world'"
++            ],
++            "step1" : {
++                "shortname" : "Reproducible Selftest for openembedded layers",
++                "EXTRACMDS" : ["${SCRIPTSDIR}/checkvnc; OEQA_DEBUGGING_SAVED_OUTPUT=${BASE_SHAREDDIR}/pub/repro-fail-openembedded/ DISPLAY=:1 oe-selftest -r reproducible"],
++                "ADDLAYER" : [
++                    "${BUILDDIR}/../meta-selftest",
++                    "${BUILDDIR}/../meta-openembedded/meta-filesystems",
++                    "${BUILDDIR}/../meta-openembedded/meta-gnome",
++                    "${BUILDDIR}/../meta-openembedded/meta-initramfs",
++                    "${BUILDDIR}/../meta-openembedded/meta-multimedia",
++                    "${BUILDDIR}/../meta-openembedded/meta-networking",
++                    "${BUILDDIR}/../meta-openembedded/meta-oe",
++                    "${BUILDDIR}/../meta-openembedded/meta-perl",
++                    "${BUILDDIR}/../meta-openembedded/meta-python",
++                    "${BUILDDIR}/../meta-openembedded/meta-webserver",
++                    "${BUILDDIR}/../meta-openembedded/meta-xfce"
++                ]
++            }
++        },
+         "trigger-build" : {
+             "SDKMACHINE" : "x86_64",
+             "MACHINE" : "qemux86-64",
+@@ -955,6 +983,9 @@
+         "reproducible" : {
+             "TEMPLATE" : "reproducible"
+         },
++        "reproducible-openembedded" : {
++            "TEMPLATE" : "reproducible-openembedded"
++        },
+         "reproducible-ubuntu" : {
+             "TEMPLATE" : "reproducible"
+         },
+-- 
+2.34.1
+
+
+
+^ permalink raw reply related	[flat|nested] 2+ messages in thread
+* Re: [yocto] [PATCH][yocto-autobuilder-helper] config.json: add reproducible-openembedded build
+  2023-09-28 13:18 [PATCH][yocto-autobuilder-helper] config.json: add reproducible-openembedded build Fabien Thomas
+@ 2023-09-28 16:33 ` Richard Purdie
+  0 siblings, 0 replies; 2+ messages in thread
+From: Richard Purdie @ 2023-09-28 16:33 UTC (permalink / raw)
+  To: Fabien Thomas, yocto; +Cc: Yoann Congal
+
+On Thu, 2023-09-28 at 15:18 +0200, Fabien Thomas wrote:
+> The purpose of this new build is to report the reproducibility status of
+> all meta-openembedded recipes. It use the same reproducible selftest than
+> OE-Core but setting only world as target, and excluding all oecore recipes
+> from it. Also, the report output directory for meta-openembedded is
+> separate from oecore's one.
+> 
+> Signed-off-by: Fabien Thomas <fabien.thomas@smile.fr>
+> Reviewed-by: Yoann Congal <yoann.congal@smile.fr>
+> ---
+>  config.json | 31 +++++++++++++++++++++++++++++++
+>  1 file changed, 31 insertions(+)
+
+This is a good start, thanks!
+
+> diff --git a/config.json b/config.json
+> index 05c6794..fde1b1f 100644
+> --- a/config.json
+> +++ b/config.json
+> @@ -264,6 +264,34 @@
+>  
+>              }
+>          },
+> +        "reproducible-openembedded" : {
+
+We should call this something like reproducible-meta-oe since we need
+to be clear this is meta-oe related.
+
+> +            "MACHINE" : "qemux86-64",
+> +            "SDKMACHINE" : "x86_64",
+> +            "DISTRO" : "None",
+> +            "NEEDREPOS" : ["oecore", "bitbake", "meta-openembedded"],
+> +            "extravars" : [
+> +                "EXCLUDE_FROM_WORLD:layer-core = '1'",
+> +                "EXCLUDE_FROM_WORLD:layer-selftest = '1'",
+> +                "OEQA_REPRODUCIBLE_TEST_TARGET = 'world'"
+
+I like the use of the layer override :)
+
+> +            ],
+> +            "step1" : {
+> +                "shortname" : "Reproducible Selftest for openembedded layers",
+> +                "EXTRACMDS" : ["${SCRIPTSDIR}/checkvnc; OEQA_DEBUGGING_SAVED_OUTPUT=${BASE_SHAREDDIR}/pub/repro-fail-openembedded/ DISPLAY=:1 oe-selftest -r reproducible"],
+> +                "ADDLAYER" : [
+> +                    "${BUILDDIR}/../meta-selftest",
+> +                    "${BUILDDIR}/../meta-openembedded/meta-filesystems",
+> +                    "${BUILDDIR}/../meta-openembedded/meta-gnome",
+> +                    "${BUILDDIR}/../meta-openembedded/meta-initramfs",
+> +                    "${BUILDDIR}/../meta-openembedded/meta-multimedia",
+> +                    "${BUILDDIR}/../meta-openembedded/meta-networking",
+> +                    "${BUILDDIR}/../meta-openembedded/meta-oe",
+> +                    "${BUILDDIR}/../meta-openembedded/meta-perl",
+> +                    "${BUILDDIR}/../meta-openembedded/meta-python",
+> +                    "${BUILDDIR}/../meta-openembedded/meta-webserver",
+> +                    "${BUILDDIR}/../meta-openembedded/meta-xfce"
+> +                ]
+> +            }
+> +        },
+
+Would it make sense to split this into steps for each sublayer? I guess
+the downside is we'd have to code the dependencies but those shouldn't
+change very often at this point. It would split the build and results
+into more manageable chunks?
+
+>          "trigger-build" : {
+>              "SDKMACHINE" : "x86_64",
+>              "MACHINE" : "qemux86-64",
+> @@ -955,6 +983,9 @@
+>          "reproducible" : {
+>              "TEMPLATE" : "reproducible"
+>          },
+> +        "reproducible-openembedded" : {
+> +            "TEMPLATE" : "reproducible-openembedded"
+> +        },
+>          "reproducible-ubuntu" : {
+>              "TEMPLATE" : "reproducible"
+>          },
+
+Otherwise looks good and definitely the right direction.
+
+Cheers,
+
+Richard
+
+
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2023-09-28 16:33 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-09-28 13:18 [PATCH][yocto-autobuilder-helper] config.json: add reproducible-openembedded build Fabien Thomas
+2023-09-28 16:33 ` [yocto] " Richard Purdie
+

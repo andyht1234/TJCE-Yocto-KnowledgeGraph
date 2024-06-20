@@ -1,0 +1,129 @@
+* #kirkstone qemu
+@ 2022-08-10 14:27 Monsees, Steven C (US)
+  0 siblings, 0 replies; only message in thread
+From: Monsees, Steven C (US) @ 2022-08-10 14:27 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 5848 bytes --]
+
+
+Hello:
+
+I built kirkstone core-image-sato from scratch no modifications, clean build was going test kirkstone out...
+When I went to run using qemu I saw the following issue with "tun", even after a manual tun config I still got another qemu error (see below):
+
+
+(1)    Is this a known issue and how would I build in proper "tun" support for the core-image-sato/qemu  ?
+
+(2)    How would I run "runqemu-gen-tapdevs" to manually create one for testing ?
+
+[yocto_user@9d7e1015e117 poky-kirkstone-4.0.2]$ ls
+bitbake        kirkstone2            MAINTAINERS.md  meta-poky       oe-init-build-env   README.poky.md
+contrib        LICENSE               Makefile        meta-selftest   README.hardware.md  README.qemu.md
+documentation  LICENSE.GPL-2.0-only  MEMORIAM        meta-skeleton   README.md           scripts
+kirkstone1     LICENSE.MIT           meta            meta-yocto-bsp  README.OE-Core.md
+[yocto_user@9d7e1015e117 poky-kirkstone-4.0.2]$ source oe-init-build-env kirkstone2
+You had no conf/bblayers.conf file. This configuration file has therefore been
+created for you with some default values. To add additional metadata layers
+into your configuration please add entries to conf/bblayers.conf.
+
+The Yocto Project has extensive documentation about OE including a reference
+manual which can be found at:
+    https://docs.yoctoproject.org
+
+For more information about OpenEmbedded see the website:
+    https://www.openembedded.org/
+
+
+### Shell environment set up for builds. ###
+
+You can now run 'bitbake <target>'
+
+Common targets are:
+    core-image-minimal
+    core-image-full-cmdline
+    core-image-sato
+    core-image-weston
+    meta-toolchain
+    meta-ide-support
+
+You can also run generated qemu images with a command like 'runqemu qemux86'
+
+Other commonly useful commands are:
+- 'devtool' and 'recipetool' handle common recipe tasks
+- 'bitbake-layers' handles common layer tasks
+- 'oe-pkgdata-util' handles common target package tasks
+[yocto_user@9d7e1015e117 kirkstone2]$ bitbake -k core-image-sato
+Loading cache: 100% |                                                                                       | ETA:  --:--:--
+Loaded 0 entries from dependency cache.
+Parsing recipes: 100% |######################################################################################| Time: 0:00:49
+Parsing of 882 .bb files complete (0 cached, 882 parsed). 1641 targets, 44 skipped, 0 masked, 0 errors.
+NOTE: Resolving any missing task queue dependencies
+
+Build Configuration:
+BB_VERSION           = "2.0.0"
+BUILD_SYS            = "x86_64-linux"
+NATIVELSBSTRING      = "centos-7"
+TARGET_SYS           = "x86_64-poky-linux"
+MACHINE              = "qemux86-64"
+DISTRO               = "poky"
+DISTRO_VERSION       = "4.0.2"
+TUNE_FEATURES        = "m64 core2"
+TARGET_FPU           = ""
+meta
+meta-poky
+meta-yocto-bsp       = "<unknown>:<unknown>"
+
+Initialising tasks: 100% |###################################################################################| Time: 0:00:05
+Sstate summary: Wanted 2730 Local 2722 Mirrors 5 Missed 3 Current 0 (99% match, 0% complete)
+NOTE: Executing Tasks
+NOTE: Tasks Summary: Attempted 6556 tasks of which 6543 didn't need to be rerun and all succeeded.
+[yocto_user@9d7e1015e117 kirkstone2]$ runqemu qemux86-64
+runqemu - INFO - Running MACHINE=qemux86-64 bitbake -e ...
+runqemu - ERROR - TUN control device /dev/net/tun is unavailable; you may need to enable TUN (e.g. sudo modprobe tun)
+runqemu - INFO - Cleaning up
+[yocto_user@9d7e1015e117 kirkstone2]$ lsmod |grep tun
+tun                    36164  0
+[yocto_user@9d7e1015e117 kirkstone2]$ sudo modprobe tun
+[sudo] password :
+[yocto_user@9d7e1015e117 kirkstone2]$ lsmod |grep tun
+tun                    36164  0
+[yocto_user@9d7e1015e117 kirkstone2]$ ls /dev
+console  core  fd  full  mqueue  null  ptmx  pts  random  shm  stderr  stdin  stdout  tty  urandom  zero
+[yocto_user@9d7e1015e117 kirkstone2]$ mkdir -p /dev/net
+mkdir: cannot create directory '/dev/net': Permission denied
+[yocto_user@9d7e1015e117 kirkstone2]$ sudo mkdir -p /dev/net
+[yocto_user@9d7e1015e117 kirkstone2]$ ls /dev
+console  core  fd  full  mqueue  net  null  ptmx  pts  random  shm  stderr  stdin  stdout  tty  urandom  zero
+[yocto_user@9d7e1015e117 kirkstone2]$ sudo mknod /dev/net/tun c 10 200
+[yocto_user@9d7e1015e117 kirkstone2]$ sudo chmod 0666 /dev/net/tun
+[yocto_user@9d7e1015e117 kirkstone2]$ ls -l /dev/net/tun
+crw-rw-rw-. 1 root root 10, 200 Aug 10 14:10 /dev/net/tun
+[yocto_user@9d7e1015e117 kirkstone2]$ runqemu qemux86-64
+runqemu - INFO - Running MACHINE=qemux86-64 bitbake -e ...
+runqemu - INFO - Continuing with the following parameters:
+KERNEL: [/disk0/scratch/yocto_user/yocto/workspace_zeus/poky-kirkstone-4.0.2/kirkstone2/tmp/deploy/images/qemux86-64/bzImage--5.15.44+git0+947149960e_eb3df10e3f-r0-qemux86-64-20220809161004.bin]
+MACHINE: [qemux86-64]
+FSTYPE: [ext4]
+ROOTFS: [/disk0/scratch/yocto_user/yocto/workspace_zeus/poky-kirkstone-4.0.2/kirkstone2/tmp/deploy/images/qemux86-64/core-image-sato-qemux86-64-20220810140132.rootfs.ext4]
+CONFFILE: [/disk0/scratch/yocto_user/yocto/workspace_zeus/poky-kirkstone-4.0.2/kirkstone2/tmp/deploy/images/qemux86-64/core-image-sato-qemux86-64-20220810140132.qemuboot.conf]
+
+runqemu - INFO - Setting up tap interface under sudo
+runqemu - ERROR - Setting up tap device failed:
+Command '('sudo', '/disk0/scratch/yocto_user/yocto/workspace_zeus/poky-kirkstone-4.0.2/scripts/runqemu-ifup', '1000', '1000', '/disk0/scratch/yocto_user/yocto/workspace_zeus/poky-kirkstone-4.0.2/kirkstone2/tmp/work/x86_64-linux/qemu-helper-native/1.0-r1/recipe-sysroot-native/usr/bin')' returned non-zero exit status 1.
+Run runqemu-gen-tapdevs to manually create one.
+runqemu - INFO - Cleaning up
+[yocto_user@9d7e1015e117 kirkstone2]$
+
+Thanks,
+Steve
+
+[-- Attachment #2: Type: text/html, Size: 15976 bytes --]
+
+^ permalink raw reply	[flat|nested] only message in thread
+only message in thread, other threads:[~2022-08-10 14:27 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-08-10 14:27 #kirkstone qemu Monsees, Steven C (US)
+

@@ -1,0 +1,374 @@
+* [meta-mingw][PATCH] openssl: support for building nativesdk of mingw
+@ 2021-01-05  3:31 Changqing Li
+  2021-07-06 17:23 ` [yocto] " Joshua Watt
+  0 siblings, 1 reply; 3+ messages in thread
+From: Changqing Li @ 2021-01-05  3:31 UTC (permalink / raw)
+  To: yocto
+
+* add support for mingw32
+* Engines are installed in a slightly different path, which is
+  urgly, patch it to make the path shorter
+* remove runtime dependency from perl for mingw nativesdk
+
+since commit 70da1f956bfbb627691c47eba7451182aca758e3 of oe-core
+'openssl: Add c_rehash to misc package and add perl runtime dependency'
+
+package openssl-misc have runtime dependency on perl, and perl then
+have depenency on another 3 recipes, db/gdbm/libxcrypt. according to
+http://arsv.github.io/perl-cross/usage.html, perl don't support
+cross-compile build for mingw32 and another 3 recipes also don't
+support mingw well. so remove the dependency of perl, don't support
+c_rehash for mingw.
+
+Signed-off-by: Changqing Li <changqing.li@windriver.com>
+---
+ ...ile.tmpl-don-t-add-prefix-for-libdir.patch | 32 +++++++++++++++++++
+ .../openssl/openssl_%.bbappend                | 31 ++++++++++++++++++
+ 2 files changed, 63 insertions(+)
+ create mode 100644 recipes-connectivity/openssl/files/0001-unix-Makefile.tmpl-don-t-add-prefix-for-libdir.patch
+ create mode 100644 recipes-connectivity/openssl/openssl_%.bbappend
+
+diff --git a/recipes-connectivity/openssl/files/0001-unix-Makefile.tmpl-don-t-add-prefix-for-libdir.patch b/recipes-connectivity/openssl/files/0001-unix-Makefile.tmpl-don-t-add-prefix-for-libdir.patch
+new file mode 100644
+index 0000000..028431b
+--- /dev/null
++++ b/recipes-connectivity/openssl/files/0001-unix-Makefile.tmpl-don-t-add-prefix-for-libdir.patch
+@@ -0,0 +1,32 @@
++From 8fe5c9421acfaff35b637e7ad55d1df598bb7081 Mon Sep 17 00:00:00 2001
++From: Changqing Li <changqing.li@windriver.com>
++Date: Tue, 22 Dec 2020 09:22:10 +0800
++Subject: [PATCH] unix-Makefile.tmpl: don't add prefix for libdir
++
++we had pass libdir to Configure, don't use prefix again to
++avoid engineer dir set to:
++/opt/poky/3.2+snapshot/sysroots/x86_64-w64-mingw32/usr/opt/poky/3.2+snapshot/sysroots/x86_64-w64-mingw32/usr/lib/engines-1_1
++
++Upstream-Status: Inappropriate[oe-specific]
++
++Signed-off-by: Changqing Li <changqing.li@windriver.com>
++---
++ Configurations/unix-Makefile.tmpl | 2 +-
++ 1 file changed, 1 insertion(+), 1 deletion(-)
++
++diff --git a/Configurations/unix-Makefile.tmpl b/Configurations/unix-Makefile.tmpl
++index bbafb98..eecb63e 100644
++--- a/Configurations/unix-Makefile.tmpl
+++++ b/Configurations/unix-Makefile.tmpl
++@@ -244,7 +244,7 @@ LIBDIR={- our $libdir = $config{libdir} || "lib";
++           File::Spec::Win32->file_name_is_absolute($libdir) ? "" : $libdir -}
++ ENGINESDIR_dev={- use File::Spec::Win32;
++                   our $enginesdir =
++-                      File::Spec::Win32->catdir($prefix,$libdir,
+++                      File::Spec::Win32->catdir($libdir,
++                                                 "engines-$sover_dirname");
++                   our ($enginesdir_dev, $enginesdir_dir, $enginesdir_file) =
++                       File::Spec::Win32->splitpath($enginesdir, 1);
++-- 
++2.17.1
++
+diff --git a/recipes-connectivity/openssl/openssl_%.bbappend b/recipes-connectivity/openssl/openssl_%.bbappend
+new file mode 100644
+index 0000000..7fd82f1
+--- /dev/null
++++ b/recipes-connectivity/openssl/openssl_%.bbappend
+@@ -0,0 +1,31 @@
++FILESEXTRAPATHS_prepend := "${THISDIR}/files:"
++
++SRC_URI_append_mingw32_class-nativesdk = " \
++           file://0001-unix-Makefile.tmpl-don-t-add-prefix-for-libdir.patch \
++"
++
++do_configure_mingw32 () {
++	os=${HOST_OS}
++	target="$os-${HOST_ARCH}"
++	case $target in
++        mingw32-x86_64)
++                target=mingw64
++                ;;
++        mingw32-i686)
++                target=mingw
++                ;;
++        esac
++
++        useprefix=${prefix}
++        if [ "x$useprefix" = "x" ]; then
++                useprefix=/
++        fi
++        # WARNING: do not set compiler/linker flags (-I/-D etc.) in EXTRA_OECONF, as they will fully replace the
++        # environment variables set by bitbake. Adjust the environment variables instead.
++        HASHBANGPERL="/usr/bin/env perl" PERL=perl PERL5LIB="${S}/external/perl/Text-Template-1.46/lib/" \
++        perl ${S}/Configure ${EXTRA_OECONF} ${PACKAGECONFIG_CONFARGS} --prefix=$useprefix --openssldir=${libdir}/ssl-1.1 --libdir=${libdir} $target
++        perl ${B}/configdata.pm --dump
++}
++
++FILES_${PN}-engines_mingw32_class-nativesdk = "${libdir}/engines-1_1"
++RDEPENDS_${PN}-misc_remove_mingw32_class-nativesdk = "perl"
+-- 
+2.17.1
+
+
+^ permalink raw reply related	[flat|nested] 3+ messages in thread
+* Re: [yocto] [meta-mingw][PATCH] openssl: support for building nativesdk of mingw
+  2021-01-05  3:31 [meta-mingw][PATCH] openssl: support for building nativesdk of mingw Changqing Li
+@ 2021-07-06 17:23 ` Joshua Watt
+  2021-07-08  9:07   ` Changqing Li
+  0 siblings, 1 reply; 3+ messages in thread
+From: Joshua Watt @ 2021-07-06 17:23 UTC (permalink / raw)
+  To: Changqing Li, yocto; +Cc: paul.eggleton, derawa
+
+[-- Attachment #1: Type: text/plain, Size: 4984 bytes --]
+
+
+On 1/4/21 9:31 PM, Changqing Li wrote:
+> * add support for mingw32
+> * Engines are installed in a slightly different path, which is
+>    urgly, patch it to make the path shorter
+> * remove runtime dependency from perl for mingw nativesdk
+>
+> since commit 70da1f956bfbb627691c47eba7451182aca758e3 of oe-core
+> 'openssl: Add c_rehash to misc package and add perl runtime dependency'
+>
+> package openssl-misc have runtime dependency on perl, and perl then
+> have depenency on another 3 recipes, db/gdbm/libxcrypt. according to
+> http://arsv.github.io/perl-cross/usage.html, perl don't support
+> cross-compile build for mingw32 and another 3 recipes also don't
+> support mingw well. so remove the dependency of perl, don't support
+> c_rehash for mingw.
+
+
+It would appear that some or all of this patch is unnecessary. OE-core 
+166bb89f6d97495b6522786182b4f9623acd7ff4 implements part of this patch, 
+which makes me think it's working there without any changes necessary. 
+It would be worth following up to see if that is the case.
+
+
+>
+> Signed-off-by: Changqing Li <changqing.li@windriver.com>
+> ---
+>   ...ile.tmpl-don-t-add-prefix-for-libdir.patch | 32 +++++++++++++++++++
+>   .../openssl/openssl_%.bbappend                | 31 ++++++++++++++++++
+>   2 files changed, 63 insertions(+)
+>   create mode 100644 recipes-connectivity/openssl/files/0001-unix-Makefile.tmpl-don-t-add-prefix-for-libdir.patch
+>   create mode 100644 recipes-connectivity/openssl/openssl_%.bbappend
+>
+> diff --git a/recipes-connectivity/openssl/files/0001-unix-Makefile.tmpl-don-t-add-prefix-for-libdir.patch b/recipes-connectivity/openssl/files/0001-unix-Makefile.tmpl-don-t-add-prefix-for-libdir.patch
+> new file mode 100644
+> index 0000000..028431b
+> --- /dev/null
+> +++ b/recipes-connectivity/openssl/files/0001-unix-Makefile.tmpl-don-t-add-prefix-for-libdir.patch
+> @@ -0,0 +1,32 @@
+> +From 8fe5c9421acfaff35b637e7ad55d1df598bb7081 Mon Sep 17 00:00:00 2001
+> +From: Changqing Li <changqing.li@windriver.com>
+> +Date: Tue, 22 Dec 2020 09:22:10 +0800
+> +Subject: [PATCH] unix-Makefile.tmpl: don't add prefix for libdir
+> +
+> +we had pass libdir to Configure, don't use prefix again to
+> +avoid engineer dir set to:
+> +/opt/poky/3.2+snapshot/sysroots/x86_64-w64-mingw32/usr/opt/poky/3.2+snapshot/sysroots/x86_64-w64-mingw32/usr/lib/engines-1_1
+> +
+> +Upstream-Status: Inappropriate[oe-specific]
+> +
+> +Signed-off-by: Changqing Li <changqing.li@windriver.com>
+> +---
+> + Configurations/unix-Makefile.tmpl | 2 +-
+> + 1 file changed, 1 insertion(+), 1 deletion(-)
+> +
+> +diff --git a/Configurations/unix-Makefile.tmpl b/Configurations/unix-Makefile.tmpl
+> +index bbafb98..eecb63e 100644
+> +--- a/Configurations/unix-Makefile.tmpl
+> ++++ b/Configurations/unix-Makefile.tmpl
+> +@@ -244,7 +244,7 @@ LIBDIR={- our $libdir = $config{libdir} || "lib";
+> +           File::Spec::Win32->file_name_is_absolute($libdir) ? "" : $libdir -}
+> + ENGINESDIR_dev={- use File::Spec::Win32;
+> +                   our $enginesdir =
+> +-                      File::Spec::Win32->catdir($prefix,$libdir,
+> ++                      File::Spec::Win32->catdir($libdir,
+> +                                                 "engines-$sover_dirname");
+> +                   our ($enginesdir_dev, $enginesdir_dir, $enginesdir_file) =
+> +                       File::Spec::Win32->splitpath($enginesdir, 1);
+> +--
+> +2.17.1
+> +
+> diff --git a/recipes-connectivity/openssl/openssl_%.bbappend b/recipes-connectivity/openssl/openssl_%.bbappend
+> new file mode 100644
+> index 0000000..7fd82f1
+> --- /dev/null
+> +++ b/recipes-connectivity/openssl/openssl_%.bbappend
+> @@ -0,0 +1,31 @@
+> +FILESEXTRAPATHS_prepend := "${THISDIR}/files:"
+> +
+> +SRC_URI_append_mingw32_class-nativesdk = " \
+> +           file://0001-unix-Makefile.tmpl-don-t-add-prefix-for-libdir.patch \
+> +"
+> +
+> +do_configure_mingw32 () {
+> +	os=${HOST_OS}
+> +	target="$os-${HOST_ARCH}"
+> +	case $target in
+> +        mingw32-x86_64)
+> +                target=mingw64
+> +                ;;
+> +        mingw32-i686)
+> +                target=mingw
+> +                ;;
+> +        esac
+> +
+> +        useprefix=${prefix}
+> +        if [ "x$useprefix" = "x" ]; then
+> +                useprefix=/
+> +        fi
+> +        # WARNING: do not set compiler/linker flags (-I/-D etc.) in EXTRA_OECONF, as they will fully replace the
+> +        # environment variables set by bitbake. Adjust the environment variables instead.
+> +        HASHBANGPERL="/usr/bin/env perl" PERL=perl PERL5LIB="${S}/external/perl/Text-Template-1.46/lib/" \
+> +        perl ${S}/Configure ${EXTRA_OECONF} ${PACKAGECONFIG_CONFARGS} --prefix=$useprefix --openssldir=${libdir}/ssl-1.1 --libdir=${libdir} $target
+> +        perl ${B}/configdata.pm --dump
+> +}
+> +
+> +FILES_${PN}-engines_mingw32_class-nativesdk = "${libdir}/engines-1_1"
+> +RDEPENDS_${PN}-misc_remove_mingw32_class-nativesdk = "perl"
+>
+> 
+>
+
+[-- Attachment #2: Type: text/html, Size: 5986 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] [meta-mingw][PATCH] openssl: support for building nativesdk of mingw
+  2021-07-06 17:23 ` [yocto] " Joshua Watt
+@ 2021-07-08  9:07   ` Changqing Li
+  0 siblings, 0 replies; 3+ messages in thread
+From: Changqing Li @ 2021-07-08  9:07 UTC (permalink / raw)
+  To: Joshua Watt, yocto; +Cc: paul.eggleton, derawa
+
+[-- Attachment #1: Type: text/plain, Size: 5388 bytes --]
+
+
+On 7/7/21 1:23 AM, Joshua Watt wrote:
+>
+> **[Please note: This e-mail is from an EXTERNAL e-mail address]
+>
+>
+> On 1/4/21 9:31 PM, Changqing Li wrote:
+>> * add support for mingw32
+>> * Engines are installed in a slightly different path, which is
+>>    urgly, patch it to make the path shorter
+>> * remove runtime dependency from perl for mingw nativesdk
+>>
+>> since commit 70da1f956bfbb627691c47eba7451182aca758e3 of oe-core
+>> 'openssl: Add c_rehash to misc package and add perl runtime dependency'
+>>
+>> package openssl-misc have runtime dependency on perl, and perl then
+>> have depenency on another 3 recipes, db/gdbm/libxcrypt. according to
+>> http://arsv.github.io/perl-cross/usage.html, perl don't support
+>> cross-compile build for mingw32 and another 3 recipes also don't
+>> support mingw well. so remove the dependency of perl, don't support
+>> c_rehash for mingw.
+>
+>
+> It would appear that some or all of this patch is unnecessary. OE-core 
+> 166bb89f6d97495b6522786182b4f9623acd7ff4 implements part of this 
+> patch, which makes me think it's working there without any changes 
+> necessary. It would be worth following up to see if that is the case.
+>
+Thanks.  I will check the oe-core commit.
+>
+>
+>
+>> Signed-off-by: Changqing Li<changqing.li@windriver.com>
+>> ---
+>>   ...ile.tmpl-don-t-add-prefix-for-libdir.patch | 32 +++++++++++++++++++
+>>   .../openssl/openssl_%.bbappend                | 31 ++++++++++++++++++
+>>   2 files changed, 63 insertions(+)
+>>   create mode 100644 recipes-connectivity/openssl/files/0001-unix-Makefile.tmpl-don-t-add-prefix-for-libdir.patch
+>>   create mode 100644 recipes-connectivity/openssl/openssl_%.bbappend
+>>
+>> diff --git a/recipes-connectivity/openssl/files/0001-unix-Makefile.tmpl-don-t-add-prefix-for-libdir.patch b/recipes-connectivity/openssl/files/0001-unix-Makefile.tmpl-don-t-add-prefix-for-libdir.patch
+>> new file mode 100644
+>> index 0000000..028431b
+>> --- /dev/null
+>> +++ b/recipes-connectivity/openssl/files/0001-unix-Makefile.tmpl-don-t-add-prefix-for-libdir.patch
+>> @@ -0,0 +1,32 @@
+>> +From 8fe5c9421acfaff35b637e7ad55d1df598bb7081 Mon Sep 17 00:00:00 2001
+>> +From: Changqing Li<changqing.li@windriver.com>
+>> +Date: Tue, 22 Dec 2020 09:22:10 +0800
+>> +Subject: [PATCH] unix-Makefile.tmpl: don't add prefix for libdir
+>> +
+>> +we had pass libdir to Configure, don't use prefix again to
+>> +avoid engineer dir set to:
+>> +/opt/poky/3.2+snapshot/sysroots/x86_64-w64-mingw32/usr/opt/poky/3.2+snapshot/sysroots/x86_64-w64-mingw32/usr/lib/engines-1_1
+>> +
+>> +Upstream-Status: Inappropriate[oe-specific]
+>> +
+>> +Signed-off-by: Changqing Li<changqing.li@windriver.com>
+>> +---
+>> + Configurations/unix-Makefile.tmpl | 2 +-
+>> + 1 file changed, 1 insertion(+), 1 deletion(-)
+>> +
+>> +diff --git a/Configurations/unix-Makefile.tmpl b/Configurations/unix-Makefile.tmpl
+>> +index bbafb98..eecb63e 100644
+>> +--- a/Configurations/unix-Makefile.tmpl
+>> ++++ b/Configurations/unix-Makefile.tmpl
+>> +@@ -244,7 +244,7 @@ LIBDIR={- our $libdir = $config{libdir} || "lib";
+>> +           File::Spec::Win32->file_name_is_absolute($libdir) ? "" : $libdir -}
+>> + ENGINESDIR_dev={- use File::Spec::Win32;
+>> +                   our $enginesdir =
+>> +-                      File::Spec::Win32->catdir($prefix,$libdir,
+>> ++                      File::Spec::Win32->catdir($libdir,
+>> +                                                 "engines-$sover_dirname");
+>> +                   our ($enginesdir_dev, $enginesdir_dir, $enginesdir_file) =
+>> +                       File::Spec::Win32->splitpath($enginesdir, 1);
+>> +--
+>> +2.17.1
+>> +
+>> diff --git a/recipes-connectivity/openssl/openssl_%.bbappend b/recipes-connectivity/openssl/openssl_%.bbappend
+>> new file mode 100644
+>> index 0000000..7fd82f1
+>> --- /dev/null
+>> +++ b/recipes-connectivity/openssl/openssl_%.bbappend
+>> @@ -0,0 +1,31 @@
+>> +FILESEXTRAPATHS_prepend := "${THISDIR}/files:"
+>> +
+>> +SRC_URI_append_mingw32_class-nativesdk = " \
+>> +file://0001-unix-Makefile.tmpl-don-t-add-prefix-for-libdir.patch  \
+>> +"
+>> +
+>> +do_configure_mingw32 () {
+>> +	os=${HOST_OS}
+>> +	target="$os-${HOST_ARCH}"
+>> +	case $target in
+>> +        mingw32-x86_64)
+>> +                target=mingw64
+>> +                ;;
+>> +        mingw32-i686)
+>> +                target=mingw
+>> +                ;;
+>> +        esac
+>> +
+>> +        useprefix=${prefix}
+>> +        if [ "x$useprefix" = "x" ]; then
+>> +                useprefix=/
+>> +        fi
+>> +        # WARNING: do not set compiler/linker flags (-I/-D etc.) in EXTRA_OECONF, as they will fully replace the
+>> +        # environment variables set by bitbake. Adjust the environment variables instead.
+>> +        HASHBANGPERL="/usr/bin/env perl" PERL=perl PERL5LIB="${S}/external/perl/Text-Template-1.46/lib/" \
+>> +        perl ${S}/Configure ${EXTRA_OECONF} ${PACKAGECONFIG_CONFARGS} --prefix=$useprefix --openssldir=${libdir}/ssl-1.1 --libdir=${libdir} $target
+>> +        perl ${B}/configdata.pm  <https://urldefense.com/v3/__http://configdata.pm__;!!AjveYdw8EvQ!PNhdP5mn3jyomF9c5P2aNPwHTTqwCpADXuBHBRyEcaFel7w-yKl0MiWg4bMTarUdo8Amlw$>  --dump
+>> +}
+>> +
+>> +FILES_${PN}-engines_mingw32_class-nativesdk = "${libdir}/engines-1_1"
+>> +RDEPENDS_${PN}-misc_remove_mingw32_class-nativesdk = "perl"
+>>
+>> 
+>>
+
+[-- Attachment #2: Type: text/html, Size: 7430 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2021-07-08  9:07 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-01-05  3:31 [meta-mingw][PATCH] openssl: support for building nativesdk of mingw Changqing Li
+2021-07-06 17:23 ` [yocto] " Joshua Watt
+2021-07-08  9:07   ` Changqing Li
+

@@ -1,0 +1,138 @@
+* RTC issue
+@ 2021-08-04  8:38 JH
+  2021-08-04  9:51 ` [yocto] " Matthias Klein
+  0 siblings, 1 reply; 4+ messages in thread
+From: JH @ 2021-08-04  8:38 UTC (permalink / raw)
+  To: yocto
+
+Hi,
+
+I built Yocto iMX6ULL image on Zeus kernel 4.19, but I have following
+RTC errors:
+
+[ 3494.446265] rtc rtc0: Timeout trying to get valid LPSRT Counter read
+[ 4190.088406] rtc rtc0: Timeout trying to get valid LPSRT Counter read
+[ 4885.740595] rtc rtc0: Timeout trying to get valid LPSRT Counter read
+
+I measured iMX6ULL RTC_XTALI and RTC_XTALO signals connecting to a
+32.768 kHz 90 kΩ ESR crystal, all good, not sure if it is caused by
+kernel or Yocto build.
+
+Someone suggested that I should remove the external RTC, the rationale
+is that Linux is not really a real time OS, there is no battery for
+supporting RTC. Appreciate your comments.
+
+My apology if it is an off topic.
+
+Thank you.
+
+Kind regards,
+
+- jupiter
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] RTC issue
+  2021-08-04  8:38 RTC issue JH
+@ 2021-08-04  9:51 ` Matthias Klein
+  2021-08-12  6:30   ` JH
+  0 siblings, 1 reply; 4+ messages in thread
+From: Matthias Klein @ 2021-08-04  9:51 UTC (permalink / raw)
+  To: jupiter.hce, yocto
+
+Hello jupiter,
+
+I have seen the same message on an i.MX6S7 (https://www.karo-electronics.com/fileadmin/download/Datasheets/TX6S-Datasheet.pdf) with kernel 5.10 (in a dunfell Yocto after I upgraded from kernel 4.14).
+
+Since we use an external RTC on the I2C bus, I disabled the internal RTC ("snvs_rtc") in the device tree, and did not analyze the problem further.
+
+I think it is a kernel problem, since in my case the Yocto version has not changed.
+
+Please inform me if you find out something.
+
+Many greetings,
+Matthias
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] RTC issue
+  2021-08-04  9:51 ` [yocto] " Matthias Klein
+@ 2021-08-12  6:30   ` JH
+  2021-08-12  6:37     ` Matthias Klein
+  0 siblings, 1 reply; 4+ messages in thread
+From: JH @ 2021-08-12  6:30 UTC (permalink / raw)
+  To: Matthias Klein; +Cc: yocto
+
+Hello Matthias,
+
+Thanks for your kind response.
+
+> I have seen the same message on an i.MX6S7
+> (https://www.karo-electronics.com/fileadmin/download/Datasheets/TX6S-Datasheet.pdf)
+> with kernel 5.10 (in a dunfell Yocto after I upgraded from kernel 4.14).
+>
+> Since we use an external RTC on the I2C bus, I disabled the internal RTC
+> ("snvs_rtc") in the device tree, and did not analyze the problem further.
+
+How did you disable snvs_rtc? My device tree to include imx6ull.dtsi
+which don't have snvs_rtc, only has snvs-rtc-lp, so I added status =
+"disabled"; to the snvs-rtc-lp node:
+
+snvs-rtc-lp {
+    compatible = "fsl,sec-v4.0-mon-rtc-lp";
+     regmap = <0x16>;
+     offset = <0x34>;
+    status = "disabled";
+}
+
+that must be wrong, it crashed in kernel booting.
+
+[    9.478754] ---[ end trace dc624b5857965e18 ]---
+[    9.483962] Kernel panic - not syncing: Attempted to kill init! exitcode=0x0b
+[    9.483962]
+[    9.493223] ---[ end Kernel panic - not syncing: Attempted to kill init! exib
+[    9.493223]  ]---
+
+
+Thank you.
+
+Kind regards,
+
+- jupiter
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] RTC issue
+  2021-08-12  6:30   ` JH
+@ 2021-08-12  6:37     ` Matthias Klein
+  0 siblings, 0 replies; 4+ messages in thread
+From: Matthias Klein @ 2021-08-12  6:37 UTC (permalink / raw)
+  To: Jupiter; +Cc: yocto
+
+Hello Jupiter,
+
+>How did you disable snvs_rtc? My device tree to include imx6ull.dtsi which don't have snvs_rtc, only has snvs-rtc-lp, so I added status = "disabled"; to the snvs-rtc-lp node:
+>
+>snvs-rtc-lp {
+>    compatible = "fsl,sec-v4.0-mon-rtc-lp";
+>     regmap = <0x16>;
+>     offset = <0x34>;
+>    status = "disabled";
+>}
+>
+>that must be wrong, it crashed in kernel booting.
+
+I only added status = "disabled": https://github.com/optimeas/linux-tx6-5.10/blob/tx6-5.10/arch/arm/boot/dts/imx6dl-tx6s-8035-smartmini-v2p3.dts#L77
+
+Best regards,
+Matthias
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+end of thread, other threads:[~2021-08-12  6:37 UTC | newest]
+
+Thread overview: 4+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-08-04  8:38 RTC issue JH
+2021-08-04  9:51 ` [yocto] " Matthias Klein
+2021-08-12  6:30   ` JH
+2021-08-12  6:37     ` Matthias Klein
+

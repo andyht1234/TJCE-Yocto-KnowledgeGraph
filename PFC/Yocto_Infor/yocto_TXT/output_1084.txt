@@ -1,0 +1,392 @@
+* DISTRO_FEATURES in custom recipe does not override local.conf setting
+@ 2022-12-28 15:51 Ron Eggler
+  2022-12-28 15:55 ` [yocto] " Alexander Kanavin
+  0 siblings, 1 reply; 5+ messages in thread
+From: Ron Eggler @ 2022-12-28 15:51 UTC (permalink / raw)
+  To: yocto
+
+Hi,
+
+I'm using the provided local.conf from the BSP which contains:
+
+DISTRO_FEATURES_remove = " x11"
+
+but I need to install xrandr in my image which needs x11, i.e. I set
+
+DISTRO_FEATURES_append = " x11"
+IMAGE_INSTALL_append = " xrandr"
+
+in my custom recipe. However, upon building, I get the following error:
+
+ERROR: Nothing RPROVIDES 'xrandr' (but 
+/home/yocto/rzg_vlp_v3.0.0/build/../meta-mistysom/recipes-core/images/mistysom-image.bb 
+RDEPENDS on or otherwise requires it)
+xrandr was skipped: missing required distro feature 'x11' (not in 
+DISTRO_FEATURES)
+NOTE: Runtime target 'xrandr' is unbuildable, removing...
+Missing or unbuildable dependency chain was: ['xrandr']
+ERROR: Required build target 'mistysom-image' has no buildable providers.
+Missing or unbuildable dependency chain was: ['mistysom-image', 'xrandr']
+
+Can I override the setting in locl.conf from my custom recipe? How?
+
+Ron
+
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] DISTRO_FEATURES in custom recipe does not override local.conf setting
+  2022-12-28 15:51 DISTRO_FEATURES in custom recipe does not override local.conf setting Ron Eggler
+@ 2022-12-28 15:55 ` Alexander Kanavin
+  2022-12-28 21:24   ` Ron Eggler
+       [not found]   ` <1735120FA8072B6E.27785@lists.yoctoproject.org>
+  0 siblings, 2 replies; 5+ messages in thread
+From: Alexander Kanavin @ 2022-12-28 15:55 UTC (permalink / raw)
+  To: Mistyron; +Cc: yocto
+
+You can't. '_remove' has priority over everything else, and
+DISTRO_FEATURES cannot be set from a recipe, only from a global
+config. You should edit local.conf, and complain to your BSP provider
+for using _remove instead of a direct assignment.
+
+Alex
+
+On Wed, 28 Dec 2022 at 16:51, Mistyron <ron.eggler@mistywest.com> wrote:
+>
+> Hi,
+>
+> I'm using the provided local.conf from the BSP which contains:
+>
+> DISTRO_FEATURES_remove = " x11"
+>
+> but I need to install xrandr in my image which needs x11, i.e. I set
+>
+> DISTRO_FEATURES_append = " x11"
+> IMAGE_INSTALL_append = " xrandr"
+>
+> in my custom recipe. However, upon building, I get the following error:
+>
+> ERROR: Nothing RPROVIDES 'xrandr' (but
+> /home/yocto/rzg_vlp_v3.0.0/build/../meta-mistysom/recipes-core/images/mistysom-image.bb
+> RDEPENDS on or otherwise requires it)
+> xrandr was skipped: missing required distro feature 'x11' (not in
+> DISTRO_FEATURES)
+> NOTE: Runtime target 'xrandr' is unbuildable, removing...
+> Missing or unbuildable dependency chain was: ['xrandr']
+> ERROR: Required build target 'mistysom-image' has no buildable providers.
+> Missing or unbuildable dependency chain was: ['mistysom-image', 'xrandr']
+>
+> Can I override the setting in locl.conf from my custom recipe? How?
+>
+> Ron
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#58881): https://lists.yoctoproject.org/g/yocto/message/58881
+> Mute This Topic: https://lists.yoctoproject.org/mt/95921674/1686489
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] DISTRO_FEATURES in custom recipe does not override local.conf setting
+  2022-12-28 15:55 ` [yocto] " Alexander Kanavin
+@ 2022-12-28 21:24   ` Ron Eggler
+       [not found]   ` <1735120FA8072B6E.27785@lists.yoctoproject.org>
+  1 sibling, 0 replies; 5+ messages in thread
+From: Ron Eggler @ 2022-12-28 21:24 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: yocto
+
+
+On 2022-12-28 7:55 a.m., Alexander Kanavin wrote:
+> You can't. '_remove' has priority over everything else, and
+> DISTRO_FEATURES cannot be set from a recipe, only from a global
+> config.
+Oh okay, that makes sense then!
+Thank you!
+> You should edit local.conf, and complain to your BSP provider
+> for using _remove instead of a direct assignment.
+>
+> Alex
+>
+> On Wed, 28 Dec 2022 at 16:51, Mistyron <ron.eggler@mistywest.com> wrote:
+>> Hi,
+>>
+>> I'm using the provided local.conf from the BSP which contains:
+>>
+>> DISTRO_FEATURES_remove = " x11"
+>>
+>> but I need to install xrandr in my image which needs x11, i.e. I set
+>>
+>> DISTRO_FEATURES_append = " x11"
+>> IMAGE_INSTALL_append = " xrandr"
+>>
+>> in my custom recipe. However, upon building, I get the following error:
+>>
+>> ERROR: Nothing RPROVIDES 'xrandr' (but
+>> /home/yocto/rzg_vlp_v3.0.0/build/../meta-mistysom/recipes-core/images/mistysom-image.bb
+>> RDEPENDS on or otherwise requires it)
+>> xrandr was skipped: missing required distro feature 'x11' (not in
+>> DISTRO_FEATURES)
+>> NOTE: Runtime target 'xrandr' is unbuildable, removing...
+>> Missing or unbuildable dependency chain was: ['xrandr']
+>> ERROR: Required build target 'mistysom-image' has no buildable providers.
+>> Missing or unbuildable dependency chain was: ['mistysom-image', 'xrandr']
+>>
+>> Can I override the setting in locl.conf from my custom recipe? How?
+>>
+>> Ron
+>>
+>>
+>> -=-=-=-=-=-=-=-=-=-=-=-
+>> Links: You receive all messages sent to this group.
+>> View/Reply Online (#58881): https://lists.yoctoproject.org/g/yocto/message/58881
+>> Mute This Topic: https://lists.yoctoproject.org/mt/95921674/1686489
+>> Group Owner: yocto+owner@lists.yoctoproject.org
+>> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com]
+>> -=-=-=-=-=-=-=-=-=-=-=-
+>>
+-- 
+
+
+*RON EGGLER*
+Firmware Engineer
+(he/him/his)
+www.mistywest.com
+MistyWest Logo
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] DISTRO_FEATURES in custom recipe does not override local.conf setting
+       [not found]   ` <1735120FA8072B6E.27785@lists.yoctoproject.org>
+@ 2022-12-29  0:32     ` Ron Eggler
+  2023-01-03  9:31       ` tomzy
+  0 siblings, 1 reply; 5+ messages in thread
+From: Ron Eggler @ 2022-12-29  0:32 UTC (permalink / raw)
+  To: yocto
+
+
+On 12/28/22 13:24, Mistyron via lists.yoctoproject.org wrote:
+>
+> On 2022-12-28 7:55 a.m., Alexander Kanavin wrote:
+>> You can't. '_remove' has priority over everything else, and
+>> DISTRO_FEATURES cannot be set from a recipe, only from a global
+>> config.
+> Oh okay, that makes sense then!
+> Thank you!
+
+Although, as soon as I added
+
+DISTRO_FEATURES_append = " x11"
+
+to local.conf, I'm not able to build anymore but see an error like below 
+instead:
+
+| checking for GBM... no
+| configure: error: Glamor for Xorg requires gbm >= 10.2.0
+| NOTE: The following config.log files may provide further information.
+| NOTE: 
+/home/yocto/rzg_vlp_v3.0.0/build/tmp/work/aarch64-poky-linux/xserver-xorg/2_1.20.8-r0/build/config.log
+| ERROR: configure failed
+| WARNING: exit code 1 from a shell command.
+| ERROR: Execution of 
+'/home/yocto/rzg_vlp_v3.0.0/build/tmp/work/aarch64-poky-linux/xserver-xorg/2_1.20.8-r0/temp/run.do_configure.480136' 
+failed with exit code 1
+ERROR: Task 
+(/home/yocto/rzg_vlp_v3.0.0/build/../poky/meta/recipes-graphics/xorg-xserver/xserver-xorg_1.20.8.bb:do_configure) 
+failed with exit code '1'
+
+I've Googled around but nbot been able to find a work around.
+
+>> You should edit local.conf, and complain to your BSP provider
+>> for using _remove instead of a direct assignment.
+>>
+>> Alex
+>>
+>> On Wed, 28 Dec 2022 at 16:51, Mistyron <ron.eggler@mistywest.com> wrote:
+>>> Hi,
+>>>
+>>> I'm using the provided local.conf from the BSP which contains:
+>>>
+>>> DISTRO_FEATURES_remove = " x11"
+>>>
+>>> but I need to install xrandr in my image which needs x11, i.e. I set
+>>>
+>>> DISTRO_FEATURES_append = " x11"
+>>> IMAGE_INSTALL_append = " xrandr"
+>>>
+>>> in my custom recipe. However, upon building, I get the following error:
+>>>
+>>> ERROR: Nothing RPROVIDES 'xrandr' (but
+>>> /home/yocto/rzg_vlp_v3.0.0/build/../meta-mistysom/recipes-core/images/mistysom-image.bb 
+>>>
+>>> RDEPENDS on or otherwise requires it)
+>>> xrandr was skipped: missing required distro feature 'x11' (not in
+>>> DISTRO_FEATURES)
+>>> NOTE: Runtime target 'xrandr' is unbuildable, removing...
+>>> Missing or unbuildable dependency chain was: ['xrandr']
+>>> ERROR: Required build target 'mistysom-image' has no buildable 
+>>> providers.
+>>> Missing or unbuildable dependency chain was: ['mistysom-image', 
+>>> 'xrandr']
+>>>
+>>> Can I override the setting in locl.conf from my custom recipe? How?
+>>>
+>>> Ron
+>>>
+>>>
+>>>
+>>>
+>>>
+>>> -=-=-=-=-=-=-=-=-=-=-=-
+>>> Links: You receive all messages sent to this group.
+>>> View/Reply Online (#58885): https://lists.yoctoproject.org/g/yocto/message/58885
+>>> Mute This Topic: https://lists.yoctoproject.org/mt/95921674/7254380
+>>> Group Owner: yocto+owner@lists.yoctoproject.org
+>>> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [ron.eggler@mistywest.com]
+>>> -=-=-=-=-=-=-=-=-=-=-=-
+>>>
+-- 
+RON EGGLER Firmware Engineer (he/him/his) www.mistywest.com
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: DISTRO_FEATURES in custom recipe does not override local.conf setting
+  2022-12-29  0:32     ` Ron Eggler
+@ 2023-01-03  9:31       ` tomzy
+  0 siblings, 0 replies; 5+ messages in thread
+From: tomzy @ 2023-01-03  9:31 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 3444 bytes --]
+
+On Thu, Dec 29, 2022 at 01:32 AM, Mistyron wrote:
+
+> 
+> On 12/28/22 13:24, Mistyron via lists.yoctoproject.org wrote:
+> 
+>> On 2022-12-28 7:55 a.m., Alexander Kanavin wrote:
+>> 
+>>> You can't. '_remove' has priority over everything else, and
+>>> DISTRO_FEATURES cannot be set from a recipe, only from a global
+>>> config.
+>> 
+>> Oh okay, that makes sense then!
+>> Thank you!
+> 
+> Although, as soon as I added
+> 
+> DISTRO_FEATURES_append = " x11"
+> 
+> to local.conf, I'm not able to build anymore but see an error like below
+> instead:
+> 
+> | checking for GBM... no
+> | configure: error: Glamor for Xorg requires gbm >= 10.2.0
+> | NOTE: The following config.log files may provide further information.
+> | NOTE:
+> /home/yocto/rzg_vlp_v3.0.0/build/tmp/work/aarch64-poky-linux/xserver-xorg/2_1.20.8-r0/build/config.log
+> 
+> | ERROR: configure failed
+> | WARNING: exit code 1 from a shell command.
+> | ERROR: Execution of
+> '/home/yocto/rzg_vlp_v3.0.0/build/tmp/work/aarch64-poky-linux/xserver-xorg/2_1.20.8-r0/temp/run.do_configure.480136'
+> 
+> failed with exit code 1
+> ERROR: Task
+> (/home/yocto/rzg_vlp_v3.0.0/build/../poky/meta/recipes-graphics/xorg-xserver/xserver-xorg_1.20.8.bb:do_configure)
+> 
+> failed with exit code '1'
+> 
+> I've Googled around but nbot been able to find a work around.
+
+Hello,
+
+once we run into a similar issue with the xserver xorg v1.20.8 compilation, in
+our case, the gbm (libgles) from the BSP provider was in version `r8p0` and not
+`10.2.0`, which is required by xserver xorg. To solve this, we added a simple
+patch to `configure.ac` of xserver xorg to change dependency from
+`LIBGBM="gbm >= 10.2.0"` to `LIBGBM="gbm >= r8p0"` which allowed us to resolve
+the compilation error and built the package. Later we did not see any
+significant performance issues, so we went with that solution.
+
+Regards
+
+--
+Tomasz Żyjewski
+Embedded Systems Engineer
+GPG: 5C495EA3EBEECA59
+https://3mdeb.com | @3mdeb_com
+
+> 
+> 
+> 
+>> 
+>>> You should edit local.conf, and complain to your BSP provider
+>>> for using _remove instead of a direct assignment.
+>>> 
+>>> Alex
+>>> 
+>>> On Wed, 28 Dec 2022 at 16:51, Mistyron <ron.eggler@mistywest.com> wrote:
+>>> 
+>>>> Hi,
+>>>> 
+>>>> I'm using the provided local.conf from the BSP which contains:
+>>>> 
+>>>> DISTRO_FEATURES_remove = " x11"
+>>>> 
+>>>> but I need to install xrandr in my image which needs x11, i.e. I set
+>>>> 
+>>>> DISTRO_FEATURES_append = " x11"
+>>>> IMAGE_INSTALL_append = " xrandr"
+>>>> 
+>>>> in my custom recipe. However, upon building, I get the following error:
+>>>> 
+>>>> ERROR: Nothing RPROVIDES 'xrandr' (but
+>>>> /home/yocto/rzg_vlp_v3.0.0/build/../meta-mistysom/recipes-core/images/mistysom-image.bb
+>>>> 
+>>>> 
+>>>> RDEPENDS on or otherwise requires it)
+>>>> xrandr was skipped: missing required distro feature 'x11' (not in
+>>>> DISTRO_FEATURES)
+>>>> NOTE: Runtime target 'xrandr' is unbuildable, removing...
+>>>> Missing or unbuildable dependency chain was: ['xrandr']
+>>>> ERROR: Required build target 'mistysom-image' has no buildable
+>>>> providers.
+>>>> Missing or unbuildable dependency chain was: ['mistysom-image',
+>>>> 'xrandr']
+>>>> 
+>>>> Can I override the setting in locl.conf from my custom recipe? How?
+>>>> 
+>>>> Ron
+>>>> 
+>>>> 
+>>>> 
+>>>> 
+>>>> 
+>>>> 
+>>> 
+>>> 
+>> 
+>> 
+> 
+> --
+> RON EGGLER Firmware Engineer (he/him/his) www.mistywest.com
+
+[-- Attachment #2: Type: text/html, Size: 3643 bytes --]
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+end of thread, other threads:[~2023-01-03  9:32 UTC | newest]
+
+Thread overview: 5+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-12-28 15:51 DISTRO_FEATURES in custom recipe does not override local.conf setting Ron Eggler
+2022-12-28 15:55 ` [yocto] " Alexander Kanavin
+2022-12-28 21:24   ` Ron Eggler
+     [not found]   ` <1735120FA8072B6E.27785@lists.yoctoproject.org>
+2022-12-29  0:32     ` Ron Eggler
+2023-01-03  9:31       ` tomzy
+

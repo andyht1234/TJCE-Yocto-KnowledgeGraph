@@ -1,0 +1,1759 @@
+* [ptest-runner 0/5] ptest: Various memory fixes and enhancements
+@ 2021-07-21  9:46 ?ukasz Majewski
+  2021-07-21  9:46 ` [ptest-runner 1/5] git: Extend the gitignore ?ukasz Majewski
+                   ` (5 more replies)
+  0 siblings, 6 replies; 16+ messages in thread
+From: ?ukasz Majewski @ 2021-07-21  9:46 UTC (permalink / raw)
+  To: yocto; +Cc: Lukasz Majewski
+
+This patch series provides some memory management fixes and corrected
+return code handling for ptest-runner2.
+
+Adrian Freihofer (4):
+  git: Extend the gitignore
+  mem: Fix memleak for ptest_opts
+  mem: Simplify memory management
+  mem: Refactor ptest_list cleanup
+
+Lukasz Majewski (1):
+  main: Do not return number of failed tests when calling ptest-runner
+
+ .gitignore         |  3 +++
+ main.c             | 33 ++++++++++++++++++++++++++++-----
+ ptest_list.c       | 13 ++++---------
+ ptest_list.h       |  8 +-------
+ tests/ptest_list.c | 13 +++++++------
+ tests/utils.c      | 22 +++++++++++-----------
+ utils.c            | 11 ++++-------
+ 7 files changed, 58 insertions(+), 45 deletions(-)
+ create mode 100644 .gitignore
+
+-- 
+2.20.1
+
+
+^ permalink raw reply	[flat|nested] 16+ messages in thread
+* [ptest-runner 1/5] git: Extend the gitignore
+  2021-07-21  9:46 [ptest-runner 0/5] ptest: Various memory fixes and enhancements ?ukasz Majewski
+@ 2021-07-21  9:46 ` ?ukasz Majewski
+  2021-07-26 15:44   ` [yocto] " Anibal Limon
+  2021-07-21  9:46 ` [ptest-runner 2/5] mem: Fix memleak for ptest_opts ?ukasz Majewski
+                   ` (4 subsequent siblings)
+  5 siblings, 1 reply; 16+ messages in thread
+From: ?ukasz Majewski @ 2021-07-21  9:46 UTC (permalink / raw)
+  To: yocto; +Cc: Adrian Freihofer
+
+From: Adrian Freihofer <adrian.freihofer@siemens.com>
+
+Signed-off-by: Adrian Freihofer <adrian.freihofer@siemens.com>
+---
+ .gitignore | 3 +++
+ 1 file changed, 3 insertions(+)
+ create mode 100644 .gitignore
+
+diff --git a/.gitignore b/.gitignore
+new file mode 100644
+index 0000000..ef07e6a
+--- /dev/null
++++ b/.gitignore
+@@ -0,0 +1,3 @@
++*.o
++ptest-runner
++ptest-runner-test
+-- 
+2.20.1
+
+
+^ permalink raw reply related	[flat|nested] 16+ messages in thread
+* [ptest-runner 2/5] mem: Fix memleak for ptest_opts
+  2021-07-21  9:46 [ptest-runner 0/5] ptest: Various memory fixes and enhancements ?ukasz Majewski
+  2021-07-21  9:46 ` [ptest-runner 1/5] git: Extend the gitignore ?ukasz Majewski
+@ 2021-07-21  9:46 ` ?ukasz Majewski
+  2021-07-26 16:02   ` [yocto] " Anibal Limon
+  2021-07-21  9:46 ` [ptest-runner 3/5] mem: Simplify memory management ?ukasz Majewski
+                   ` (3 subsequent siblings)
+  5 siblings, 1 reply; 16+ messages in thread
+From: ?ukasz Majewski @ 2021-07-21  9:46 UTC (permalink / raw)
+  To: yocto; +Cc: Adrian Freihofer
+
+From: Adrian Freihofer <adrian.freihofer@siemens.com>
+
+make && valgrind -s --leak-check=full ./ptest-runner -d tests/data2
+
+==4154029== HEAP SUMMARY:
+==4154029==     in use at exit: 20 bytes in 2 blocks
+==4154029==   total heap usage: 45 allocs, 43 frees, 42,909 bytes allocated
+==4154029==
+==4154029== 20 (8 direct, 12 indirect) bytes in 1 blocks are definitely lost in loss record 2 of 2
+==4154029==    at 0x4839809: malloc (vg_replace_malloc.c:307)
+==4154029==    by 0x40252D: str2array (main.c:70)
+==4154029==    by 0x402768: main (main.c:119)
+==4154029==
+==4154029== LEAK SUMMARY:
+==4154029==    definitely lost: 8 bytes in 1 blocks
+==4154029==    indirectly lost: 12 bytes in 1 blocks
+==4154029==      possibly lost: 0 bytes in 0 blocks
+==4154029==    still reachable: 0 bytes in 0 blocks
+==4154029==         suppressed: 0 bytes in 0 blocks
+==4154029==
+==4154029== ERROR SUMMARY: 1 errors from 1 contexts (suppressed: 0 from 0)
+
+With this patch valgrind reports 0 errors.
+
+Signed-off-by: Adrian Freihofer <adrian.freihofer@siemens.com>
+---
+ main.c | 21 ++++++++++++++++++++-
+ 1 file changed, 20 insertions(+), 1 deletion(-)
+
+diff --git a/main.c b/main.c
+index 467548e..e73626c 100644
+--- a/main.c
++++ b/main.c
+@@ -84,6 +84,25 @@ str2array(char *str, const char *delim, int *num)
+ 	return array;
+ }
+ 
++void cleanup_ptest_opts(struct ptest_options *opts)
++{
++	for (int i=0; i < opts->dirs_no; i++)
++		free(opts->dirs[i]);
++
++	free(opts->dirs);
++	opts->dirs = NULL;
++
++	if (opts->ptests) {
++		free(opts->ptests);
++		opts->ptests = NULL;
++	}
++
++	if (opts->xml_filename) {
++		free(opts->xml_filename);
++		opts->xml_filename = NULL;
++	}
++}
++
+ int
+ main(int argc, char *argv[])
+ {
+@@ -98,7 +117,7 @@ main(int argc, char *argv[])
+ #endif
+ 
+ 	struct ptest_list *head, *run;
+-	struct ptest_options opts;
++	__attribute__ ((__cleanup__(cleanup_ptest_opts))) struct ptest_options opts;
+ 
+ 	opts.dirs = malloc(sizeof(char **) * 1);
+ 	CHECK_ALLOCATION(opts.dirs, 1, 1);
+-- 
+2.20.1
+
+
+^ permalink raw reply related	[flat|nested] 16+ messages in thread
+* [ptest-runner 3/5] mem: Simplify memory management
+  2021-07-21  9:46 [ptest-runner 0/5] ptest: Various memory fixes and enhancements ?ukasz Majewski
+  2021-07-21  9:46 ` [ptest-runner 1/5] git: Extend the gitignore ?ukasz Majewski
+  2021-07-21  9:46 ` [ptest-runner 2/5] mem: Fix memleak for ptest_opts ?ukasz Majewski
+@ 2021-07-21  9:46 ` ?ukasz Majewski
+  2021-07-26 16:05   ` [yocto] " Anibal Limon
+  2021-07-21  9:46 ` [ptest-runner 4/5] mem: Refactor ptest_list cleanup ?ukasz Majewski
+                   ` (2 subsequent siblings)
+  5 siblings, 1 reply; 16+ messages in thread
+From: ?ukasz Majewski @ 2021-07-21  9:46 UTC (permalink / raw)
+  To: yocto; +Cc: Adrian Freihofer
+
+From: Adrian Freihofer <adrian.freihofer@siemens.com>
+
+Removes the following warnings thrown by
+make && valgrind -s --leak-check=full ./ptest-runner -d tests/data2
+
+==4154390== Invalid write of size 8
+==4154390==    at 0x40360D: run_child (utils.c:357)
+==4154390==    by 0x403C5B: run_ptests (utils.c:534)
+==4154390==    by 0x402C4D: main (main.c:223)
+==4154390==  Address 0x4a66440 is 0 bytes inside a block of size 2 alloc'd
+==4154390==    at 0x4839809: malloc (vg_replace_malloc.c:307)
+==4154390==    by 0x4035E4: run_child (utils.c:354)
+==4154390==    by 0x403C5B: run_ptests (utils.c:534)
+==4154390==    by 0x402C4D: main (main.c:223)
+==4154390==
+==4154390== Invalid write of size 8
+==4154390==    at 0x403618: run_child (utils.c:358)
+==4154390==    by 0x403C5B: run_ptests (utils.c:534)
+==4154390==    by 0x402C4D: main (main.c:223)
+==4154390==  Address 0x4a66448 is 6 bytes after a block of size 2 alloc'd
+==4154390==    at 0x4839809: malloc (vg_replace_malloc.c:307)
+==4154390==    by 0x4035E4: run_child (utils.c:354)
+==4154390==    by 0x403C5B: run_ptests (utils.c:534)
+==4154390==    by 0x402C4D: main (main.c:223)
+==4154390==
+==4154390== Syscall param execve(argv) points to unaddressable byte(s)
+==4154390==    at 0x4955C2B: execve (in /usr/lib64/libc-2.32.so)
+==4154390==    by 0x40365E: run_child (utils.c:368)
+==4154390==    by 0x403C5B: run_ptests (utils.c:534)
+==4154390==    by 0x402C4D: main (main.c:223)
+==4154390==  Address 0x4a66442 is 0 bytes after a block of size 2 alloc'd
+==4154390==    at 0x4839809: malloc (vg_replace_malloc.c:307)
+==4154390==    by 0x4035E4: run_child (utils.c:354)
+==4154390==    by 0x403C5B: run_ptests (utils.c:534)
+==4154390==    by 0x402C4D: main (main.c:223)
+
+Signed-off-by: Adrian Freihofer <adrian.freihofer@siemens.com>
+---
+ utils.c | 5 +----
+ 1 file changed, 1 insertion(+), 4 deletions(-)
+
+diff --git a/utils.c b/utils.c
+index bce9808..a23679a 100644
+--- a/utils.c
++++ b/utils.c
+@@ -351,12 +351,9 @@ read_child(void *arg)
+ static inline void
+ run_child(char *run_ptest, int fd_stdout, int fd_stderr)
+ {
+-	char **argv = malloc(sizeof(char) * 2);
++	char *const argv[2] = {run_ptest, NULL};
+ 	chdir(dirname(strdup(run_ptest)));
+ 
+-	argv[0] = run_ptest;
+-	argv[1] = NULL;
+-
+ 	dup2(fd_stdout, STDOUT_FILENO);
+ 	// XXX: Redirect stderr to stdout to avoid buffer ordering problems.
+ 	dup2(fd_stdout, STDERR_FILENO);
+-- 
+2.20.1
+
+
+^ permalink raw reply related	[flat|nested] 16+ messages in thread
+* [ptest-runner 4/5] mem: Refactor ptest_list cleanup
+  2021-07-21  9:46 [ptest-runner 0/5] ptest: Various memory fixes and enhancements ?ukasz Majewski
+                   ` (2 preceding siblings ...)
+  2021-07-21  9:46 ` [ptest-runner 3/5] mem: Simplify memory management ?ukasz Majewski
+@ 2021-07-21  9:46 ` ?ukasz Majewski
+  2021-07-26 16:10   ` [yocto] " Anibal Limon
+  2021-07-21  9:46 ` [ptest-runner 5/5] main: Do not return number of failed tests when calling ptest-runner ?ukasz Majewski
+  2021-07-21 23:36 ` [yocto] [ptest-runner 0/5] ptest: Various memory fixes and enhancements Randy MacLeod
+  5 siblings, 1 reply; 16+ messages in thread
+From: ?ukasz Majewski @ 2021-07-21  9:46 UTC (permalink / raw)
+  To: yocto; +Cc: Adrian Freihofer
+
+From: Adrian Freihofer <adrian.freihofer@siemens.com>
+
+Try to make memory management more robust by assigning always NULL to
+struct ptest_list pointers. It's a refactoring which probably improves
+the code but does not fix a concrete bug.
+
+Signed-off-by: Adrian Freihofer <adrian.freihofer@siemens.com>
+---
+ main.c             |  9 +++++----
+ ptest_list.c       | 13 ++++---------
+ ptest_list.h       |  8 +-------
+ tests/ptest_list.c | 13 +++++++------
+ tests/utils.c      | 22 +++++++++++-----------
+ utils.c            |  6 +++---
+ 6 files changed, 31 insertions(+), 40 deletions(-)
+
+diff --git a/main.c b/main.c
+index e73626c..efa21b2 100644
+--- a/main.c
++++ b/main.c
+@@ -116,7 +116,8 @@ main(int argc, char *argv[])
+ 	mtrace();
+ #endif
+ 
+-	struct ptest_list *head, *run;
++	struct ptest_list *head = NULL;
++	struct ptest_list *run = NULL;
+ 	__attribute__ ((__cleanup__(cleanup_ptest_opts))) struct ptest_options opts;
+ 
+ 	opts.dirs = malloc(sizeof(char **) * 1);
+@@ -175,7 +176,7 @@ main(int argc, char *argv[])
+ 
+ 	head = NULL;
+ 	for (i = 0; i < opts.dirs_no; i ++) {
+-		struct ptest_list *tmp;
++		struct ptest_list *tmp = NULL;
+ 
+ 		tmp = get_available_ptests(opts.dirs[i], opts.timeout);
+ 		if (tmp == NULL) {
+@@ -211,7 +212,7 @@ main(int argc, char *argv[])
+ 
+ 		run = filter_ptests(head, opts.ptests, ptest_num);
+ 		CHECK_ALLOCATION(run, (size_t) ptest_num, 1);
+-		ptest_list_free_all(head);
++		ptest_list_free_all(&head);
+ 	}
+ 
+ 	for (i = 0; i < ptest_exclude_num; i++)
+@@ -219,7 +220,7 @@ main(int argc, char *argv[])
+ 
+ 	rc = run_ptests(run, opts, argv[0], stdout, stderr);
+ 
+-	ptest_list_free_all(run);
++	ptest_list_free_all(&run);
+ 
+ 	return rc;
+ }
+diff --git a/ptest_list.c b/ptest_list.c
+index b689670..87b8c71 100644
+--- a/ptest_list.c
++++ b/ptest_list.c
+@@ -69,24 +69,19 @@ ptest_list_free(struct ptest_list *p)
+ 	free(p);
+ }
+ 
+-int
+-ptest_list_free_all(struct ptest_list *head)
++void
++ptest_list_free_all(struct ptest_list **head)
+ {
+-	int i = 0;
+ 	struct ptest_list *p, *q;
+ 
+-	VALIDATE_PTR_RINT(head);
+-
+-	p = head;
++	p = *head;
+ 	while (p != NULL) {
+ 		q = p;
+ 		p = p->next;
+ 
+ 		ptest_list_free(q);
+-		i++;
+ 	}
+-
+-	return i;
++	*head = NULL;
+ }
+ 
+ int
+diff --git a/ptest_list.h b/ptest_list.h
+index e583d9f..949250c 100644
+--- a/ptest_list.h
++++ b/ptest_list.h
+@@ -36,12 +36,6 @@
+ 		x = NULL; \
+ 	} while (0)
+ 
+-#define PTEST_LIST_FREE_ALL_CLEAN(x) \
+-	do { \
+-		ptest_list_free_all(x); \
+-		x = NULL; \
+-	} while (0)
+-
+ #define PTEST_LIST_ITERATE_START(head, p) for (p = head->next; p != NULL; p = p->next) {
+ #define PTEST_LIST_ITERATE_END }
+ 
+@@ -58,7 +52,7 @@ struct ptest_list {
+ 
+ extern struct ptest_list *ptest_list_alloc(void);
+ extern void ptest_list_free(struct ptest_list *);
+-extern int ptest_list_free_all(struct ptest_list *);
++extern void ptest_list_free_all(struct ptest_list **);
+ 
+ extern int ptest_list_length(struct ptest_list *);
+ extern struct ptest_list *ptest_list_search(struct ptest_list *, char *);
+diff --git a/tests/ptest_list.c b/tests/ptest_list.c
+index 37d19ae..6bbc13b 100644
+--- a/tests/ptest_list.c
++++ b/tests/ptest_list.c
+@@ -53,7 +53,7 @@ START_TEST(test_add)
+ {
+ 	struct ptest_list *head = ptest_list_alloc();
+ 	ck_assert(ptest_list_add(head, strdup("perl"), NULL, 1) != NULL);
+-	ptest_list_free_all(head);
++	ptest_list_free_all(&head);
+ }
+ END_TEST
+ 
+@@ -62,14 +62,15 @@ START_TEST(test_free_all)
+ 	struct ptest_list *head = NULL;
+ 	int i;
+  
+-	ck_assert(ptest_list_free_all(head) == -1);
++ 	ptest_list_free_all(&head);
++	ck_assert(head == NULL);
+ 	ck_assert(errno == EINVAL);
+ 
+ 	head = ptest_list_alloc();
+ 	for (i = 0; i < ptests_num; i++)
+ 		ptest_list_add(head, strdup(ptest_names[i]), NULL, 1);
+ 
+-	ptest_list_free_all(head);
++	ptest_list_free_all(&head);
+ }
+ END_TEST
+ 
+@@ -87,7 +88,7 @@ START_TEST(test_length)
+ 		ptest_list_add(head, strdup(ptest_names[i]), NULL, 1);
+ 
+ 	ck_assert_int_eq(ptest_list_length(head), ptests_num);
+-	ptest_list_free_all(head);
++	ptest_list_free_all(&head);
+ }
+ END_TEST
+ 
+@@ -109,7 +110,7 @@ START_TEST(test_search)
+ 	for (i = ptests_num - 1; i >= 0; i--)
+ 		ck_assert(ptest_list_search(head, ptest_names[i]) != NULL);
+ 
+-	ptest_list_free_all(head);
++	ptest_list_free_all(&head);
+ }
+ END_TEST
+ 
+@@ -141,7 +142,7 @@ START_TEST(test_remove)
+ 	ck_assert_int_eq(ptest_list_length(head), n);
+ 
+ 	ck_assert(ptest_list_search(head, "busybox") != NULL);
+-	ptest_list_free_all(head);
++	ptest_list_free_all(&head);
+ }
+ END_TEST
+ 
+diff --git a/tests/utils.c b/tests/utils.c
+index 8df1b54..4e244fe 100644
+--- a/tests/utils.c
++++ b/tests/utils.c
+@@ -88,13 +88,13 @@ START_TEST(test_get_available_ptests)
+ 	for (i = 0; ptests_not_found[i] != NULL; i++)
+ 		ck_assert(ptest_list_search(head, ptests_not_found[i]) == NULL);
+ 
+-	ptest_list_free_all(head);
++	ptest_list_free_all(&head);
+ }
+ END_TEST
+ 
+ START_TEST(test_print_ptests)
+ {
+-	struct ptest_list *head;
++	struct ptest_list *head = NULL;
+ 
+ 	char *buf;
+ 	size_t size = PRINT_PTEST_BUF_SIZE;
+@@ -116,14 +116,14 @@ START_TEST(test_print_ptests)
+ 
+ 	head = ptest_list_alloc();
+ 	ck_assert(print_ptests(head, fp) == 1);
+-	ptest_list_free_all(head);
++	ptest_list_free_all(&head);
+ 	line = fgets(line_buf, PRINT_PTEST_BUF_SIZE, fp);
+ 	ck_assert(line != NULL);
+ 	ck_assert(strcmp(line, PRINT_PTESTS_NOT_FOUND) == 0);
+ 
+ 	head = get_available_ptests(opts_directory, 1);
+ 	ck_assert(print_ptests(head, fp) == 0);
+-	ptest_list_free_all(head);
++	ptest_list_free_all(&head);
+ 	line = fgets(line_buf, PRINT_PTEST_BUF_SIZE, fp);
+ 	ck_assert(line != NULL);
+ 	ck_assert(strcmp(line, PRINT_PTESTS_AVAILABLE) == 0);
+@@ -144,7 +144,7 @@ END_TEST
+ START_TEST(test_filter_ptests)
+ {
+ 	struct ptest_list *head = get_available_ptests(opts_directory, 1);
+-	struct ptest_list *head_new;
++	struct ptest_list *head_new = NULL;
+ 	char *ptest_not_exists[] = {
+ 		"glib",
+ 	};
+@@ -161,8 +161,8 @@ START_TEST(test_filter_ptests)
+ 	ck_assert(head_new != NULL);
+ 	ck_assert(ptest_list_length(head_new) == 3);
+ 
+-	ptest_list_free_all(head);
+-	ptest_list_free_all(head_new);
++	ptest_list_free_all(&head);
++	ptest_list_free_all(&head_new);
+ }
+ END_TEST
+ 
+@@ -191,7 +191,7 @@ START_TEST(test_run_ptests)
+ 
+ 	rc = run_ptests(head, opts, "test_run_ptests", fp_stdout, fp_stderr);
+ 	ck_assert(rc == 0);
+-	ptest_list_free_all(head);
++	ptest_list_free_all(&head);
+ 
+ 	fclose(fp_stdout);
+ 	free(buf_stdout);
+@@ -227,7 +227,7 @@ START_TEST(test_run_timeout_duration_ptest)
+ 
+ 	test_ptest_expected_failure(head, timeout, "hang", search_for_timeout_and_duration);
+ 
+-	ptest_list_free_all(head);
++	ptest_list_free_all(&head);
+ }
+ END_TEST
+ 
+@@ -255,7 +255,7 @@ START_TEST(test_run_fail_ptest)
+ 
+ 	test_ptest_expected_failure(head, timeout, "fail", search_for_fail);
+ 
+-	ptest_list_free_all(head);
++	ptest_list_free_all(&head);
+ }
+ END_TEST
+ 
+@@ -354,7 +354,7 @@ test_ptest_expected_failure(struct ptest_list *head, const int timeout, char *pr
+ 			fp_stdout
+ 		);
+ 
+-		PTEST_LIST_FREE_ALL_CLEAN(filtered);
++		ptest_list_free_all(&filtered);
+ 	}
+ 
+ 	fclose(fp_stdout);
+diff --git a/utils.c b/utils.c
+index a23679a..4737bcd 100644
+--- a/utils.c
++++ b/utils.c
+@@ -110,7 +110,7 @@ get_ptest_file(char **ptest_file, struct stat *st_buf, const char *main_dir,
+ struct ptest_list *
+ get_available_ptests(const char *dir, int global_timeout)
+ {
+-	struct ptest_list *head;
++	struct ptest_list *head = NULL;
+ 	struct stat st_buf;
+ 
+ 	int n, i;
+@@ -212,7 +212,7 @@ get_available_ptests(const char *dir, int global_timeout)
+ 		free(namelist);
+ 
+ 		if (fail) {
+-			PTEST_LIST_FREE_ALL_CLEAN(head);
++			ptest_list_free_all(&head);
+ 			errno = saved_errno;
+ 			break;
+ 		}
+@@ -282,7 +282,7 @@ filter_ptests(struct ptest_list *head, char **ptests, int ptest_num)
+ 		}
+ 
+ 		if (fail) {
+-			PTEST_LIST_FREE_ALL_CLEAN(head_new);
++			ptest_list_free_all(&head_new);
+ 			errno = saved_errno;
+ 		} 
+ 	} while (0);
+-- 
+2.20.1
+
+
+^ permalink raw reply related	[flat|nested] 16+ messages in thread
+* [ptest-runner 5/5] main: Do not return number of failed tests when calling ptest-runner
+  2021-07-21  9:46 [ptest-runner 0/5] ptest: Various memory fixes and enhancements ?ukasz Majewski
+                   ` (3 preceding siblings ...)
+  2021-07-21  9:46 ` [ptest-runner 4/5] mem: Refactor ptest_list cleanup ?ukasz Majewski
+@ 2021-07-21  9:46 ` ?ukasz Majewski
+  2021-07-26  7:00   ` Tero Kinnunen
+  2021-07-27 15:54   ` Adrian Freihofer
+  2021-07-21 23:36 ` [yocto] [ptest-runner 0/5] ptest: Various memory fixes and enhancements Randy MacLeod
+  5 siblings, 2 replies; 16+ messages in thread
+From: ?ukasz Majewski @ 2021-07-21  9:46 UTC (permalink / raw)
+  To: yocto; +Cc: Lukasz Majewski
+
+Up till now ptest-runner2 returns number of failed tests with its
+exit status code. Such use case is not recommended [1] and may cause
+issues when there are more than 256 tests to be executed.
+
+To alleviate this issue the number of total tests with number of failed
+ones is printed before exit. To be more specific - failure of a single
+test doesn't indicate that the ptest-runner itself encounter any issue
+during its execution.
+
+One can test this change with executing:
+./ptest-runner -d tests/data fail
+
+Links:
+[1] - https://www.gnu.org/software/libc/manual/html_node/Exit-Status.html
+
+Signed-off-by: Lukasz Majewski <lukma@denx.de>
+---
+ main.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/main.c b/main.c
+index efa21b2..9f03857 100644
+--- a/main.c
++++ b/main.c
+@@ -219,6 +219,9 @@ main(int argc, char *argv[])
+ 		ptest_list_remove(run, opts.exclude[i], 1);
+ 
+ 	rc = run_ptests(run, opts, argv[0], stdout, stderr);
++	fprintf(stdout, "TOTAL: %d FAIL: %d\n", ptest_list_length(run), rc);
++	if (rc > 0)
++		rc = 0;
+ 
+ 	ptest_list_free_all(&run);
+ 
+-- 
+2.20.1
+
+
+^ permalink raw reply related	[flat|nested] 16+ messages in thread
+* Re: [yocto] [ptest-runner 0/5] ptest: Various memory fixes and enhancements
+  2021-07-21  9:46 [ptest-runner 0/5] ptest: Various memory fixes and enhancements ?ukasz Majewski
+                   ` (4 preceding siblings ...)
+  2021-07-21  9:46 ` [ptest-runner 5/5] main: Do not return number of failed tests when calling ptest-runner ?ukasz Majewski
+@ 2021-07-21 23:36 ` Randy MacLeod
+  2021-07-22  9:27   ` ?ukasz Majewski
+  5 siblings, 1 reply; 16+ messages in thread
+From: Randy MacLeod @ 2021-07-21 23:36 UTC (permalink / raw)
+  To: yocto, lukma
+
+On 2021-07-21 5:46 a.m., ?ukasz Majewski wrote:
+> This patch series provides some memory management fixes and corrected
+> return code handling for ptest-runner2.
+> 
+> Adrian Freihofer (4):
+>    git: Extend the gitignore
+>    mem: Fix memleak for ptest_opts
+>    mem: Simplify memory management
+>    mem: Refactor ptest_list cleanup
+> 
+> Lukasz Majewski (1):
+>    main: Do not return number of failed tests when calling ptest-runner
+> 
+>   .gitignore         |  3 +++
+>   main.c             | 33 ++++++++++++++++++++++++++++-----
+>   ptest_list.c       | 13 ++++---------
+>   ptest_list.h       |  8 +-------
+>   tests/ptest_list.c | 13 +++++++------
+>   tests/utils.c      | 22 +++++++++++-----------
+>   utils.c            | 11 ++++-------
+>   7 files changed, 58 insertions(+), 45 deletions(-)
+>   create mode 100644 .gitignore
+> 
+> 
+> 
+> 
+> 
+
+Looks good to me.
+
+Did you happen to check the compile with clang as well?
+If not, I may do that eventually.
+
+-- 
+# Randy MacLeod
+# Wind River Linux
+
+^ permalink raw reply	[flat|nested] 16+ messages in thread
+* Re: [yocto] [ptest-runner 0/5] ptest: Various memory fixes and enhancements
+  2021-07-21 23:36 ` [yocto] [ptest-runner 0/5] ptest: Various memory fixes and enhancements Randy MacLeod
+@ 2021-07-22  9:27   ` ?ukasz Majewski
+  0 siblings, 0 replies; 16+ messages in thread
+From: ?ukasz Majewski @ 2021-07-22  9:27 UTC (permalink / raw)
+  To: Randy MacLeod; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1364 bytes --]
+
+Hi Randy,
+
+> On 2021-07-21 5:46 a.m., ?ukasz Majewski wrote:
+> > This patch series provides some memory management fixes and
+> > corrected return code handling for ptest-runner2.
+> > 
+> > Adrian Freihofer (4):
+> >    git: Extend the gitignore
+> >    mem: Fix memleak for ptest_opts
+> >    mem: Simplify memory management
+> >    mem: Refactor ptest_list cleanup
+> > 
+> > Lukasz Majewski (1):
+> >    main: Do not return number of failed tests when calling
+> > ptest-runner
+> > 
+> >   .gitignore         |  3 +++
+> >   main.c             | 33 ++++++++++++++++++++++++++++-----
+> >   ptest_list.c       | 13 ++++---------
+> >   ptest_list.h       |  8 +-------
+> >   tests/ptest_list.c | 13 +++++++------
+> >   tests/utils.c      | 22 +++++++++++-----------
+> >   utils.c            | 11 ++++-------
+> >   7 files changed, 58 insertions(+), 45 deletions(-)
+> >   create mode 100644 .gitignore
+> > 
+> > 
+> > 
+> > 
+> >   
+> 
+> Looks good to me.
+> 
+> Did you happen to check the compile with clang as well?
+> If not, I may do that eventually.
+> 
+
+No, I've just used gcc.
+
+
+Best regards,
+
+Lukasz Majewski
+
+--
+
+DENX Software Engineering GmbH,      Managing Director: Wolfgang Denk
+HRB 165235 Munich, Office: Kirchenstr.5, D-82194 Groebenzell, Germany
+Phone: (+49)-8142-66989-59 Fax: (+49)-8142-66989-80 Email: lukma@denx.de
+
+[-- Attachment #2: OpenPGP digital signature --]
+[-- Type: application/pgp-signature, Size: 499 bytes --]
+
+^ permalink raw reply	[flat|nested] 16+ messages in thread
+* Re: [ptest-runner 5/5] main: Do not return number of failed tests when calling ptest-runner
+  2021-07-21  9:46 ` [ptest-runner 5/5] main: Do not return number of failed tests when calling ptest-runner ?ukasz Majewski
+@ 2021-07-26  7:00   ` Tero Kinnunen
+  2021-07-26 15:40     ` [yocto] " Anibal Limon
+  2021-07-27 15:54   ` Adrian Freihofer
+  1 sibling, 1 reply; 16+ messages in thread
+From: Tero Kinnunen @ 2021-07-26  7:00 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 805 bytes --]
+
+I would favor to keep non-zero exit value if any tests failed. We have relied on exit value since ptest started to support it, others may be doing that as well. This would be backward incompatible change, making tests silently fail. It is somewhat clumsy to try to parse failed tests from output, so non-zero rc was very welcome change to me.
+
+Looking at other test runners, it is very common to return non-zero if any tests failed. (Some examples: pytest, python unittest, googletest, shunit2, robot framework.) See pytest exit codes for example: https://docs.pytest.org/en/latest/reference/exit-codes.html
+
+Indeed the failed count is not a good exit value though because of rollover, should be fixed. Could consider using own rc for "any tests failed" differentiating from other errors.
+
+- Tero
+
+[-- Attachment #2: Type: text/html, Size: 847 bytes --]
+
+^ permalink raw reply	[flat|nested] 16+ messages in thread
+* Re: [yocto] [ptest-runner 5/5] main: Do not return number of failed tests when calling ptest-runner
+  2021-07-26  7:00   ` Tero Kinnunen
+@ 2021-07-26 15:40     ` Anibal Limon
+  0 siblings, 0 replies; 16+ messages in thread
+From: Anibal Limon @ 2021-07-26 15:40 UTC (permalink / raw)
+  To: Tero Kinnunen; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1151 bytes --]
+
+Hi all,
+
+Just replied in other email about this situation, so yes for me is better
+at least return 1 when any test fails to make it backwards compatible and
+knows when some test fails.
+
+Regards,
+Anibal
+
+On Mon, 26 Jul 2021 at 02:00, Tero Kinnunen <tero.kinnunen@vaisala.com>
+wrote:
+
+> I would favor to keep non-zero exit value if any tests failed. We have
+> relied on exit value since ptest started to support it, others may be doing
+> that as well. This would be backward incompatible change, making tests
+> silently fail. It is somewhat clumsy to try to parse failed tests from
+> output, so non-zero rc was very welcome change to me.
+>
+> Looking at other test runners, it is very common to return non-zero if any
+> tests failed. (Some examples: pytest, python unittest, googletest, shunit2,
+> robot framework.) See pytest exit codes for example:
+> https://docs.pytest.org/en/latest/reference/exit-codes.html
+>
+> Indeed the failed count is not a good exit value though because of
+> rollover, should be fixed. Could consider using own rc for "any tests
+> failed" differentiating from other errors.
+>
+>     - Tero
+> 
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 1567 bytes --]
+
+^ permalink raw reply	[flat|nested] 16+ messages in thread
+* Re: [yocto] [ptest-runner 1/5] git: Extend the gitignore
+  2021-07-21  9:46 ` [ptest-runner 1/5] git: Extend the gitignore ?ukasz Majewski
+@ 2021-07-26 15:44   ` Anibal Limon
+  0 siblings, 0 replies; 16+ messages in thread
+From: Anibal Limon @ 2021-07-26 15:44 UTC (permalink / raw)
+  To: ?ukasz Majewski; +Cc: yocto, Adrian Freihofer
+
+[-- Attachment #1: Type: text/plain, Size: 555 bytes --]
+
+Applied, Thanks!, Anibal.
+
+On Wed, 21 Jul 2021 at 04:47, ?ukasz Majewski <lukma@denx.de> wrote:
+
+> From: Adrian Freihofer <adrian.freihofer@siemens.com>
+>
+> Signed-off-by: Adrian Freihofer <adrian.freihofer@siemens.com>
+> ---
+>  .gitignore | 3 +++
+>  1 file changed, 3 insertions(+)
+>  create mode 100644 .gitignore
+>
+> diff --git a/.gitignore b/.gitignore
+> new file mode 100644
+> index 0000000..ef07e6a
+> --- /dev/null
+> +++ b/.gitignore
+> @@ -0,0 +1,3 @@
+> +*.o
+> +ptest-runner
+> +ptest-runner-test
+> --
+> 2.20.1
+>
+>
+> 
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 1020 bytes --]
+
+^ permalink raw reply	[flat|nested] 16+ messages in thread
+* Re: [yocto] [ptest-runner 2/5] mem: Fix memleak for ptest_opts
+  2021-07-21  9:46 ` [ptest-runner 2/5] mem: Fix memleak for ptest_opts ?ukasz Majewski
+@ 2021-07-26 16:02   ` Anibal Limon
+  0 siblings, 0 replies; 16+ messages in thread
+From: Anibal Limon @ 2021-07-26 16:02 UTC (permalink / raw)
+  To: ?ukasz Majewski; +Cc: yocto, Adrian Freihofer
+
+[-- Attachment #1: Type: text/plain, Size: 2607 bytes --]
+
+Hi,
+
+In a normal execution this memleak doesn't have a bad effect in practical
+terms because at end of the program the memory will be free'd.
+
+I'm fine to pick this patch.
+
+Regards,
+Anibal
+
+On Wed, 21 Jul 2021 at 04:46, ?ukasz Majewski <lukma@denx.de> wrote:
+
+> From: Adrian Freihofer <adrian.freihofer@siemens.com>
+>
+> make && valgrind -s --leak-check=full ./ptest-runner -d tests/data2
+>
+> ==4154029== HEAP SUMMARY:
+> ==4154029==     in use at exit: 20 bytes in 2 blocks
+> ==4154029==   total heap usage: 45 allocs, 43 frees, 42,909 bytes allocated
+> ==4154029==
+> ==4154029== 20 (8 direct, 12 indirect) bytes in 1 blocks are definitely
+> lost in loss record 2 of 2
+> ==4154029==    at 0x4839809: malloc (vg_replace_malloc.c:307)
+> ==4154029==    by 0x40252D: str2array (main.c:70)
+> ==4154029==    by 0x402768: main (main.c:119)
+> ==4154029==
+> ==4154029== LEAK SUMMARY:
+> ==4154029==    definitely lost: 8 bytes in 1 blocks
+> ==4154029==    indirectly lost: 12 bytes in 1 blocks
+> ==4154029==      possibly lost: 0 bytes in 0 blocks
+> ==4154029==    still reachable: 0 bytes in 0 blocks
+> ==4154029==         suppressed: 0 bytes in 0 blocks
+> ==4154029==
+> ==4154029== ERROR SUMMARY: 1 errors from 1 contexts (suppressed: 0 from 0)
+>
+> With this patch valgrind reports 0 errors.
+>
+> Signed-off-by: Adrian Freihofer <adrian.freihofer@siemens.com>
+> ---
+>  main.c | 21 ++++++++++++++++++++-
+>  1 file changed, 20 insertions(+), 1 deletion(-)
+>
+> diff --git a/main.c b/main.c
+> index 467548e..e73626c 100644
+> --- a/main.c
+> +++ b/main.c
+> @@ -84,6 +84,25 @@ str2array(char *str, const char *delim, int *num)
+>         return array;
+>  }
+>
+> +void cleanup_ptest_opts(struct ptest_options *opts)
+> +{
+> +       for (int i=0; i < opts->dirs_no; i++)
+> +               free(opts->dirs[i]);
+> +
+> +       free(opts->dirs);
+> +       opts->dirs = NULL;
+> +
+> +       if (opts->ptests) {
+> +               free(opts->ptests);
+> +               opts->ptests = NULL;
+> +       }
+> +
+> +       if (opts->xml_filename) {
+> +               free(opts->xml_filename);
+> +               opts->xml_filename = NULL;
+> +       }
+> +}
+> +
+>  int
+>  main(int argc, char *argv[])
+>  {
+> @@ -98,7 +117,7 @@ main(int argc, char *argv[])
+>  #endif
+>
+>         struct ptest_list *head, *run;
+> -       struct ptest_options opts;
+> +       __attribute__ ((__cleanup__(cleanup_ptest_opts))) struct
+> ptest_options opts;
+>
+>         opts.dirs = malloc(sizeof(char **) * 1);
+>         CHECK_ALLOCATION(opts.dirs, 1, 1);
+> --
+> 2.20.1
+>
+>
+> 
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 3422 bytes --]
+
+^ permalink raw reply	[flat|nested] 16+ messages in thread
+* Re: [yocto] [ptest-runner 3/5] mem: Simplify memory management
+  2021-07-21  9:46 ` [ptest-runner 3/5] mem: Simplify memory management ?ukasz Majewski
+@ 2021-07-26 16:05   ` Anibal Limon
+  0 siblings, 0 replies; 16+ messages in thread
+From: Anibal Limon @ 2021-07-26 16:05 UTC (permalink / raw)
+  To: ?ukasz Majewski; +Cc: yocto, Adrian Freihofer
+
+[-- Attachment #1: Type: text/plain, Size: 2714 bytes --]
+
+Applied, Thanks!,
+
+On Wed, 21 Jul 2021 at 04:47, ?ukasz Majewski <lukma@denx.de> wrote:
+
+> From: Adrian Freihofer <adrian.freihofer@siemens.com>
+>
+> Removes the following warnings thrown by
+> make && valgrind -s --leak-check=full ./ptest-runner -d tests/data2
+>
+> ==4154390== Invalid write of size 8
+> ==4154390==    at 0x40360D: run_child (utils.c:357)
+> ==4154390==    by 0x403C5B: run_ptests (utils.c:534)
+> ==4154390==    by 0x402C4D: main (main.c:223)
+> ==4154390==  Address 0x4a66440 is 0 bytes inside a block of size 2 alloc'd
+> ==4154390==    at 0x4839809: malloc (vg_replace_malloc.c:307)
+> ==4154390==    by 0x4035E4: run_child (utils.c:354)
+> ==4154390==    by 0x403C5B: run_ptests (utils.c:534)
+> ==4154390==    by 0x402C4D: main (main.c:223)
+> ==4154390==
+> ==4154390== Invalid write of size 8
+> ==4154390==    at 0x403618: run_child (utils.c:358)
+> ==4154390==    by 0x403C5B: run_ptests (utils.c:534)
+> ==4154390==    by 0x402C4D: main (main.c:223)
+> ==4154390==  Address 0x4a66448 is 6 bytes after a block of size 2 alloc'd
+> ==4154390==    at 0x4839809: malloc (vg_replace_malloc.c:307)
+> ==4154390==    by 0x4035E4: run_child (utils.c:354)
+> ==4154390==    by 0x403C5B: run_ptests (utils.c:534)
+> ==4154390==    by 0x402C4D: main (main.c:223)
+> ==4154390==
+> ==4154390== Syscall param execve(argv) points to unaddressable byte(s)
+> ==4154390==    at 0x4955C2B: execve (in /usr/lib64/libc-2.32.so)
+> ==4154390==    by 0x40365E: run_child (utils.c:368)
+> ==4154390==    by 0x403C5B: run_ptests (utils.c:534)
+> ==4154390==    by 0x402C4D: main (main.c:223)
+> ==4154390==  Address 0x4a66442 is 0 bytes after a block of size 2 alloc'd
+> ==4154390==    at 0x4839809: malloc (vg_replace_malloc.c:307)
+> ==4154390==    by 0x4035E4: run_child (utils.c:354)
+> ==4154390==    by 0x403C5B: run_ptests (utils.c:534)
+> ==4154390==    by 0x402C4D: main (main.c:223)
+>
+> Signed-off-by: Adrian Freihofer <adrian.freihofer@siemens.com>
+> ---
+>  utils.c | 5 +----
+>  1 file changed, 1 insertion(+), 4 deletions(-)
+>
+> diff --git a/utils.c b/utils.c
+> index bce9808..a23679a 100644
+> --- a/utils.c
+> +++ b/utils.c
+> @@ -351,12 +351,9 @@ read_child(void *arg)
+>  static inline void
+>  run_child(char *run_ptest, int fd_stdout, int fd_stderr)
+>  {
+> -       char **argv = malloc(sizeof(char) * 2);
+> +       char *const argv[2] = {run_ptest, NULL};
+>         chdir(dirname(strdup(run_ptest)));
+>
+> -       argv[0] = run_ptest;
+> -       argv[1] = NULL;
+> -
+>         dup2(fd_stdout, STDOUT_FILENO);
+>         // XXX: Redirect stderr to stdout to avoid buffer ordering
+> problems.
+>         dup2(fd_stdout, STDERR_FILENO);
+> --
+> 2.20.1
+>
+>
+> 
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 3431 bytes --]
+
+^ permalink raw reply	[flat|nested] 16+ messages in thread
+* Re: [yocto] [ptest-runner 4/5] mem: Refactor ptest_list cleanup
+  2021-07-21  9:46 ` [ptest-runner 4/5] mem: Refactor ptest_list cleanup ?ukasz Majewski
+@ 2021-07-26 16:10   ` Anibal Limon
+  2021-07-26 16:25     ` Anibal Limon
+  0 siblings, 1 reply; 16+ messages in thread
+From: Anibal Limon @ 2021-07-26 16:10 UTC (permalink / raw)
+  To: ?ukasz Majewski; +Cc: yocto, Adrian Freihofer
+
+[-- Attachment #1: Type: text/plain, Size: 9950 bytes --]
+
+Indeed this change doesn't has a direct impact  but is fine to me.
+
+Applied, Thanks!
+
+On Wed, 21 Jul 2021 at 04:47, ?ukasz Majewski <lukma@denx.de> wrote:
+
+> From: Adrian Freihofer <adrian.freihofer@siemens.com>
+>
+> Try to make memory management more robust by assigning always NULL to
+> struct ptest_list pointers. It's a refactoring which probably improves
+> the code but does not fix a concrete bug.
+>
+> Signed-off-by: Adrian Freihofer <adrian.freihofer@siemens.com>
+> ---
+>  main.c             |  9 +++++----
+>  ptest_list.c       | 13 ++++---------
+>  ptest_list.h       |  8 +-------
+>  tests/ptest_list.c | 13 +++++++------
+>  tests/utils.c      | 22 +++++++++++-----------
+>  utils.c            |  6 +++---
+>  6 files changed, 31 insertions(+), 40 deletions(-)
+>
+> diff --git a/main.c b/main.c
+> index e73626c..efa21b2 100644
+> --- a/main.c
+> +++ b/main.c
+> @@ -116,7 +116,8 @@ main(int argc, char *argv[])
+>         mtrace();
+>  #endif
+>
+> -       struct ptest_list *head, *run;
+> +       struct ptest_list *head = NULL;
+> +       struct ptest_list *run = NULL;
+>         __attribute__ ((__cleanup__(cleanup_ptest_opts))) struct
+> ptest_options opts;
+>
+>         opts.dirs = malloc(sizeof(char **) * 1);
+> @@ -175,7 +176,7 @@ main(int argc, char *argv[])
+>
+>         head = NULL;
+>         for (i = 0; i < opts.dirs_no; i ++) {
+> -               struct ptest_list *tmp;
+> +               struct ptest_list *tmp = NULL;
+>
+>                 tmp = get_available_ptests(opts.dirs[i], opts.timeout);
+>                 if (tmp == NULL) {
+> @@ -211,7 +212,7 @@ main(int argc, char *argv[])
+>
+>                 run = filter_ptests(head, opts.ptests, ptest_num);
+>                 CHECK_ALLOCATION(run, (size_t) ptest_num, 1);
+> -               ptest_list_free_all(head);
+> +               ptest_list_free_all(&head);
+>         }
+>
+>         for (i = 0; i < ptest_exclude_num; i++)
+> @@ -219,7 +220,7 @@ main(int argc, char *argv[])
+>
+>         rc = run_ptests(run, opts, argv[0], stdout, stderr);
+>
+> -       ptest_list_free_all(run);
+> +       ptest_list_free_all(&run);
+>
+>         return rc;
+>  }
+> diff --git a/ptest_list.c b/ptest_list.c
+> index b689670..87b8c71 100644
+> --- a/ptest_list.c
+> +++ b/ptest_list.c
+> @@ -69,24 +69,19 @@ ptest_list_free(struct ptest_list *p)
+>         free(p);
+>  }
+>
+> -int
+> -ptest_list_free_all(struct ptest_list *head)
+> +void
+> +ptest_list_free_all(struct ptest_list **head)
+>  {
+> -       int i = 0;
+>         struct ptest_list *p, *q;
+>
+> -       VALIDATE_PTR_RINT(head);
+> -
+> -       p = head;
+> +       p = *head;
+>         while (p != NULL) {
+>                 q = p;
+>                 p = p->next;
+>
+>                 ptest_list_free(q);
+> -               i++;
+>         }
+> -
+> -       return i;
+> +       *head = NULL;
+>  }
+>
+>  int
+> diff --git a/ptest_list.h b/ptest_list.h
+> index e583d9f..949250c 100644
+> --- a/ptest_list.h
+> +++ b/ptest_list.h
+> @@ -36,12 +36,6 @@
+>                 x = NULL; \
+>         } while (0)
+>
+> -#define PTEST_LIST_FREE_ALL_CLEAN(x) \
+> -       do { \
+> -               ptest_list_free_all(x); \
+> -               x = NULL; \
+> -       } while (0)
+> -
+>  #define PTEST_LIST_ITERATE_START(head, p) for (p = head->next; p != NULL;
+> p = p->next) {
+>  #define PTEST_LIST_ITERATE_END }
+>
+> @@ -58,7 +52,7 @@ struct ptest_list {
+>
+>  extern struct ptest_list *ptest_list_alloc(void);
+>  extern void ptest_list_free(struct ptest_list *);
+> -extern int ptest_list_free_all(struct ptest_list *);
+> +extern void ptest_list_free_all(struct ptest_list **);
+>
+>  extern int ptest_list_length(struct ptest_list *);
+>  extern struct ptest_list *ptest_list_search(struct ptest_list *, char *);
+> diff --git a/tests/ptest_list.c b/tests/ptest_list.c
+> index 37d19ae..6bbc13b 100644
+> --- a/tests/ptest_list.c
+> +++ b/tests/ptest_list.c
+> @@ -53,7 +53,7 @@ START_TEST(test_add)
+>  {
+>         struct ptest_list *head = ptest_list_alloc();
+>         ck_assert(ptest_list_add(head, strdup("perl"), NULL, 1) != NULL);
+> -       ptest_list_free_all(head);
+> +       ptest_list_free_all(&head);
+>  }
+>  END_TEST
+>
+> @@ -62,14 +62,15 @@ START_TEST(test_free_all)
+>         struct ptest_list *head = NULL;
+>         int i;
+>
+> -       ck_assert(ptest_list_free_all(head) == -1);
+> +       ptest_list_free_all(&head);
+> +       ck_assert(head == NULL);
+>         ck_assert(errno == EINVAL);
+>
+>         head = ptest_list_alloc();
+>         for (i = 0; i < ptests_num; i++)
+>                 ptest_list_add(head, strdup(ptest_names[i]), NULL, 1);
+>
+> -       ptest_list_free_all(head);
+> +       ptest_list_free_all(&head);
+>  }
+>  END_TEST
+>
+> @@ -87,7 +88,7 @@ START_TEST(test_length)
+>                 ptest_list_add(head, strdup(ptest_names[i]), NULL, 1);
+>
+>         ck_assert_int_eq(ptest_list_length(head), ptests_num);
+> -       ptest_list_free_all(head);
+> +       ptest_list_free_all(&head);
+>  }
+>  END_TEST
+>
+> @@ -109,7 +110,7 @@ START_TEST(test_search)
+>         for (i = ptests_num - 1; i >= 0; i--)
+>                 ck_assert(ptest_list_search(head, ptest_names[i]) != NULL);
+>
+> -       ptest_list_free_all(head);
+> +       ptest_list_free_all(&head);
+>  }
+>  END_TEST
+>
+> @@ -141,7 +142,7 @@ START_TEST(test_remove)
+>         ck_assert_int_eq(ptest_list_length(head), n);
+>
+>         ck_assert(ptest_list_search(head, "busybox") != NULL);
+> -       ptest_list_free_all(head);
+> +       ptest_list_free_all(&head);
+>  }
+>  END_TEST
+>
+> diff --git a/tests/utils.c b/tests/utils.c
+> index 8df1b54..4e244fe 100644
+> --- a/tests/utils.c
+> +++ b/tests/utils.c
+> @@ -88,13 +88,13 @@ START_TEST(test_get_available_ptests)
+>         for (i = 0; ptests_not_found[i] != NULL; i++)
+>                 ck_assert(ptest_list_search(head, ptests_not_found[i]) ==
+> NULL);
+>
+> -       ptest_list_free_all(head);
+> +       ptest_list_free_all(&head);
+>  }
+>  END_TEST
+>
+>  START_TEST(test_print_ptests)
+>  {
+> -       struct ptest_list *head;
+> +       struct ptest_list *head = NULL;
+>
+>         char *buf;
+>         size_t size = PRINT_PTEST_BUF_SIZE;
+> @@ -116,14 +116,14 @@ START_TEST(test_print_ptests)
+>
+>         head = ptest_list_alloc();
+>         ck_assert(print_ptests(head, fp) == 1);
+> -       ptest_list_free_all(head);
+> +       ptest_list_free_all(&head);
+>         line = fgets(line_buf, PRINT_PTEST_BUF_SIZE, fp);
+>         ck_assert(line != NULL);
+>         ck_assert(strcmp(line, PRINT_PTESTS_NOT_FOUND) == 0);
+>
+>         head = get_available_ptests(opts_directory, 1);
+>         ck_assert(print_ptests(head, fp) == 0);
+> -       ptest_list_free_all(head);
+> +       ptest_list_free_all(&head);
+>         line = fgets(line_buf, PRINT_PTEST_BUF_SIZE, fp);
+>         ck_assert(line != NULL);
+>         ck_assert(strcmp(line, PRINT_PTESTS_AVAILABLE) == 0);
+> @@ -144,7 +144,7 @@ END_TEST
+>  START_TEST(test_filter_ptests)
+>  {
+>         struct ptest_list *head = get_available_ptests(opts_directory, 1);
+> -       struct ptest_list *head_new;
+> +       struct ptest_list *head_new = NULL;
+>         char *ptest_not_exists[] = {
+>                 "glib",
+>         };
+> @@ -161,8 +161,8 @@ START_TEST(test_filter_ptests)
+>         ck_assert(head_new != NULL);
+>         ck_assert(ptest_list_length(head_new) == 3);
+>
+> -       ptest_list_free_all(head);
+> -       ptest_list_free_all(head_new);
+> +       ptest_list_free_all(&head);
+> +       ptest_list_free_all(&head_new);
+>  }
+>  END_TEST
+>
+> @@ -191,7 +191,7 @@ START_TEST(test_run_ptests)
+>
+>         rc = run_ptests(head, opts, "test_run_ptests", fp_stdout,
+> fp_stderr);
+>         ck_assert(rc == 0);
+> -       ptest_list_free_all(head);
+> +       ptest_list_free_all(&head);
+>
+>         fclose(fp_stdout);
+>         free(buf_stdout);
+> @@ -227,7 +227,7 @@ START_TEST(test_run_timeout_duration_ptest)
+>
+>         test_ptest_expected_failure(head, timeout, "hang",
+> search_for_timeout_and_duration);
+>
+> -       ptest_list_free_all(head);
+> +       ptest_list_free_all(&head);
+>  }
+>  END_TEST
+>
+> @@ -255,7 +255,7 @@ START_TEST(test_run_fail_ptest)
+>
+>         test_ptest_expected_failure(head, timeout, "fail",
+> search_for_fail);
+>
+> -       ptest_list_free_all(head);
+> +       ptest_list_free_all(&head);
+>  }
+>  END_TEST
+>
+> @@ -354,7 +354,7 @@ test_ptest_expected_failure(struct ptest_list *head,
+> const int timeout, char *pr
+>                         fp_stdout
+>                 );
+>
+> -               PTEST_LIST_FREE_ALL_CLEAN(filtered);
+> +               ptest_list_free_all(&filtered);
+>         }
+>
+>         fclose(fp_stdout);
+> diff --git a/utils.c b/utils.c
+> index a23679a..4737bcd 100644
+> --- a/utils.c
+> +++ b/utils.c
+> @@ -110,7 +110,7 @@ get_ptest_file(char **ptest_file, struct stat *st_buf,
+> const char *main_dir,
+>  struct ptest_list *
+>  get_available_ptests(const char *dir, int global_timeout)
+>  {
+> -       struct ptest_list *head;
+> +       struct ptest_list *head = NULL;
+>         struct stat st_buf;
+>
+>         int n, i;
+> @@ -212,7 +212,7 @@ get_available_ptests(const char *dir, int
+> global_timeout)
+>                 free(namelist);
+>
+>                 if (fail) {
+> -                       PTEST_LIST_FREE_ALL_CLEAN(head);
+> +                       ptest_list_free_all(&head);
+>                         errno = saved_errno;
+>                         break;
+>                 }
+> @@ -282,7 +282,7 @@ filter_ptests(struct ptest_list *head, char **ptests,
+> int ptest_num)
+>                 }
+>
+>                 if (fail) {
+> -                       PTEST_LIST_FREE_ALL_CLEAN(head_new);
+> +                       ptest_list_free_all(&head_new);
+>                         errno = saved_errno;
+>                 }
+>         } while (0);
+> --
+> 2.20.1
+>
+>
+> 
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 11994 bytes --]
+
+^ permalink raw reply	[flat|nested] 16+ messages in thread
+* Re: [yocto] [ptest-runner 4/5] mem: Refactor ptest_list cleanup
+  2021-07-26 16:10   ` [yocto] " Anibal Limon
+@ 2021-07-26 16:25     ` Anibal Limon
+  0 siblings, 0 replies; 16+ messages in thread
+From: Anibal Limon @ 2021-07-26 16:25 UTC (permalink / raw)
+  To: ?ukasz Majewski; +Cc: yocto, Adrian Freihofer
+
+[-- Attachment #1: Type: text/plain, Size: 10511 bytes --]
+
+Hi,
+
+I tried to apply without success, looks like the patch is corrupted, can
+you send it again?, or share a git repo/branch.
+
+Regards,
+Anibal
+
+
+On Mon, 26 Jul 2021 at 11:10, Anibal Limon <anibal.limon@linaro.org> wrote:
+
+> Indeed this change doesn't has a direct impact  but is fine to me.
+>
+> Applied, Thanks!
+>
+> On Wed, 21 Jul 2021 at 04:47, ?ukasz Majewski <lukma@denx.de> wrote:
+>
+>> From: Adrian Freihofer <adrian.freihofer@siemens.com>
+>>
+>> Try to make memory management more robust by assigning always NULL to
+>> struct ptest_list pointers. It's a refactoring which probably improves
+>> the code but does not fix a concrete bug.
+>>
+>> Signed-off-by: Adrian Freihofer <adrian.freihofer@siemens.com>
+>> ---
+>>  main.c             |  9 +++++----
+>>  ptest_list.c       | 13 ++++---------
+>>  ptest_list.h       |  8 +-------
+>>  tests/ptest_list.c | 13 +++++++------
+>>  tests/utils.c      | 22 +++++++++++-----------
+>>  utils.c            |  6 +++---
+>>  6 files changed, 31 insertions(+), 40 deletions(-)
+>>
+>> diff --git a/main.c b/main.c
+>> index e73626c..efa21b2 100644
+>> --- a/main.c
+>> +++ b/main.c
+>> @@ -116,7 +116,8 @@ main(int argc, char *argv[])
+>>         mtrace();
+>>  #endif
+>>
+>> -       struct ptest_list *head, *run;
+>> +       struct ptest_list *head = NULL;
+>> +       struct ptest_list *run = NULL;
+>>         __attribute__ ((__cleanup__(cleanup_ptest_opts))) struct
+>> ptest_options opts;
+>>
+>>         opts.dirs = malloc(sizeof(char **) * 1);
+>> @@ -175,7 +176,7 @@ main(int argc, char *argv[])
+>>
+>>         head = NULL;
+>>         for (i = 0; i < opts.dirs_no; i ++) {
+>> -               struct ptest_list *tmp;
+>> +               struct ptest_list *tmp = NULL;
+>>
+>>                 tmp = get_available_ptests(opts.dirs[i], opts.timeout);
+>>                 if (tmp == NULL) {
+>> @@ -211,7 +212,7 @@ main(int argc, char *argv[])
+>>
+>>                 run = filter_ptests(head, opts.ptests, ptest_num);
+>>                 CHECK_ALLOCATION(run, (size_t) ptest_num, 1);
+>> -               ptest_list_free_all(head);
+>> +               ptest_list_free_all(&head);
+>>         }
+>>
+>>         for (i = 0; i < ptest_exclude_num; i++)
+>> @@ -219,7 +220,7 @@ main(int argc, char *argv[])
+>>
+>>         rc = run_ptests(run, opts, argv[0], stdout, stderr);
+>>
+>> -       ptest_list_free_all(run);
+>> +       ptest_list_free_all(&run);
+>>
+>>         return rc;
+>>  }
+>> diff --git a/ptest_list.c b/ptest_list.c
+>> index b689670..87b8c71 100644
+>> --- a/ptest_list.c
+>> +++ b/ptest_list.c
+>> @@ -69,24 +69,19 @@ ptest_list_free(struct ptest_list *p)
+>>         free(p);
+>>  }
+>>
+>> -int
+>> -ptest_list_free_all(struct ptest_list *head)
+>> +void
+>> +ptest_list_free_all(struct ptest_list **head)
+>>  {
+>> -       int i = 0;
+>>         struct ptest_list *p, *q;
+>>
+>> -       VALIDATE_PTR_RINT(head);
+>> -
+>> -       p = head;
+>> +       p = *head;
+>>         while (p != NULL) {
+>>                 q = p;
+>>                 p = p->next;
+>>
+>>                 ptest_list_free(q);
+>> -               i++;
+>>         }
+>> -
+>> -       return i;
+>> +       *head = NULL;
+>>  }
+>>
+>>  int
+>> diff --git a/ptest_list.h b/ptest_list.h
+>> index e583d9f..949250c 100644
+>> --- a/ptest_list.h
+>> +++ b/ptest_list.h
+>> @@ -36,12 +36,6 @@
+>>                 x = NULL; \
+>>         } while (0)
+>>
+>> -#define PTEST_LIST_FREE_ALL_CLEAN(x) \
+>> -       do { \
+>> -               ptest_list_free_all(x); \
+>> -               x = NULL; \
+>> -       } while (0)
+>> -
+>>  #define PTEST_LIST_ITERATE_START(head, p) for (p = head->next; p !=
+>> NULL; p = p->next) {
+>>  #define PTEST_LIST_ITERATE_END }
+>>
+>> @@ -58,7 +52,7 @@ struct ptest_list {
+>>
+>>  extern struct ptest_list *ptest_list_alloc(void);
+>>  extern void ptest_list_free(struct ptest_list *);
+>> -extern int ptest_list_free_all(struct ptest_list *);
+>> +extern void ptest_list_free_all(struct ptest_list **);
+>>
+>>  extern int ptest_list_length(struct ptest_list *);
+>>  extern struct ptest_list *ptest_list_search(struct ptest_list *, char *);
+>> diff --git a/tests/ptest_list.c b/tests/ptest_list.c
+>> index 37d19ae..6bbc13b 100644
+>> --- a/tests/ptest_list.c
+>> +++ b/tests/ptest_list.c
+>> @@ -53,7 +53,7 @@ START_TEST(test_add)
+>>  {
+>>         struct ptest_list *head = ptest_list_alloc();
+>>         ck_assert(ptest_list_add(head, strdup("perl"), NULL, 1) != NULL);
+>> -       ptest_list_free_all(head);
+>> +       ptest_list_free_all(&head);
+>>  }
+>>  END_TEST
+>>
+>> @@ -62,14 +62,15 @@ START_TEST(test_free_all)
+>>         struct ptest_list *head = NULL;
+>>         int i;
+>>
+>> -       ck_assert(ptest_list_free_all(head) == -1);
+>> +       ptest_list_free_all(&head);
+>> +       ck_assert(head == NULL);
+>>         ck_assert(errno == EINVAL);
+>>
+>>         head = ptest_list_alloc();
+>>         for (i = 0; i < ptests_num; i++)
+>>                 ptest_list_add(head, strdup(ptest_names[i]), NULL, 1);
+>>
+>> -       ptest_list_free_all(head);
+>> +       ptest_list_free_all(&head);
+>>  }
+>>  END_TEST
+>>
+>> @@ -87,7 +88,7 @@ START_TEST(test_length)
+>>                 ptest_list_add(head, strdup(ptest_names[i]), NULL, 1);
+>>
+>>         ck_assert_int_eq(ptest_list_length(head), ptests_num);
+>> -       ptest_list_free_all(head);
+>> +       ptest_list_free_all(&head);
+>>  }
+>>  END_TEST
+>>
+>> @@ -109,7 +110,7 @@ START_TEST(test_search)
+>>         for (i = ptests_num - 1; i >= 0; i--)
+>>                 ck_assert(ptest_list_search(head, ptest_names[i]) !=
+>> NULL);
+>>
+>> -       ptest_list_free_all(head);
+>> +       ptest_list_free_all(&head);
+>>  }
+>>  END_TEST
+>>
+>> @@ -141,7 +142,7 @@ START_TEST(test_remove)
+>>         ck_assert_int_eq(ptest_list_length(head), n);
+>>
+>>         ck_assert(ptest_list_search(head, "busybox") != NULL);
+>> -       ptest_list_free_all(head);
+>> +       ptest_list_free_all(&head);
+>>  }
+>>  END_TEST
+>>
+>> diff --git a/tests/utils.c b/tests/utils.c
+>> index 8df1b54..4e244fe 100644
+>> --- a/tests/utils.c
+>> +++ b/tests/utils.c
+>> @@ -88,13 +88,13 @@ START_TEST(test_get_available_ptests)
+>>         for (i = 0; ptests_not_found[i] != NULL; i++)
+>>                 ck_assert(ptest_list_search(head, ptests_not_found[i]) ==
+>> NULL);
+>>
+>> -       ptest_list_free_all(head);
+>> +       ptest_list_free_all(&head);
+>>  }
+>>  END_TEST
+>>
+>>  START_TEST(test_print_ptests)
+>>  {
+>> -       struct ptest_list *head;
+>> +       struct ptest_list *head = NULL;
+>>
+>>         char *buf;
+>>         size_t size = PRINT_PTEST_BUF_SIZE;
+>> @@ -116,14 +116,14 @@ START_TEST(test_print_ptests)
+>>
+>>         head = ptest_list_alloc();
+>>         ck_assert(print_ptests(head, fp) == 1);
+>> -       ptest_list_free_all(head);
+>> +       ptest_list_free_all(&head);
+>>         line = fgets(line_buf, PRINT_PTEST_BUF_SIZE, fp);
+>>         ck_assert(line != NULL);
+>>         ck_assert(strcmp(line, PRINT_PTESTS_NOT_FOUND) == 0);
+>>
+>>         head = get_available_ptests(opts_directory, 1);
+>>         ck_assert(print_ptests(head, fp) == 0);
+>> -       ptest_list_free_all(head);
+>> +       ptest_list_free_all(&head);
+>>         line = fgets(line_buf, PRINT_PTEST_BUF_SIZE, fp);
+>>         ck_assert(line != NULL);
+>>         ck_assert(strcmp(line, PRINT_PTESTS_AVAILABLE) == 0);
+>> @@ -144,7 +144,7 @@ END_TEST
+>>  START_TEST(test_filter_ptests)
+>>  {
+>>         struct ptest_list *head = get_available_ptests(opts_directory, 1);
+>> -       struct ptest_list *head_new;
+>> +       struct ptest_list *head_new = NULL;
+>>         char *ptest_not_exists[] = {
+>>                 "glib",
+>>         };
+>> @@ -161,8 +161,8 @@ START_TEST(test_filter_ptests)
+>>         ck_assert(head_new != NULL);
+>>         ck_assert(ptest_list_length(head_new) == 3);
+>>
+>> -       ptest_list_free_all(head);
+>> -       ptest_list_free_all(head_new);
+>> +       ptest_list_free_all(&head);
+>> +       ptest_list_free_all(&head_new);
+>>  }
+>>  END_TEST
+>>
+>> @@ -191,7 +191,7 @@ START_TEST(test_run_ptests)
+>>
+>>         rc = run_ptests(head, opts, "test_run_ptests", fp_stdout,
+>> fp_stderr);
+>>         ck_assert(rc == 0);
+>> -       ptest_list_free_all(head);
+>> +       ptest_list_free_all(&head);
+>>
+>>         fclose(fp_stdout);
+>>         free(buf_stdout);
+>> @@ -227,7 +227,7 @@ START_TEST(test_run_timeout_duration_ptest)
+>>
+>>         test_ptest_expected_failure(head, timeout, "hang",
+>> search_for_timeout_and_duration);
+>>
+>> -       ptest_list_free_all(head);
+>> +       ptest_list_free_all(&head);
+>>  }
+>>  END_TEST
+>>
+>> @@ -255,7 +255,7 @@ START_TEST(test_run_fail_ptest)
+>>
+>>         test_ptest_expected_failure(head, timeout, "fail",
+>> search_for_fail);
+>>
+>> -       ptest_list_free_all(head);
+>> +       ptest_list_free_all(&head);
+>>  }
+>>  END_TEST
+>>
+>> @@ -354,7 +354,7 @@ test_ptest_expected_failure(struct ptest_list *head,
+>> const int timeout, char *pr
+>>                         fp_stdout
+>>                 );
+>>
+>> -               PTEST_LIST_FREE_ALL_CLEAN(filtered);
+>> +               ptest_list_free_all(&filtered);
+>>         }
+>>
+>>         fclose(fp_stdout);
+>> diff --git a/utils.c b/utils.c
+>> index a23679a..4737bcd 100644
+>> --- a/utils.c
+>> +++ b/utils.c
+>> @@ -110,7 +110,7 @@ get_ptest_file(char **ptest_file, struct stat
+>> *st_buf, const char *main_dir,
+>>  struct ptest_list *
+>>  get_available_ptests(const char *dir, int global_timeout)
+>>  {
+>> -       struct ptest_list *head;
+>> +       struct ptest_list *head = NULL;
+>>         struct stat st_buf;
+>>
+>>         int n, i;
+>> @@ -212,7 +212,7 @@ get_available_ptests(const char *dir, int
+>> global_timeout)
+>>                 free(namelist);
+>>
+>>                 if (fail) {
+>> -                       PTEST_LIST_FREE_ALL_CLEAN(head);
+>> +                       ptest_list_free_all(&head);
+>>                         errno = saved_errno;
+>>                         break;
+>>                 }
+>> @@ -282,7 +282,7 @@ filter_ptests(struct ptest_list *head, char **ptests,
+>> int ptest_num)
+>>                 }
+>>
+>>                 if (fail) {
+>> -                       PTEST_LIST_FREE_ALL_CLEAN(head_new);
+>> +                       ptest_list_free_all(&head_new);
+>>                         errno = saved_errno;
+>>                 }
+>>         } while (0);
+>> --
+>> 2.20.1
+>>
+>>
+>> 
+>>
+>>
+
+[-- Attachment #2: Type: text/html, Size: 12598 bytes --]
+
+^ permalink raw reply	[flat|nested] 16+ messages in thread
+* Re: [yocto] [ptest-runner 5/5] main: Do not return number of failed tests when calling ptest-runner
+  2021-07-21  9:46 ` [ptest-runner 5/5] main: Do not return number of failed tests when calling ptest-runner ?ukasz Majewski
+  2021-07-26  7:00   ` Tero Kinnunen
+@ 2021-07-27 15:54   ` Adrian Freihofer
+  1 sibling, 0 replies; 16+ messages in thread
+From: Adrian Freihofer @ 2021-07-27 15:54 UTC (permalink / raw)
+  To: ?ukasz Majewski; +Cc: yocto
+
+Hi Lukasz
+
+Also our test infrastructure expects an exit value not equal to 0 in
+case of a failed test.
+
+Regards,
+Adrian
+
+On Wed, 2021-07-21 at 11:46 +0200, ?ukasz Majewski wrote:
+> Up till now ptest-runner2 returns number of failed tests with its
+> exit status code. Such use case is not recommended [1] and may cause
+> issues when there are more than 256 tests to be executed.
+> 
+> To alleviate this issue the number of total tests with number of failed
+> ones is printed before exit. To be more specific - failure of a single
+> test doesn't indicate that the ptest-runner itself encounter any issue
+> during its execution.
+> 
+> One can test this change with executing:
+> ./ptest-runner -d tests/data fail
+> 
+> Links:
+> [1] - https://www.gnu.org/software/libc/manual/html_node/Exit-Status.html
+> 
+> Signed-off-by: Lukasz Majewski <lukma@denx.de>
+> ---
+>  main.c | 3 +++
+>  1 file changed, 3 insertions(+)
+> 
+> diff --git a/main.c b/main.c
+> index efa21b2..9f03857 100644
+> --- a/main.c
+> +++ b/main.c
+> @@ -219,6 +219,9 @@ main(int argc, char *argv[])
+>  		ptest_list_remove(run, opts.exclude[i], 1);
+>  
+> 
+>  	rc = run_ptests(run, opts, argv[0], stdout, stderr);
+> +	fprintf(stdout, "TOTAL: %d FAIL: %d\n", ptest_list_length(run), rc);
+> +	if (rc > 0)
+> +		rc = 0;
+>  
+> 
+>  	ptest_list_free_all(&run);
+>  
+> 
+> 
+> 
+
+
+
+^ permalink raw reply	[flat|nested] 16+ messages in thread
+end of thread, other threads:[~2021-07-27 15:54 UTC | newest]
+
+Thread overview: 16+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-07-21  9:46 [ptest-runner 0/5] ptest: Various memory fixes and enhancements ?ukasz Majewski
+2021-07-21  9:46 ` [ptest-runner 1/5] git: Extend the gitignore ?ukasz Majewski
+2021-07-26 15:44   ` [yocto] " Anibal Limon
+2021-07-21  9:46 ` [ptest-runner 2/5] mem: Fix memleak for ptest_opts ?ukasz Majewski
+2021-07-26 16:02   ` [yocto] " Anibal Limon
+2021-07-21  9:46 ` [ptest-runner 3/5] mem: Simplify memory management ?ukasz Majewski
+2021-07-26 16:05   ` [yocto] " Anibal Limon
+2021-07-21  9:46 ` [ptest-runner 4/5] mem: Refactor ptest_list cleanup ?ukasz Majewski
+2021-07-26 16:10   ` [yocto] " Anibal Limon
+2021-07-26 16:25     ` Anibal Limon
+2021-07-21  9:46 ` [ptest-runner 5/5] main: Do not return number of failed tests when calling ptest-runner ?ukasz Majewski
+2021-07-26  7:00   ` Tero Kinnunen
+2021-07-26 15:40     ` [yocto] " Anibal Limon
+2021-07-27 15:54   ` Adrian Freihofer
+2021-07-21 23:36 ` [yocto] [ptest-runner 0/5] ptest: Various memory fixes and enhancements Randy MacLeod
+2021-07-22  9:27   ` ?ukasz Majewski
+

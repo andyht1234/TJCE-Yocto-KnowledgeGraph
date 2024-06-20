@@ -1,0 +1,196 @@
+* Re: oFono Version 1.31 ofonod crash
+       [not found] ` <CAFiQ677d90DJCM6m+RgAJ-AieqpoBBY+soHXN-rH_bVP7Vgf6g@mail.gmail.com>
+@ 2021-08-25  7:22   ` JH
+  0 siblings, 0 replies; only message in thread
+From: JH @ 2021-08-25  7:22 UTC (permalink / raw)
+  To: Sergei Golubtsov; +Cc: oe-core, yocto, Oleksandr Kravchuk
+
+Hi Sergei,
+
+Thanks for the advice, the latest ofono in oe-core master is 1.32, but
+I am in branch Hardknott, so I copied ofono 1.32 from master to my
+layer running Hardknott branch, but I could not build ofono 1.32 in
+Hardknott:
+
+ERROR: ParseError at
+/build/oe-cor/../meta-solar/recipes-connectivity/ofono/ofono_1.32.bb:22:
+unparsed line: 'SYSTEMD_SERVICE:${PN} = "ofono.service"'
+
+I used ofono 1.30 and connman 1.37 in Zeus, both worked fine , but
+both connman 1.39 and ofono 1.31 failed to work properly in oe-core
+Hardknott branch, to narrow down if it is ofono issue or Yocto OE
+build or other library issue, I was able to build ofono 1.30 for
+Hardknott, I can confirm that ofono 1.30 failed just like the 1.31
+stuck at the statement add_serial_device.
+
+................
+ofonod[2806]: ../ofono-1.30/plugins/udevng.c:add_serial_device()
+Device is missing required OFONO_DRIVER property
+ofonod[2806]: ../ofono-1.30/plugins/udevng.c:add_serial_device()
+Device is missing required OFONO_DRIVER property
+ofonod[2806]: ../ofono-1.30/plugins/udevng.c:add_serial_device()
+Device is missing required OFONO_DRIVER property
+
+If I run ofono 1.30 built from Zeus build, the ofonod would pass
+missing OFONO_DRIVER property and kept it work:
+
+......
+ofonod[3712]: ../ofono-1.30/plugins/udevng.c:add_serial_device()
+Device is missing required OFONO_DRIVER property
+ofonod[3712]: ../ofono-1.30/plugins/udevng.c:create_modem()
+/sys/devices/soc0/soc/2100000.aips-bus/2184200.usb/ci_hdrc.1/usb1/1-1
+ofonod[3712]: ../ofono-1.30/plugins/udevng.c:create_modem() driver=ubloxqmi
+ofonod[3712]: ../ofono-1.30/src/modem.c:ofono_modem_create() name:
+(null), type: ubloxqmi
+ofonod[3712]: ../ofono-1.30/plugins/udevng.c:setup_ubloxqmi()
+/sys/devices/soc0/soc/2100000.aips-bus/2184200.usb/ci_hdrc.1/usb1/1-1
+.....
+
+So I don't think it is an oFono issue, but rather an OE Yocto build or
+library issue, can anyone run oFono in oe-core Hardknott branch?
+
+Thank you.
+
+Kind regards,
+
+- jupiter
+
+
+
+On 8/22/21, Sergei Golubtsov <s.e.golubtsov@gmail.com> wrote:
+> Hi jupiter,
+>
+> Please try to update ofono to the latest release. Seems to be a library
+> incompatibility issue or something like that.
+>
+> Yours sincerely,
+> Sergei Golubtsov.
+>
+>
+> On Sat, Aug 21, 2021 at 4:09 AM Jupiter <jupiter.hce@gmail.com> wrote:
+>
+>> Hi,
+>>
+>> I build ofono v1.31 from git://git.yoctoproject.org/poky branch
+>> hardknott,
+>>
+>> $ cat meta/recipes-connectivity/ofono/ofono_1.31.bb
+>>
+>> SUMMARY = "open source telephony"
+>> DESCRIPTION = "oFono is a stack for mobile telephony devices on Linux.
+>> oFono supports speaking to telephony devices through specific drivers,
+>> or with generic AT commands."
+>> HOMEPAGE = "http://www.ofono.org"
+>> BUGTRACKER = "https://01.org/jira/browse/OF"
+>> LICENSE = "GPLv2"
+>> LIC_FILES_CHKSUM = "file://COPYING;md5=eb723b61539feef013de476e68b5c50a \
+>>
+>>
+>> file://src/ofono.h;beginline=1;endline=20;md5=3ce17d5978ef3445def265b98899c2ee"
+>> DEPENDS = "dbus glib-2.0 udev mobile-broadband-provider-info ell"
+>>
+>> SRC_URI = "\
+>>     ${KERNELORG_MIRROR}/linux/network/${BPN}/${BP}.tar.xz \
+>>     file://ofono \
+>>     file://0001-mbim-add-an-optional-TEMP_FAILURE_RETRY-macro-copy.patch
+>> \
+>> "
+>> SRC_URI[md5sum] = "1c26340e3c6ed132cc812595081bb3dc"
+>> SRC_URI[sha256sum] =
+>> "a15c5d28096c10eb30e47a68b6dc2e7c4a5a99d7f4cfedf0b69624f33d859e9b"
+>>
+>> inherit autotools pkgconfig update-rc.d systemd
+>> gobject-introspection-data
+>>
+>> INITSCRIPT_NAME = "ofono"
+>> INITSCRIPT_PARAMS = "defaults 22"
+>> SYSTEMD_SERVICE_${PN} = "ofono.service"
+>>
+>> PACKAGECONFIG ??= "\
+>>     ${@bb.utils.filter('DISTRO_FEATURES', 'systemd', d)} \
+>>     ${@bb.utils.contains('DISTRO_FEATURES', 'bluetooth', 'bluez', '', d)}
+>> \
+>> "
+>> PACKAGECONFIG[systemd] =
+>> "--with-systemdunitdir=${systemd_unitdir}/system/,--with-systemdunitdir="
+>> PACKAGECONFIG[bluez] = "--enable-bluetooth, --disable-bluetooth, bluez5"
+>>
+>> EXTRA_OECONF += "--enable-test --enable-external-ell"
+>>
+>> do_install_append() {
+>>   install -d ${D}${sysconfdir}/init.d/
+>>   install -m 0755 ${WORKDIR}/ofono ${D}${sysconfdir}/init.d/ofono
+>> }
+>>
+>> PACKAGES =+ "${PN}-tests"
+>>
+>> FILES_${PN} += "${systemd_unitdir}"
+>> FILES_${PN}-tests = "${libdir}/${BPN}/test"
+>>
+>> RDEPENDS_${PN} += "dbus"
+>> RDEPENDS_${PN}-tests = "\
+>>     python3-core \
+>>     python3-dbus \
+>>     ${@bb.utils.contains('GI_DATA_ENABLED', 'True',
+>> 'python3-pygobject', '', d)} \
+>> "
+>>
+>> RRECOMMENDS_${PN} += "kernel-module-tun mobile-broadband-provider-info"
+>>
+>> The build was fine, but running the v1.31 ofono.service crashed at
+>> udevng.c missing OFONO_DRIVER property, the ofono.service was repeated
+>> to be restarted every 6 seconds:
+>>
+>> .....
+>>
+>> ofonod[9005]: ../ofono-1.31/plugins/udevng.c:add_serial_device()
+>> Device is missing required OFONO_DRIVER property
+>> ofonod[9005]: ../ofono-1.31/plugins/udevng.c:add_serial_device()
+>> Device is missing required OFONO_DRIVER property
+>> ......
+>>
+>> I am not quite sure if it is ofono 1.31 problem or oe-core
+>> ofono_1.31.bb problem, could anyone have a look at and advise? Let me
+>> know if you need more debug information.
+>>
+>> Thank you.
+>>
+>> Kind regards,
+>>
+>> - jupiter
+>>
+>>
+>> On 8/20/21, Jupiter <jupiter.hce@gmail.com> wrote:
+>> > Hi,
+>> >
+>> > I upgraded from Zeus to Hardknotte, I was able to run dbus to get
+>> > interface properties, but I failed on Hardknotte ofono 1.31. Has
+>> > anyone got oFono 1.31 dbus work?
+>> >
+>> > Thank you.
+>> >
+>> > Kind regards,
+>> >
+>> > - jupiter
+>> >
+>> _______________________________________________
+>> ofono mailing list -- ofono@ofono.org
+>> To unsubscribe send an email to ofono-leave@ofono.org
+>>
+>
+
+
+--
+"A man can fail many times, but he isn't a failure until he begins to
+blame somebody else."
+-- John Burroughs
+
+^ permalink raw reply	[flat|nested] only message in thread
+only message in thread, other threads:[~2021-08-25  7:23 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+     [not found] <CAA=hcWQAWZyiSTQ3r8DiTK2DFuJZZ7hDasAuggfR9shqwz2ioQ@mail.gmail.com>
+     [not found] ` <CAFiQ677d90DJCM6m+RgAJ-AieqpoBBY+soHXN-rH_bVP7Vgf6g@mail.gmail.com>
+2021-08-25  7:22   ` oFono Version 1.31 ofonod crash JH
+

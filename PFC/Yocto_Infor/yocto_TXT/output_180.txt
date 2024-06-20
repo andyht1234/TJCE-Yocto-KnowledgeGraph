@@ -1,0 +1,614 @@
+* Errno=No space left on device
+@ 2023-09-14 12:07 Dave Hitchman
+  2023-09-14 12:13 ` [yocto] " Gyorgy Sarvari
+                   ` (2 more replies)
+  0 siblings, 3 replies; 12+ messages in thread
+From: Dave Hitchman @ 2023-09-14 12:07 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 4163 bytes --]
+
+. sources/poky/oe-init-build-env
+
+██████╗ ██╗  ██╗██╗   ██╗████████╗███████╗ ██████╗
+██╔══██╗██║  ██║╚██╗ ██╔╝╚══██╔══╝██╔════╝██╔════╝
+██████╔╝███████║ ╚████╔╝    ██║   █████╗  ██║
+██╔═══╝ ██╔══██║  ╚██╔╝     ██║   ██╔══╝  ██║
+██║     ██║  ██║   ██║      ██║   ███████╗╚██████╗
+╚═╝     ╚═╝  ╚═╝   ╚═╝      ╚═╝   ╚══════╝ ╚═════╝
+
+
+Welcome to the PHYTEC BSP-Yocto buildsystem.
+
+Before building for the first time, you should take a look in the main
+configuration file 'conf/local.conf'. There you can tweak the build system
+settings and license configuration. For example you may have to accept the
+Freescale/NXP GPU and VPU licence for an i.MX6 board.
+
+Tested build target for this build configuration is:
+
+   $ bitbake phytec-headless-image
+
+
+As yesterday I managed to build the headless image with no issue I was then going to start to customise it so decided to create a layer...
+
+bitbake-layers create-layer meta-custom-mpet
+
+And got the no space error. Strangely enough on an old yocto directory attempting a different phytec configuration that was apparently tested I also got the same.
+
+
+NOTE: Starting bitbake server...
+ERROR: No space left on device or exceeds fs.inotify.max_user_watches?
+ERROR: To check max_user_watches: sysctl -n fs.inotify.max_user_watches.
+ERROR: To modify max_user_watches: sysctl -n -w fs.inotify.max_user_watches=<value>.
+ERROR: Root privilege is required to modify max_user_watches.
+Traceback (most recent call last):
+  File "/home/dave/Documents/Kymati/yocto/sources/poky/bitbake/bin/bitbake-layers", line 93, in <module>
+    ret = main()
+  File "/home/dave/Documents/Kymati/yocto/sources/poky/bitbake/bin/bitbake-layers", line 61, in main
+    tinfoil.prepare(True)
+  File "/home/dave/Documents/Kymati/yocto/sources/poky/bitbake/lib/bb/tinfoil.py", line 409, in prepare
+    config_params.updateToServer(self.server_connection.connection, os.environ.copy())
+  File "/home/dave/Documents/Kymati/yocto/sources/poky/bitbake/lib/bb/cookerdata.py", line 75, in updateToServer
+    raise Exception("Unable to update the server configuration with local parameters: %s" % error)
+Exception: Unable to update the server configuration with local parameters: Traceback (most recent call last):
+  File "/home/dave/Documents/Kymati/yocto/sources/poky/bitbake/lib/bb/command.py", line 81, in runCommand
+    result = command_method(self, commandline)
+  File "/home/dave/Documents/Kymati/yocto/sources/poky/bitbake/lib/bb/command.py", line 277, in updateConfig
+    command.cooker.updateConfigOpts(options, environment, cmdline)
+  File "/home/dave/Documents/Kymati/yocto/sources/poky/bitbake/lib/bb/cooker.py", line 497, in updateConfigOpts
+    self.reset()
+  File "/home/dave/Documents/Kymati/yocto/sources/poky/bitbake/lib/bb/cooker.py", line 1722, in reset
+    self.initConfigurationData()
+  File "/home/dave/Documents/Kymati/yocto/sources/poky/bitbake/lib/bb/cooker.py", line 375, in initConfigurationData
+    self.add_filewatch(mc.getVar("__base_depends", False), self.configwatcher)
+  File "/home/dave/Documents/Kymati/yocto/sources/poky/bitbake/lib/bb/cooker.py", line 291, in add_filewatch
+    watcher.add_watch(f, self.watchmask, quiet=False)
+  File "/home/dave/Documents/Kymati/yocto/sources/poky/bitbake/lib/pyinotify.py", line 1908, in add_watch
+    raise WatchManagerError(err, ret_)
+pyinotify.WatchManagerError: add_watch: cannot watch /home/dave/Documents/Kymati/yocto/build/conf WD=-1, Errno=No space left on device (ENOSPC)
+
+dave@dave-TUXEDO-Aura-15-Gen1:~/Documents/Kymati/yocto/build$ sysctl -n fs.inotify.max_user_watches
+65536
+
+
+the disc has 1.2 TB empty, there are gBytes of ram available, nothing else running. I succesfully built an image yesterday.
+It seems at the moment that I can only ever build one thing with the directory, if I want to build again or attempt a tweak of any sort I get this error. Its wrong for sure, there is plenty of space, the hint cant surely be right - you cant surely be watching over 65000 things - not realistically?
+
+What IS the actual problem and how is it actually fixed? I cant be the only person facing this surely?
+
+[-- Attachment #2: Type: text/html, Size: 8388 bytes --]
+
+^ permalink raw reply	[flat|nested] 12+ messages in thread
+* Re: [yocto] Errno=No space left on device
+  2023-09-14 12:07 Errno=No space left on device Dave Hitchman
+@ 2023-09-14 12:13 ` Gyorgy Sarvari
+  2023-09-14 12:14 ` Alexander Kanavin
+  2023-09-14 12:17 ` Martin Jansa
+  2 siblings, 0 replies; 12+ messages in thread
+From: Gyorgy Sarvari @ 2023-09-14 12:13 UTC (permalink / raw)
+  To: Dave Hitchman, yocto
+
+
+
+On 9/14/23 14:07, Dave Hitchman wrote:
+
+> 
+> 
+> the disc has 1.2 TB empty, there are gBytes of ram available, nothing 
+> else running. I succesfully built an image yesterday.
+
+
+What about the inodes on the drive (df -i)? Do you still have any 
+available ones left?
+
+
+^ permalink raw reply	[flat|nested] 12+ messages in thread
+* Re: [yocto] Errno=No space left on device
+  2023-09-14 12:07 Errno=No space left on device Dave Hitchman
+  2023-09-14 12:13 ` [yocto] " Gyorgy Sarvari
+@ 2023-09-14 12:14 ` Alexander Kanavin
+  2023-09-14 12:17 ` Martin Jansa
+  2 siblings, 0 replies; 12+ messages in thread
+From: Alexander Kanavin @ 2023-09-14 12:14 UTC (permalink / raw)
+  To: Dave Hitchman; +Cc: yocto
+
+On Thu, 14 Sept 2023 at 14:07, Dave Hitchman <dave.hitchman@kymati.com> wrote:
+> bitbake-layers create-layer meta-custom-mpet
+
+meta-custom-mpet is actually a path, so maybe you need to use an
+absolute path here and place it somewhere else than your build
+directory?
+
+Alex
+
+
+^ permalink raw reply	[flat|nested] 12+ messages in thread
+* Re: [yocto] Errno=No space left on device
+  2023-09-14 12:07 Errno=No space left on device Dave Hitchman
+  2023-09-14 12:13 ` [yocto] " Gyorgy Sarvari
+  2023-09-14 12:14 ` Alexander Kanavin
+@ 2023-09-14 12:17 ` Martin Jansa
+  2023-09-14 12:35   ` Dave Hitchman
+  2023-09-14 12:47   ` Dave Hitchman
+  2 siblings, 2 replies; 12+ messages in thread
+From: Martin Jansa @ 2023-09-14 12:17 UTC (permalink / raw)
+  To: Dave Hitchman; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 877 bytes --]
+
+On Thu, Sep 14, 2023 at 2:07 PM Dave Hitchman <dave.hitchman@kymati.com>
+wrote:
+
+> ERROR: No space left on device or exceeds fs.inotify.max_user_watches?
+> ERROR: To check max_user_watches: sysctl -n fs.inotify.max_user_watches.
+> ERROR: To modify max_user_watches: sysctl -n -w
+> fs.inotify.max_user_watches=<value>.
+>
+
+
+> pyinotify.WatchManagerError: add_watch: cannot watch
+> /home/dave/Documents/Kymati/yocto/build/conf WD=-1, Errno=No space left on
+> device (ENOSPC)
+>
+> dave@dave-TUXEDO-Aura-15-Gen1:~/Documents/Kymati/yocto/build$ sysctl -n
+> fs.inotify.max_user_watches
+> 65536
+>
+> What IS the actual problem and how is it actually fixed? I cant be the
+> only person facing this surely?
+>
+
+Have you tried to increase fs.inotify.max_user_watches as the error says?
+
+$ sysctl -n fs.inotify.max_user_watches
+1048576
+
+64K might not be enough.
+
+[-- Attachment #2: Type: text/html, Size: 1841 bytes --]
+
+^ permalink raw reply	[flat|nested] 12+ messages in thread
+* Re: [yocto] Errno=No space left on device
+  2023-09-14 12:17 ` Martin Jansa
+@ 2023-09-14 12:35   ` Dave Hitchman
+  2023-09-14 12:39     ` Alexander Kanavin
+                       ` (2 more replies)
+  2023-09-14 12:47   ` Dave Hitchman
+  1 sibling, 3 replies; 12+ messages in thread
+From: Dave Hitchman @ 2023-09-14 12:35 UTC (permalink / raw)
+  To: Martin Jansa; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1509 bytes --]
+
+Does anyone know what IS enough? Watching the video series around https://www.youtube.com/watch?v=bTEdfwtPtNY he doesnt mention changing this size. I dont actually know what this watch manager thing is supposed to be doing, there is one command prompt doing one thing, I cant believe that it would need that many things being watched? What is it even watching for?
+________________________________
+From: Martin Jansa <martin.jansa@gmail.com>
+Sent: 14 September 2023 14:17
+To: Dave Hitchman <dave.hitchman@kymati.com>
+Cc: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+Subject: Re: [yocto] Errno=No space left on device
+
+On Thu, Sep 14, 2023 at 2:07 PM Dave Hitchman <dave.hitchman@kymati.com<mailto:dave.hitchman@kymati.com>> wrote:
+ERROR: No space left on device or exceeds fs.inotify.max_user_watches?
+ERROR: To check max_user_watches: sysctl -n fs.inotify.max_user_watches.
+ERROR: To modify max_user_watches: sysctl -n -w fs.inotify.max_user_watches=<value>.
+
+pyinotify.WatchManagerError: add_watch: cannot watch /home/dave/Documents/Kymati/yocto/build/conf WD=-1, Errno=No space left on device (ENOSPC)
+
+dave@dave-TUXEDO-Aura-15-Gen1:~/Documents/Kymati/yocto/build$ sysctl -n fs.inotify.max_user_watches
+65536
+
+What IS the actual problem and how is it actually fixed? I cant be the only person facing this surely?
+
+Have you tried to increase fs.inotify.max_user_watches as the error says?
+
+$ sysctl -n fs.inotify.max_user_watches
+1048576
+
+64K might not be enough.
+
+[-- Attachment #2: Type: text/html, Size: 3358 bytes --]
+
+^ permalink raw reply	[flat|nested] 12+ messages in thread
+* Re: [yocto] Errno=No space left on device
+  2023-09-14 12:35   ` Dave Hitchman
+@ 2023-09-14 12:39     ` Alexander Kanavin
+  2023-09-14 12:46     ` Martin Jansa
+  2023-09-14 13:59     ` Richard Purdie
+  2 siblings, 0 replies; 12+ messages in thread
+From: Alexander Kanavin @ 2023-09-14 12:39 UTC (permalink / raw)
+  To: Dave Hitchman; +Cc: Martin Jansa, yocto
+
+How about if you try it with a plain poky checkout (to the same
+revision as your phytec setup)? Does it still happen?
+
+Alex
+
+On Thu, 14 Sept 2023 at 14:35, Dave Hitchman <dave.hitchman@kymati.com> wrote:
+>
+> Does anyone know what IS enough? Watching the video series around https://www.youtube.com/watch?v=bTEdfwtPtNY he doesnt mention changing this size. I dont actually know what this watch manager thing is supposed to be doing, there is one command prompt doing one thing, I cant believe that it would need that many things being watched? What is it even watching for?
+> ________________________________
+> From: Martin Jansa <martin.jansa@gmail.com>
+> Sent: 14 September 2023 14:17
+> To: Dave Hitchman <dave.hitchman@kymati.com>
+> Cc: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+> Subject: Re: [yocto] Errno=No space left on device
+>
+> On Thu, Sep 14, 2023 at 2:07 PM Dave Hitchman <dave.hitchman@kymati.com> wrote:
+>
+> ERROR: No space left on device or exceeds fs.inotify.max_user_watches?
+> ERROR: To check max_user_watches: sysctl -n fs.inotify.max_user_watches.
+> ERROR: To modify max_user_watches: sysctl -n -w fs.inotify.max_user_watches=<value>.
+>
+>
+>
+> pyinotify.WatchManagerError: add_watch: cannot watch /home/dave/Documents/Kymati/yocto/build/conf WD=-1, Errno=No space left on device (ENOSPC)
+>
+> dave@dave-TUXEDO-Aura-15-Gen1:~/Documents/Kymati/yocto/build$ sysctl -n fs.inotify.max_user_watches
+> 65536
+>
+> What IS the actual problem and how is it actually fixed? I cant be the only person facing this surely?
+>
+>
+> Have you tried to increase fs.inotify.max_user_watches as the error says?
+>
+> $ sysctl -n fs.inotify.max_user_watches
+> 1048576
+>
+> 64K might not be enough.
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#61000): https://lists.yoctoproject.org/g/yocto/message/61000
+> Mute This Topic: https://lists.yoctoproject.org/mt/101356635/1686489
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 12+ messages in thread
+* Re: [yocto] Errno=No space left on device
+  2023-09-14 12:35   ` Dave Hitchman
+  2023-09-14 12:39     ` Alexander Kanavin
+@ 2023-09-14 12:46     ` Martin Jansa
+  2023-09-14 12:48       ` Dave Hitchman
+  2023-09-14 13:59     ` Richard Purdie
+  2 siblings, 1 reply; 12+ messages in thread
+From: Martin Jansa @ 2023-09-14 12:46 UTC (permalink / raw)
+  To: Dave Hitchman; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1973 bytes --]
+
+On Thu, Sep 14, 2023 at 2:35 PM Dave Hitchman <dave.hitchman@kymati.com>
+wrote:
+
+> Does anyone know what IS enough?
+>
+
+Depends on how big your metadata layers are, so there isn't single value
+which would suite everybody. But 1M works for me even for very big builds,
+so it should be big enough for you as well (for whatever PHYTEC is doing).
+
+
+> Watching the video series around
+> https://www.youtube.com/watch?v=bTEdfwtPtNY he doesnt mention changing
+> this size. I dont actually know what this watch manager thing is supposed
+> to be doing, there is one command prompt doing one thing, I cant believe
+> that it would need that many things being watched? What is it even watching
+> for?
+>
+
+It's watching for changes in metadata, which is a lot of files.
+
+
+------------------------------
+> *From:* Martin Jansa <martin.jansa@gmail.com>
+> *Sent:* 14 September 2023 14:17
+> *To:* Dave Hitchman <dave.hitchman@kymati.com>
+> *Cc:* yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+> *Subject:* Re: [yocto] Errno=No space left on device
+>
+> On Thu, Sep 14, 2023 at 2:07 PM Dave Hitchman <dave.hitchman@kymati.com>
+> wrote:
+>
+> ERROR: No space left on device or exceeds fs.inotify.max_user_watches?
+> ERROR: To check max_user_watches: sysctl -n fs.inotify.max_user_watches.
+> ERROR: To modify max_user_watches: sysctl -n -w
+> fs.inotify.max_user_watches=<value>.
+>
+>
+>
+> pyinotify.WatchManagerError: add_watch: cannot watch
+> /home/dave/Documents/Kymati/yocto/build/conf WD=-1, Errno=No space left on
+> device (ENOSPC)
+>
+> dave@dave-TUXEDO-Aura-15-Gen1:~/Documents/Kymati/yocto/build$ sysctl -n
+> fs.inotify.max_user_watches
+> 65536
+>
+> What IS the actual problem and how is it actually fixed? I cant be the
+> only person facing this surely?
+>
+>
+> Have you tried to increase fs.inotify.max_user_watches as the error says?
+>
+> $ sysctl -n fs.inotify.max_user_watches
+> 1048576
+>
+> 64K might not be enough.
+>
+
+[-- Attachment #2: Type: text/html, Size: 4596 bytes --]
+
+^ permalink raw reply	[flat|nested] 12+ messages in thread
+* Re: [yocto] Errno=No space left on device
+  2023-09-14 12:17 ` Martin Jansa
+  2023-09-14 12:35   ` Dave Hitchman
+@ 2023-09-14 12:47   ` Dave Hitchman
+  2023-09-14 12:54     ` Martin Jansa
+  1 sibling, 1 reply; 12+ messages in thread
+From: Dave Hitchman @ 2023-09-14 12:47 UTC (permalink / raw)
+  To: Martin Jansa; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1726 bytes --]
+
+Well using that enormous number worked... for the moment, until when it next stops. I still would like to know what the devil is being done in my system with that one build that is consuming such a crazy number of watches, what is being watched, why etc. This is taking memory away from other things, maybe I do have a thumping great machine but just endlessly sucking bigger and bigger numbers of watches appears to me to be the wrong thing to be doing, not everyone can afford enough ram to store an encyclopedia britannicas worth of data about every grain of sand on the planet.
+________________________________
+From: Martin Jansa <martin.jansa@gmail.com>
+Sent: 14 September 2023 14:17
+To: Dave Hitchman <dave.hitchman@kymati.com>
+Cc: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+Subject: Re: [yocto] Errno=No space left on device
+
+On Thu, Sep 14, 2023 at 2:07 PM Dave Hitchman <dave.hitchman@kymati.com<mailto:dave.hitchman@kymati.com>> wrote:
+ERROR: No space left on device or exceeds fs.inotify.max_user_watches?
+ERROR: To check max_user_watches: sysctl -n fs.inotify.max_user_watches.
+ERROR: To modify max_user_watches: sysctl -n -w fs.inotify.max_user_watches=<value>.
+
+pyinotify.WatchManagerError: add_watch: cannot watch /home/dave/Documents/Kymati/yocto/build/conf WD=-1, Errno=No space left on device (ENOSPC)
+
+dave@dave-TUXEDO-Aura-15-Gen1:~/Documents/Kymati/yocto/build$ sysctl -n fs.inotify.max_user_watches
+65536
+
+What IS the actual problem and how is it actually fixed? I cant be the only person facing this surely?
+
+Have you tried to increase fs.inotify.max_user_watches as the error says?
+
+$ sysctl -n fs.inotify.max_user_watches
+1048576
+
+64K might not be enough.
+
+[-- Attachment #2: Type: text/html, Size: 3462 bytes --]
+
+^ permalink raw reply	[flat|nested] 12+ messages in thread
+* Re: [yocto] Errno=No space left on device
+  2023-09-14 12:46     ` Martin Jansa
+@ 2023-09-14 12:48       ` Dave Hitchman
+  0 siblings, 0 replies; 12+ messages in thread
+From: Dave Hitchman @ 2023-09-14 12:48 UTC (permalink / raw)
+  To: Martin Jansa; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2658 bytes --]
+
+Thanks Martin, I have adopted your huge number and that does at least get me motoring. I would still love to know what the devil is going on, I cant imagine how anyone constructing any form of linux build requires that many things to be watched during the build. I dont think I even have that many files on my machine!
+________________________________
+From: Martin Jansa <martin.jansa@gmail.com>
+Sent: 14 September 2023 14:46
+To: Dave Hitchman <dave.hitchman@kymati.com>
+Cc: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+Subject: Re: [yocto] Errno=No space left on device
+
+On Thu, Sep 14, 2023 at 2:35 PM Dave Hitchman <dave.hitchman@kymati.com<mailto:dave.hitchman@kymati.com>> wrote:
+Does anyone know what IS enough?
+
+Depends on how big your metadata layers are, so there isn't single value which would suite everybody. But 1M works for me even for very big builds, so it should be big enough for you as well (for whatever PHYTEC is doing).
+
+Watching the video series around https://www.youtube.com/watch?v=bTEdfwtPtNY he doesnt mention changing this size. I dont actually know what this watch manager thing is supposed to be doing, there is one command prompt doing one thing, I cant believe that it would need that many things being watched? What is it even watching for?
+
+It's watching for changes in metadata, which is a lot of files.
+
+
+________________________________
+From: Martin Jansa <martin.jansa@gmail.com<mailto:martin.jansa@gmail.com>>
+Sent: 14 September 2023 14:17
+To: Dave Hitchman <dave.hitchman@kymati.com<mailto:dave.hitchman@kymati.com>>
+Cc: yocto@lists.yoctoproject.org<mailto:yocto@lists.yoctoproject.org> <yocto@lists.yoctoproject.org<mailto:yocto@lists.yoctoproject.org>>
+Subject: Re: [yocto] Errno=No space left on device
+
+On Thu, Sep 14, 2023 at 2:07 PM Dave Hitchman <dave.hitchman@kymati.com<mailto:dave.hitchman@kymati.com>> wrote:
+ERROR: No space left on device or exceeds fs.inotify.max_user_watches?
+ERROR: To check max_user_watches: sysctl -n fs.inotify.max_user_watches.
+ERROR: To modify max_user_watches: sysctl -n -w fs.inotify.max_user_watches=<value>.
+
+pyinotify.WatchManagerError: add_watch: cannot watch /home/dave/Documents/Kymati/yocto/build/conf WD=-1, Errno=No space left on device (ENOSPC)
+
+dave@dave-TUXEDO-Aura-15-Gen1:~/Documents/Kymati/yocto/build$ sysctl -n fs.inotify.max_user_watches
+65536
+
+What IS the actual problem and how is it actually fixed? I cant be the only person facing this surely?
+
+Have you tried to increase fs.inotify.max_user_watches as the error says?
+
+$ sysctl -n fs.inotify.max_user_watches
+1048576
+
+64K might not be enough.
+
+[-- Attachment #2: Type: text/html, Size: 5980 bytes --]
+
+^ permalink raw reply	[flat|nested] 12+ messages in thread
+* Re: [yocto] Errno=No space left on device
+  2023-09-14 12:47   ` Dave Hitchman
+@ 2023-09-14 12:54     ` Martin Jansa
+  0 siblings, 0 replies; 12+ messages in thread
+From: Martin Jansa @ 2023-09-14 12:54 UTC (permalink / raw)
+  To: Dave Hitchman; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1319 bytes --]
+
+On Thu, Sep 14, 2023 at 2:47 PM Dave Hitchman <dave.hitchman@kymati.com>
+wrote:
+
+> Well using that enormous number worked... for the moment, until when it
+> next stops. I still would like to know what the devil is being done in my
+> system with that one build that is consuming such a crazy number of
+> watches, what is being watched, why etc.
+>
+
+bitbake is open source, you can read what exactly it does here:
+https://git.openembedded.org/bitbake/
+
+
+> This is taking memory away from other things, maybe I do have a thumping
+> great machine but just endlessly sucking bigger and bigger numbers of
+> watches appears to me to be the wrong thing to be doing, not everyone can
+> afford enough ram to store an encyclopedia britannicas worth of data about
+> every grain of sand on the planet.
+>
+
+If you're afraid that number of watches will eat your thumping great
+machine, then maybe you should avoid building software completely and use
+that machine in toaster. Other things will eat a lot more ram, cpu and disk
+once you pass the parsing phase.
+
+The same question from 2019
+https://www.yoctoproject.org/pipermail/yocto/2019-May/045221.html - you
+don't need to copy encyclopedia or count grains of sand on the planet, you
+can just google "yocto fs.inotify.max_user_watches" to find it.
+
+>
+
+[-- Attachment #2: Type: text/html, Size: 2582 bytes --]
+
+^ permalink raw reply	[flat|nested] 12+ messages in thread
+* Re: [yocto] Errno=No space left on device
+  2023-09-14 12:35   ` Dave Hitchman
+  2023-09-14 12:39     ` Alexander Kanavin
+  2023-09-14 12:46     ` Martin Jansa
+@ 2023-09-14 13:59     ` Richard Purdie
+  2023-09-14 15:53       ` Dave Hitchman
+  2 siblings, 1 reply; 12+ messages in thread
+From: Richard Purdie @ 2023-09-14 13:59 UTC (permalink / raw)
+  To: Dave Hitchman, Martin Jansa; +Cc: yocto
+
+On Thu, 2023-09-14 at 12:35 +0000, Dave Hitchman wrote:
+> 
+> Does anyone know what IS enough? Watching the video series
+> around https://www.youtube.com/watch?v=bTEdfwtPtNY he doesnt mention
+> changing this size. I dont actually know what this watch manager
+> thing is supposed to be doing, there is one command prompt doing one
+> thing, I cant believe that it would need that many things being
+> watched? What is it even watching for? 
+
+There is a "memory resident" mode for bitbake (BB_SERVER_TIMEOUT = "X")
+and for that to work reliably, bitbake needs to know when to reparse
+metadata. For that reason it does track the metadata changing. In
+theory it does this even when not staying resident so it can detect
+changes in the metadata during builds and inform the user not to do
+that and also to reduce differences in the codepaths between memory
+resident and non-resident codepaths.
+
+You might think 65k sounds a lot but in a simple OE-Core checkout,
+there are 2.5k directories and 19k files.
+
+In order to reduce system impact, bitbake only monitors directories,
+not files. I'd imagine somehow you have a lot of directories being
+included in the watch paths.
+
+FWIW in a given build there are millions of files being processed. We
+should only be monitoring the recipe/config files though.
+
+So whilst that doesn't answer your question fully and I don't know
+where the files are coming from, 65k is a relatively easy number to
+reach in the kinds of work bitbake does.
+
+Cheers,
+
+Richard
+
+
+
+
+
+
+^ permalink raw reply	[flat|nested] 12+ messages in thread
+* Re: [yocto] Errno=No space left on device
+  2023-09-14 13:59     ` Richard Purdie
+@ 2023-09-14 15:53       ` Dave Hitchman
+  0 siblings, 0 replies; 12+ messages in thread
+From: Dave Hitchman @ 2023-09-14 15:53 UTC (permalink / raw)
+  To: Richard Purdie, Martin Jansa; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1949 bytes --]
+
+Thanks Richard, nice to have a little more info, at least now I know what might be going on
+
+________________________________
+From: Richard Purdie <richard.purdie@linuxfoundation.org>
+Sent: 14 September 2023 15:59
+To: Dave Hitchman <dave.hitchman@kymati.com>; Martin Jansa <martin.jansa@gmail.com>
+Cc: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+Subject: Re: [yocto] Errno=No space left on device
+
+On Thu, 2023-09-14 at 12:35 +0000, Dave Hitchman wrote:
+>
+> Does anyone know what IS enough? Watching the video series
+> around https://www.youtube.com/watch?v=bTEdfwtPtNY he doesnt mention
+> changing this size. I dont actually know what this watch manager
+> thing is supposed to be doing, there is one command prompt doing one
+> thing, I cant believe that it would need that many things being
+> watched? What is it even watching for?
+
+There is a "memory resident" mode for bitbake (BB_SERVER_TIMEOUT = "X")
+and for that to work reliably, bitbake needs to know when to reparse
+metadata. For that reason it does track the metadata changing. In
+theory it does this even when not staying resident so it can detect
+changes in the metadata during builds and inform the user not to do
+that and also to reduce differences in the codepaths between memory
+resident and non-resident codepaths.
+
+You might think 65k sounds a lot but in a simple OE-Core checkout,
+there are 2.5k directories and 19k files.
+
+In order to reduce system impact, bitbake only monitors directories,
+not files. I'd imagine somehow you have a lot of directories being
+included in the watch paths.
+
+FWIW in a given build there are millions of files being processed. We
+should only be monitoring the recipe/config files though.
+
+So whilst that doesn't answer your question fully and I don't know
+where the files are coming from, 65k is a relatively easy number to
+reach in the kinds of work bitbake does.
+
+Cheers,
+
+Richard
+
+
+
+
+
+[-- Attachment #2: Type: text/html, Size: 3268 bytes --]
+
+^ permalink raw reply	[flat|nested] 12+ messages in thread
+end of thread, other threads:[~2023-09-14 15:53 UTC | newest]
+
+Thread overview: 12+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-09-14 12:07 Errno=No space left on device Dave Hitchman
+2023-09-14 12:13 ` [yocto] " Gyorgy Sarvari
+2023-09-14 12:14 ` Alexander Kanavin
+2023-09-14 12:17 ` Martin Jansa
+2023-09-14 12:35   ` Dave Hitchman
+2023-09-14 12:39     ` Alexander Kanavin
+2023-09-14 12:46     ` Martin Jansa
+2023-09-14 12:48       ` Dave Hitchman
+2023-09-14 13:59     ` Richard Purdie
+2023-09-14 15:53       ` Dave Hitchman
+2023-09-14 12:47   ` Dave Hitchman
+2023-09-14 12:54     ` Martin Jansa
+

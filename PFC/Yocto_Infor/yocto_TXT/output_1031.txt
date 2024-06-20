@@ -1,0 +1,93 @@
+* Creating dependency on swu images
+@ 2023-01-19 14:41 Marek Słomiany
+  0 siblings, 0 replies; only message in thread
+From: Marek Słomiany @ 2023-01-19 14:41 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 3586 bytes --]
+
+Hi,
+
+I am trying to prepare a wic for SD card for factory-flashing the device.
+For this I have prepared bootloader and initramfs (containing swupdate) on
+first partition, and I'm planing to store a bunch of swu update files on
+second one - those files will partition the device's storage and install
+kernel, bootloader, rootfs and whatever necesary.
+To achive this I have already collected all required swu files and I am
+able to create a package with them to be used further to populate that
+second partition on SD. The problem starts when I'm trying to create a
+dependency.
+(To simplify, I am testing on beaglebone-yocto machine, and as swu packages
+using "update-image.bb" from meta-swupdate-boards and created by me simple
+update of kernel called "update-kernel.bb")
+If I add:
+
+DEPENDS = " update-image update-kernel "
+
+I got error:
+
+ERROR: swus-1.0-r0 do_package: The sstate manifest for task
+'update-kernel:packagedata' (multilib variant '') could not be found.
+The pkgarchs considered were: beaglebone_yocto, cortexa8hf-neon,
+cortexa8hf-vfp, armv7ahf-neon, armv7ahf-vfp, armv6hf-vfp, armv5ehf-vfp,
+armv5hf-vfp, allarch, x86_64_x86_64-nativesdk.
+But none of these manifests exists:
+
+/home/marslo/cooker/bbb/builds/build-beaglebone-console/tmp/sstate-control/manifest-beaglebone_yocto-update-kernel.packagedata
+
+/home/marslo/cooker/bbb/builds/build-beaglebone-console/tmp/sstate-control/manifest-cortexa8hf-neon-update-kernel.packagedata
+
+/home/marslo/cooker/bbb/builds/build-beaglebone-console/tmp/sstate-control/manifest-cortexa8hf-vfp-update-kernel.packagedata
+
+/home/marslo/cooker/bbb/builds/build-beaglebone-console/tmp/sstate-control/manifest-armv7ahf-neon-update-kernel.packagedata
+
+/home/marslo/cooker/bbb/builds/build-beaglebone-console/tmp/sstate-control/manifest-armv7ahf-vfp-update-kernel.packagedata
+
+/home/marslo/cooker/bbb/builds/build-beaglebone-console/tmp/sstate-control/manifest-armv6hf-vfp-update-kernel.packagedata
+
+/home/marslo/cooker/bbb/builds/build-beaglebone-console/tmp/sstate-control/manifest-armv5ehf-vfp-update-kernel.packagedata
+
+/home/marslo/cooker/bbb/builds/build-beaglebone-console/tmp/sstate-control/manifest-armv5hf-vfp-update-kernel.packagedata
+
+/home/marslo/cooker/bbb/builds/build-beaglebone-console/tmp/sstate-control/manifest-allarch-update-kernel.packagedata
+
+/home/marslo/cooker/bbb/builds/build-beaglebone-console/tmp/sstate-control/manifest-x86_64_x86_64-nativesdk-update-kernel.packagedata
+ERROR: Logfile of failure stored in:
+/home/marslo/cooker/bbb/builds/build-beaglebone-console/tmp/work/cortexa8hf-neon-poky-linux-gnueabi/swus/1.0-r0/temp/log.do_package.56423
+ERROR: Task
+(/home/marslo/cooker/bbb/builds/build-beaglebone-console/../../layers/meta-test/recipes-core/other/swus_1.0.bb:do_package)
+failed with exit code '1'
+
+On the other hand, when I try doing this this way:
+
+do_install[depends] += " update-image:do_swuimage update-kernel:do_swuimage
+"
+
+I got following  error:
+
+Exception: FileExistsError: [Errno 17] File exists:
+'/home/marslo/cooker/bbb/builds/build-beaglebone-console/tmp/sysroots-components/cortexa8hf-neon/libgcc-initial/usr/lib/arm-poky-linux-gnueabi/11.3.0/libgcov.a'
+->
+'/home/marslo/cooker/bbb/builds/build-beaglebone-console/tmp/work/cortexa8hf-neon-poky-linux-gnueabi/swus/1.0-r0/recipe-sysroot/usr/lib/arm-poky-linux-gnueabi/11.3.0/libgcov.a'
+
+My do_install fuction is:
+do_install() {
+    install -d ${D}/swus
+    install -m 0440 ${DEPLOY_DIR_IMAGE}/update-image-${MACHINE}.swu
+${D}/swus/
+    install -m 0440 ${DEPLOY_DIR_IMAGE}/update-kernel-${MACHINE}.swu
+${D}/swus/
+}
+
+Kind Regards,
+Marek Slomiany
+
+[-- Attachment #2: Type: text/html, Size: 3969 bytes --]
+
+^ permalink raw reply	[flat|nested] only message in thread
+only message in thread, other threads:[~2023-01-19 14:41 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-01-19 14:41 Creating dependency on swu images Marek Słomiany
+

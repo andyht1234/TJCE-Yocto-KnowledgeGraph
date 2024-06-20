@@ -1,0 +1,224 @@
+* valgrind failed do_compile during bitbake
+@ 2021-07-08 22:00 Michael
+  2021-07-17  2:39 ` [yocto] " Randy MacLeod
+  0 siblings, 1 reply; 2+ messages in thread
+From: Michael @ 2021-07-08 22:00 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 3121 bytes --]
+
+
+I'm using Yocto "warrior" version.
+
+It is setup for powerpc-nf
+DEFAULTTUNE = "powerpc-nf"
+DISTRO = "poky"
+
+Everything seems to work find until I enable "valgrind".  'bitbake' fails
+to compile valgrind
+
+************************
+:
+| collect2: error: ld returned 1 exit status
+| make[3]: *** [Makefile:1034: memcheck-ppc32-linux] Error 1
+| make[3]: Leaving directory '$
+{WORK_DIR}/powerpc-nf-poky-linux/valgrind/3.14.0-r0/build/memcheck'
+| make[2]: *** [Makefile:1345: all-recursive] Error 1
+| make[2]: Leaving directory '$
+{WORK_DIR}/powerpc-nf-poky-linux/valgrind/3.14.0-r0/build/memcheck'
+| make[1]: *** [Makefile:834: all-recursive] Error 1
+| make[1]: Leaving directory '$
+{WORK_DIR}/work/powerpc-nf-poky-linux/valgrind/3.14.0-r0/build'
+| make: *** [Makefile:703: all] Error 2
+| make: Leaving directory '$
+{WORK_DIR}/powerpc-nf-poky-linux/valgrind/3.14.0-r0/build'
+| ERROR: oe_runmake failed
+| WARNING: $
+{WORK_DIR}/powerpc-nf-poky-linux/valgrind/3.14.0-r0/temp/run.do_compile.23806:1
+ exit 1 from 'exit 1'
+| ERROR: Function failed: do_compile (log file is located at $
+{WORK_DIR}/powerpc-nf-poky-linux/valgrind/3.14.0-r0/temp/log.do_compile.23806)
+ERROR: Task ($
+{REPODIR}fips-build/meta/recipes-devtools/valgrind/valgrind_3.14.0.bb:do_compile)
+ failed with exit code '1'
+NOTE: Tasks Summary: Attempted 4091 tasks of which 4089 didn't need to be
+rerun and 1 failed.
+
+Summary: 1 task failed:
+  $
+{REPO_DIR}/fips-build/meta/recipes-devtools/valgrind/valgrind_3.14.0.bb:do_compile
+Summary: There were 2 ERROR messages shown, returning a non-zero exit code.
+*********************************************
+
+Many link failure...
+**********************************
+ undefined reference to `__floatsidf'
+ undefined reference to `__muldf3'
+ undefined reference to `__ltdf2'
+ undefined reference to `__fixdfsi'
+ undefined reference to `__divdf3'
+ undefined reference to `__floatunsidf'
+ undefined reference to `__floatundidf'
+ undefined reference to `__adddf3'
+ undefined reference to `__fixunsdfdi'
+ undefined reference to `__nedf2'
+ undefined reference to `__gtdf2'
+ undefined reference to `__subdf3'
+ undefined reference to `__eqsf2'
+ undefined reference to `__eqdf2'
+ undefined reference to `__floatunsisf'
+ undefined reference to `__divsf3'
+***********************
+
+Seems like many people were running into this issue for many reason.  Saw a
+lot of suggestion in google, but seem like there is no real solution...
+I try to create valgrind_%.bbappen with the following contents.  And did
+not help...
+#####################
+#valgrind will not compile even with below changes
+CFLAGS_prepend = " -lc -lm "
+CFLAGS_append = " -ffast-math -static-libgcc -lgcc -ffreestanding -lc -lm "
+#BASE_WORKDIR="/tmp/youhour/fips-build/m20210707a/fips-ppcnf/build/tmp/work"
+#./powerpc-nf-poky-linux/valgrind/3.14.0-r0/recipe-sysroot/usr/lib/powerpc-poky-linux/8.3.0/libgcc.a
+BUILD_LDFLAGS_append = " -L$
+{BASE_WORKDIR}/powerpc-nf-poky-linux/valgrind/3.14.0-r0/recipe-sysroot/usr/lib/powerpc-poky-linux/8.3.0
+ "
+#####################
+
+Any suggestion is appreciated.
+
+[-- Attachment #2: Type: text/html, Size: 5075 bytes --]
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+* Re: [yocto] valgrind failed do_compile during bitbake
+  2021-07-08 22:00 valgrind failed do_compile during bitbake Michael
+@ 2021-07-17  2:39 ` Randy MacLeod
+  0 siblings, 0 replies; 2+ messages in thread
+From: Randy MacLeod @ 2021-07-17  2:39 UTC (permalink / raw)
+  To: Michael, yocto
+
+On 2021-07-08 6:00 p.m., Michael wrote:
+> I'm using Yocto "warrior" version.
+> 
+> It is setup for powerpc-nf
+> DEFAULTTUNE = "powerpc-nf"
+> DISTRO = "poky"
+> 
+> Everything seems to work find until I enable "valgrind".  'bitbake' 
+> fails to compile valgrind
+> 
+> ************************
+> :
+> | collect2: error: ld returned 1 exit status
+> | make[3]: *** [Makefile:1034: <file:1034:> memcheck-ppc32-linux] Error 1
+> | make[3]: Leaving directory 
+> '${WORK_DIR}/powerpc-nf-poky-linux/valgrind/3.14.0-r0/build/memcheck'
+> | make[2]: *** [Makefile:1345: <file:1345:> all-recursive] Error 1
+> | make[2]: Leaving directory 
+> '${WORK_DIR}/powerpc-nf-poky-linux/valgrind/3.14.0-r0/build/memcheck'
+> | make[1]: *** [Makefile:834: <file:834:> all-recursive] Error 1
+> | make[1]: Leaving directory 
+> '${WORK_DIR}/work/powerpc-nf-poky-linux/valgrind/3.14.0-r0/build'
+> | make: *** [Makefile:703: <file:703:> all] Error 2
+> | make: Leaving directory 
+> '${WORK_DIR}/powerpc-nf-poky-linux/valgrind/3.14.0-r0/build'
+> | ERROR: oe_runmake failed
+> | WARNING: 
+> ${WORK_DIR}/powerpc-nf-poky-linux/valgrind/3.14.0-r0/temp/run.do_compile.23806:1 
+> exit 1 from 'exit 1'
+> | ERROR: Function failed: do_compile (log file is located at 
+> ${WORK_DIR}/powerpc-nf-poky-linux/valgrind/3.14.0-r0/temp/log.do_compile.23806)
+> ERROR: Task 
+> (${REPODIR}fips-build/meta/recipes-devtools/valgrind/valgrind_3.14.0.bb 
+> <https://urldefense.com/v3/__http://valgrind_3.14.0.bb__;!!AjveYdw8EvQ!OY_7dx2G2egduSYaa7nftLqPZTpn3EC40Z_N7J8MPkv_dz7hS4AnmQdr1YAPEw_-jJ6cSQ$>:do_compile) 
+> failed with exit code '1'
+> NOTE: Tasks Summary: Attempted 4091 tasks of which 4089 didn't need to 
+> be rerun and 1 failed.
+> 
+> Summary: 1 task failed:
+>
+> ${REPO_DIR}/fips-build/meta/recipes-devtools/valgrind/valgrind_3.14.0.bb 
+> <https://urldefense.com/v3/__http://valgrind_3.14.0.bb__;!!AjveYdw8EvQ!OY_7dx2G2egduSYaa7nftLqPZTpn3EC40Z_N7J8MPkv_dz7hS4AnmQdr1YAPEw_-jJ6cSQ$>:do_compile
+> Summary: There were 2 ERROR messages shown, returning a non-zero exit code.
+> *********************************************
+> 
+> Many link failure...
+> **********************************
+>   undefined reference to `__floatsidf'
+> undefined reference to `__muldf3'
+> undefined reference to `__ltdf2'
+> undefined reference to `__fixdfsi'
+> undefined reference to `__divdf3'
+> undefined reference to `__floatunsidf'
+> undefined reference to `__floatundidf'
+> undefined reference to `__adddf3'
+> undefined reference to `__fixunsdfdi'
+> undefined reference to `__nedf2'
+> undefined reference to `__gtdf2'
+> undefined reference to `__subdf3'
+> undefined reference to `__eqsf2'
+> undefined reference to `__eqdf2'
+> undefined reference to `__floatunsisf'
+> undefined reference to `__divsf3'
+> ***********************
+> 
+> Seems like many people were running into this issue for many reason. 
+>   Saw a lot of suggestion in google, but seem like there is no real 
+> solution...
+> I try to create valgrind_%.bbappen with the following contents.  And did 
+> not help...
+> #####################
+> #valgrind will not compile even with below changes
+> CFLAGS_prepend = " -lc -lm "
+> CFLAGS_append = " -ffast-math -static-libgcc -lgcc -ffreestanding -lc -lm "
+> #BASE_WORKDIR="/tmp/youhour/fips-build/m20210707a/fips-ppcnf/build/tmp/work"
+> #./powerpc-nf-poky-linux/valgrind/3.14.0-r0/recipe-sysroot/usr/lib/powerpc-poky-linux/8.3.0/libgcc.a
+> BUILD_LDFLAGS_append = " 
+> -L${BASE_WORKDIR}/powerpc-nf-poky-linux/valgrind/3.14.0-r0/recipe-sysroot/usr/lib/powerpc-poky-linux/8.3.0 
+> "
+> #####################
+> 
+> Any suggestion is appreciated.
+
+It looks like you are just missing a soft-float library but I don't know
+off-hand where that is.
+
+We have a recent commit:
+
+https://git.openembedded.org/openembedded-core/commit/?id=effd1434a6ca6afcc358bea64053a7bf805633c7
+
+   valgrind: disable it for powerpc soft-float
+   valgrind doesn't build for powerpc soft-float. It is thus disabled for
+   such architectures.
+
+so it seems that powerpc-nf is just not supported by valgrind yet.
+
+
+An examples that shows what sort of changes would be needed:
+
+https://sourceware.org/git/?p=valgrind.git&a=search&h=HEAD&st=commit&s=soft-float
+
+Good luck,
+../Randy
+
+
+> 
+> 
+> 
+> 
+> 
+> 
+
+
+-- 
+# Randy MacLeod
+# Wind River Linux
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2021-07-17  2:39 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-07-08 22:00 valgrind failed do_compile during bitbake Michael
+2021-07-17  2:39 ` [yocto] " Randy MacLeod
+

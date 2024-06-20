@@ -1,0 +1,173 @@
+* Howto build packages for dependencies of an out of image recipe build.
+@ 2022-03-09 10:24 Daniel Squires
+  2022-03-09 12:41 ` [yocto] " Bruce Ashfield
+  2022-03-09 12:46 ` Daniel Squires
+  0 siblings, 2 replies; 6+ messages in thread
+From: Daniel Squires @ 2022-03-09 10:24 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 551 bytes --]
+
+We have our image and it is working as we need.
+We have an apt repo setup and working so that we can install additional packages within a deployment of the image.
+However when we manually bitbake additional packages (e.g bitbake my-optional-recipe) which we want to make available within this apt repository by default only the package for my-optional-recipe gets built, although all the dependencies of my-optional-recipe get built, none of them are packaged. how do we make sure all the dependencies have packages built?
+
+Best Regards
+
+Dan
+
+[-- Attachment #2: Type: text/html, Size: 583 bytes --]
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] Howto build packages for dependencies of an out of image recipe build.
+  2022-03-09 10:24 Howto build packages for dependencies of an out of image recipe build Daniel Squires
+@ 2022-03-09 12:41 ` Bruce Ashfield
+  2022-03-09 12:49   ` Daniel Squires
+  2022-03-09 12:46 ` Daniel Squires
+  1 sibling, 1 reply; 6+ messages in thread
+From: Bruce Ashfield @ 2022-03-09 12:41 UTC (permalink / raw)
+  To: Daniel Squires; +Cc: yocto
+
+On Wed, Mar 9, 2022 at 5:24 AM Daniel Squires <dan@engineeredarts.co.uk> wrote:
+>
+> We have our image and it is working as we need.
+> We have an apt repo setup and working so that we can install additional packages within a deployment of the image.
+> However when we manually bitbake additional packages (e.g bitbake my-optional-recipe) which we want to make available within this apt repository by default only the package for my-optional-recipe gets built, although all the dependencies of my-optional-recipe get built, none of them are packaged. how do we make sure all the dependencies have packages built?
+
+Are the dependencies in the recipe as RDEPENDS ? If so, they will be
+built and packaged. If they weren't, then image assembly and pretty
+much any package feed would be non-functional.
+
+Bruce
+
+>
+> Best Regards
+>
+> Dan
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#56401): https://lists.yoctoproject.org/g/yocto/message/56401
+> Mute This Topic: https://lists.yoctoproject.org/mt/89659095/1050810
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [bruce.ashfield@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+-- 
+- Thou shalt not follow the NULL pointer, for chaos and madness await
+thee at its end
+- "Use the force Harry" - Gandalf, Star Trek II
+
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: Howto build packages for dependencies of an out of image recipe build.
+  2022-03-09 10:24 Howto build packages for dependencies of an out of image recipe build Daniel Squires
+  2022-03-09 12:41 ` [yocto] " Bruce Ashfield
+@ 2022-03-09 12:46 ` Daniel Squires
+  1 sibling, 0 replies; 6+ messages in thread
+From: Daniel Squires @ 2022-03-09 12:46 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 127 bytes --]
+
+Just want to add that it seems to run the do_package task but not the do_package_write_deb one for each of the dependencies.
+
+[-- Attachment #2: Type: text/html, Size: 131 bytes --]
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: Howto build packages for dependencies of an out of image recipe build.
+  2022-03-09 12:41 ` [yocto] " Bruce Ashfield
+@ 2022-03-09 12:49   ` Daniel Squires
+  2022-03-09 12:59     ` Daniel Squires
+  0 siblings, 1 reply; 6+ messages in thread
+From: Daniel Squires @ 2022-03-09 12:49 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 320 bytes --]
+
+Yes, in RDPENDS, here's an example of an attempt at the equivalent of Ubuntu's build-essential package:
+
+DESCRIPTION = "Informational list of build-essential pacakages"
+
+inherit packagegroup
+
+PACKAGES = "\
+${PN} \
+"
+
+RDEPENDS:${PN} = "\
+libc6-dev \
+g++ \
+gcc \
+make \
+"
+
+INSANE_SKIP:${PN} = "dev-deps"
+
+[-- Attachment #2: Type: text/html, Size: 1106 bytes --]
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: Howto build packages for dependencies of an out of image recipe build.
+  2022-03-09 12:49   ` Daniel Squires
+@ 2022-03-09 12:59     ` Daniel Squires
+  2022-03-09 15:00       ` [yocto] " Robert Joslyn
+  0 siblings, 1 reply; 6+ messages in thread
+From: Daniel Squires @ 2022-03-09 12:59 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 487 bytes --]
+
+Just to be absolutely clear, here is the result of having run bitbake build-essential having first removed and thus started with a clean tmp dir.
+
+dan@melon:/home/dan/workspace_ssd/kas/build$ find tmp/deploy/deb/
+tmp/deploy/deb/
+tmp/deploy/deb/all
+tmp/deploy/deb/all/build-essential-ptest_1.0.0-r0.0_all.deb
+tmp/deploy/deb/all/build-essential-dev_1.0.0-r0.0_all.deb
+tmp/deploy/deb/all/build-essential_1.0.0-r0.0_all.deb
+tmp/deploy/deb/all/build-essential-dbg_1.0.0-r0.0_all.deb
+
+[-- Attachment #2: Type: text/html, Size: 619 bytes --]
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] Howto build packages for dependencies of an out of image recipe build.
+  2022-03-09 12:59     ` Daniel Squires
+@ 2022-03-09 15:00       ` Robert Joslyn
+  0 siblings, 0 replies; 6+ messages in thread
+From: Robert Joslyn @ 2022-03-09 15:00 UTC (permalink / raw)
+  To: Daniel Squires; +Cc: yocto
+
+
+> On Mar 9, 2022, at 4:59 AM, Daniel Squires <dan@engineeredarts.co.uk> wrote:
+> 
+> Just to be absolutely clear, here is the result of having run bitbake build-essential having first removed and thus started with a clean tmp dir.
+> 
+> dan@melon:/home/dan/workspace_ssd/kas/build$ find tmp/deploy/deb/ 
+> tmp/deploy/deb/ 
+> tmp/deploy/deb/all 
+> tmp/deploy/deb/all/build-essential-ptest_1.0.0-r0.0_all.deb 
+> tmp/deploy/deb/all/build-essential-dev_1.0.0-r0.0_all.deb 
+> tmp/deploy/deb/all/build-essential_1.0.0-r0.0_all.deb 
+> tmp/deploy/deb/all/build-essential-dbg_1.0.0-r0.0_all.deb
+
+This is now expected behavior. I discovered it a few months ago in my package feed builds:
+https://lists.yoctoproject.org/g/yocto/topic/88553371#55926
+
+Bitbake no longer does recursive packaging tasks since they are not always needed. To get all the recursive packages, you need to run bitbake --runall build build-essential
+
+
+Robert
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+end of thread, other threads:[~2022-03-09 15:00 UTC | newest]
+
+Thread overview: 6+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-03-09 10:24 Howto build packages for dependencies of an out of image recipe build Daniel Squires
+2022-03-09 12:41 ` [yocto] " Bruce Ashfield
+2022-03-09 12:49   ` Daniel Squires
+2022-03-09 12:59     ` Daniel Squires
+2022-03-09 15:00       ` [yocto] " Robert Joslyn
+2022-03-09 12:46 ` Daniel Squires
+

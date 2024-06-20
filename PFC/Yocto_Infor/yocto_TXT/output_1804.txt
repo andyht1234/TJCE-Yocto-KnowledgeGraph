@@ -1,0 +1,173 @@
+* Make psplash wait for the framebuffer to be ready
+       [not found] ` <1b153bce-a66a-45ee-a5c6-963ea6fb1c82.0d2bd5fa-15cc-4b27-b94e-83614f9e5b38.1195c9bc-3466-43ac-9600-56e4081b21e6@emailsignatures365.codetwo.com>
+@ 2022-05-23 12:12   ` Mike Looijmans
+       [not found]   ` <16F1BAD0BACA2F83.18186@lists.yoctoproject.org>
+  1 sibling, 0 replies; 2+ messages in thread
+From: Mike Looijmans @ 2022-05-23 12:12 UTC (permalink / raw)
+  To: yocto
+
+psplash doesn't work on my system because systemd attempts to start it 
+at 1.6 seconds into boot, while the fb device is created 1.9 seconds 
+after booting.
+
+This results in:
+
+[FAILED] Failed to start Start psplash boot splash screen.
+
+
+I figure I'm not the first and only person in the world to encounter 
+this issue...
+
+
+I'm digging into udev and systemd options to properly make it wait. As 
+suggested on the net, it should be possible using an udev rule like:
+
+SUBSYSTEM=="graphics", KERNEL=="fb0", TAG+="systemd"
+
+
+And then add the following to psplash-start.service:
+
+After=dev-fb0.device
+
+I also tried this variant, as reported by systemctl list-units:
+
+After=sys-devices-platform-gpu-graphics-fb0.device
+
+
+However, neither has any effect whatsoever, the service still tries to 
+start too early and fails. The "After=" apparently is ignored or so?
+
+
+
+-- Mike Looijmans
+
+Met vriendelijke groet / kind regards,
+
+Mike Looijmans
+System Expert
+
+
+TOPIC Embedded Products B.V.
+Materiaalweg 4, 5681 RJ Best
+The Netherlands
+
+T: +31 (0) 499 33 69 69
+E: mike.looijmans@topicproducts.com
+W: www.topic.nl
+
+Please consider the environment before printing this e-mail
+
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+* Re: [yocto] Make psplash wait for the framebuffer to be ready
+       [not found]   ` <16F1BAD0BACA2F83.18186@lists.yoctoproject.org>
+@ 2022-05-23 12:29     ` Mike Looijmans
+  0 siblings, 0 replies; 2+ messages in thread
+From: Mike Looijmans @ 2022-05-23 12:29 UTC (permalink / raw)
+  To: yocto
+
+Ah, just writing to the list appeared to have helped. For the dependency 
+to work, you need both a "Requires" and an "After" directive, i.e.
+
+[unit]
+...
+Requires=sys-devices-platform-gpu-graphics-fb0.device
+After=sys-devices-platform-gpu-graphics-fb0.device
+
+And with that change, it works. The splash appears as soon as the device 
+registers.
+
+
+
+Met vriendelijke groet / kind regards,
+
+Mike Looijmans
+System Expert
+
+
+TOPIC Embedded Products B.V.
+Materiaalweg 4, 5681 RJ Best
+The Netherlands
+
+T: +31 (0) 499 33 69 69
+E: mike.looijmans@topicproducts.com
+W: www.topic.nl
+
+Please consider the environment before printing this e-mail
+On 23-05-2022 14:12, Mike Looijmans via lists.yoctoproject.org wrote:
+> psplash doesn't work on my system because systemd attempts to start it 
+> at 1.6 seconds into boot, while the fb device is created 1.9 seconds 
+> after booting.
+>
+> This results in:
+>
+> [FAILED] Failed to start Start psplash boot splash screen.
+>
+>
+> I figure I'm not the first and only person in the world to encounter 
+> this issue...
+>
+>
+> I'm digging into udev and systemd options to properly make it wait. As 
+> suggested on the net, it should be possible using an udev rule like:
+>
+> SUBSYSTEM=="graphics", KERNEL=="fb0", TAG+="systemd"
+>
+>
+> And then add the following to psplash-start.service:
+>
+> After=dev-fb0.device
+>
+> I also tried this variant, as reported by systemctl list-units:
+>
+> After=sys-devices-platform-gpu-graphics-fb0.device
+>
+>
+> However, neither has any effect whatsoever, the service still tries to 
+> start too early and fails. The "After=" apparently is ignored or so?
+>
+>
+>
+> -- Mike Looijmans
+>
+> Met vriendelijke groet / kind regards,
+>
+> Mike Looijmans
+> System Expert
+>
+>
+> TOPIC Embedded Products B.V.
+> Materiaalweg 4, 5681 RJ Best
+> The Netherlands
+>
+> T: +31 (0) 499 33 69 69
+> E: mike.looijmans@topicproducts.com
+> W: www.topic.nl
+>
+> Please consider the environment before printing this e-mail
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#57155): https://lists.yoctoproject.org/g/yocto/message/57155
+> Mute This Topic: https://lists.yoctoproject.org/mt/91286438/3618446
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [mike.looijmans@topic.nl]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+-- 
+Mike Looijmans
+
+
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2022-05-23 12:29 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+     [not found] <1b153bce-a66a-45ee-a5c6-963ea6fb1c82.949ef384-8293-46b8-903f-40a477c056ae.b7e4c2e3-7ef8-438a-875f-c8d974c21d76@emailsignatures365.codetwo.com>
+     [not found] ` <1b153bce-a66a-45ee-a5c6-963ea6fb1c82.0d2bd5fa-15cc-4b27-b94e-83614f9e5b38.1195c9bc-3466-43ac-9600-56e4081b21e6@emailsignatures365.codetwo.com>
+2022-05-23 12:12   ` Make psplash wait for the framebuffer to be ready Mike Looijmans
+     [not found]   ` <16F1BAD0BACA2F83.18186@lists.yoctoproject.org>
+2022-05-23 12:29     ` [yocto] " Mike Looijmans
+

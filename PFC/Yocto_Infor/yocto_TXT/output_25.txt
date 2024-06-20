@@ -1,0 +1,1029 @@
+* [meta-rockchip][kirkstone][PATCH] bsp: rkbin: fix default COMPATIBLE_MACHINE matching all
+@ 2023-10-16 11:22 Quentin Schulz
+  2023-10-16 15:27 ` [yocto] Using cmake... how? Dave Hitchman
+  0 siblings, 1 reply; 15+ messages in thread
+From: Quentin Schulz @ 2023-10-16 11:22 UTC (permalink / raw)
+  To: twoerner; +Cc: yocto, Quentin Schulz, Quentin Schulz
+
+From: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+
+The goal of the default COMPATIBLE_MACHINE was to not allow
+rockchip-rkbin to be even parsed if a MACHINE isn't part of the
+COMPATIBLE_MACHINE.
+
+However, COMPATIBLE_MACHINE is a regexp checked using Python's re module
+approximately like:
+"""
+if re.match(COMPATIBLE_MACHINE, MACHINE):
+	return True
+"""
+
+and re.match() returns a match whatever MACHINE is if COMPATIBLE_MACHINE
+is the empty string.
+
+Therefore, let's change it to `^$` which only matches the empty string,
+which shouldn't be possible for anything in MACHINEOVERRIDES, and if it
+is there are probably bigger problems than parsing rockchip-rkbin.
+
+Fixes: 3c7f532c2e25 ("rk3588(s): add")
+Cc: Quentin Schulz <foss+yocto@0leil.net>
+Signed-off-by: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+---
+ recipes-bsp/rkbin/rockchip-rkbin_git.bb | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/recipes-bsp/rkbin/rockchip-rkbin_git.bb b/recipes-bsp/rkbin/rockchip-rkbin_git.bb
+index 7fefb01..f9e680d 100644
+--- a/recipes-bsp/rkbin/rockchip-rkbin_git.bb
++++ b/recipes-bsp/rkbin/rockchip-rkbin_git.bb
+@@ -12,7 +12,7 @@ inherit bin_package deploy
+ 
+ S = "${WORKDIR}/git"
+ 
+-COMPATIBLE_MACHINE = ""
++COMPATIBLE_MACHINE = "^$"
+ COMPATIBLE_MACHINE:rk3588s = "rk3588s"
+ 
+ PACKAGE_ARCH = "${MACHINE_ARCH}"
+-- 
+2.41.0
+
+
+
+^ permalink raw reply related	[flat|nested] 15+ messages in thread
+* [yocto] Using cmake... how?
+  2023-10-16 11:22 [meta-rockchip][kirkstone][PATCH] bsp: rkbin: fix default COMPATIBLE_MACHINE matching all Quentin Schulz
+@ 2023-10-16 15:27 ` Dave Hitchman
+  2023-10-16 19:48   ` Khem Raj
+  2023-10-17  5:49   ` Mikko Rapeli
+  0 siblings, 2 replies; 15+ messages in thread
+From: Dave Hitchman @ 2023-10-16 15:27 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1000 bytes --]
+
+So my current recipe for the project works, including building various C, C++ files
+I wanted to now add a library of someone elses creation.
+On my machine this library builds using the tools installed so the code is ok
+
+I added a recipe to my yocto build and it attempts to do the cmake.
+
+Unfortunately whatever I have tried over 2 days cmake insists:
+
+  1.  On using the from my machine NOT the cross compiling tool set the rest of the yocto build uses.
+| -- The CXX compiler identification is GNU 9.4.0
+| -- The C compiler identification is GNU 9.4.0
+  2.
+Getting upset about the flags passed in:
+|     g++: warning: ‘-mcpu=’ is deprecated; use ‘-mtune=’ or ‘-march=’ instead
+|     cc1plus: error: bad value (‘armv8-a+crc+crypto’) for ‘-march=’ switch
+I cant even find where these flags are actually set, where I found them and thought they were set I altered them to be FRED and nothing changed in the errors at all.
+
+Any idea? Surely it should be pretty easy?
+
+thanks
+Dave
+
+
+[-- Attachment #2: Type: text/html, Size: 3707 bytes --]
+
+^ permalink raw reply	[flat|nested] 15+ messages in thread
+* Re: [yocto] Using cmake... how?
+  2023-10-16 15:27 ` [yocto] Using cmake... how? Dave Hitchman
+@ 2023-10-16 19:48   ` Khem Raj
+  2023-10-17  5:49   ` Mikko Rapeli
+  1 sibling, 0 replies; 15+ messages in thread
+From: Khem Raj @ 2023-10-16 19:48 UTC (permalink / raw)
+  To: Dave Hitchman; +Cc: yocto
+
+On Mon, Oct 16, 2023 at 8:27 AM Dave Hitchman <dave.hitchman@kymati.com> wrote:
+>
+> So my current recipe for the project works, including building various C, C++ files
+> I wanted to now add a library of someone elses creation.
+> On my machine this library builds using the tools installed so the code is ok
+>
+> I added a recipe to my yocto build and it attempts to do the cmake.
+>
+> Unfortunately whatever I have tried over 2 days cmake insists:
+>
+> On using the from my machine NOT the cross compiling tool set the rest of the yocto build uses.
+> | -- The CXX compiler identification is GNU 9.4.0
+> | -- The C compiler identification is GNU 9.4.0
+> Getting upset about the flags passed in:
+> |     g++: warning: ‘-mcpu=’ is deprecated; use ‘-mtune=’ or ‘-march=’ instead
+> |     cc1plus: error: bad value (‘armv8-a+crc+crypto’) for ‘-march=’ switch
+> I cant even find where these flags are actually set, where I found them and thought they were set I altered them to be FRED and nothing changed in the errors at all.
+>
+>
+> Any idea? Surely it should be pretty easy?
+
+share your recipe and also any peculiarities in CMake files in this library
+
+>
+> thanks
+> Dave
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> You automatically follow any topics you start or reply to.
+> View/Reply Online (#61346): https://lists.yoctoproject.org/g/yocto/message/61346
+> Mute This Topic: https://lists.yoctoproject.org/mt/101998042/1997914
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [raj.khem@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 15+ messages in thread
+* Re: [yocto] Using cmake... how?
+  2023-10-16 15:27 ` [yocto] Using cmake... how? Dave Hitchman
+  2023-10-16 19:48   ` Khem Raj
+@ 2023-10-17  5:49   ` Mikko Rapeli
+  2023-10-17  9:21     ` Dave Hitchman
+  1 sibling, 1 reply; 15+ messages in thread
+From: Mikko Rapeli @ 2023-10-17  5:49 UTC (permalink / raw)
+  To: Dave Hitchman; +Cc: yocto
+
+Hi,
+
+On Mon, Oct 16, 2023 at 03:27:01PM +0000, Dave Hitchman wrote:
+> So my current recipe for the project works, including building various C, C++ files
+> I wanted to now add a library of someone elses creation.
+> On my machine this library builds using the tools installed so the code is ok
+> 
+> I added a recipe to my yocto build and it attempts to do the cmake.
+> 
+> Unfortunately whatever I have tried over 2 days cmake insists:
+> 
+>   1.  On using the from my machine NOT the cross compiling tool set the rest of the yocto build uses.
+> | -- The CXX compiler identification is GNU 9.4.0
+> | -- The C compiler identification is GNU 9.4.0
+>   2.
+> Getting upset about the flags passed in:
+> |     g++: warning: ‘-mcpu=’ is deprecated; use ‘-mtune=’ or ‘-march=’ instead
+> |     cc1plus: error: bad value (‘armv8-a+crc+crypto’) for ‘-march=’ switch
+> I cant even find where these flags are actually set, where I found them and thought they were set I altered them to be FRED and nothing changed in the errors at all.
+> 
+> Any idea? Surely it should be pretty easy?
+
+"inherit cmake" in the recipe and then fix the CMake scripts to use variables from
+the toolchain file and only append to them. Same problems in all build tools. CMake
+adds several abstractions on top though so finding out the details may be tricky.
+See the toolchain.cmake file in recipe build directory. If this is not followed
+wrong compiler can be used, with wrong flags, using wrong binary, module and header file
+search paths...
+
+Cheers,
+
+-Mikko
+
+
+^ permalink raw reply	[flat|nested] 15+ messages in thread
+* Re: [yocto] Using cmake... how?
+  2023-10-17  5:49   ` Mikko Rapeli
+@ 2023-10-17  9:21     ` Dave Hitchman
+  2023-10-17  9:52       ` Mikko Rapeli
+  0 siblings, 1 reply; 15+ messages in thread
+From: Dave Hitchman @ 2023-10-17  9:21 UTC (permalink / raw)
+  To: Mikko Rapeli; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 3187 bytes --]
+
+Oh I dont know. This is getting to be a bit annoying.
+I had already included the inherit cmake line but now it seems maybe that you dont need to put any cmake commands in... not 100% sure, no one seems to explain this, I am not convinced.
+However I want some extra flags and I have read that you should be able to:
+TARGET_CFLAGS += "-DBUILD_PYTHON_BINDINGS=ON -DBUILD_SHARED=ON -DBUILD_TOOLS=ON"
+
+but building that gives me
++ cd /home/dave/Documents/Kymati/yocto/build/tmp/work/cortexa53-crypto-phytec-linux/libkymati/1.0-r0/build
++ do_configure
++ cd /home/dave/Documents/Kymati/yocto/build/tmp/work/cortexa53-crypto-phytec-linux/libkymati/1.0-r0/git
++ TARGET_CFLAGS:=-DBUILD_PYTHON_BINDINGS=ON -DBUILD_SHARED=ON -DBUILD_TOOLS=ON
+
+/home/dave/Documents/Kymati/yocto/build/tmp/work/cortexa53-crypto-phytec-linux/libkymati/1.0-r0/temp/run.do_configure.991537: 159: TARGET_CFLAGS:=-DBUILD_PYTHON_BINDINGS=ON -DBUILD_SHARED=ON -DBUILD_TOOLS=ON: not found
+
+
+Is there a good, really works, actually sets extra flags, really shows and explains with comments and everything example I can look at?  This bitbake is clearly clever, so is cmake, but in honesty I really gave up trying to understand any of it and just want it to work, writing the code is one thing but these build systems are a fight all of their own that takes longer than the code to solve the universe
+________________________________
+From: Mikko Rapeli <mikko.rapeli@linaro.org>
+Sent: 17 October 2023 07:49
+To: Dave Hitchman <dave.hitchman@kymati.com>
+Cc: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+Subject: Re: [yocto] Using cmake... how?
+
+Hi,
+
+On Mon, Oct 16, 2023 at 03:27:01PM +0000, Dave Hitchman wrote:
+> So my current recipe for the project works, including building various C, C++ files
+> I wanted to now add a library of someone elses creation.
+> On my machine this library builds using the tools installed so the code is ok
+>
+> I added a recipe to my yocto build and it attempts to do the cmake.
+>
+> Unfortunately whatever I have tried over 2 days cmake insists:
+>
+>   1.  On using the from my machine NOT the cross compiling tool set the rest of the yocto build uses.
+> | -- The CXX compiler identification is GNU 9.4.0
+> | -- The C compiler identification is GNU 9.4.0
+>   2.
+> Getting upset about the flags passed in:
+> |     g++: warning: ‘-mcpu=’ is deprecated; use ‘-mtune=’ or ‘-march=’ instead
+> |     cc1plus: error: bad value (‘armv8-a+crc+crypto’) for ‘-march=’ switch
+> I cant even find where these flags are actually set, where I found them and thought they were set I altered them to be FRED and nothing changed in the errors at all.
+>
+> Any idea? Surely it should be pretty easy?
+
+"inherit cmake" in the recipe and then fix the CMake scripts to use variables from
+the toolchain file and only append to them. Same problems in all build tools. CMake
+adds several abstractions on top though so finding out the details may be tricky.
+See the toolchain.cmake file in recipe build directory. If this is not followed
+wrong compiler can be used, with wrong flags, using wrong binary, module and header file
+search paths...
+
+Cheers,
+
+-Mikko
+
+[-- Attachment #2: Type: text/html, Size: 7282 bytes --]
+
+^ permalink raw reply	[flat|nested] 15+ messages in thread
+* Re: [yocto] Using cmake... how?
+  2023-10-17  9:21     ` Dave Hitchman
+@ 2023-10-17  9:52       ` Mikko Rapeli
+  2023-10-17 10:09         ` Dave Hitchman
+  0 siblings, 1 reply; 15+ messages in thread
+From: Mikko Rapeli @ 2023-10-17  9:52 UTC (permalink / raw)
+  To: Dave Hitchman; +Cc: yocto
+
+Hi,
+
+On Tue, Oct 17, 2023 at 09:21:27AM +0000, Dave Hitchman wrote:
+> Oh I dont know. This is getting to be a bit annoying.
+> I had already included the inherit cmake line but now it seems maybe that you dont need to put any cmake commands in... not 100% sure, no one seems to explain this, I am not convinced.
+> However I want some extra flags and I have read that you should be able to:
+> TARGET_CFLAGS += "-DBUILD_PYTHON_BINDINGS=ON -DBUILD_SHARED=ON -DBUILD_TOOLS=ON"
+
+Don't put these into CFLAGS. I presume you want to give these to CMake via EXTRA_OECMAKE
+variable to be used at do_configure time. Check poky tree for documentation and examples,
+docs are also here:
+
+https://docs.yoctoproject.org/dev/singleindex.html#cmake
+
+> but building that gives me
+> + cd /home/dave/Documents/Kymati/yocto/build/tmp/work/cortexa53-crypto-phytec-linux/libkymati/1.0-r0/build
+> + do_configure
+> + cd /home/dave/Documents/Kymati/yocto/build/tmp/work/cortexa53-crypto-phytec-linux/libkymati/1.0-r0/git
+> + TARGET_CFLAGS:=-DBUILD_PYTHON_BINDINGS=ON -DBUILD_SHARED=ON -DBUILD_TOOLS=ON
+> 
+> /home/dave/Documents/Kymati/yocto/build/tmp/work/cortexa53-crypto-phytec-linux/libkymati/1.0-r0/temp/run.do_configure.991537: 159: TARGET_CFLAGS:=-DBUILD_PYTHON_BINDINGS=ON -DBUILD_SHARED=ON -DBUILD_TOOLS=ON: not found
+> 
+> Is there a good, really works, actually sets extra flags, really shows and explains with comments and everything example I can look at?  This bitbake is clearly clever, so is cmake, but in honesty I really gave up trying to understand any of it and just want it to work, writing the code is one thing but these build systems are a fight all of their own that takes longer than the code to solve the universe
+
+Build systems are hard. I'm sure someone will invent another one to solve all issues
+and resurrect all old ones. :)
+
+Cheers,
+
+-Mikko
+
+
+^ permalink raw reply	[flat|nested] 15+ messages in thread
+* Re: [yocto] Using cmake... how?
+  2023-10-17  9:52       ` Mikko Rapeli
+@ 2023-10-17 10:09         ` Dave Hitchman
+  2023-10-17 10:22           ` Mikko Rapeli
+  0 siblings, 1 reply; 15+ messages in thread
+From: Dave Hitchman @ 2023-10-17 10:09 UTC (permalink / raw)
+  To: Mikko Rapeli; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 4360 bytes --]
+
+Thanks
+
+So, first, I thought - as I had seen examples that I had to put these flags etc. in the configuration function but it appears that was a wrong thing.
+Now my recipe looks like:
+SUMMARY = "mylib"
+DESCRIPTION = "Fetch and build mylibi"
+LICENSE = "CLOSED"
+LIC_FILES_CHKSUM = ""
+
+##EXTRA_OECMAKE = "all"
+inherit cmake
+
+python do_display_banner() {
+    bb.plain("***********************************************");
+    bb.plain("*                                             *");
+    bb.plain("*  mylibrecipe created by mei         *");
+    bb.plain("*                                             *");
+    bb.plain("***********************************************");
+}
+
+addtask display_banner before do_build
+
+# where and how to get source
+## this is via git
+SRC_URI = "git://git@correct git - this works;"
+
+# where to source is stored
+S = "${WORKDIR}/git"
+
+## was using target flags but Mikko suggested EXTRA_OECMAKE which at least doesnt complain
+##TARGET_CFLAGS += "-DBUILD_PYTHON_BINDINGS=ON -DBUILD_SHARED=ON -DBUILD_TOOLS=ON"
+##TARGET_CXXFLAGS += "-DBUILD_PYTHON_BINDINGS=ON -DBUILD_SHARED=ON -DBUILD_TOOLS=ON"
+EXTRA_OECMAKE += "-DBUILD_PYTHON_BINDINGS=ON -DBUILD_SHARED=ON -DBUILD_TOOLS=ON"
+
+## this I think is needed to ensure the correct compilers are used... I think anyway.
+export CXX="/usr/bin/arm-none-gnueabi-g++"
+export CMAKE_CXX_COMPILER="/usr/bin/arm-none-gnueabi-g++"
+
+
+
+
+However:
+| DEBUG: Python function extend_recipe_sysroot finished
+| DEBUG: Executing shell function do_configure
+| -- The CXX compiler identification is GNU 9.4.0
+| -- The C compiler identification is GNU 9.4.0
+| -- Detecting CXX compiler ABI info
+| -- Detecting CXX compiler ABI info - failed
+| -- Check for working CXX compiler: /usr/bin/g++
+| -- Check for working CXX compiler: /usr/bin/g++ - broken
+| CMake Error at /home/dave/Documents/Kymati/yocto/build/tmp/work/cortexa53-crypto-phytec-linux/libkymati/1.0-r0/recipe-sysroot-native/usr/share/cmake-3.19/Modules/CMakeTestCXXCompiler.cmake:59 (message):
+|   The C++ compiler
+|
+|     "/usr/bin/g++"
+|
+|   is not able to compile a simple test program.
+|
+
+
+
+
+
+suggesting it is not using the c++ I thought it should be.
+________________________________
+From: Mikko Rapeli <mikko.rapeli@linaro.org>
+Sent: 17 October 2023 11:52
+To: Dave Hitchman <dave.hitchman@kymati.com>
+Cc: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+Subject: Re: [yocto] Using cmake... how?
+
+Hi,
+
+On Tue, Oct 17, 2023 at 09:21:27AM +0000, Dave Hitchman wrote:
+> Oh I dont know. This is getting to be a bit annoying.
+> I had already included the inherit cmake line but now it seems maybe that you dont need to put any cmake commands in... not 100% sure, no one seems to explain this, I am not convinced.
+> However I want some extra flags and I have read that you should be able to:
+> TARGET_CFLAGS += "-DBUILD_PYTHON_BINDINGS=ON -DBUILD_SHARED=ON -DBUILD_TOOLS=ON"
+
+Don't put these into CFLAGS. I presume you want to give these to CMake via EXTRA_OECMAKE
+variable to be used at do_configure time. Check poky tree for documentation and examples,
+docs are also here:
+
+https://docs.yoctoproject.org/dev/singleindex.html#cmake
+
+> but building that gives me
+> + cd /home/dave/Documents/Kymati/yocto/build/tmp/work/cortexa53-crypto-phytec-linux/libkymati/1.0-r0/build
+> + do_configure
+> + cd /home/dave/Documents/Kymati/yocto/build/tmp/work/cortexa53-crypto-phytec-linux/libkymati/1.0-r0/git
+> + TARGET_CFLAGS:=-DBUILD_PYTHON_BINDINGS=ON -DBUILD_SHARED=ON -DBUILD_TOOLS=ON
+>
+> /home/dave/Documents/Kymati/yocto/build/tmp/work/cortexa53-crypto-phytec-linux/libkymati/1.0-r0/temp/run.do_configure.991537: 159: TARGET_CFLAGS:=-DBUILD_PYTHON_BINDINGS=ON -DBUILD_SHARED=ON -DBUILD_TOOLS=ON: not found
+>
+> Is there a good, really works, actually sets extra flags, really shows and explains with comments and everything example I can look at?  This bitbake is clearly clever, so is cmake, but in honesty I really gave up trying to understand any of it and just want it to work, writing the code is one thing but these build systems are a fight all of their own that takes longer than the code to solve the universe
+
+Build systems are hard. I'm sure someone will invent another one to solve all issues
+and resurrect all old ones. :)
+
+Cheers,
+
+-Mikko
+
+[-- Attachment #2: Type: text/html, Size: 10352 bytes --]
+
+^ permalink raw reply	[flat|nested] 15+ messages in thread
+* Re: [yocto] Using cmake... how?
+  2023-10-17 10:09         ` Dave Hitchman
+@ 2023-10-17 10:22           ` Mikko Rapeli
+  2023-10-17 11:35             ` Dave Hitchman
+  0 siblings, 1 reply; 15+ messages in thread
+From: Mikko Rapeli @ 2023-10-17 10:22 UTC (permalink / raw)
+  To: Dave Hitchman; +Cc: yocto
+
+Hi,
+
+On Tue, Oct 17, 2023 at 10:09:42AM +0000, Dave Hitchman wrote:
+> Thanks
+> 
+> So, first, I thought - as I had seen examples that I had to put these flags etc. in the configuration function but it appears that was a wrong thing.
+> Now my recipe looks like:
+> SUMMARY = "mylib"
+> DESCRIPTION = "Fetch and build mylibi"
+> LICENSE = "CLOSED"
+> LIC_FILES_CHKSUM = ""
+> 
+> ##EXTRA_OECMAKE = "all"
+> inherit cmake
+> 
+> python do_display_banner() {
+>     bb.plain("***********************************************");
+>     bb.plain("*                                             *");
+>     bb.plain("*  mylibrecipe created by mei         *");
+>     bb.plain("*                                             *");
+>     bb.plain("***********************************************");
+> }
+> 
+> addtask display_banner before do_build
+> 
+> # where and how to get source
+> ## this is via git
+> SRC_URI = "git://git@correct git - this works;"
+> 
+> # where to source is stored
+> S = "${WORKDIR}/git"
+> 
+> ## was using target flags but Mikko suggested EXTRA_OECMAKE which at least doesnt complain
+> ##TARGET_CFLAGS += "-DBUILD_PYTHON_BINDINGS=ON -DBUILD_SHARED=ON -DBUILD_TOOLS=ON"
+> ##TARGET_CXXFLAGS += "-DBUILD_PYTHON_BINDINGS=ON -DBUILD_SHARED=ON -DBUILD_TOOLS=ON"
+> EXTRA_OECMAKE += "-DBUILD_PYTHON_BINDINGS=ON -DBUILD_SHARED=ON -DBUILD_TOOLS=ON"
+> 
+> ## this I think is needed to ensure the correct compilers are used... I think anyway.
+> export CXX="/usr/bin/arm-none-gnueabi-g++"
+> export CMAKE_CXX_COMPILER="/usr/bin/arm-none-gnueabi-g++"
+
+This is wrong. cmake.bbclass generates a toolchain file which is given
+to cmake binary and this has all the compiler, binary, module, header file etc
+search paths set correctly. It's up to the CMake scripts of the SW component to obey
+these settings and not overwrite them. The SW component can amend them by appending
+to them but not overwriting. An overwrite of any variable from toolchain.cmake
+will break things in various ways. Run the "bitbake -c configure && bitbake -c compile" steps
+manually and check the environment in a "bitbake -c devshell", for example.
+
+> However:
+> | DEBUG: Python function extend_recipe_sysroot finished
+> | DEBUG: Executing shell function do_configure
+> | -- The CXX compiler identification is GNU 9.4.0
+> | -- The C compiler identification is GNU 9.4.0
+> | -- Detecting CXX compiler ABI info
+> | -- Detecting CXX compiler ABI info - failed
+> | -- Check for working CXX compiler: /usr/bin/g++
+> | -- Check for working CXX compiler: /usr/bin/g++ - broken
+> | CMake Error at /home/dave/Documents/Kymati/yocto/build/tmp/work/cortexa53-crypto-phytec-linux/libkymati/1.0-r0/recipe-sysroot-native/usr/share/cmake-3.19/Modules/CMakeTestCXXCompiler.cmake:59 (message):
+> |   The C++ compiler
+> |
+> |     "/usr/bin/g++"
+> |
+> |   is not able to compile a simple test program.
+> |
+> 
+> suggesting it is not using the c++ I thought it should be.
+
+Yes, as said before, using the host compiled from the Linux machine instead of
+yocto cross compiler for real target.
+
+Cheers,
+
+-Mikko
+
+
+^ permalink raw reply	[flat|nested] 15+ messages in thread
+* Re: [yocto] Using cmake... how?
+  2023-10-17 10:22           ` Mikko Rapeli
+@ 2023-10-17 11:35             ` Dave Hitchman
+  2023-10-17 11:42               ` Mikko Rapeli
+  2023-10-17 11:53               ` Mikko Rapeli
+  0 siblings, 2 replies; 15+ messages in thread
+From: Dave Hitchman @ 2023-10-17 11:35 UTC (permalink / raw)
+  To: Mikko Rapeli; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 19510 bytes --]
+
+Thanks, but without the CXX settings there is no difference either, it still uses the wrong toolchain (or rather tries to and fails in the same way) . I have now removed the two export CXX type lines...
+
+
+bitbake -c configure custom-image-mpet
+Loading cache: 100% |#######################################################################################################################################| Time: 0:00:00
+Loaded 5337 entries from dependency cache.
+Parsing recipes: 100% |#####################################################################################################################################| Time: 0:00:00
+Parsing of 3640 .bb files complete (3639 cached, 1 parsed). 5336 targets, 576 skipped, 1 masked, 0 errors.
+NOTE: Resolving any missing task queue dependencies
+
+Build Configuration:
+BB_VERSION           = "1.50.0"
+BUILD_SYS            = "x86_64-linux"
+NATIVELSBSTRING      = "universal"
+TARGET_SYS           = "aarch64-phytec-linux"
+MACHINE              = "phyboard-pollux-imx8mp-2"
+DISTRO               = "ampliphy-vendor"
+DISTRO_VERSION       = "BSP-Yocto-NXP-i.MX8MP-PD22.1.1"
+TUNE_FEATURES        = "aarch64 armv8a crc cortexa53 crypto"
+TARGET_FPU           = ""
+meta
+meta-poky            = "HEAD:269265c00091fa65f93de6cad32bf24f1e7f72a3"
+meta-oe
+meta-networking
+meta-python
+meta-multimedia
+meta-filesystems
+meta-perl
+meta-gnome           = "HEAD:f44e1a2b575826e88b8cb2725e54a7c5d29cf94a"
+meta-bsp
+meta-sdk
+meta-ml              = "HEAD:cc4c2d1c845b48fdec989f089aee3c13d2b1e15b"
+meta-chromium        = "HEAD:8be1d3a0ba0cf32e61144900597207af5698c10d"
+meta-clang           = "HEAD:b0d805060791006d651efd3d7ae3dd5add8f70fe"
+meta-freescale       = "HEAD:f0be684f01b53482cb43e016a5c5c1faf3ae448e"
+meta-freescale-3rdparty = "HEAD:f8150f3b37cb83cba1f9e2378e57bb63e02d4610"
+meta-freescale-distro = "HEAD:e6daa26ba1f748326546063d63a085ae671827d9"
+meta-nxp-demo-experience = "HEAD:9dcc11ea9f525cffedbb28895e0abb443e56c3e0"
+meta-python2         = "HEAD:8db9e4f6ceae33d7a4f55453d31e69f9858af4eb"
+meta-qt5             = "HEAD:43f8f539d40070a70fe89136db89bf5bb1dfe7ed"
+meta-virtualization  = "HEAD:7f719ef40896b6c78893add8485fda995b00d51d"
+meta-rauc            = "HEAD:b344adecae6cef9a26b3c5b6a7bb344d18c074a6"
+meta-phytec          = "HEAD:f023740382f01e85151a67843a08d9d965503961"
+meta-ampliphy        = "HEAD:d761395629c0f8f0d06f9fd6fe128fdb001fdfec"
+meta-security
+meta-tpm             = "HEAD:c40e1e84da9624b9096a463dbed3b301c01c268e"
+meta-custom-mpet     = "master:19ff82126c1239c9fe258555b10ee2e44d7f651a"
+
+Initialising tasks: 100% |##################################################################################################################################| Time: 0:00:03
+Sstate summary: Wanted 8 Local 4 Network 0 Missed 4 Current 193 (50% match, 98% complete)
+Removing 1 stale sstate objects for arch phyboard_pollux_imx8mp_2: 100% |###################################################################################| Time: 0:00:00
+NOTE: Executing Tasks
+WARNING: optee-os-3.15.0.imx-r0 do_optee_warning: OP-TEE support is experimental and not ready for production use
+NOTE: Tasks Summary: Attempted 891 tasks of which 885 didn't need to be rerun and all succeeded.
+NOTE: Writing buildhistory
+NOTE: Writing buildhistory took: 3 seconds
+
+Summary: There was 1 WARNING message shown.
+dave@dave-TUXEDO-Aura-15-Gen1:~/Documents/Kymati/yocto/build$
+
+
+
+
+bitbake -c compile custom-image-mpet
+Loading cache: 100% |#######################################################################################################################################| Time: 0:00:00
+Loaded 5337 entries from dependency cache.
+NOTE: Resolving any missing task queue dependencies
+
+Build Configuration:
+BB_VERSION           = "1.50.0"
+BUILD_SYS            = "x86_64-linux"
+NATIVELSBSTRING      = "universal"
+TARGET_SYS           = "aarch64-phytec-linux"
+MACHINE              = "phyboard-pollux-imx8mp-2"
+DISTRO               = "ampliphy-vendor"
+DISTRO_VERSION       = "BSP-Yocto-NXP-i.MX8MP-PD22.1.1"
+TUNE_FEATURES        = "aarch64 armv8a crc cortexa53 crypto"
+TARGET_FPU           = ""
+meta
+meta-poky            = "HEAD:269265c00091fa65f93de6cad32bf24f1e7f72a3"
+meta-oe
+meta-networking
+meta-python
+meta-multimedia
+meta-filesystems
+meta-perl
+meta-gnome           = "HEAD:f44e1a2b575826e88b8cb2725e54a7c5d29cf94a"
+meta-bsp
+meta-sdk
+meta-ml              = "HEAD:cc4c2d1c845b48fdec989f089aee3c13d2b1e15b"
+meta-chromium        = "HEAD:8be1d3a0ba0cf32e61144900597207af5698c10d"
+meta-clang           = "HEAD:b0d805060791006d651efd3d7ae3dd5add8f70fe"
+meta-freescale       = "HEAD:f0be684f01b53482cb43e016a5c5c1faf3ae448e"
+meta-freescale-3rdparty = "HEAD:f8150f3b37cb83cba1f9e2378e57bb63e02d4610"
+meta-freescale-distro = "HEAD:e6daa26ba1f748326546063d63a085ae671827d9"
+meta-nxp-demo-experience = "HEAD:9dcc11ea9f525cffedbb28895e0abb443e56c3e0"
+meta-python2         = "HEAD:8db9e4f6ceae33d7a4f55453d31e69f9858af4eb"
+meta-qt5             = "HEAD:43f8f539d40070a70fe89136db89bf5bb1dfe7ed"
+meta-virtualization  = "HEAD:7f719ef40896b6c78893add8485fda995b00d51d"
+meta-rauc            = "HEAD:b344adecae6cef9a26b3c5b6a7bb344d18c074a6"
+meta-phytec          = "HEAD:f023740382f01e85151a67843a08d9d965503961"
+meta-ampliphy        = "HEAD:d761395629c0f8f0d06f9fd6fe128fdb001fdfec"
+meta-security
+meta-tpm             = "HEAD:c40e1e84da9624b9096a463dbed3b301c01c268e"
+meta-custom-mpet     = "master:19ff82126c1239c9fe258555b10ee2e44d7f651a"
+
+Initialising tasks: 100% |##################################################################################################################################| Time: 0:00:02
+Sstate summary: Wanted 7 Local 4 Network 0 Missed 3 Current 194 (57% match, 98% complete)
+Removing 3 stale sstate objects for arch phyboard_pollux_imx8mp_2: 100% |###################################################################################| Time: 0:00:00
+NOTE: Executing Tasks
+WARNING: optee-os-3.15.0.imx-r0 do_optee_warning: OP-TEE support is experimental and not ready for production use
+NOTE: Tasks Summary: Attempted 892 tasks of which 889 didn't need to be rerun and all succeeded.
+NOTE: Writing buildhistory
+NOTE: Writing buildhistory took: 2 seconds
+
+Summary: There was 1 WARNING message shown.
+
+
+
+
+But when I build ...
+
+
+
+bitbake custom-image-mpet
+Loading cache: 100% |#######################################################################################################################################| Time: 0:00:00
+Loaded 5337 entries from dependency cache.
+NOTE: Resolving any missing task queue dependencies
+
+Build Configuration:
+BB_VERSION           = "1.50.0"
+BUILD_SYS            = "x86_64-linux"
+NATIVELSBSTRING      = "universal"
+TARGET_SYS           = "aarch64-phytec-linux"
+MACHINE              = "phyboard-pollux-imx8mp-2"
+DISTRO               = "ampliphy-vendor"
+DISTRO_VERSION       = "BSP-Yocto-NXP-i.MX8MP-PD22.1.1"
+TUNE_FEATURES        = "aarch64 armv8a crc cortexa53 crypto"
+TARGET_FPU           = ""
+meta
+meta-poky            = "HEAD:269265c00091fa65f93de6cad32bf24f1e7f72a3"
+meta-oe
+meta-networking
+meta-python
+meta-multimedia
+meta-filesystems
+meta-perl
+meta-gnome           = "HEAD:f44e1a2b575826e88b8cb2725e54a7c5d29cf94a"
+meta-bsp
+meta-sdk
+meta-ml              = "HEAD:cc4c2d1c845b48fdec989f089aee3c13d2b1e15b"
+meta-chromium        = "HEAD:8be1d3a0ba0cf32e61144900597207af5698c10d"
+meta-clang           = "HEAD:b0d805060791006d651efd3d7ae3dd5add8f70fe"
+meta-freescale       = "HEAD:f0be684f01b53482cb43e016a5c5c1faf3ae448e"
+meta-freescale-3rdparty = "HEAD:f8150f3b37cb83cba1f9e2378e57bb63e02d4610"
+meta-freescale-distro = "HEAD:e6daa26ba1f748326546063d63a085ae671827d9"
+meta-nxp-demo-experience = "HEAD:9dcc11ea9f525cffedbb28895e0abb443e56c3e0"
+meta-python2         = "HEAD:8db9e4f6ceae33d7a4f55453d31e69f9858af4eb"
+meta-qt5             = "HEAD:43f8f539d40070a70fe89136db89bf5bb1dfe7ed"
+meta-virtualization  = "HEAD:7f719ef40896b6c78893add8485fda995b00d51d"
+meta-rauc            = "HEAD:b344adecae6cef9a26b3c5b6a7bb344d18c074a6"
+meta-phytec          = "HEAD:f023740382f01e85151a67843a08d9d965503961"
+meta-ampliphy        = "HEAD:d761395629c0f8f0d06f9fd6fe128fdb001fdfec"
+meta-security
+meta-tpm             = "HEAD:c40e1e84da9624b9096a463dbed3b301c01c268e"
+meta-custom-mpet     = "master:19ff82126c1239c9fe258555b10ee2e44d7f651a"
+
+Initialising tasks: 100% |##################################################################################################################################| Time: 0:00:04
+Sstate summary: Wanted 139 Local 114 Network 0 Missed 25 Current 1038 (82% match, 97% complete)
+Removing 9 stale sstate objects for arch phyboard_pollux_imx8mp_2: 100% |###################################################################################| Time: 0:00:00
+Removing 3 stale sstate objects for arch cortexa53-crypto: 100% |###########################################################################################| Time: 0:00:00
+NOTE: Executing Tasks
+WARNING: optee-os-3.15.0.imx-r0 do_optee_warning: OP-TEE support is experimental and not ready for production use
+ERROR: libkymati-1.0-r0 do_configure: Execution of '/home/dave/Documents/Kymati/yocto/build/tmp/work/cortexa53-crypto-phytec-linux/libkymati/1.0-r0/temp/run.do_configure.1005716' failed with exit code 1
+ERROR: Logfile of failure stored in: /home/dave/Documents/Kymati/yocto/build/tmp/work/cortexa53-crypto-phytec-linux/libkymati/1.0-r0/temp/log.do_configure.1005716
+Log data follows:
+| DEBUG: Executing python function extend_recipe_sysroot
+| NOTE: Direct dependencies are ['/home/dave/Documents/Kymati/yocto/sources/poky/../poky/meta/recipes-devtools/gcc/gcc-cross_10.2.bb:do_populate_sysroot', 'virtual:native:/home/dave/Documents/Kymati/yocto/sources/poky/../poky/meta/recipes-devtools/pseudo/pseudo_git.bb:do_populate_sysroot', '/home/dave/Documents/Kymati/yocto/sources/poky/../poky/meta/recipes-devtools/quilt/quilt-native_0.66.bb:do_populate_sysroot', 'virtual:native:/home/dave/Documents/Kymati/yocto/sources/poky/../poky/meta/recipes-devtools/ninja/ninja_1.10.2.bb:do_populate_sysroot', '/home/dave/Documents/Kymati/yocto/sources/poky/../poky/meta/recipes-core/glibc/glibc_2.33.bb:do_populate_sysroot', '/home/dave/Documents/Kymati/yocto/sources/poky/../poky/meta/recipes-devtools/gcc/gcc-runtime_10.2.bb:do_populate_sysroot', '/home/dave/Documents/Kymati/yocto/sources/poky/../poky/meta/recipes-devtools/cmake/cmake-native_3.19.5.bb:do_populate_sysroot', 'virtual:native:/home/dave/Documents/Kymati/yocto/sources/poky/../poky/meta/recipes-devtools/patch/patch_2.7.6.bb:do_populate_sysroot']
+| NOTE: Installed into sysroot: []
+| NOTE: Skipping as already exists in sysroot: ['gcc-cross-aarch64', 'pseudo-native', 'quilt-native', 'ninja-native', 'glibc', 'gcc-runtime', 'cmake-native', 'patch-native', 'binutils-cross-aarch64', 'flex-native', 'libmpc-native', 'libtool-native', 'texinfo-dummy-native', 'xz-native', 'gnu-config-native', 'zlib-native', 'mpfr-native', 'autoconf-native', 'automake-native', 'gmp-native', 'linux-libc-headers', 're2c-native', 'libgcc', 'bzip2-native', 'ncurses-native', 'curl-native', 'attr-native', 'm4-native', 'gettext-minimal-native', 'pkgconfig-native', 'openssl-native']
+| DEBUG: Python function extend_recipe_sysroot finished
+| DEBUG: Executing shell function do_configure
+| -- The CXX compiler identification is GNU 9.4.0
+| -- The C compiler identification is GNU 9.4.0
+| -- Detecting CXX compiler ABI info
+| -- Detecting CXX compiler ABI info - failed
+| -- Check for working CXX compiler: /usr/bin/g++
+| -- Check for working CXX compiler: /usr/bin/g++ - broken
+| CMake Error at /home/dave/Documents/Kymati/yocto/build/tmp/work/cortexa53-crypto-phytec-linux/libkymati/1.0-r0/recipe-sysroot-native/usr/share/cmake-3.19/Modules/CMakeTestCXXCompiler.cmake:59 (message):
+|   The C++ compiler
+|
+|     "/usr/bin/g++"
+|
+|   is not able to compile a simple test program.
+|
+|   It fails with the following output:
+|
+|     Change Dir: /home/dave/Documents/Kymati/yocto/build/tmp/work/cortexa53-crypto-phytec-linux/libkymati/1.0-r0/git/CMakeFiles/CMakeTmp
+|
+|     Run Build Command(s):ninja cmTC_e06e9 && [1/2] Building CXX object CMakeFiles/cmTC_e06e9.dir/testCXXCompiler.cxx.o
+|     FAILED: CMakeFiles/cmTC_e06e9.dir/testCXXCompiler.cxx.o
+|     /usr/bin/g++   -O2 -pipe -g -feliminate-unused-debug-types -fmacro-prefix-map=/home/dave/Documents/Kymati/yocto/build/tmp/work/cortexa53-crypto-phytec-linux/libkymati/1.0-r0=/usr/src/debug/libkymati/1.0-r0                      -fdebug-prefix-map=/home/dave/Documents/Kymati/yocto/build/tmp/work/cortexa53-crypto-phytec-linux/libkymati/1.0-r0=/usr/src/debug/libkymati/1.0-r0                      -fdebug-prefix-map=/home/dave/Documents/Kymati/yocto/build/tmp/work/cortexa53-crypto-phytec-linux/libkymati/1.0-r0/recipe-sysroot=                      -fdebug-prefix-map=/home/dave/Documents/Kymati/yocto/build/tmp/work/cortexa53-crypto-phytec-linux/libkymati/1.0-r0/recipe-sysroot-native=  -fvisibility-inlines-hidden  -mcpu=cortex-a53 -march=armv8-a+crc+crypto -fstack-protector-strong  -O2 -D_FORTIFY_SOURCE=2 -Wformat -Wformat-security -Werror=format-security  --sysroot=/home/dave/Documents/Kymati/yocto/build/tmp/work/cortexa53-crypto-phytec-linux/libkymati/1.0-r0/recipe-sysroot -o CMakeFiles/cmTC_e06e9.dir/testCXXCompiler.cxx.o -c testCXXCompiler.cxx
+|     g++: warning: ‘-mcpu=’ is deprecated; use ‘-mtune=’ or ‘-march=’ instead
+|     cc1plus: error: bad value (‘armv8-a+crc+crypto’) for ‘-march=’ switch
+|     cc1plus: note: valid arguments to ‘-march=’ switch are: nocona core2 nehalem corei7 westmere sandybridge corei7-avx ivybridge core-avx-i haswell core-avx2 broadwell skylake skylake-avx512 cannonlake icelake-client icelake-server cascadelake tigerlake bonnell atom silvermont slm goldmont goldmont-plus tremont knl knm x86-64 eden-x2 nano nano-1000 nano-2000 nano-3000 nano-x2 eden-x4 nano-x4 k8 k8-sse3 opteron opteron-sse3 athlon64 athlon64-sse3 athlon-fx amdfam10 barcelona bdver1 bdver2 bdver3 bdver4 znver1 znver2 btver1 btver2 native
+|     cc1plus: error: bad value (‘cortex-a53’) for ‘-mtune=’ switch
+|     cc1plus: note: valid arguments to ‘-mtune=’ switch are: nocona core2 nehalem corei7 westmere sandybridge corei7-avx ivybridge core-avx-i haswell core-avx2 broadwell skylake skylake-avx512 cannonlake icelake-client icelake-server cascadelake tigerlake bonnell atom silvermont slm goldmont goldmont-plus tremont knl knm intel x86-64 eden-x2 nano nano-1000 nano-2000 nano-3000 nano-x2 eden-x4 nano-x4 k8 k8-sse3 opteron opteron-sse3 athlon64 athlon64-sse3 athlon-fx amdfam10 barcelona bdver1 bdver2 bdver3 bdver4 znver1 znver2 btver1 btver2 generic native
+|     ninja: build stopped: subcommand failed.
+|
+|
+|
+|
+|
+|   CMake will not be able to correctly generate this project.
+| Call Stack (most recent call first):
+|   CMakeLists.txt:3 (project)
+|
+|
+| -- Configuring incomplete, errors occurred!
+| See also "/home/dave/Documents/Kymati/yocto/build/tmp/work/cortexa53-crypto-phytec-linux/libkymati/1.0-r0/git/CMakeFiles/CMakeOutput.log".
+| See also "/home/dave/Documents/Kymati/yocto/build/tmp/work/cortexa53-crypto-phytec-linux/libkymati/1.0-r0/git/CMakeFiles/CMakeError.log".
+| WARNING: exit code 1 from a shell command.
+| ERROR: Execution of '/home/dave/Documents/Kymati/yocto/build/tmp/work/cortexa53-crypto-phytec-linux/libkymati/1.0-r0/temp/run.do_configure.1005716' failed with exit code 1
+ERROR: Task (/home/dave/Documents/Kymati/yocto/sources/poky/../meta-custom-mpet/recipes-apps/libkymati/libkymati.bb:do_configure) failed with exit code '1'
+NOTE: Tasks Summary: Attempted 2684 tasks of which 2680 didn't need to be rerun and 1 failed.
+NOTE: Writing buildhistory
+NOTE: Writing buildhistory took: 3 seconds
+
+Summary: 1 task failed:
+  /home/dave/Documents/Kymati/yocto/sources/poky/../meta-custom-mpet/recipes-apps/libkymati/libkymati.bb:do_configure
+Summary: There was 1 WARNING message shown.
+Summary: There was 1 ERROR message shown, returning a non-zero exit code.
+
+
+
+
+
+
+
+________________________________
+From: Mikko Rapeli <mikko.rapeli@linaro.org>
+Sent: 17 October 2023 12:22
+To: Dave Hitchman <dave.hitchman@kymati.com>
+Cc: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+Subject: Re: [yocto] Using cmake... how?
+
+Hi,
+
+On Tue, Oct 17, 2023 at 10:09:42AM +0000, Dave Hitchman wrote:
+> Thanks
+>
+> So, first, I thought - as I had seen examples that I had to put these flags etc. in the configuration function but it appears that was a wrong thing.
+> Now my recipe looks like:
+> SUMMARY = "mylib"
+> DESCRIPTION = "Fetch and build mylibi"
+> LICENSE = "CLOSED"
+> LIC_FILES_CHKSUM = ""
+>
+> ##EXTRA_OECMAKE = "all"
+> inherit cmake
+>
+> python do_display_banner() {
+>     bb.plain("***********************************************");
+>     bb.plain("*                                             *");
+>     bb.plain("*  mylibrecipe created by mei         *");
+>     bb.plain("*                                             *");
+>     bb.plain("***********************************************");
+> }
+>
+> addtask display_banner before do_build
+>
+> # where and how to get source
+> ## this is via git
+> SRC_URI = "git://git@correct git - this works;"
+>
+> # where to source is stored
+> S = "${WORKDIR}/git"
+>
+> ## was using target flags but Mikko suggested EXTRA_OECMAKE which at least doesnt complain
+> ##TARGET_CFLAGS += "-DBUILD_PYTHON_BINDINGS=ON -DBUILD_SHARED=ON -DBUILD_TOOLS=ON"
+> ##TARGET_CXXFLAGS += "-DBUILD_PYTHON_BINDINGS=ON -DBUILD_SHARED=ON -DBUILD_TOOLS=ON"
+> EXTRA_OECMAKE += "-DBUILD_PYTHON_BINDINGS=ON -DBUILD_SHARED=ON -DBUILD_TOOLS=ON"
+>
+> ## this I think is needed to ensure the correct compilers are used... I think anyway.
+> export CXX="/usr/bin/arm-none-gnueabi-g++"
+> export CMAKE_CXX_COMPILER="/usr/bin/arm-none-gnueabi-g++"
+
+This is wrong. cmake.bbclass generates a toolchain file which is given
+to cmake binary and this has all the compiler, binary, module, header file etc
+search paths set correctly. It's up to the CMake scripts of the SW component to obey
+these settings and not overwrite them. The SW component can amend them by appending
+to them but not overwriting. An overwrite of any variable from toolchain.cmake
+will break things in various ways. Run the "bitbake -c configure && bitbake -c compile" steps
+manually and check the environment in a "bitbake -c devshell", for example.
+
+> However:
+> | DEBUG: Python function extend_recipe_sysroot finished
+> | DEBUG: Executing shell function do_configure
+> | -- The CXX compiler identification is GNU 9.4.0
+> | -- The C compiler identification is GNU 9.4.0
+> | -- Detecting CXX compiler ABI info
+> | -- Detecting CXX compiler ABI info - failed
+> | -- Check for working CXX compiler: /usr/bin/g++
+> | -- Check for working CXX compiler: /usr/bin/g++ - broken
+> | CMake Error at /home/dave/Documents/Kymati/yocto/build/tmp/work/cortexa53-crypto-phytec-linux/libkymati/1.0-r0/recipe-sysroot-native/usr/share/cmake-3.19/Modules/CMakeTestCXXCompiler.cmake:59 (message):
+> |   The C++ compiler
+> |
+> |     "/usr/bin/g++"
+> |
+> |   is not able to compile a simple test program.
+> |
+>
+> suggesting it is not using the c++ I thought it should be.
+
+Yes, as said before, using the host compiled from the Linux machine instead of
+yocto cross compiler for real target.
+
+Cheers,
+
+-Mikko
+
+[-- Attachment #2: Type: text/html, Size: 36800 bytes --]
+
+^ permalink raw reply	[flat|nested] 15+ messages in thread
+* Re: [yocto] Using cmake... how?
+  2023-10-17 11:35             ` Dave Hitchman
+@ 2023-10-17 11:42               ` Mikko Rapeli
+  2023-10-17 11:53               ` Mikko Rapeli
+  1 sibling, 0 replies; 15+ messages in thread
+From: Mikko Rapeli @ 2023-10-17 11:42 UTC (permalink / raw)
+  To: Dave Hitchman; +Cc: yocto
+
+Hi,
+
+On Tue, Oct 17, 2023 at 11:35:13AM +0000, Dave Hitchman wrote:
+> Thanks, but without the CXX settings there is no difference either, it still uses the wrong toolchain (or rather tries to and fails in the same way) . I have now removed the two export CXX type lines...
+
+Check the CMakeFile.txt etc scripts in the SW component. They are likely overwriting
+variables like CXX. Alternatively, they are trying to mix host (-native) and target
+compilation in one step by compiling code generators etc tools.
+
+If something on bitbake side is setting CXX etc variables, those can be seen
+with "bitbake -e recipe".
+
+Sadly these issues are quite common for SW which has not been cross compiled before..
+
+Cheers,
+
+-Mikko
+
+
+^ permalink raw reply	[flat|nested] 15+ messages in thread
+* Re: [yocto] Using cmake... how?
+  2023-10-17 11:35             ` Dave Hitchman
+  2023-10-17 11:42               ` Mikko Rapeli
+@ 2023-10-17 11:53               ` Mikko Rapeli
+  2023-10-17 11:58                 ` Dave Hitchman
+  1 sibling, 1 reply; 15+ messages in thread
+From: Mikko Rapeli @ 2023-10-17 11:53 UTC (permalink / raw)
+  To: Dave Hitchman; +Cc: yocto
+
+Hi,
+
+On Tue, Oct 17, 2023 at 11:35:13AM +0000, Dave Hitchman wrote:
+<snip>
+> |     /usr/bin/g++   -O2 -pipe -g -feliminate-unused-debug-types -fmacro-prefix-map=/home/dave/Documents/Kymati/yocto/build/tmp/work/cortexa53-crypto-phytec-linux/libkymati/1.0-r0=/usr/src/debug/libkymati/1.0-r0                      -fdebug-prefix-map=/home/dave/Documents/Kymati/yocto/build/tmp/work/cortexa53-crypto-phytec-linux/libkymati/1.0-r0=/usr/src/debug/libkymati/1.0-r0                      -fdebug-prefix-map=/home/dave/Documents/Kymati/yocto/build/tmp/work/cortexa53-crypto-phytec-linux/libkymati/1.0-r0/recipe-sysroot=                      -fdebug-prefix-map=/home/dave/Documents/Kymati/yocto/build/tmp/work/cortexa53-crypto-phytec-linux/libkymati/1.0-r0/recipe-sysroot-native=  -fvisibility-inlines-hidden  -mcpu=cortex-a53 -march=armv8-a+crc+crypto -fstack-protector-strong  -O2 -D_FORTIFY_SOURCE=2 -Wformat -Wformat-security -Werror=format-security  --sysroot=/home/dave/Documents/Kymati/yocto/build/tmp/work/cortexa53-crypto-phytec-linux/libkymati/1.0-r0/recipe-sysroot -o CMakeFiles/cmTC_e06e9.dir/testCXXCompiler.cxx.o -c testCXXCompiler.cxx
+> |     g++: warning: ‘-mcpu=’ is deprecated; use ‘-mtune=’ or ‘-march=’ instead
+> |     cc1plus: error: bad value (‘armv8-a+crc+crypto’) for ‘-march=’ switch
+> |     cc1plus: note: valid arguments to ‘-march=’ switch are: nocona core2 nehalem corei7 westmere sandybridge corei7-avx ivybridge core-avx-i haswell core-avx2 broadwell skylake skylake-avx512 cannonlake icelake-client icelake-server cascadelake tigerlake bonnell atom silvermont slm goldmont goldmont-plus tremont knl knm x86-64 eden-x2 nano nano-1000 nano-2000 nano-3000 nano-x2 eden-x4 nano-x4 k8 k8-sse3 opteron opteron-sse3 athlon64 athlon64-sse3 athlon-fx amdfam10 barcelona bdver1 bdver2 bdver3 bdver4 znver1 znver2 btver1 btver2 native
+
+For example here the "/usr/bin/g++" compiler will not understand -mcpu=cortex-a53 flags
+since the compiler is on the Linux build machine and compiling natively for x86_64 target
+architecture, this is not the yocto/bitbake cross compiler. The correct compiler binary
+is set via CMAKE_CXX_COMPILER variable in the toolchain file and path to it is somewhere
+in the recipe specific native sysroot path. CMake build scripts of libkymati must use those
+variables from the toolchain file. They must not overwrite them with their own guesses
+like /usr/bin/g++.
+
+Further details depends on what kind of CMake build scripts libkymati has.
+
+Cheers,
+
+-Mikko
+
+
+^ permalink raw reply	[flat|nested] 15+ messages in thread
+* Re: [yocto] Using cmake... how?
+  2023-10-17 11:53               ` Mikko Rapeli
+@ 2023-10-17 11:58                 ` Dave Hitchman
+  2023-10-17 12:23                   ` Mikko Rapeli
+  2023-10-17 13:32                   ` Ross Burton
+  0 siblings, 2 replies; 15+ messages in thread
+From: Dave Hitchman @ 2023-10-17 11:58 UTC (permalink / raw)
+  To: Mikko Rapeli; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 3067 bytes --]
+
+I understand that, and the compiler the rest of the recipe uses does cope so I am trying to understand why this bit of the whole thing is using a different compiler. Maybe it is somewhere in the cmake of the library, but it certainly isnt obvious. Thats where I am digging for the moment.
+________________________________
+From: Mikko Rapeli <mikko.rapeli@linaro.org>
+Sent: 17 October 2023 13:53
+To: Dave Hitchman <dave.hitchman@kymati.com>
+Cc: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+Subject: Re: [yocto] Using cmake... how?
+
+Hi,
+
+On Tue, Oct 17, 2023 at 11:35:13AM +0000, Dave Hitchman wrote:
+<snip>
+> |     /usr/bin/g++   -O2 -pipe -g -feliminate-unused-debug-types -fmacro-prefix-map=/home/dave/Documents/Kymati/yocto/build/tmp/work/cortexa53-crypto-phytec-linux/libkymati/1.0-r0=/usr/src/debug/libkymati/1.0-r0                      -fdebug-prefix-map=/home/dave/Documents/Kymati/yocto/build/tmp/work/cortexa53-crypto-phytec-linux/libkymati/1.0-r0=/usr/src/debug/libkymati/1.0-r0                      -fdebug-prefix-map=/home/dave/Documents/Kymati/yocto/build/tmp/work/cortexa53-crypto-phytec-linux/libkymati/1.0-r0/recipe-sysroot=                      -fdebug-prefix-map=/home/dave/Documents/Kymati/yocto/build/tmp/work/cortexa53-crypto-phytec-linux/libkymati/1.0-r0/recipe-sysroot-native=  -fvisibility-inlines-hidden  -mcpu=cortex-a53 -march=armv8-a+crc+crypto -fstack-protector-strong  -O2 -D_FORTIFY_SOURCE=2 -Wformat -Wformat-security -Werror=format-security  --sysroot=/home/dave/Documents/Kymati/yocto/build/tmp/work/cortexa53-crypto-phytec-linux/libkymati/1.0-r0/recipe-sysroot -o CMakeFiles/cmTC_e06e9.dir/testCXXCompiler.cxx.o -c testCXXCompiler.cxx
+> |     g++: warning: ‘-mcpu=’ is deprecated; use ‘-mtune=’ or ‘-march=’ instead
+> |     cc1plus: error: bad value (‘armv8-a+crc+crypto’) for ‘-march=’ switch
+> |     cc1plus: note: valid arguments to ‘-march=’ switch are: nocona core2 nehalem corei7 westmere sandybridge corei7-avx ivybridge core-avx-i haswell core-avx2 broadwell skylake skylake-avx512 cannonlake icelake-client icelake-server cascadelake tigerlake bonnell atom silvermont slm goldmont goldmont-plus tremont knl knm x86-64 eden-x2 nano nano-1000 nano-2000 nano-3000 nano-x2 eden-x4 nano-x4 k8 k8-sse3 opteron opteron-sse3 athlon64 athlon64-sse3 athlon-fx amdfam10 barcelona bdver1 bdver2 bdver3 bdver4 znver1 znver2 btver1 btver2 native
+
+For example here the "/usr/bin/g++" compiler will not understand -mcpu=cortex-a53 flags
+since the compiler is on the Linux build machine and compiling natively for x86_64 target
+architecture, this is not the yocto/bitbake cross compiler. The correct compiler binary
+is set via CMAKE_CXX_COMPILER variable in the toolchain file and path to it is somewhere
+in the recipe specific native sysroot path. CMake build scripts of libkymati must use those
+variables from the toolchain file. They must not overwrite them with their own guesses
+like /usr/bin/g++.
+
+Further details depends on what kind of CMake build scripts libkymati has.
+
+Cheers,
+
+-Mikko
+
+[-- Attachment #2: Type: text/html, Size: 4411 bytes --]
+
+^ permalink raw reply	[flat|nested] 15+ messages in thread
+* Re: [yocto] Using cmake... how?
+  2023-10-17 11:58                 ` Dave Hitchman
+@ 2023-10-17 12:23                   ` Mikko Rapeli
+  2023-10-17 13:32                   ` Ross Burton
+  1 sibling, 0 replies; 15+ messages in thread
+From: Mikko Rapeli @ 2023-10-17 12:23 UTC (permalink / raw)
+  To: Dave Hitchman; +Cc: yocto
+
+Hi,
+
+On Tue, Oct 17, 2023 at 11:58:23AM +0000, Dave Hitchman wrote:
+> I understand that, and the compiler the rest of the recipe uses does cope so I am trying to understand why this bit of the whole thing is using a different compiler. Maybe it is somewhere in the cmake of the library, but it certainly isnt obvious. Thats where I am digging for the moment.
+
+One thing could be CMake calls to sub projects/directories/modules where the
+toolchain file is not propagated. So first level CMake gets correctly called with
+cross compile toolchain file but second or third level ones not. These are
+annoyingly tricky to spot. It makes sense to change the do_configure
+task calls to cmake be as verbose as possible. CMake doesn't make these easy.
+
+Hope this helps,
+
+-Mikko
+
+
+^ permalink raw reply	[flat|nested] 15+ messages in thread
+* Re: [yocto] Using cmake... how?
+  2023-10-17 11:58                 ` Dave Hitchman
+  2023-10-17 12:23                   ` Mikko Rapeli
+@ 2023-10-17 13:32                   ` Ross Burton
+  2023-10-17 15:18                     ` Dave Hitchman
+  1 sibling, 1 reply; 15+ messages in thread
+From: Ross Burton @ 2023-10-17 13:32 UTC (permalink / raw)
+  To: dave.hitchman; +Cc: Mikko Rapeli, yocto
+
+On 17 Oct 2023, at 12:58, Dave Hitchman via lists.yoctoproject.org <dave.hitchman=kymati.com@lists.yoctoproject.org> wrote:
+> 
+> 
+> I understand that, and the compiler the rest of the recipe uses does cope so I am trying to understand why this bit of the whole thing is using a different compiler. Maybe it is somewhere in the cmake of the library, but it certainly isnt obvious. Thats where I am digging for the moment.
+
+I presume this is a closed-source library so you can’t just share it?
+
+The CMakeLists.txt are definitely doing The Wrong Thing by not respecting the environment the toolchain sets up.  Unfortunately this is now your problem to figure out exactly where and why it overrides the settings.
+
+Ross
+
+^ permalink raw reply	[flat|nested] 15+ messages in thread
+* Re: [yocto] Using cmake... how?
+  2023-10-17 13:32                   ` Ross Burton
+@ 2023-10-17 15:18                     ` Dave Hitchman
+  0 siblings, 0 replies; 15+ messages in thread
+From: Dave Hitchman @ 2023-10-17 15:18 UTC (permalink / raw)
+  To: Ross Burton; +Cc: Mikko Rapeli, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1085 bytes --]
+
+Yeah, it is indeed, hence the changing the git address 🙂
+________________________________
+From: Ross Burton <Ross.Burton@arm.com>
+Sent: 17 October 2023 15:32
+To: Dave Hitchman <dave.hitchman@kymati.com>
+Cc: Mikko Rapeli <mikko.rapeli@linaro.org>; yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+Subject: Re: [yocto] Using cmake... how?
+
+On 17 Oct 2023, at 12:58, Dave Hitchman via lists.yoctoproject.org <dave.hitchman=kymati.com@lists.yoctoproject.org> wrote:
+>
+>
+> I understand that, and the compiler the rest of the recipe uses does cope so I am trying to understand why this bit of the whole thing is using a different compiler. Maybe it is somewhere in the cmake of the library, but it certainly isnt obvious. Thats where I am digging for the moment.
+
+I presume this is a closed-source library so you can’t just share it?
+
+The CMakeLists.txt are definitely doing The Wrong Thing by not respecting the environment the toolchain sets up.  Unfortunately this is now your problem to figure out exactly where and why it overrides the settings.
+
+Ross
+
+[-- Attachment #2: Type: text/html, Size: 1956 bytes --]
+
+^ permalink raw reply	[flat|nested] 15+ messages in thread
+end of thread, other threads:[~2023-10-17 15:18 UTC | newest]
+
+Thread overview: 15+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-10-16 11:22 [meta-rockchip][kirkstone][PATCH] bsp: rkbin: fix default COMPATIBLE_MACHINE matching all Quentin Schulz
+2023-10-16 15:27 ` [yocto] Using cmake... how? Dave Hitchman
+2023-10-16 19:48   ` Khem Raj
+2023-10-17  5:49   ` Mikko Rapeli
+2023-10-17  9:21     ` Dave Hitchman
+2023-10-17  9:52       ` Mikko Rapeli
+2023-10-17 10:09         ` Dave Hitchman
+2023-10-17 10:22           ` Mikko Rapeli
+2023-10-17 11:35             ` Dave Hitchman
+2023-10-17 11:42               ` Mikko Rapeli
+2023-10-17 11:53               ` Mikko Rapeli
+2023-10-17 11:58                 ` Dave Hitchman
+2023-10-17 12:23                   ` Mikko Rapeli
+2023-10-17 13:32                   ` Ross Burton
+2023-10-17 15:18                     ` Dave Hitchman
+

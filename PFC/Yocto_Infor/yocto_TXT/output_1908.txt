@@ -1,0 +1,286 @@
+* [PATCH yocto-autobuilder-helper v10] Add a banner on the old documentation docs.
+@ 2022-04-26 11:55 Abongwa Bonalais Amahnui
+  2022-04-26 13:09 ` [yocto] " Quentin Schulz
+  0 siblings, 1 reply; 4+ messages in thread
+From: Abongwa Bonalais Amahnui @ 2022-04-26 11:55 UTC (permalink / raw)
+  To: yocto; +Cc: Abongwa Bonalais Amahnui
+
+Signed-off-by: Abongwa Bonalais Amahnui <abongwabonalais@gmail.com>
+---
+ scripts/docs_fix_all_html_css.py | 75 ++++++++++++++++++++++++++++++++
+ scripts/run-docs-build           |  2 +
+ 2 files changed, 77 insertions(+)
+ create mode 100755 scripts/docs_fix_all_html_css.py
+
+diff --git a/scripts/docs_fix_all_html_css.py b/scripts/docs_fix_all_html_css.py
+new file mode 100755
+index 0000000..9ac5a2b
+--- /dev/null
++++ b/scripts/docs_fix_all_html_css.py
+@@ -0,0 +1,75 @@
++#!/usr/bin/env python3
++#
++# SPDX-License-Identifier: GPL-2.0-only
++#
++#Signed-off-by: Abongwa Bonalais Amahnui <abongwabonalais@gmail.com>
++#
++#
++# function to append to the content of a html file below the body tag
++#
++#
++
++import os
++
++
++
++html_content = '''
++<div id="outdated-warning">This document is outdated, you should select the <a href="https://docs.yoctoproject.org/">latest release version</a> in this series.</div>
++<div xml:lang="en" class="body" lang="en">
++'''
++# <div xml:lang="en" class="body" lang="en"> and </div> are added to the html files to wrap all the content below the body tag in a div tag whose class is known so it can be controlled in the css file
++last_div = '''
++</div>
++
++'''
++
++css_replacement_content = '''
++ 
++  font-family: Verdana, Sans, sans-serif;
++
++  /*min-width: 640px;*/
++  width: 100%;
++  margin:  0;
++  padding: 0;
++  color: #333;
++  overflow-x: hidden;
++  }
++ 
++ /*added books too*/
++.body{
++margin:  0 auto;
++min-width: 640px;
++padding: 0 5em 5em 5em;
++}
++/* added the id below to make the banner show and be fixed*/
++#outdated-warning{
++text-align: center;
++background-color: rgb(255, 186, 186); 
++color: rgb(106, 14, 14); 
++padding: 0.5em 0; 
++width: 100%;
++position: fixed;
++top: 0;
++
++
++'''
++    # pattern = '^3.1*'
++    # exclude = re.search(pattern, dir)
++def loop_through_html_directories(dir):
++    for root, dirs, filenames in os.walk(dir):
++        # exclude banner for 3.1.x upward as it is an LTS release and is still supported
++        exclude = set(['3.1', '3.1.1', '3.1.2', '3.1.3'])
++        dirs[:] = list(filter(lambda x: not x in exclude, dirs))
++        for filename in filenames:
++            if filename.endswith('.html'):
++                with open(os.path.join(root, filename), 'r', encoding="ISO-8859-1") as f:
++                    current_content = f.read()
++                with open(os.path.join(root, filename), 'w') as f:
++                    f.write(current_content.replace('<body>', '<body>' + html_content))
++                    f.write(current_content.replace('</body>', last_div + '</body>'))
++            if filename.endswith('.css'):
++                with open(os.path.join(root, filename), 'r', encoding="ISO-8859-1") as f:
++                    css_content = f.read()
++                with open(os.path.join(root, filename), 'w') as f:
++                    f.write(css_content.replace(css_content[css_content.find('body {'):css_content.find('}'[0])], 'body {' + css_replacement_content ))
++loop_through_html_directories('.')
+\ No newline at end of file
+diff --git a/scripts/run-docs-build b/scripts/run-docs-build
+index ecc5332..307ac19 100755
+--- a/scripts/run-docs-build
++++ b/scripts/run-docs-build
+@@ -37,6 +37,8 @@ cd $outputdir
+ echo Extracing old content from archive
+ tar -xJf $docbookarchive
+ 
++$scriptdir/docs_fix_all_html_css.py
++
+ cd $bbdocs
+ mkdir $outputdir/bitbake
+ 
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 4+ messages in thread
+* Re: [yocto] [PATCH yocto-autobuilder-helper v10] Add a banner on the old documentation docs.
+  2022-04-26 11:55 [PATCH yocto-autobuilder-helper v10] Add a banner on the old documentation docs Abongwa Bonalais Amahnui
+@ 2022-04-26 13:09 ` Quentin Schulz
+  2022-04-26 15:49   ` Abongwa Amahnui Bonalais
+  0 siblings, 1 reply; 4+ messages in thread
+From: Quentin Schulz @ 2022-04-26 13:09 UTC (permalink / raw)
+  To: Abongwa Amahnui Bonalais, yocto
+
+Hi Amahnui,
+
+On 4/26/22 13:55, Abongwa Amahnui Bonalais wrote:
+> Signed-off-by: Abongwa Bonalais Amahnui <abongwabonalais@gmail.com>
+> ---
+>   scripts/docs_fix_all_html_css.py | 75 ++++++++++++++++++++++++++++++++
+>   scripts/run-docs-build           |  2 +
+>   2 files changed, 77 insertions(+)
+>   create mode 100755 scripts/docs_fix_all_html_css.py
+> 
+> diff --git a/scripts/docs_fix_all_html_css.py b/scripts/docs_fix_all_html_css.py
+> new file mode 100755
+> index 0000000..9ac5a2b
+> --- /dev/null
+> +++ b/scripts/docs_fix_all_html_css.py
+> @@ -0,0 +1,75 @@
+> +#!/usr/bin/env python3
+> +#
+> +# SPDX-License-Identifier: GPL-2.0-only
+> +#
+> +#Signed-off-by: Abongwa Bonalais Amahnui <abongwabonalais@gmail.com>
+> +#
+> +#
+> +# function to append to the content of a html file below the body tag
+> +#
+> +#
+> +
+> +import os
+> +
+> +
+> +
+> +html_content = '''
+> +<div id="outdated-warning">This document is outdated, you should select the <a href="https://urldefense.proofpoint.com/v2/url?u=https-3A__docs.yoctoproject.org_&amp;d=DwMDAg&amp;c=_sEr5x9kUWhuk4_nFwjJtA&amp;r=LYjLexDn7rXIzVmkNPvw5ymA1XTSqHGq8yBP6m6qZZ4njZguQhZhkI_-172IIy1t&amp;m=QSXvmsOZCPvnujS5xVQeG1_nbbJlo9MdPDnn8pJWC8JwcBRoB0Y1lQVspWNVn0Qy&amp;s=huYXC94XMMYriEdfcMvylQV9z5JxJ6VUTq_IBdmkY7o&amp;e=">latest release version</a> in this series.</div>
+> +<div xml:lang="en" class="body" lang="en">
+
+This message is ok for Dunfell (3.1.x) releases. You could also point 
+directly to https://docs.yoctoproject.org/dunfell/
+
+For all other releases, use:
+
+This version of the project is now considered obsolete, please select 
+and use a <a href="https://docs.yoctoproject.org">more recent version</a>.
+
+> +'''
+> +# <div xml:lang="en" class="body" lang="en"> and </div> are added to the html files to wrap all the content below the body tag in a div tag whose class is known so it can be controlled in the css file
+
+body can be modified directly in the css file without using a div. I 
+seem to recall you told us something related to the content actually 
+overlapping you modifications if body was used without putting it in a 
+div? This is the comment we want in there, you explaining why we cannot 
+keep body tag but need a div with a body class instead.
+
+> +last_div = '''
+> +</div>
+> +
+> +'''
+> + > +css_replacement_content = '''
+> +
+> +  font-family: Verdana, Sans, sans-serif;
+> +
+> +  /*min-width: 640px;*/
+> +  width: 100%;
+> +  margin:  0;
+> +  padding: 0;
+> +  color: #333;
+> +  overflow-x: hidden;
+> +  }
+> +
+> + /*added books too*/
+> +.body{
+> +margin:  0 auto;
+> +min-width: 640px;
+> +padding: 0 5em 5em 5em;
+> +}
+> +/* added the id below to make the banner show and be fixed*/
+> +#outdated-warning{
+> +text-align: center;
+> +background-color: rgb(255, 186, 186);
+> +color: rgb(106, 14, 14);
+> +padding: 0.5em 0;
+> +width: 100%;
+> +position: fixed;
+> +top: 0;
+> +
+> +
+> +'''
+> +    # pattern = '^3.1*'
+> +    # exclude = re.search(pattern, dir)
+
+Useless comments, please remove.
+
+> +def loop_through_html_directories(dir):
+> +    for root, dirs, filenames in os.walk(dir):
+> +        # exclude banner for 3.1.x upward as it is an LTS release and is still supported
+
+It is still supported but the files you're looking through are outdated, 
+so a different message should be printed. But something should still be 
+printed though!
+
+> +        exclude = set(['3.1', '3.1.1', '3.1.2', '3.1.3'])
+
+3.1.4 is still missing. You could just check for any directory whose 
+filename is prefixed by 3.1.
+
+Cheers,
+Quentin
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [PATCH yocto-autobuilder-helper v10] Add a banner on the old documentation docs.
+  2022-04-26 13:09 ` [yocto] " Quentin Schulz
+@ 2022-04-26 15:49   ` Abongwa Amahnui Bonalais
+  2022-04-26 16:04     ` [yocto] " Quentin Schulz
+  0 siblings, 1 reply; 4+ messages in thread
+From: Abongwa Amahnui Bonalais @ 2022-04-26 15:49 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 343 bytes --]
+
+Hi Quentin,
+Thanks for the review.
+
+I tried using regex to look for all the folders prefixed by 3.1. but it is currently not working, But I am still working on a fix for it.
+I noticed that the banner was already on the dunfell excluding 3.1.15, so should I hardcode from 3.1 to 3.1.14 while looking for way to make the regex method work?
+
+[-- Attachment #2: Type: text/html, Size: 365 bytes --]
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] [PATCH yocto-autobuilder-helper v10] Add a banner on the old documentation docs.
+  2022-04-26 15:49   ` Abongwa Amahnui Bonalais
+@ 2022-04-26 16:04     ` Quentin Schulz
+  0 siblings, 0 replies; 4+ messages in thread
+From: Quentin Schulz @ 2022-04-26 16:04 UTC (permalink / raw)
+  To: yocto, Abongwa Amahnui Bonalais
+
+Hi Amahnui,
+
+On April 26, 2022 5:49:38 PM GMT+02:00, Abongwa Amahnui Bonalais <abongwabonalais@gmail.com> wrote:
+>Hi Quentin,
+>Thanks for the review.
+>
+>I tried using regex to look for all the folders prefixed by 3.1. but it is currently not working, But I am still working on a fix for it.
+
+No need for a regex, just check the root string starts with "./3.1", that's enough.
+
+>I noticed that the banner was already on the dunfell excluding 3.1.15, so should I hardcode from 3.1 to 3.1.14 while looking for way to make the regex method work?
+
+Your script will only run on the old docs which stops at 3.1.4. There are no other directories. You can check by yourself in the docbook tarball and/or by exiting the run-docs-build script right after calling your script. Therefore, there's really nothing fancy in handling 3.1 except having a different message than for <3.1 releases.
+
+Cheers,
+Quentin
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+end of thread, other threads:[~2022-04-26 16:04 UTC | newest]
+
+Thread overview: 4+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-04-26 11:55 [PATCH yocto-autobuilder-helper v10] Add a banner on the old documentation docs Abongwa Bonalais Amahnui
+2022-04-26 13:09 ` [yocto] " Quentin Schulz
+2022-04-26 15:49   ` Abongwa Amahnui Bonalais
+2022-04-26 16:04     ` [yocto] " Quentin Schulz
+

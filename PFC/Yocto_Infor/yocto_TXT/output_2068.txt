@@ -1,0 +1,707 @@
+* [PATCH yocto-autobuilder-helper 1/6] scripts: run-docs-build: factor out all bitbake branches building
+@ 2022-03-18 16:36 Quentin Schulz
+  2022-03-18 16:36 ` [PATCH yocto-autobuilder-helper 2/6] scripts: run-docs-build: automatically build new Bitbake branches Quentin Schulz
+                   ` (5 more replies)
+  0 siblings, 6 replies; 12+ messages in thread
+From: Quentin Schulz @ 2022-03-18 16:36 UTC (permalink / raw)
+  To: yocto; +Cc: Quentin Schulz, Quentin Schulz
+
+From: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+
+master and master-next only differ from other branches by their output
+directory name. Let's put everything in common and only have a check on
+whether the branch is master or master-next and modify the output dir in
+those cases.
+
+Cc: Quentin Schulz <foss+yocto@0leil.net>
+Signed-off-by: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+---
+ scripts/run-docs-build | 26 +++++++++++---------------
+ 1 file changed, 11 insertions(+), 15 deletions(-)
+
+diff --git a/scripts/run-docs-build b/scripts/run-docs-build
+index b9b331b..f7b5f97 100755
+--- a/scripts/run-docs-build
++++ b/scripts/run-docs-build
+@@ -30,33 +30,29 @@ echo Extracing old content from archive
+ tar -xJf $docbookarchive
+ 
+ cd $bbdocs
+-echo Building bitbake master branch
+-git checkout master
+-make clean
+-make publish
+ mkdir $outputdir/bitbake
+-cp -r ./_build/final/* $outputdir/bitbake
+ 
+-git checkout master-next
+-echo Building bitbake master-next branch
+-make clean
+-make publish
+-mkdir $outputdir/bitbake/next
+-cp -r ./_build/final/* $outputdir/bitbake/next
+-
+-# stable branches
+ # A decision was made to keep updating all the Sphinx generated docs for the moment,
+ # even the ones corresponding to no longer supported releases
+ # https://lists.yoctoproject.org/g/docs/message/2193
+ # We copy the releases.rst file from master so that all versions of the docs
+ # see the latest releases.
+-for branch in 1.46 1.48 1.50 1.52; do
++for branch in 1.46 1.48 1.50 1.52 master master-next; do
+     echo Building bitbake $branch branch
+     git checkout $branch
+     git checkout master releases.rst
+     make clean
+     make publish
+-    mkdir $outputdir/bitbake/$branch
++
++    if [ "$branch" = "master-next" ]; then
++        branch="next"
++	mkdir $outputdir/bitbake/$branch
++    elif [ "$branch" = "master" ]; then
++        branch=""
++    else
++	mkdir $outputdir/bitbake/$branch
++    fi
++
+     cp -r ./_build/final/* $outputdir/bitbake/$branch
+     git reset --hard
+ done
+-- 
+2.35.1
+
+
+
+^ permalink raw reply related	[flat|nested] 12+ messages in thread
+* [PATCH yocto-autobuilder-helper 2/6] scripts: run-docs-build: automatically build new Bitbake branches
+  2022-03-18 16:36 [PATCH yocto-autobuilder-helper 1/6] scripts: run-docs-build: factor out all bitbake branches building Quentin Schulz
+@ 2022-03-18 16:36 ` Quentin Schulz
+  2022-03-21  9:04   ` [yocto] " Michael Opdenacker
+  2022-03-18 16:36 ` [PATCH yocto-autobuilder-helper 3/6] scripts: run-docs-build: factor out all yocto-docs branches building Quentin Schulz
+                   ` (4 subsequent siblings)
+  5 siblings, 1 reply; 12+ messages in thread
+From: Quentin Schulz @ 2022-03-18 16:36 UTC (permalink / raw)
+  To: yocto; +Cc: Quentin Schulz, Quentin Schulz
+
+From: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+
+Since commit 84ccba0f4aff91528f764523fe1205a354c889ed, docs of all later
+releases can be built with Sphinx. Instead of manually updating this
+list, let's have git return the list of remote branches which contains
+this commit.
+
+1.46 branch was initially released without Sphinx support but was later
+patched, hence why it's explicitly listed.
+
+Cc: Quentin Schulz <foss+yocto@0leil.net>
+Signed-off-by: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+---
+ scripts/run-docs-build | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/scripts/run-docs-build b/scripts/run-docs-build
+index f7b5f97..d8d77c7 100755
+--- a/scripts/run-docs-build
++++ b/scripts/run-docs-build
+@@ -37,7 +37,12 @@ mkdir $outputdir/bitbake
+ # https://lists.yoctoproject.org/g/docs/message/2193
+ # We copy the releases.rst file from master so that all versions of the docs
+ # see the latest releases.
+-for branch in 1.46 1.48 1.50 1.52 master master-next; do
++first_sphinx_commit=84ccba0f4aff91528f764523fe1205a354c889ed
++for branch in 1.46 $(git branch --remote --contains "$first_sphinx_commit" --format '%(refname:lstrip=3)'); do
++    if [ "$branch" = "HEAD" ]; then
++        continue
++    fi
++
+     echo Building bitbake $branch branch
+     git checkout $branch
+     git checkout master releases.rst
+-- 
+2.35.1
+
+
+
+^ permalink raw reply related	[flat|nested] 12+ messages in thread
+* [PATCH yocto-autobuilder-helper 3/6] scripts: run-docs-build: factor out all yocto-docs branches building
+  2022-03-18 16:36 [PATCH yocto-autobuilder-helper 1/6] scripts: run-docs-build: factor out all bitbake branches building Quentin Schulz
+  2022-03-18 16:36 ` [PATCH yocto-autobuilder-helper 2/6] scripts: run-docs-build: automatically build new Bitbake branches Quentin Schulz
+@ 2022-03-18 16:36 ` Quentin Schulz
+  2022-03-21  9:06   ` [yocto] " Michael Opdenacker
+  2022-03-18 16:36 ` [PATCH yocto-autobuilder-helper 4/6] scripts: run-docs-build: automatically build new yocto-docs branches Quentin Schulz
+                   ` (3 subsequent siblings)
+  5 siblings, 1 reply; 12+ messages in thread
+From: Quentin Schulz @ 2022-03-18 16:36 UTC (permalink / raw)
+  To: yocto; +Cc: Quentin Schulz, Quentin Schulz
+
+From: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+
+master, master-next and transition only differ from other branches by
+their output directory name. Let's put everything in common and only
+have a check on whether the branch is master, master-next or transition
+and modify the output dir in those cases.
+
+Cc: Quentin Schulz <foss+yocto@0leil.net>
+Signed-off-by: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+---
+ scripts/run-docs-build | 35 +++++++++++------------------------
+ 1 file changed, 11 insertions(+), 24 deletions(-)
+
+diff --git a/scripts/run-docs-build b/scripts/run-docs-build
+index d8d77c7..0055b19 100755
+--- a/scripts/run-docs-build
++++ b/scripts/run-docs-build
+@@ -68,37 +68,24 @@ cd $outputdir
+ rsync -irlp --checksum --ignore-times --delete bitbake docs@docs.yoctoproject.org:docs/
+ 
+ cd $ypdocs
+-echo Building master branch
+-git checkout master
+-make clean
+-make publish
+-cp -r ./_build/final/* $outputdir
+ 
+-cd $ypdocs
+-echo Building transition branch
+-git checkout transition
+-make clean
+-make publish
+-cp -r ./_build/final/* $outputdir/
+-
+-cd $ypdocs
+-echo Building master-next branch
+-git checkout master-next
+-make clean
+-make publish
+-mkdir $outputdir/next
+-cp -r ./_build/final/* $outputdir/next
+-
+-# stable branches
+ # Again, keeping even the no longer supported releases (see above comment)
+-for branch in dunfell gatesgarth hardknott honister; do
+-    cd $ypdocs
++for branch in dunfell gatesgarth hardknott honister master master-next transition; do
+     echo Building $branch branch
+     git checkout $branch
+     git checkout master releases.rst
+     make clean
+     make publish
+-    mkdir $outputdir/$branch
++
++    if [ "$branch" = "master-next" ]; then
++        branch="next"
++	mkdir $outputdir/$branch
++    elif [ "$branch" = "master" ] || [ "$branch" = "transition" ]; then
++        branch=""
++    else
++	mkdir $outputdir/$branch
++    fi
++
+     cp -r ./_build/final/* $outputdir/$branch
+     git reset --hard
+ done
+-- 
+2.35.1
+
+
+
+^ permalink raw reply related	[flat|nested] 12+ messages in thread
+* [PATCH yocto-autobuilder-helper 4/6] scripts: run-docs-build: automatically build new yocto-docs branches
+  2022-03-18 16:36 [PATCH yocto-autobuilder-helper 1/6] scripts: run-docs-build: factor out all bitbake branches building Quentin Schulz
+  2022-03-18 16:36 ` [PATCH yocto-autobuilder-helper 2/6] scripts: run-docs-build: automatically build new Bitbake branches Quentin Schulz
+  2022-03-18 16:36 ` [PATCH yocto-autobuilder-helper 3/6] scripts: run-docs-build: factor out all yocto-docs branches building Quentin Schulz
+@ 2022-03-18 16:36 ` Quentin Schulz
+  2022-03-21  9:07   ` [yocto] " Michael Opdenacker
+  2022-03-18 16:36 ` [PATCH yocto-autobuilder-helper 5/6] scripts: run-docs-build: simplify sphinx-buildable yocto-docs tag list fetching Quentin Schulz
+                   ` (2 subsequent siblings)
+  5 siblings, 1 reply; 12+ messages in thread
+From: Quentin Schulz @ 2022-03-18 16:36 UTC (permalink / raw)
+  To: yocto; +Cc: Quentin Schulz, Quentin Schulz
+
+From: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+
+Since commit 01dd5af7954e24552aca022917669b27bb0541ed, all later
+releases of yocto-docs can be built with Sphinx. Instead of manually
+updating this list, let's have git return the list of remote branches
+which contains the commit.
+
+dunfell branch was initially released without Sphinx support but was
+later patched, hence why it's explicitly listed.
+
+Cc: Quentin Schulz <foss+yocto@0leil.net>
+Signed-off-by: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+---
+ scripts/run-docs-build | 13 ++++++++++++-
+ 1 file changed, 12 insertions(+), 1 deletion(-)
+
+diff --git a/scripts/run-docs-build b/scripts/run-docs-build
+index 0055b19..1656975 100755
+--- a/scripts/run-docs-build
++++ b/scripts/run-docs-build
+@@ -70,7 +70,18 @@ rsync -irlp --checksum --ignore-times --delete bitbake docs@docs.yoctoproject.or
+ cd $ypdocs
+ 
+ # Again, keeping even the no longer supported releases (see above comment)
+-for branch in dunfell gatesgarth hardknott honister master master-next transition; do
++first_sphinx_commit=01dd5af7954e24552aca022917669b27bb0541ed
++for branch in dunfell transition $(git branch --remote --contains "$first_sphinx_commit" --format '%(refname:lstrip=3)'); do
++    if [ "$branch" = "HEAD" ]; then
++        continue
++    fi
++
++    # Do not build <release>-next branches as they are development branches only
++    # Do build master-next branch though!
++    if echo "$branch" | grep -v "master-next" | grep -q -E "-next$"; then
++        continue
++    fi
++
+     echo Building $branch branch
+     git checkout $branch
+     git checkout master releases.rst
+-- 
+2.35.1
+
+
+
+^ permalink raw reply related	[flat|nested] 12+ messages in thread
+* [PATCH yocto-autobuilder-helper 5/6] scripts: run-docs-build: simplify sphinx-buildable yocto-docs tag list fetching
+  2022-03-18 16:36 [PATCH yocto-autobuilder-helper 1/6] scripts: run-docs-build: factor out all bitbake branches building Quentin Schulz
+                   ` (2 preceding siblings ...)
+  2022-03-18 16:36 ` [PATCH yocto-autobuilder-helper 4/6] scripts: run-docs-build: automatically build new yocto-docs branches Quentin Schulz
+@ 2022-03-18 16:36 ` Quentin Schulz
+  2022-03-21  9:11   ` [yocto] " Michael Opdenacker
+  2022-03-18 16:36 ` [PATCH yocto-autobuilder-helper 6/6] scripts: run-docs-build: factor out yocto-docs tags and branches building Quentin Schulz
+  2022-03-21  8:54 ` [yocto] [PATCH yocto-autobuilder-helper 1/6] scripts: run-docs-build: factor out all bitbake " Michael Opdenacker
+  5 siblings, 1 reply; 12+ messages in thread
+From: Quentin Schulz @ 2022-03-18 16:36 UTC (permalink / raw)
+  To: yocto; +Cc: Quentin Schulz, Quentin Schulz
+
+From: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+
+The commit that introduced Sphinx support in yocto-docs is
+01dd5af7954e24552aca022917669b27bb0541ed. Any tag containing this commit
+is buildable by sphinx.
+
+Dunfell tags don't all have Sphinx support. However, all tags containing
+the introducing commit c25fe058b88b893b0d146f3ed27320b47cdec236 are
+buildable by sphinx.
+
+Therefore, let's just list all tags which contains either of those two
+commits instead of the complex series of pipes and shell commands.
+
+Cc: Quentin Schulz <foss+yocto@0leil.net>
+Signed-off-by: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+---
+ scripts/run-docs-build | 36 +++++++++++++++++-------------------
+ 1 file changed, 17 insertions(+), 19 deletions(-)
+
+diff --git a/scripts/run-docs-build b/scripts/run-docs-build
+index 1656975..ab5b6db 100755
+--- a/scripts/run-docs-build
++++ b/scripts/run-docs-build
+@@ -102,27 +102,25 @@ for branch in dunfell transition $(git branch --remote --contains "$first_sphinx
+ done
+ 
+ # Yocto Project releases/tags
+-v_sphinx='yocto-3.1.5' #This and newer versions have Sphinx docs.
++first_dunfell_sphinx_commit=c25fe058b88b893b0d146f3ed27320b47cdec236
++
+ cd $ypdocs
+-for tag in $(git tag --list 'yocto-*'); do
+-    first=$(printf '%s\n%s' $tag $v_sphinx | sort --version-sort | head -n1)
+-    if [ "$first" = "$v_sphinx" ]; then
+-        echo Processing $tag
+-        cd $ypdocs
+-        git checkout $tag
+-	if [ -e "${scriptdir}/docs-build-patches/${tag}/" ]; then
+-            echo Adding patch for $tag
+-            git am "${scriptdir}/docs-build-patches/${tag}/"000*
+-        fi
+-        git checkout master releases.rst
+-        make clean
+-        make publish
+-        version=$(echo $tag | cut -c7-)
+-        mkdir $outputdir/$version
+-        cp -r ./_build/final/* $outputdir/$version
+-        git reset --hard
+-        echo Finished processing $tag
++for tag in $(git tag --contains "$first_sphinx_commit" --contains "$first_dunfell_sphinx_commit" 'yocto-*'); do
++    echo Processing $tag
++    cd $ypdocs
++    git checkout $tag
++    if [ -e "${scriptdir}/docs-build-patches/${tag}/" ]; then
++        echo Adding patch for $tag
++        git am "${scriptdir}/docs-build-patches/${tag}/"000*
+     fi
++    git checkout master releases.rst
++    make clean
++    make publish
++    version=$(echo $tag | cut -c7-)
++    mkdir $outputdir/$version
++    cp -r ./_build/final/* $outputdir/$version
++    git reset --hard
++    echo Finished processing $tag
+ done
+ 
+ # get current release (e.g. most recent tag), and add a 'current' link
+-- 
+2.35.1
+
+
+
+^ permalink raw reply related	[flat|nested] 12+ messages in thread
+* [PATCH yocto-autobuilder-helper 6/6] scripts: run-docs-build: factor out yocto-docs tags and branches building
+  2022-03-18 16:36 [PATCH yocto-autobuilder-helper 1/6] scripts: run-docs-build: factor out all bitbake branches building Quentin Schulz
+                   ` (3 preceding siblings ...)
+  2022-03-18 16:36 ` [PATCH yocto-autobuilder-helper 5/6] scripts: run-docs-build: simplify sphinx-buildable yocto-docs tag list fetching Quentin Schulz
+@ 2022-03-18 16:36 ` Quentin Schulz
+  2022-03-21  9:19   ` [yocto] " Michael Opdenacker
+  2022-03-21  8:54 ` [yocto] [PATCH yocto-autobuilder-helper 1/6] scripts: run-docs-build: factor out all bitbake " Michael Opdenacker
+  5 siblings, 1 reply; 12+ messages in thread
+From: Quentin Schulz @ 2022-03-18 16:36 UTC (permalink / raw)
+  To: yocto; +Cc: Quentin Schulz, Quentin Schuls
+
+From: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+
+Except patching which is specific to tags and yocto- tag prefix
+stripping, the logic is identical, so let's merge both loops together.
+
+Cc: Quentin Schuls <foss+yocto@0leil.net>
+Signed-off-by: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+---
+ scripts/run-docs-build | 36 ++++++++++++------------------------
+ 1 file changed, 12 insertions(+), 24 deletions(-)
+
+diff --git a/scripts/run-docs-build b/scripts/run-docs-build
+index ab5b6db..ceda213 100755
+--- a/scripts/run-docs-build
++++ b/scripts/run-docs-build
+@@ -71,7 +71,8 @@ cd $ypdocs
+ 
+ # Again, keeping even the no longer supported releases (see above comment)
+ first_sphinx_commit=01dd5af7954e24552aca022917669b27bb0541ed
+-for branch in dunfell transition $(git branch --remote --contains "$first_sphinx_commit" --format '%(refname:lstrip=3)'); do
++first_dunfell_sphinx_commit=c25fe058b88b893b0d146f3ed27320b47cdec236
++for branch in dunfell transition $(git branch --remote --contains "$first_sphinx_commit" --format '%(refname:lstrip=3)') $(git tag --contains "$first_sphinx_commit" --contains "$first_dunfell_sphinx_commit" 'yocto-*'); do
+     if [ "$branch" = "HEAD" ]; then
+         continue
+     fi
+@@ -82,12 +83,21 @@ for branch in dunfell transition $(git branch --remote --contains "$first_sphinx
+         continue
+     fi
+ 
+-    echo Building $branch branch
++    echo Building $branch
+     git checkout $branch
++
++    if [ -e "${scriptdir}/docs-build-patches/${branch}/" ]; then
++        echo Adding patch for $branch
++        git am "${scriptdir}/docs-build-patches/${branch}/"000*
++    fi
++
+     git checkout master releases.rst
+     make clean
+     make publish
+ 
++    # Strip yocto- from tag names
++    branch=$(echo "$branch" | sed 's/yocto-//')
++
+     if [ "$branch" = "master-next" ]; then
+         branch="next"
+ 	mkdir $outputdir/$branch
+@@ -101,28 +111,6 @@ for branch in dunfell transition $(git branch --remote --contains "$first_sphinx
+     git reset --hard
+ done
+ 
+-# Yocto Project releases/tags
+-first_dunfell_sphinx_commit=c25fe058b88b893b0d146f3ed27320b47cdec236
+-
+-cd $ypdocs
+-for tag in $(git tag --contains "$first_sphinx_commit" --contains "$first_dunfell_sphinx_commit" 'yocto-*'); do
+-    echo Processing $tag
+-    cd $ypdocs
+-    git checkout $tag
+-    if [ -e "${scriptdir}/docs-build-patches/${tag}/" ]; then
+-        echo Adding patch for $tag
+-        git am "${scriptdir}/docs-build-patches/${tag}/"000*
+-    fi
+-    git checkout master releases.rst
+-    make clean
+-    make publish
+-    version=$(echo $tag | cut -c7-)
+-    mkdir $outputdir/$version
+-    cp -r ./_build/final/* $outputdir/$version
+-    git reset --hard
+-    echo Finished processing $tag
+-done
+-
+ # get current release (e.g. most recent tag), and add a 'current' link
+ tag=$(git tag --list 'yocto-*' | sort --version-sort | tail -1 | cut -c7-)
+ echo Linking to $tag as current
+-- 
+2.35.1
+
+
+
+^ permalink raw reply related	[flat|nested] 12+ messages in thread
+* Re: [yocto] [PATCH yocto-autobuilder-helper 1/6] scripts: run-docs-build: factor out all bitbake branches building
+  2022-03-18 16:36 [PATCH yocto-autobuilder-helper 1/6] scripts: run-docs-build: factor out all bitbake branches building Quentin Schulz
+                   ` (4 preceding siblings ...)
+  2022-03-18 16:36 ` [PATCH yocto-autobuilder-helper 6/6] scripts: run-docs-build: factor out yocto-docs tags and branches building Quentin Schulz
+@ 2022-03-21  8:54 ` Michael Opdenacker
+  5 siblings, 0 replies; 12+ messages in thread
+From: Michael Opdenacker @ 2022-03-21  8:54 UTC (permalink / raw)
+  To: Quentin Schulz, yocto; +Cc: Quentin Schulz, Quentin Schulz
+
+Hi Quentin
+
+On 3/18/22 17:36, Quentin Schulz wrote:
+> From: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+>
+> master and master-next only differ from other branches by their output
+> directory name. Let's put everything in common and only have a check on
+> whether the branch is master or master-next and modify the output dir in
+> those cases.
+>
+> Cc: Quentin Schulz <foss+yocto@0leil.net>
+> Signed-off-by: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+
+Thanks for the useful patch!
+
+Reviewed-by: Michael Opdenacker <michael.opdenacker@bootlin.com>
+Cheers
+Michael.
+
+-- 
+Michael Opdenacker, Bootlin
+Embedded Linux and Kernel engineering
+https://bootlin.com
+
+
+
+^ permalink raw reply	[flat|nested] 12+ messages in thread
+* Re: [yocto] [PATCH yocto-autobuilder-helper 2/6] scripts: run-docs-build: automatically build new Bitbake branches
+  2022-03-18 16:36 ` [PATCH yocto-autobuilder-helper 2/6] scripts: run-docs-build: automatically build new Bitbake branches Quentin Schulz
+@ 2022-03-21  9:04   ` Michael Opdenacker
+  0 siblings, 0 replies; 12+ messages in thread
+From: Michael Opdenacker @ 2022-03-21  9:04 UTC (permalink / raw)
+  To: Quentin Schulz, yocto; +Cc: Quentin Schulz, Quentin Schulz
+
+
+On 3/18/22 17:36, Quentin Schulz wrote:
+> From: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+>
+> Since commit 84ccba0f4aff91528f764523fe1205a354c889ed, docs of all later
+> releases can be built with Sphinx. Instead of manually updating this
+> list, let's have git return the list of remote branches which contains
+> this commit.
+>
+> 1.46 branch was initially released without Sphinx support but was later
+> patched, hence why it's explicitly listed.
+>
+> Cc: Quentin Schulz <foss+yocto@0leil.net>
+> Signed-off-by: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+> ---
+>  scripts/run-docs-build | 7 ++++++-
+>  1 file changed, 6 insertions(+), 1 deletion(-)
+>
+> diff --git a/scripts/run-docs-build b/scripts/run-docs-build
+> index f7b5f97..d8d77c7 100755
+> --- a/scripts/run-docs-build
+> +++ b/scripts/run-docs-build
+> @@ -37,7 +37,12 @@ mkdir $outputdir/bitbake
+>  # https://lists.yoctoproject.org/g/docs/message/2193
+>  # We copy the releases.rst file from master so that all versions of the docs
+>  # see the latest releases.
+> -for branch in 1.46 1.48 1.50 1.52 master master-next; do
+> +first_sphinx_commit=84ccba0f4aff91528f764523fe1205a354c889ed
+> +for branch in 1.46 $(git branch --remote --contains "$first_sphinx_commit" --format '%(refname:lstrip=3)'); do
+> +    if [ "$branch" = "HEAD" ]; then
+> +        continue
+> +    fi
+> +
+>      echo Building bitbake $branch branch
+>      git checkout $branch
+>      git checkout master releases.rst
+
+
+Very good idea! I learned a new git option today.
+Reviewed-by: Michael Opdenacker <michael.opdenacker@bootlin.com>
+Thanks!
+Michael.
+
+-- 
+Michael Opdenacker, Bootlin
+Embedded Linux and Kernel engineering
+https://bootlin.com
+
+
+
+^ permalink raw reply	[flat|nested] 12+ messages in thread
+* Re: [yocto] [PATCH yocto-autobuilder-helper 3/6] scripts: run-docs-build: factor out all yocto-docs branches building
+  2022-03-18 16:36 ` [PATCH yocto-autobuilder-helper 3/6] scripts: run-docs-build: factor out all yocto-docs branches building Quentin Schulz
+@ 2022-03-21  9:06   ` Michael Opdenacker
+  0 siblings, 0 replies; 12+ messages in thread
+From: Michael Opdenacker @ 2022-03-21  9:06 UTC (permalink / raw)
+  To: Quentin Schulz, yocto; +Cc: Quentin Schulz, Quentin Schulz
+
+
+On 3/18/22 17:36, Quentin Schulz wrote:
+> From: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+>
+> master, master-next and transition only differ from other branches by
+> their output directory name. Let's put everything in common and only
+> have a check on whether the branch is master, master-next or transition
+> and modify the output dir in those cases.
+>
+> Cc: Quentin Schulz <foss+yocto@0leil.net>
+> Signed-off-by: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+> ---
+>  scripts/run-docs-build | 35 +++++++++++------------------------
+>  1 file changed, 11 insertions(+), 24 deletions(-)
+
+
+Reviewed-by: Michael Opdenacker <michael.opdenacker@bootlin.com>
+Thanks!
+Michael.
+
+-- 
+Michael Opdenacker, Bootlin
+Embedded Linux and Kernel engineering
+https://bootlin.com
+
+
+
+^ permalink raw reply	[flat|nested] 12+ messages in thread
+* Re: [yocto] [PATCH yocto-autobuilder-helper 4/6] scripts: run-docs-build: automatically build new yocto-docs branches
+  2022-03-18 16:36 ` [PATCH yocto-autobuilder-helper 4/6] scripts: run-docs-build: automatically build new yocto-docs branches Quentin Schulz
+@ 2022-03-21  9:07   ` Michael Opdenacker
+  0 siblings, 0 replies; 12+ messages in thread
+From: Michael Opdenacker @ 2022-03-21  9:07 UTC (permalink / raw)
+  To: Quentin Schulz, yocto; +Cc: Quentin Schulz, Quentin Schulz
+
+
+On 3/18/22 17:36, Quentin Schulz wrote:
+> From: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+>
+> Since commit 01dd5af7954e24552aca022917669b27bb0541ed, all later
+> releases of yocto-docs can be built with Sphinx. Instead of manually
+> updating this list, let's have git return the list of remote branches
+> which contains the commit.
+>
+> dunfell branch was initially released without Sphinx support but was
+> later patched, hence why it's explicitly listed.
+>
+> Cc: Quentin Schulz <foss+yocto@0leil.net>
+> Signed-off-by: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+> ---
+>  scripts/run-docs-build | 13 ++++++++++++-
+>  1 file changed, 12 insertions(+), 1 deletion(-)
+
+
+Reviewed-by: Michael Opdenacker <michael.opdenacker@bootlin.com>
+Many thanks
+Michael.
+-- 
+
+Michael Opdenacker, Bootlin
+Embedded Linux and Kernel engineering
+https://bootlin.com
+
+
+
+^ permalink raw reply	[flat|nested] 12+ messages in thread
+* Re: [yocto] [PATCH yocto-autobuilder-helper 5/6] scripts: run-docs-build: simplify sphinx-buildable yocto-docs tag list fetching
+  2022-03-18 16:36 ` [PATCH yocto-autobuilder-helper 5/6] scripts: run-docs-build: simplify sphinx-buildable yocto-docs tag list fetching Quentin Schulz
+@ 2022-03-21  9:11   ` Michael Opdenacker
+  0 siblings, 0 replies; 12+ messages in thread
+From: Michael Opdenacker @ 2022-03-21  9:11 UTC (permalink / raw)
+  To: Quentin Schulz, yocto; +Cc: Quentin Schulz, Quentin Schulz
+
+
+On 3/18/22 17:36, Quentin Schulz wrote:
+> From: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+>
+> The commit that introduced Sphinx support in yocto-docs is
+> 01dd5af7954e24552aca022917669b27bb0541ed. Any tag containing this commit
+> is buildable by sphinx.
+>
+> Dunfell tags don't all have Sphinx support. However, all tags containing
+> the introducing commit c25fe058b88b893b0d146f3ed27320b47cdec236 are
+> buildable by sphinx.
+>
+> Therefore, let's just list all tags which contains either of those two
+> commits instead of the complex series of pipes and shell commands.
+>
+> Cc: Quentin Schulz <foss+yocto@0leil.net>
+> Signed-off-by: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+> ---
+>  scripts/run-docs-build | 36 +++++++++++++++++-------------------
+>  1 file changed, 17 insertions(+), 19 deletions(-)
+
+
+Thanks for the simplification!
+Reviewed-by: Michael Opdenacker <michael.opdenacker@bootlin.com>
+Cheers
+Michael.
+
+-- 
+Michael Opdenacker, Bootlin
+Embedded Linux and Kernel engineering
+https://bootlin.com
+
+
+
+^ permalink raw reply	[flat|nested] 12+ messages in thread
+* Re: [yocto] [PATCH yocto-autobuilder-helper 6/6] scripts: run-docs-build: factor out yocto-docs tags and branches building
+  2022-03-18 16:36 ` [PATCH yocto-autobuilder-helper 6/6] scripts: run-docs-build: factor out yocto-docs tags and branches building Quentin Schulz
+@ 2022-03-21  9:19   ` Michael Opdenacker
+  0 siblings, 0 replies; 12+ messages in thread
+From: Michael Opdenacker @ 2022-03-21  9:19 UTC (permalink / raw)
+  To: Quentin Schulz, yocto; +Cc: Quentin Schulz, Quentin Schuls
+
+
+On 3/18/22 17:36, Quentin Schulz wrote:
+> From: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+>
+> Except patching which is specific to tags and yocto- tag prefix
+> stripping, the logic is identical, so let's merge both loops together.
+>
+> Cc: Quentin Schuls <foss+yocto@0leil.net>
+> Signed-off-by: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+> ---
+>  scripts/run-docs-build | 36 ++++++++++++------------------------
+>  1 file changed, 12 insertions(+), 24 deletions(-)
+
+
+Reviewed-by: Michael Opdenacker <michael.opdenacker@bootlin.com>
+Thanks for making the script much more readable :-)
+Cheers
+Michael.
+
+-- 
+Michael Opdenacker, Bootlin
+Embedded Linux and Kernel engineering
+https://bootlin.com
+
+
+
+^ permalink raw reply	[flat|nested] 12+ messages in thread
+end of thread, other threads:[~2022-03-21  9:19 UTC | newest]
+
+Thread overview: 12+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-03-18 16:36 [PATCH yocto-autobuilder-helper 1/6] scripts: run-docs-build: factor out all bitbake branches building Quentin Schulz
+2022-03-18 16:36 ` [PATCH yocto-autobuilder-helper 2/6] scripts: run-docs-build: automatically build new Bitbake branches Quentin Schulz
+2022-03-21  9:04   ` [yocto] " Michael Opdenacker
+2022-03-18 16:36 ` [PATCH yocto-autobuilder-helper 3/6] scripts: run-docs-build: factor out all yocto-docs branches building Quentin Schulz
+2022-03-21  9:06   ` [yocto] " Michael Opdenacker
+2022-03-18 16:36 ` [PATCH yocto-autobuilder-helper 4/6] scripts: run-docs-build: automatically build new yocto-docs branches Quentin Schulz
+2022-03-21  9:07   ` [yocto] " Michael Opdenacker
+2022-03-18 16:36 ` [PATCH yocto-autobuilder-helper 5/6] scripts: run-docs-build: simplify sphinx-buildable yocto-docs tag list fetching Quentin Schulz
+2022-03-21  9:11   ` [yocto] " Michael Opdenacker
+2022-03-18 16:36 ` [PATCH yocto-autobuilder-helper 6/6] scripts: run-docs-build: factor out yocto-docs tags and branches building Quentin Schulz
+2022-03-21  9:19   ` [yocto] " Michael Opdenacker
+2022-03-21  8:54 ` [yocto] [PATCH yocto-autobuilder-helper 1/6] scripts: run-docs-build: factor out all bitbake " Michael Opdenacker
+

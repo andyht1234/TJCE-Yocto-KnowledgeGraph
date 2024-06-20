@@ -1,0 +1,468 @@
+* [meta-rockchip][PATCH v5 0/2] kmeta BSP for nanopi-m4
+@ 2021-05-05 13:06 Yann Dirson
+  2021-05-05 13:06 ` [meta-rockchip][PATCH v5 1/2] linux-yocto: add an initial NanoPi-M4 BSP Yann Dirson
+  2021-05-05 13:06 ` [meta-rockchip][PATCH v5 2/2] WIP linux-yocto: add workaround to disable VOPL usage on HDMI Yann Dirson
+  0 siblings, 2 replies; 3+ messages in thread
+From: Yann Dirson @ 2021-05-05 13:06 UTC (permalink / raw)
+  To: yocto; +Cc: twoerner, Yann Dirson
+
+From: Yann Dirson <yann@blade-group.com>
+
+The Wifi/BT support requires firmware, to be properly packaged; BT
+support itself is still buggy in mainline; audio jack requires a
+couple of patches.
+
+Changes in v5:
+- removed AP6356S-related config options, will come later with proper
+  wifi/bt support
+- removed CONFIG_SND_SOC_RK3288_HDMI_ANALOG which turns out not to be
+  needed for HDMI audio
+- new patch to get HDMI to work
+
+Changes in v4:
+- install our bsp files in bsp/rockchip/ rather than directly in bsp/
+- also add "serial" to MACHINE_FEATURES
+
+Changes in v3:
+- relocate the bsp files into files/ so we don't have to add linux-yocto/
+  to FILESEXTRAPATHS for all other kernels
+- removed the "don't force KCONFIG_MODE to alldefconfig" (not needed finally,
+  and causing interferences in default setup)
+- add "usbhost" to MACHINE_FEATURES to enable lsusb and friends
+- better hardware coverage (though still no wifi/bt/audio, and buggy hdmi)
+
+Yann Dirson (2):
+  linux-yocto: add an initial NanoPi-M4 BSP
+  WIP linux-yocto: add workaround to disable VOPL usage on HDMI
+
+ .../files/bsp/rockchip/hdmi-no-vopl.patch     | 65 +++++++++++++++++
+ .../files/bsp/rockchip/nanopi-m4-standard.scc |  7 ++
+ .../files/bsp/rockchip/nanopi-m4-tiny.scc     |  7 ++
+ .../linux/files/bsp/rockchip/nanopi-m4.cfg    | 11 +++
+ .../linux/files/bsp/rockchip/nanopi-m4.scc    |  5 ++
+ .../linux/files/bsp/rockchip/rk3399.cfg       | 70 +++++++++++++++++++
+ .../linux/files/bsp/rockchip/rk3399.scc       |  5 ++
+ .../linux/files/bsp/rockchip/rockchip.cfg     | 50 +++++++++++++
+ .../linux/files/bsp/rockchip/rockchip.scc     |  8 +++
+ recipes-kernel/linux/linux-yocto%.bbappend    |  6 ++
+ 10 files changed, 234 insertions(+)
+ create mode 100644 recipes-kernel/linux/files/bsp/rockchip/hdmi-no-vopl.patch
+ create mode 100644 recipes-kernel/linux/files/bsp/rockchip/nanopi-m4-standard.scc
+ create mode 100644 recipes-kernel/linux/files/bsp/rockchip/nanopi-m4-tiny.scc
+ create mode 100644 recipes-kernel/linux/files/bsp/rockchip/nanopi-m4.cfg
+ create mode 100644 recipes-kernel/linux/files/bsp/rockchip/nanopi-m4.scc
+ create mode 100644 recipes-kernel/linux/files/bsp/rockchip/rk3399.cfg
+ create mode 100644 recipes-kernel/linux/files/bsp/rockchip/rk3399.scc
+ create mode 100644 recipes-kernel/linux/files/bsp/rockchip/rockchip.cfg
+ create mode 100644 recipes-kernel/linux/files/bsp/rockchip/rockchip.scc
+
+-- 
+2.30.2
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* [meta-rockchip][PATCH v5 1/2] linux-yocto: add an initial NanoPi-M4 BSP
+  2021-05-05 13:06 [meta-rockchip][PATCH v5 0/2] kmeta BSP for nanopi-m4 Yann Dirson
+@ 2021-05-05 13:06 ` Yann Dirson
+  2021-05-05 13:06 ` [meta-rockchip][PATCH v5 2/2] WIP linux-yocto: add workaround to disable VOPL usage on HDMI Yann Dirson
+  1 sibling, 0 replies; 3+ messages in thread
+From: Yann Dirson @ 2021-05-05 13:06 UTC (permalink / raw)
+  To: yocto; +Cc: twoerner, Yann Dirson
+
+From: Yann Dirson <yann@blade-group.com>
+
+This patch provides "standard" and "tiny" BSP.
+
+There is still much work to be done in dispatching feature to individual
+scc files - the more boards we can support the better it will get.
+Not all SoC/board features are covered yet either (esp. Wifi/Bluetooth and
+audio jack), and properly-woking HDMI still needs patches.
+
+Tiny is not fully testable by itself, it can be minimally booted with
+serial console (though still missing CONFIG_MULTIUSER for serial getty,
+and CONFIG_INOTIFY_USER for proper udev operation) using:
+
+ PREFERRED_PROVIDER_virtual/kernel = "linux-yocto-tiny"
+ KERNEL_FEATURES_append = "\
+  ktypes/base/base.scc \
+  features/debug/printk.scc \
+  cfg/fs/ext4.scc \
+  cfg/8250.scc \
+ "
+
+Such a tiny build is still using mainline defconfig with lots of hardware
+features, and the kernel can be slimmed down even more by using:
+
+ KBUILD_DEFCONFIG = ""
+
+Kernel weight using default configurations:
+- standard                11MB
+- tiny                     5MB
+- tiny with no defconfig   2.5MB
+
+Signed-off-by: Yann Dirson <yann@blade-group.com>
+---
+ .../files/bsp/rockchip/nanopi-m4-standard.scc |  7 ++
+ .../files/bsp/rockchip/nanopi-m4-tiny.scc     |  7 ++
+ .../linux/files/bsp/rockchip/nanopi-m4.cfg    | 11 +++
+ .../linux/files/bsp/rockchip/nanopi-m4.scc    |  5 ++
+ .../linux/files/bsp/rockchip/rk3399.cfg       | 70 +++++++++++++++++++
+ .../linux/files/bsp/rockchip/rk3399.scc       |  5 ++
+ .../linux/files/bsp/rockchip/rockchip.cfg     | 50 +++++++++++++
+ .../linux/files/bsp/rockchip/rockchip.scc     |  6 ++
+ recipes-kernel/linux/linux-yocto%.bbappend    |  6 ++
+ 9 files changed, 167 insertions(+)
+ create mode 100644 recipes-kernel/linux/files/bsp/rockchip/nanopi-m4-standard.scc
+ create mode 100644 recipes-kernel/linux/files/bsp/rockchip/nanopi-m4-tiny.scc
+ create mode 100644 recipes-kernel/linux/files/bsp/rockchip/nanopi-m4.cfg
+ create mode 100644 recipes-kernel/linux/files/bsp/rockchip/nanopi-m4.scc
+ create mode 100644 recipes-kernel/linux/files/bsp/rockchip/rk3399.cfg
+ create mode 100644 recipes-kernel/linux/files/bsp/rockchip/rk3399.scc
+ create mode 100644 recipes-kernel/linux/files/bsp/rockchip/rockchip.cfg
+ create mode 100644 recipes-kernel/linux/files/bsp/rockchip/rockchip.scc
+
+diff --git a/recipes-kernel/linux/files/bsp/rockchip/nanopi-m4-standard.scc b/recipes-kernel/linux/files/bsp/rockchip/nanopi-m4-standard.scc
+new file mode 100644
+index 0000000..5c74d6b
+--- /dev/null
++++ b/recipes-kernel/linux/files/bsp/rockchip/nanopi-m4-standard.scc
+@@ -0,0 +1,7 @@
++# SPDX-License-Identifier: MIT
++define KMACHINE nanopi-m4
++define KTYPE standard
++define KARCH arm
++
++include ktypes/standard/standard.scc
++include nanopi-m4.scc
+diff --git a/recipes-kernel/linux/files/bsp/rockchip/nanopi-m4-tiny.scc b/recipes-kernel/linux/files/bsp/rockchip/nanopi-m4-tiny.scc
+new file mode 100644
+index 0000000..6e94d6a
+--- /dev/null
++++ b/recipes-kernel/linux/files/bsp/rockchip/nanopi-m4-tiny.scc
+@@ -0,0 +1,7 @@
++# SPDX-License-Identifier: MIT
++define KMACHINE nanopi-m4
++define KTYPE tiny
++define KARCH arm
++
++include ktypes/tiny/tiny.scc
++include nanopi-m4.scc
+diff --git a/recipes-kernel/linux/files/bsp/rockchip/nanopi-m4.cfg b/recipes-kernel/linux/files/bsp/rockchip/nanopi-m4.cfg
+new file mode 100644
+index 0000000..f3a2abf
+--- /dev/null
++++ b/recipes-kernel/linux/files/bsp/rockchip/nanopi-m4.cfg
+@@ -0,0 +1,11 @@
++CONFIG_MFD_RK808=y
++CONFIG_COMMON_CLK_RK808=y
++
++CONFIG_REGULATOR_RK808=y
++CONFIG_REGULATOR_FAN53555=y
++
++CONFIG_MMC_BLOCK=y
++CONFIG_PWRSEQ_SIMPLE=y
++
++# RTL8211E
++CONFIG_REALTEK_PHY=m
+diff --git a/recipes-kernel/linux/files/bsp/rockchip/nanopi-m4.scc b/recipes-kernel/linux/files/bsp/rockchip/nanopi-m4.scc
+new file mode 100644
+index 0000000..f4267aa
+--- /dev/null
++++ b/recipes-kernel/linux/files/bsp/rockchip/nanopi-m4.scc
+@@ -0,0 +1,5 @@
++# SPDX-License-Identifier: MIT
++
++kconf hardware nanopi-m4.cfg
++
++include rk3399.scc
+diff --git a/recipes-kernel/linux/files/bsp/rockchip/rk3399.cfg b/recipes-kernel/linux/files/bsp/rockchip/rk3399.cfg
+new file mode 100644
+index 0000000..42adfd1
+--- /dev/null
++++ b/recipes-kernel/linux/files/bsp/rockchip/rk3399.cfg
+@@ -0,0 +1,70 @@
++# A72 errata, all past revisions
++CONFIG_ARM64_ERRATUM_1319367=y
++# A53 errata, all patched on boot when needed
++CONFIG_ARM64_ERRATUM_826319=y
++CONFIG_ARM64_ERRATUM_827319=y
++CONFIG_ARM64_ERRATUM_824069=y
++CONFIG_ARM64_ERRATUM_819472=y
++
++# cru
++CONFIG_CLK_RK3399=y
++
++CONFIG_PL330_DMA=y
++CONFIG_I2C_RK3X=y
++CONFIG_SERIAL_8250_DW=y
++
++# usb
++CONFIG_PHY_ROCKCHIP_INNO_USB2=y
++CONFIG_PHY_ROCKCHIP_TYPEC=y
++
++# ethernet
++CONFIG_NET_VENDOR_STMICRO=y
++CONFIG_STMMAC_ETH=m
++CONFIG_STMMAC_PLATFORM=m
++CONFIG_DWMAC_ROCKCHIP=m
++CONFIG_PHYLIB=m
++
++# display
++CONFIG_ROCKCHIP_DW_HDMI=y
++CONFIG_ROCKCHIP_DW_MIPI_DSI=y
++CONFIG_ROCKCHIP_ANALOGIX_DP=y
++CONFIG_ROCKCHIP_CDN_DP=y
++CONFIG_PHY_ROCKCHIP_DP=y
++CONFIG_DRM_DW_HDMI=m
++CONFIG_DRM_DW_HDMI_I2S_AUDIO=m
++CONFIG_DRM_DW_HDMI_CEC=m
++CONFIG_DRM_DW_MIPI_DSI=m
++CONFIG_DRM_PANFROST=m
++
++# HDMI audio
++CONFIG_DRM_DW_HDMI_AHB_AUDIO=m
++
++CONFIG_VIDEO_DEV=m
++CONFIG_V4L_MEM2MEM_DRIVERS=y
++CONFIG_VIDEO_ROCKCHIP_RGA=m
++
++CONFIG_V4L2_H264=m
++CONFIG_MEDIA_CONTROLLER_REQUEST_API=y
++CONFIG_VIDEO_HANTRO=m
++CONFIG_VIDEO_HANTRO_ROCKCHIP=y
++CONFIG_VIDEO_ROCKCHIP_VDEC=m
++
++# usb
++CONFIG_USB_DWC2=y
++CONFIG_USB_DWC3=y
++CONFIG_USB_DWC3_DUAL_ROLE=y
++
++# sd/mmc
++CONFIG_MMC=y
++CONFIG_MMC_SDHCI=y
++CONFIG_MMC_SDHCI_PLTFM=y
++CONFIG_MMC_DW=y
++CONFIG_MMC_DW_ROCKCHIP=y
++CONFIG_MMC_SDHCI_OF_ARASAN=y
++
++# temperature sensors
++CONFIG_THERMAL=y
++CONFIG_THERMAL_OF=y
++CONFIG_ROCKCHIP_THERMAL=m
++CONFIG_IIO=y
++CONFIG_ROCKCHIP_SARADC=m
+diff --git a/recipes-kernel/linux/files/bsp/rockchip/rk3399.scc b/recipes-kernel/linux/files/bsp/rockchip/rk3399.scc
+new file mode 100644
+index 0000000..9b1a88e
+--- /dev/null
++++ b/recipes-kernel/linux/files/bsp/rockchip/rk3399.scc
+@@ -0,0 +1,5 @@
++# SPDX-License-Identifier: MIT
++
++kconf hardware rk3399.cfg
++
++include rockchip.scc
+diff --git a/recipes-kernel/linux/files/bsp/rockchip/rockchip.cfg b/recipes-kernel/linux/files/bsp/rockchip/rockchip.cfg
+new file mode 100644
+index 0000000..05a397d
+--- /dev/null
++++ b/recipes-kernel/linux/files/bsp/rockchip/rockchip.cfg
+@@ -0,0 +1,50 @@
++CONFIG_CPU_ISOLATION=y
++CONFIG_NUMA_BALANCING_DEFAULT_ENABLED=y
++CONFIG_HZ_250=y
++CONFIG_CPU_IDLE=y
++CONFIG_ARM_CPUIDLE=y
++
++CONFIG_ARCH_ROCKCHIP=y
++CONFIG_COMMON_CLK_ROCKCHIP=y
++CONFIG_REGULATOR=y
++CONFIG_REGULATOR_FIXED_VOLTAGE=y
++CONFIG_REGULATOR_PWM=y
++CONFIG_I2C=y
++CONFIG_FW_LOADER=y
++CONFIG_PHY_ROCKCHIP_EMMC=y
++CONFIG_PINCTRL=y
++CONFIG_PINCTRL_ROCKCHIP=y
++CONFIG_ROCKCHIP_IODOMAIN=y
++CONFIG_ROCKCHIP_PM_DOMAINS=y
++
++CONFIG_SPI=y
++CONFIG_SPI_ROCKCHIP=m
++
++CONFIG_PWM=y
++CONFIG_PWM_ROCKCHIP=y
++
++CONFIG_DRM_KMS_HELPER=m
++CONFIG_DRM_FBDEV_EMULATION=y
++CONFIG_ROCKCHIP_IOMMU=y
++CONFIG_DRM_ROCKCHIP=m
++CONFIG_DRM_BRIDGE=y
++
++CONFIG_SND=y
++CONFIG_SND_SOC=y
++CONFIG_SND_HDA_CODEC_HDMI=m
++CONFIG_SND_SOC_ROCKCHIP=m
++CONFIG_SND_SOC_ROCKCHIP_I2S=m
++CONFIG_SND_SOC_ROCKCHIP_SPDIF=m
++
++CONFIG_NVMEM=y
++CONFIG_ROCKCHIP_EFUSE=m
++
++CONFIG_CPU_FREQ=y
++CONFIG_CPU_FREQ_THERMAL=y
++CONFIG_HWMON=y
++CONFIG_THERMAL_HWMON=y
++
++CONFIG_CRYPTO_HW=y
++CONFIG_CRYPTO_DEV_ROCKCHIP=m
++
++CONFIG_MMC_BLOCK_MINORS=32
+diff --git a/recipes-kernel/linux/files/bsp/rockchip/rockchip.scc b/recipes-kernel/linux/files/bsp/rockchip/rockchip.scc
+new file mode 100644
+index 0000000..800f105
+--- /dev/null
++++ b/recipes-kernel/linux/files/bsp/rockchip/rockchip.scc
+@@ -0,0 +1,6 @@
++# SPDX-License-Identifier: MIT
++
++kconf hardware rockchip.cfg
++
++include cfg/dmaengine.scc
++include features/mmc/mmc-block.cfg
+diff --git a/recipes-kernel/linux/linux-yocto%.bbappend b/recipes-kernel/linux/linux-yocto%.bbappend
+index 7702e3f..9658681 100644
+--- a/recipes-kernel/linux/linux-yocto%.bbappend
++++ b/recipes-kernel/linux/linux-yocto%.bbappend
+@@ -1,3 +1,9 @@
++FILESEXTRAPATHS_prepend := "${THISDIR}/files:"
++
++SRC_URI_append = "\
++ file://bsp;type=kmeta;subdir=kernel-meta \
++"
++
+ COMPATIBLE_MACHINE_marsboard-rk3066 = "marsboard-rk3066"
+ COMPATIBLE_MACHINE_rock2-square = "rock2-square"
+ COMPATIBLE_MACHINE_radxarock = "radxarock"
+-- 
+2.30.2
+
+
+^ permalink raw reply related	[flat|nested] 3+ messages in thread
+* [meta-rockchip][PATCH v5 2/2] WIP linux-yocto: add workaround to disable VOPL usage on HDMI
+  2021-05-05 13:06 [meta-rockchip][PATCH v5 0/2] kmeta BSP for nanopi-m4 Yann Dirson
+  2021-05-05 13:06 ` [meta-rockchip][PATCH v5 1/2] linux-yocto: add an initial NanoPi-M4 BSP Yann Dirson
+@ 2021-05-05 13:06 ` Yann Dirson
+  1 sibling, 0 replies; 3+ messages in thread
+From: Yann Dirson @ 2021-05-05 13:06 UTC (permalink / raw)
+  To: yocto; +Cc: twoerner, Yann Dirson
+
+From: Yann Dirson <yann@blade-group.com>
+
+There is a known issue in mainline kernel making the machine unusable
+once a HDMI screen is plugged.  This patch lets VOPB be alone to use
+the HDMI port and avoids the issue while providing wupport for the largest
+set of video modes, at the expense of double-screen support.
+
+FIXME: patch does not get applied, unless the scc is also added to
+KERNEL_FEATURES ?
+---
+ .../files/bsp/rockchip/hdmi-no-vopl.patch     | 65 +++++++++++++++++++
+ .../linux/files/bsp/rockchip/rockchip.scc     |  2 +
+ 2 files changed, 67 insertions(+)
+ create mode 100644 recipes-kernel/linux/files/bsp/rockchip/hdmi-no-vopl.patch
+
+diff --git a/recipes-kernel/linux/files/bsp/rockchip/hdmi-no-vopl.patch b/recipes-kernel/linux/files/bsp/rockchip/hdmi-no-vopl.patch
+new file mode 100644
+index 0000000..72ed753
+--- /dev/null
++++ b/recipes-kernel/linux/files/bsp/rockchip/hdmi-no-vopl.patch
+@@ -0,0 +1,65 @@
++From 92d9cf4e6c2767c8c5aa8d97e684f2f77d950e7d Mon Sep 17 00:00:00 2001
++From: Jonas Karlman <jonas@kwiboo.se>
++Date: Sun, 19 Jul 2020 16:35:11 +0000
++Subject: [PATCH] HACK: dts: rockchip: do not use vopl for hdmi
++Upstream-Status: Inappropriate [other]
++
++---
++ arch/arm/boot/dts/rk3288.dtsi            | 9 ---------
++ arch/arm64/boot/dts/rockchip/rk3399.dtsi | 9 ---------
++ 2 files changed, 18 deletions(-)
++
++diff --git a/arch/arm/boot/dts/rk3288.dtsi b/arch/arm/boot/dts/rk3288.dtsi
++index 03e86d012edd..746acfac1e92 100644
++--- a/arch/arm/boot/dts/rk3288.dtsi
+++++ b/arch/arm/boot/dts/rk3288.dtsi
++@@ -1104,11 +1104,6 @@ vopl_out: port {
++ 			#address-cells = <1>;
++ 			#size-cells = <0>;
++ 
++-			vopl_out_hdmi: endpoint@0 {
++-				reg = <0>;
++-				remote-endpoint = <&hdmi_in_vopl>;
++-			};
++-
++ 			vopl_out_edp: endpoint@1 {
++ 				reg = <1>;
++ 				remote-endpoint = <&edp_in_vopl>;
++@@ -1249,10 +1244,6 @@ hdmi_in_vopb: endpoint@0 {
++ 					reg = <0>;
++ 					remote-endpoint = <&vopb_out_hdmi>;
++ 				};
++-				hdmi_in_vopl: endpoint@1 {
++-					reg = <1>;
++-					remote-endpoint = <&vopl_out_hdmi>;
++-				};
++ 			};
++ 		};
++ 	};
++diff --git a/arch/arm64/boot/dts/rockchip/rk3399.dtsi b/arch/arm64/boot/dts/rockchip/rk3399.dtsi
++index a855805649ef..418d16b0b648 100644
++--- a/arch/arm64/boot/dts/rockchip/rk3399.dtsi
+++++ b/arch/arm64/boot/dts/rockchip/rk3399.dtsi
++@@ -1640,11 +1640,6 @@ vopl_out_edp: endpoint@1 {
++ 				remote-endpoint = <&edp_in_vopl>;
++ 			};
++ 
++-			vopl_out_hdmi: endpoint@2 {
++-				reg = <2>;
++-				remote-endpoint = <&hdmi_in_vopl>;
++-			};
++-
++ 			vopl_out_mipi1: endpoint@3 {
++ 				reg = <3>;
++ 				remote-endpoint = <&mipi1_in_vopl>;
++@@ -1816,10 +1811,6 @@ hdmi_in_vopb: endpoint@0 {
++ 					reg = <0>;
++ 					remote-endpoint = <&vopb_out_hdmi>;
++ 				};
++-				hdmi_in_vopl: endpoint@1 {
++-					reg = <1>;
++-					remote-endpoint = <&vopl_out_hdmi>;
++-				};
++ 			};
++ 		};
++ 	};
+diff --git a/recipes-kernel/linux/files/bsp/rockchip/rockchip.scc b/recipes-kernel/linux/files/bsp/rockchip/rockchip.scc
+index 800f105..4d61509 100644
+--- a/recipes-kernel/linux/files/bsp/rockchip/rockchip.scc
++++ b/recipes-kernel/linux/files/bsp/rockchip/rockchip.scc
+@@ -4,3 +4,5 @@ kconf hardware rockchip.cfg
+ 
+ include cfg/dmaengine.scc
+ include features/mmc/mmc-block.cfg
++
++patch hdmi-no-vopl.patch
+-- 
+2.30.2
+
+
+^ permalink raw reply related	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2021-05-05 13:07 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-05-05 13:06 [meta-rockchip][PATCH v5 0/2] kmeta BSP for nanopi-m4 Yann Dirson
+2021-05-05 13:06 ` [meta-rockchip][PATCH v5 1/2] linux-yocto: add an initial NanoPi-M4 BSP Yann Dirson
+2021-05-05 13:06 ` [meta-rockchip][PATCH v5 2/2] WIP linux-yocto: add workaround to disable VOPL usage on HDMI Yann Dirson
+

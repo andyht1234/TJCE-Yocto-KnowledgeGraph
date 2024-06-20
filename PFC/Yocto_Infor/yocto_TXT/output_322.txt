@@ -1,0 +1,152 @@
+* connman + busybox-hwclock startup failure
+@ 2023-03-30 22:04 Chris Elledge
+  2023-03-31  5:18 ` [yocto] " Alexander Kanavin
+  2023-07-28  6:15 ` Mike Looijmans
+  0 siblings, 2 replies; 3+ messages in thread
+From: Chris Elledge @ 2023-03-30 22:04 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 978 bytes --]
+
+I've encountered an issue when using a system that has both connman and the
+hwclock.sh script enabled during startup. The default combined startup
+order for these two services is wrong.
+
+Currently connman starts at 05, and hwclock.sh is at 20 (default for
+update-rc.d). This means that we have a situation where connman starts up
+and obtains a correct NTP time, then hwclock.sh clobbers the system time
+with whatever is in the RTC even if it is way in the past. The big issue
+caused by that is connman schedules its next NTP update at an absolute time
+of (current time + 1024s). Once the hwclock.sh script knocks the system
+time way into the past, the NTP update will not run for a potentially very
+long time.
+
+I would suggest adding a line to poky/meta/recipes-core/busybox.inc to move
+hwclock.sh earlier.
+For example:
+INITSCRIPT_PARAMS:${PN}-hwclock = "start 04 2 3 4 5 . stop 20 0 1 6"
+or
+INITSCRIPT_PARAMS:${PN}-hwclock = "start 40 S . stop 20 0 1 6"
+
+Thanks,
+Chris Elledge
+
+[-- Attachment #2: Type: text/html, Size: 1187 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] connman + busybox-hwclock startup failure
+  2023-03-30 22:04 connman + busybox-hwclock startup failure Chris Elledge
+@ 2023-03-31  5:18 ` Alexander Kanavin
+  2023-07-28  6:15 ` Mike Looijmans
+  1 sibling, 0 replies; 3+ messages in thread
+From: Alexander Kanavin @ 2023-03-31  5:18 UTC (permalink / raw)
+  To: Chris Elledge; +Cc: yocto
+
+Can you submit a patch for this please? The mailing list is openembedded-core@.
+
+Alex
+
+On Fri, 31 Mar 2023 at 00:05, Chris Elledge <celledge@siteworx.io> wrote:
+>
+> I've encountered an issue when using a system that has both connman and the hwclock.sh script enabled during startup. The default combined startup order for these two services is wrong.
+>
+> Currently connman starts at 05, and hwclock.sh is at 20 (default for update-rc.d). This means that we have a situation where connman starts up and obtains a correct NTP time, then hwclock.sh clobbers the system time with whatever is in the RTC even if it is way in the past. The big issue caused by that is connman schedules its next NTP update at an absolute time of (current time + 1024s). Once the hwclock.sh script knocks the system time way into the past, the NTP update will not run for a potentially very long time.
+>
+> I would suggest adding a line to poky/meta/recipes-core/busybox.inc to move hwclock.sh earlier.
+> For example:
+> INITSCRIPT_PARAMS:${PN}-hwclock = "start 04 2 3 4 5 . stop 20 0 1 6"
+> or
+> INITSCRIPT_PARAMS:${PN}-hwclock = "start 40 S . stop 20 0 1 6"
+>
+> Thanks,
+> Chris Elledge
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#59555): https://lists.yoctoproject.org/g/yocto/message/59555
+> Mute This Topic: https://lists.yoctoproject.org/mt/97961702/1686489
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] connman + busybox-hwclock startup failure
+  2023-03-30 22:04 connman + busybox-hwclock startup failure Chris Elledge
+  2023-03-31  5:18 ` [yocto] " Alexander Kanavin
+@ 2023-07-28  6:15 ` Mike Looijmans
+  1 sibling, 0 replies; 3+ messages in thread
+From: Mike Looijmans @ 2023-07-28  6:15 UTC (permalink / raw)
+  To: yocto
+
+A bit late, but might be useful to others.
+
+The Linux kernel has options to set the RTC time at boot. This will happen as 
+soon as the RTC probes, which is often before the rootfs mounts.
+
+The kernel also has an option to synchronize the RTC to NTP time (userspace 
+provides the actual NTP) when available.
+
+Combined this completely replaces the hwclock functionality. In fact, I found 
+that I had to bbappend the busybox recipeand remove the hwclock scripts, they 
+actually interfere with proper operation:
+- At boot, the RTC clock is copied twice
+- At shutdown the RTC is set. But most RTC clocks have more accurate time 
+keeping (e.g. temperature compensated crystal) than what the system has, so 
+this usually makes things worse. Better to set the RTC time from userspace and 
+leave it alone.
+- Most RTCs have only "second" resolution and setting it too often makes it 
+drift more.
+
+
+
+On 31-03-2023 00:04, Chris Elledge via lists.yoctoproject.org wrote:
+> I've encountered an issue when using a system that has both connman and the 
+> hwclock.sh script enabled during startup. The default combined startup order 
+> for these two services is wrong.
+> 
+> Currently connman starts at 05, and hwclock.sh is at 20 (default for 
+> update-rc.d). This means that we have a situation where connman starts up and 
+> obtains a correct NTP time, then hwclock.sh clobbers the system time with 
+> whatever is in the RTC even if it is way in the past. The big issue caused by 
+> that is connman schedules its next NTP update at an absolute time of (current 
+> time + 1024s). Once the hwclock.sh script knocks the system time way into the 
+> past, the NTP update will not run for a potentially very long time.
+> 
+> I would suggest adding a line to poky/meta/recipes-core/busybox.inc to move 
+> hwclock.sh earlier.
+> For example:
+> INITSCRIPT_PARAMS:${PN}-hwclock = "start 04 2 3 4 5 . stop 20 0 1 6"
+> or
+> INITSCRIPT_PARAMS:${PN}-hwclock = "start 40 S . stop 20 0 1 6"
+> 
+> Thanks,
+> Chris Elledge
+> 
+> 
+
+-- 
+Mike Looijmans
+System Expert
+
+TOPIC Embedded Products B.V.
+Materiaalweg 4, 5681 RJ Best
+The Netherlands
+
+T: +31 (0) 499 33 69 69
+E: mike.looijmans@topic.nl
+W: www.topic.nl
+
+
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2023-07-28  6:16 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-03-30 22:04 connman + busybox-hwclock startup failure Chris Elledge
+2023-03-31  5:18 ` [yocto] " Alexander Kanavin
+2023-07-28  6:15 ` Mike Looijmans
+

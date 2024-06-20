@@ -1,0 +1,322 @@
+* [meta-lts-mixins][PATCH 0/4] kirkstone/rust-1.68 branch updates
+@ 2023-08-23 18:25 Scott Murray
+  2023-08-23 18:25 ` [meta-lts-mixins][PATCH 1/4] cargo.bbclass: set up cargo environment in common do_compile Scott Murray
+                   ` (3 more replies)
+  0 siblings, 4 replies; 5+ messages in thread
+From: Scott Murray @ 2023-08-23 18:25 UTC (permalink / raw)
+  To: yocto
+
+Pull in a couple of recent fixes that were backported to Mickledore, a
+librsvg update that Steve has queued in mickledore-nut, and a fix for
+building for RISC-V platforms.
+
+Alexander Kanavin (2):
+  cargo.bbclass: set up cargo environment in common do_compile
+  rust-common.bbclass: move musl-specific linking fix from
+    rust-source.inc
+
+Chee Yang Lee (1):
+  librsvg: upgrade to 2.54.6
+
+Scott Murray (1):
+  Fix RISC-V support
+
+ classes/cargo.bbclass                               |  1 -
+ classes/cargo_common.bbclass                        |  4 ++++
+ classes/rust-common.bbclass                         |  8 ++++++--
+ classes/rust-target-config.bbclass                  |  2 +-
+ conf/layer.conf                                     |  4 ++++
+ lib/mixin/rust.py                                   | 13 +++++++++++++
+ recipes-devtools/rust/rust-source.inc               |  5 -----
+ .../{librsvg_2.54.5.bb => librsvg_2.54.6.bb}        |  2 +-
+ 8 files changed, 29 insertions(+), 10 deletions(-)
+ create mode 100644 lib/mixin/rust.py
+ rename recipes-gnome/librsvg/{librsvg_2.54.5.bb => librsvg_2.54.6.bb} (97%)
+
+-- 
+2.41.0
+
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* [meta-lts-mixins][PATCH 1/4] cargo.bbclass: set up cargo environment in common do_compile
+  2023-08-23 18:25 [meta-lts-mixins][PATCH 0/4] kirkstone/rust-1.68 branch updates Scott Murray
+@ 2023-08-23 18:25 ` Scott Murray
+  2023-08-23 18:25 ` [meta-lts-mixins][PATCH 2/4] rust-common.bbclass: move musl-specific linking fix from rust-source.inc Scott Murray
+                   ` (2 subsequent siblings)
+  3 siblings, 0 replies; 5+ messages in thread
+From: Scott Murray @ 2023-08-23 18:25 UTC (permalink / raw)
+  To: yocto
+
+From: Alexander Kanavin <alex.kanavin@gmail.com>
+
+cargo_do_compile runs only if the recipe is built using cargo
+as the top level tool. Some recipes hide usage of cargo inside setuptools
+(or autoconf) and use do_compile definitions specific to those,
+and so the environment isn't properly set up.
+
+This was exposed by latest versions of python3-cryptography.
+
+(From OE-Core rev: a1946efdbec608d47f9e992c1b5cf3c671a204fc)
+
+Signed-off-by: Alexander Kanavin <alex@linutronix.de>
+Signed-off-by: Alexandre Belloni <alexandre.belloni@bootlin.com>
+Signed-off-by: Richard Purdie <richard.purdie@linuxfoundation.org>
+(cherry picked from commit 9f4ff643a028d7f5670d80861f2ce19ca2d90faa)
+Signed-off-by: Steve Sakoman <steve@sakoman.com>
+Signed-off-by: Scott Murray <scott.murray@konsulko.com>
+---
+ classes/cargo.bbclass        | 1 -
+ classes/cargo_common.bbclass | 4 ++++
+ 2 files changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/classes/cargo.bbclass b/classes/cargo.bbclass
+index 7a8cc1e..3ef0bbb 100644
+--- a/classes/cargo.bbclass
++++ b/classes/cargo.bbclass
+@@ -55,7 +55,6 @@ oe_cargo_build () {
+ 
+ do_compile[progress] = "outof:\s+(\d+)/(\d+)"
+ cargo_do_compile () {
+-	oe_cargo_fix_env
+ 	oe_cargo_build
+ }
+ 
+diff --git a/classes/cargo_common.bbclass b/classes/cargo_common.bbclass
+index 82ab25b..1ca0be4 100644
+--- a/classes/cargo_common.bbclass
++++ b/classes/cargo_common.bbclass
+@@ -149,6 +149,10 @@ python cargo_common_do_patch_paths() {
+ }
+ do_configure[postfuncs] += "cargo_common_do_patch_paths"
+ 
++do_compile:prepend () {
++        oe_cargo_fix_env
++}
++
+ oe_cargo_fix_env () {
+ 	export CC="${RUST_TARGET_CC}"
+ 	export CXX="${RUST_TARGET_CXX}"
+-- 
+2.41.0
+
+
+
+^ permalink raw reply related	[flat|nested] 5+ messages in thread
+* [meta-lts-mixins][PATCH 2/4] rust-common.bbclass: move musl-specific linking fix from rust-source.inc
+  2023-08-23 18:25 [meta-lts-mixins][PATCH 0/4] kirkstone/rust-1.68 branch updates Scott Murray
+  2023-08-23 18:25 ` [meta-lts-mixins][PATCH 1/4] cargo.bbclass: set up cargo environment in common do_compile Scott Murray
+@ 2023-08-23 18:25 ` Scott Murray
+  2023-08-23 18:25 ` [meta-lts-mixins][PATCH 3/4] librsvg: upgrade to 2.54.6 Scott Murray
+  2023-08-23 18:25 ` [meta-lts-mixins][PATCH 4/4] Fix RISC-V support Scott Murray
+  3 siblings, 0 replies; 5+ messages in thread
+From: Scott Murray @ 2023-08-23 18:25 UTC (permalink / raw)
+  To: yocto
+
+From: Alexander Kanavin <alex.kanavin@gmail.com>
+
+This needs to be done for any item that is linked under rustc,
+and not just rust itself. Latest python-cryptography exposes the issue.
+
+(From OE-Core rev: 967d847a9815df43d0c92ca61cc544e1fe5dcc03)
+
+Signed-off-by: Alexander Kanavin <alex@linutronix.de>
+Signed-off-by: Alexandre Belloni <alexandre.belloni@bootlin.com>
+Signed-off-by: Richard Purdie <richard.purdie@linuxfoundation.org>
+(cherry picked from commit d3811228747590ea06e8d68be4785d45ec9c478f)
+Signed-off-by: Steve Sakoman <steve@sakoman.com>
+Signed-off-by: Scott Murray <scott.murray@konsulko.com>
+---
+ classes/rust-common.bbclass           | 4 ++++
+ recipes-devtools/rust/rust-source.inc | 5 -----
+ 2 files changed, 4 insertions(+), 5 deletions(-)
+
+diff --git a/classes/rust-common.bbclass b/classes/rust-common.bbclass
+index e0cedd7..8782727 100644
+--- a/classes/rust-common.bbclass
++++ b/classes/rust-common.bbclass
+@@ -158,6 +158,10 @@ WRAPPER_TARGET_CXX = "${CXX}"
+ WRAPPER_TARGET_CCLD = "${CCLD}"
+ WRAPPER_TARGET_LDFLAGS = "${LDFLAGS}"
+ WRAPPER_TARGET_EXTRALD = ""
++# see recipes-devtools/gcc/gcc/0018-Add-ssp_nonshared-to-link-commandline-for-musl-targe.patch
++# we need to link with ssp_nonshared on musl to avoid "undefined reference to `__stack_chk_fail_local'"
++# when building MACHINE=qemux86 for musl
++WRAPPER_TARGET_EXTRALD:libc-musl = "-lssp_nonshared"
+ WRAPPER_TARGET_AR = "${AR}"
+ 
+ # compiler is used by gcc-rs
+diff --git a/recipes-devtools/rust/rust-source.inc b/recipes-devtools/rust/rust-source.inc
+index b25b5c1..0534e59 100644
+--- a/recipes-devtools/rust/rust-source.inc
++++ b/recipes-devtools/rust/rust-source.inc
+@@ -17,8 +17,3 @@ export TARGET_VENDOR
+ 
+ UPSTREAM_CHECK_URI = "https://forge.rust-lang.org/infra/other-installation-methods.html"
+ UPSTREAM_CHECK_REGEX = "rustc-(?P<pver>\d+(\.\d+)+)-src"
+-
+-# see recipes-devtools/gcc/gcc/0018-Add-ssp_nonshared-to-link-commandline-for-musl-targe.patch
+-# we need to link with ssp_nonshared on musl to avoid "undefined reference to `__stack_chk_fail_local'"
+-# when building MACHINE=qemux86 for musl
+-WRAPPER_TARGET_EXTRALD:libc-musl = "-lssp_nonshared"
+-- 
+2.41.0
+
+
+
+^ permalink raw reply related	[flat|nested] 5+ messages in thread
+* [meta-lts-mixins][PATCH 3/4] librsvg: upgrade to 2.54.6
+  2023-08-23 18:25 [meta-lts-mixins][PATCH 0/4] kirkstone/rust-1.68 branch updates Scott Murray
+  2023-08-23 18:25 ` [meta-lts-mixins][PATCH 1/4] cargo.bbclass: set up cargo environment in common do_compile Scott Murray
+  2023-08-23 18:25 ` [meta-lts-mixins][PATCH 2/4] rust-common.bbclass: move musl-specific linking fix from rust-source.inc Scott Murray
+@ 2023-08-23 18:25 ` Scott Murray
+  2023-08-23 18:25 ` [meta-lts-mixins][PATCH 4/4] Fix RISC-V support Scott Murray
+  3 siblings, 0 replies; 5+ messages in thread
+From: Scott Murray @ 2023-08-23 18:25 UTC (permalink / raw)
+  To: yocto
+
+From: Chee Yang Lee <chee.yang.lee@intel.com>
+
+update include fix for CVE-2023-38633.
+
+Signed-off-by: Chee Yang Lee <chee.yang.lee@intel.com>
+Signed-off-by: Steve Sakoman <steve@sakoman.com>
+Signed-off-by: Scott Murray <scott.murray@konsulko.com>
+---
+ recipes-gnome/librsvg/{librsvg_2.54.5.bb => librsvg_2.54.6.bb} | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+ rename recipes-gnome/librsvg/{librsvg_2.54.5.bb => librsvg_2.54.6.bb} (97%)
+
+diff --git a/recipes-gnome/librsvg/librsvg_2.54.5.bb b/recipes-gnome/librsvg/librsvg_2.54.6.bb
+similarity index 97%
+rename from recipes-gnome/librsvg/librsvg_2.54.5.bb
+rename to recipes-gnome/librsvg/librsvg_2.54.6.bb
+index 59278d1..b917b76 100644
+--- a/recipes-gnome/librsvg/librsvg_2.54.5.bb
++++ b/recipes-gnome/librsvg/librsvg_2.54.6.bb
+@@ -20,7 +20,7 @@ SRC_URI += "file://0001-Makefile.am-pass-rust-target-to-cargo-also-when-not-.pat
+            file://0001-system-deps-src-lib.rs-do-not-probe-into-harcoded-li.patch \
+            "
+ 
+-SRC_URI[archive.sha256sum] = "4f03190f45324d1fa1f52a79dfcded1f64eaf49b3ae2f88eedab0c07617cae6e"
++SRC_URI[archive.sha256sum] = "0ee6174140b5fc017e19a75c26e8c3324a560bf2c37f7abd3da06bd58542bb03"
+ 
+ # librsvg is still autotools-based, but is calling cargo from its automake-driven makefiles
+ # so we cannot use cargo class directly, but still need bits and pieces from it 
+-- 
+2.41.0
+
+
+
+^ permalink raw reply related	[flat|nested] 5+ messages in thread
+* [meta-lts-mixins][PATCH 4/4] Fix RISC-V support
+  2023-08-23 18:25 [meta-lts-mixins][PATCH 0/4] kirkstone/rust-1.68 branch updates Scott Murray
+                   ` (2 preceding siblings ...)
+  2023-08-23 18:25 ` [meta-lts-mixins][PATCH 3/4] librsvg: upgrade to 2.54.6 Scott Murray
+@ 2023-08-23 18:25 ` Scott Murray
+  3 siblings, 0 replies; 5+ messages in thread
+From: Scott Murray @ 2023-08-23 18:25 UTC (permalink / raw)
+  To: yocto
+
+Building Rust projects for RISC-V platforms was failing due to the
+layer not including a copy of lib/oe/rust.py to get all the changes
+from oe-core commit 1cfb9c8a ("rust-target-config: match riscv target
+names with what rust expects").  Reverting the changes from that
+commit seems likely to make things less robust, so instead add a
+copy of the updated lib/oe/rust.py in lib/mixin and update callers
+of arch_to_rust_arch to use it.  This is not ideal from an ease
+of further maintenance perspective, but seems more inline with the
+intent of matching the behavior of the Rust toolchain as it stands
+in Mickledore branch.
+
+Signed-off-by: Scott Murray <scott.murray@konsulko.com>
+---
+ classes/rust-common.bbclass        |  4 ++--
+ classes/rust-target-config.bbclass |  2 +-
+ conf/layer.conf                    |  4 ++++
+ lib/mixin/rust.py                  | 13 +++++++++++++
+ 4 files changed, 20 insertions(+), 3 deletions(-)
+ create mode 100644 lib/mixin/rust.py
+
+diff --git a/classes/rust-common.bbclass b/classes/rust-common.bbclass
+index 8782727..a8971cd 100644
+--- a/classes/rust-common.bbclass
++++ b/classes/rust-common.bbclass
+@@ -51,7 +51,7 @@ def rust_base_triple(d, thing):
+     if d.getVar('{}_ARCH'.format(thing)) == d.getVar('TARGET_ARCH') and target_is_armv7(d):
+         arch = "armv7"
+     else:
+-        arch = oe.rust.arch_to_rust_arch(d.getVar('{}_ARCH'.format(thing)))
++        arch = mixin.rust.arch_to_rust_arch(d.getVar('{}_ARCH'.format(thing)))
+ 
+     # Substituting "unknown" when vendor is empty will match rust's standard
+     # targets when building native recipes (including rust-native itself)
+@@ -77,7 +77,7 @@ def rust_base_triple(d, thing):
+ 
+ 
+ # In some cases uname and the toolchain differ on their idea of the arch name
+-RUST_BUILD_ARCH = "${@oe.rust.arch_to_rust_arch(d.getVar('BUILD_ARCH'))}"
++RUST_BUILD_ARCH = "${@mixin.rust.arch_to_rust_arch(d.getVar('BUILD_ARCH'))}"
+ 
+ # Naming explanation
+ # Yocto
+diff --git a/classes/rust-target-config.bbclass b/classes/rust-target-config.bbclass
+index 21a56ed..663b02c 100644
+--- a/classes/rust-target-config.bbclass
++++ b/classes/rust-target-config.bbclass
+@@ -343,7 +343,7 @@ def rust_gen_target(d, thing, wd, arch):
+         if arch == "arm" and target_is_armv7(d):
+             arch = 'armv7'
+ 
+-    rust_arch = oe.rust.arch_to_rust_arch(arch)
++    rust_arch = mixin.rust.arch_to_rust_arch(arch)
+ 
+     if abi:
+         arch_abi = "{}-{}".format(rust_arch, abi)
+diff --git a/conf/layer.conf b/conf/layer.conf
+index b057c77..fa0cbd6 100644
+--- a/conf/layer.conf
++++ b/conf/layer.conf
+@@ -23,3 +23,7 @@ BBMASK:append = " meta/recipes-devtools/cargo/ meta/recipes-devtools/rust/ meta/
+ # These are in bitbake.conf in langdale and up, adding them here to make
+ # using the layer more turn-key seems reasonable.
+ BB_BASEHASH_IGNORE_VARS:append = " RUST_BUILD_SYS RUST_HOST_SYS RUST_TARGET_SYS"
++
++# Since we cannot overlay the lib/oe version easily, make sure our backport
++# of rust.py in lib/mixin is picked up.
++OE_EXTRA_IMPORTS:append = " mixin.rust"
+diff --git a/lib/mixin/rust.py b/lib/mixin/rust.py
+new file mode 100644
+index 0000000..185553e
+--- /dev/null
++++ b/lib/mixin/rust.py
+@@ -0,0 +1,13 @@
++#
++# Copyright OpenEmbedded Contributors
++#
++# SPDX-License-Identifier: MIT
++#
++
++# Handle mismatches between `uname -m`-style output and Rust's arch names
++def arch_to_rust_arch(arch):
++    if arch == "ppc64le":
++        return "powerpc64le"
++    if arch in ('riscv32', 'riscv64'):
++        return arch + 'gc'
++    return arch
+-- 
+2.41.0
+
+
+
+^ permalink raw reply related	[flat|nested] 5+ messages in thread
+end of thread, other threads:[~2023-08-23 18:25 UTC | newest]
+
+Thread overview: 5+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-08-23 18:25 [meta-lts-mixins][PATCH 0/4] kirkstone/rust-1.68 branch updates Scott Murray
+2023-08-23 18:25 ` [meta-lts-mixins][PATCH 1/4] cargo.bbclass: set up cargo environment in common do_compile Scott Murray
+2023-08-23 18:25 ` [meta-lts-mixins][PATCH 2/4] rust-common.bbclass: move musl-specific linking fix from rust-source.inc Scott Murray
+2023-08-23 18:25 ` [meta-lts-mixins][PATCH 3/4] librsvg: upgrade to 2.54.6 Scott Murray
+2023-08-23 18:25 ` [meta-lts-mixins][PATCH 4/4] Fix RISC-V support Scott Murray
+

@@ -1,0 +1,194 @@
+* [meta-rockchip][PATCH v3] Rock64: add machine
+@ 2021-06-15 13:07 Yann Dirson
+  2021-06-18 17:49 ` Trevor Woerner
+  0 siblings, 1 reply; 2+ messages in thread
+From: Yann Dirson @ 2021-06-15 13:07 UTC (permalink / raw)
+  To: yocto; +Cc: twoerner, Yann Dirson
+
+From: Yann Dirson <yann@blade-group.com>
+
+This is a RK3328 board from Pine64.
+Board details at https://wiki.pine64.org/wiki/ROCK64.
+
+Default image is built to boot from SD-card.  Building an image for
+eMMC requires to set RK_BOOT_DEVICE="mmcblk0".
+
+Signed-off-by: Yann Dirson <yann@blade-group.com>
+---
+
+This is just basic initial support without a kernel BSP.  As is the
+board boots with a serial console.
+
+Note I had to create the SoC definition for rk3328, and rather than
+setting serial at 115200 there just to have the board definition
+override it with rockchip-standard 1500000 I've set the latter right
+in rk3328.inc.
+
+Changes in v3:
+- add board to README
+- use rock-pi-e.wks rather than rock-pi-4.wks (identical contents today)
+- put copyright info straight
+
+Changes in v2:
+- include Ayufan's patch for mmc aliases so presence of eMMC won't
+prevent booting from SD
+
+ README                                        |  1 +
+ conf/machine/include/rk3328.inc               | 25 +++++++++++++++
+ conf/machine/rock64.conf                      | 31 +++++++++++++++++++
+ ...an-dtsi-rk3328-add-mmc0-mmc1-aliases.patch | 27 ++++++++++++++++
+ recipes-kernel/linux/linux-yocto%.bbappend    |  6 ++++
+ 5 files changed, 90 insertions(+)
+ create mode 100644 conf/machine/include/rk3328.inc
+ create mode 100644 conf/machine/rock64.conf
+ create mode 100644 recipes-kernel/linux/files/0001-ayufan-dtsi-rk3328-add-mmc0-mmc1-aliases.patch
+
+diff --git a/README b/README
+index b825eba..cec1b53 100644
+--- a/README
++++ b/README
+@@ -24,6 +24,7 @@ Status of supported boards:
+ 		rock-pi-4a
+ 		rock-pi-4b
+ 		rock-pi-4c
++		rock64
+ 		tinker-board
+ 		tinker-board-s
+ 		vyasa-rk3288
+diff --git a/conf/machine/include/rk3328.inc b/conf/machine/include/rk3328.inc
+new file mode 100644
+index 0000000..a4bbc5d
+--- /dev/null
++++ b/conf/machine/include/rk3328.inc
+@@ -0,0 +1,25 @@
++# Copyright (C) 2021 Blade SAS
++# Released under the MIT license (see COPYING.MIT for the terms)
++
++SOC_FAMILY = "rk3328"
++
++DEFAULTTUNE ?= "cortexa53-crypto"
++
++require conf/machine/include/soc-family.inc
++require conf/machine/include/tune-cortexa53.inc
++require conf/machine/include/rockchip-defaults.inc
++
++KBUILD_DEFCONFIG ?= "defconfig"
++KERNEL_CLASSES = "kernel-fitimage"
++KERNEL_IMAGETYPE = "fitImage"
++
++TFA_PLATFORM = "rk3328"
++TFA_BUILD_TARGET = "bl31"
++
++UBOOT_SUFFIX ?= "itb"
++UBOOT_ENTRYPOINT ?= "0x06000000"
++
++SERIAL_CONSOLES = "1500000;ttyS2"
++
++PREFERRED_PROVIDER_virtual/bootloader ?= "u-boot"
++SPL_BINARY ?= "idbloader.img"
+diff --git a/conf/machine/rock64.conf b/conf/machine/rock64.conf
+new file mode 100644
+index 0000000..acda018
+--- /dev/null
++++ b/conf/machine/rock64.conf
+@@ -0,0 +1,31 @@
++# Copyright (C) 2021 Blade SAS
++# Released under the MIT license (see COPYING.MIT for the terms)
++
++#@TYPE: Machine
++#@NAME: Rock64
++#@DESCRIPTION: Rock64 RK3328 board from Pine64
++
++require include/rk3328.inc
++
++MACHINE_FEATURES += "usbhost serial"
++
++UBOOT_MACHINE = "rock64-rk3328_defconfig"
++KERNEL_DEVICETREE = "rockchip/rk3328-rock64.dtb"
++
++# set to mmcblk0 for booting from optional eMMC
++RK_BOOT_DEVICE ?= "mmcblk1"
++
++WKS_FILE ?= "rock-pi-e.wks"
++IMAGE_FSTYPES += "wic wic.bmap"
++
++WKS_FILE_DEPENDS ?= " \
++    mtools-native \
++    dosfstools-native \
++    virtual/bootloader \
++    virtual/kernel \
++    "
++IMAGE_BOOT_FILES ?= "\
++    ${KERNEL_IMAGETYPE} \
++    "
++
++KBUILD_DEFCONFIG = "defconfig"
+diff --git a/recipes-kernel/linux/files/0001-ayufan-dtsi-rk3328-add-mmc0-mmc1-aliases.patch b/recipes-kernel/linux/files/0001-ayufan-dtsi-rk3328-add-mmc0-mmc1-aliases.patch
+new file mode 100644
+index 0000000..1ad3b9e
+--- /dev/null
++++ b/recipes-kernel/linux/files/0001-ayufan-dtsi-rk3328-add-mmc0-mmc1-aliases.patch
+@@ -0,0 +1,27 @@
++From f10cfe01f753348d346374008b8e8f5f26ed94ab Mon Sep 17 00:00:00 2001
++From: Kamil Trzcinski <ayufan@ayufan.eu>
++Date: Mon, 28 Aug 2017 11:24:37 +0200
++Subject: [PATCH] ayufan: dtsi: rk3328: add mmc0/mmc1 aliases
++Upstream-Status: Pending [https://github.com/ayufan-rock64/linux-mainline-kernel/commit/f10cfe01f753348d346374008b8e8f5f26ed94ab]
++
++Change-Id: I82a5394df8a505f7d1496393621c1198895c88b0
++---
++ arch/arm64/boot/dts/rockchip/rk3328.dtsi | 2 ++
++ 1 file changed, 2 insertions(+)
++
++diff --git a/arch/arm64/boot/dts/rockchip/rk3328.dtsi b/arch/arm64/boot/dts/rockchip/rk3328.dtsi
++index 0afed15bc7ff..800f1c796882 100644
++--- a/arch/arm64/boot/dts/rockchip/rk3328.dtsi
+++++ b/arch/arm64/boot/dts/rockchip/rk3328.dtsi
++@@ -27,6 +27,8 @@
++ 		i2c1 = &i2c1;
++ 		i2c2 = &i2c2;
++ 		i2c3 = &i2c3;
+++		mmc0 = &emmc;
+++		mmc1 = &sdmmc;
++ 		ethernet0 = &gmac2io;
++ 		ethernet1 = &gmac2phy;
++ 	};
++-- 
++2.30.2
++
+diff --git a/recipes-kernel/linux/linux-yocto%.bbappend b/recipes-kernel/linux/linux-yocto%.bbappend
+index 7702e3f..3789c72 100644
+--- a/recipes-kernel/linux/linux-yocto%.bbappend
++++ b/recipes-kernel/linux/linux-yocto%.bbappend
+@@ -8,3 +8,9 @@ COMPATIBLE_MACHINE_tinker-board-s = "tinker-board-s"
+ COMPATIBLE_MACHINE_rock-pi-4 = "rock-pi-4"
+ COMPATIBLE_MACHINE_nanopi-m4 = "nanopi-m4"
+ COMPATIBLE_MACHINE_nanopi-m4-2gb = "nanopi-m4-2gb"
++COMPATIBLE_MACHINE_rock64 = "rock64"
++
++FILESEXTRAPATHS_prepend := "${THISDIR}/files:"
++
++# indeed applicable to all rk3328 boards
++SRC_URI_append_rock64 = " file://0001-ayufan-dtsi-rk3328-add-mmc0-mmc1-aliases.patch"
+-- 
+2.30.2
+
+
+^ permalink raw reply related	[flat|nested] 2+ messages in thread
+* Re: [meta-rockchip][PATCH v3] Rock64: add machine
+  2021-06-15 13:07 [meta-rockchip][PATCH v3] Rock64: add machine Yann Dirson
+@ 2021-06-18 17:49 ` Trevor Woerner
+  0 siblings, 0 replies; 2+ messages in thread
+From: Trevor Woerner @ 2021-06-18 17:49 UTC (permalink / raw)
+  To: yann.dirson; +Cc: yocto
+
+Applied to meta-rockchip master. Thanks! :-)
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2021-06-18 17:49 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-06-15 13:07 [meta-rockchip][PATCH v3] Rock64: add machine Yann Dirson
+2021-06-18 17:49 ` Trevor Woerner
+

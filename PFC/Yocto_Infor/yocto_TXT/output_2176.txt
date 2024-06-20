@@ -1,0 +1,163 @@
+* [RFC] [PATCH yocto-autobuilder-helper] scripts: run-docs-build: make the script fail hard ASAP when there's an error
+@ 2022-02-23 11:31 Quentin Schulz
+  2022-02-23 13:05 ` [yocto] " Michael Opdenacker
+  0 siblings, 1 reply; 3+ messages in thread
+From: Quentin Schulz @ 2022-02-23 11:31 UTC (permalink / raw)
+  To: yocto; +Cc: Quentin Schulz, Quentin Schulz
+
+From: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+
+There are some intermittent issues with the script not publishing all
+versions. So let's go extreme and fail the script if any error happens:
+ - a command returns a non-zero code, even if piped,
+ - a variable is used uninitialized,
+
+This also makes the script print each and every command being run so we
+have a better idea where the script struggles.
+
+Cc: Quentin Schulz <foss+yocto@0leil.net>
+Signed-off-by: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+---
+
+RFC:
+ - I highly suspect this change to break the building script because
+ Sphinx probably throws errors at old doc builds,
+ - Also, with Sphinx updates, new warnings might arrise on
+ old/unmaintained branches, we probably want to use virtualenv with
+ specific Sphinx versions to make sure this is not an issue in the
+ future? (and allows to bump Sphinx (or other dependencies) requirement
+ for newer doc branches),
+
+ scripts/run-docs-build | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/scripts/run-docs-build b/scripts/run-docs-build
+index 3bc35b3..b7b5773 100755
+--- a/scripts/run-docs-build
++++ b/scripts/run-docs-build
+@@ -2,6 +2,12 @@
+ # Called with $1 as the build directory
+ #             $2 as the path to yocto-docs
+ #             $3 as the path to bitbake
++
++set -e
++set -u
++set -o pipefail
++set -x
++
+ builddir=$1
+ ypdocs=$2/documentation/
+ bbdocs=$3/doc/
+-- 
+2.35.1
+
+
+
+^ permalink raw reply related	[flat|nested] 3+ messages in thread
+* Re: [yocto] [RFC] [PATCH yocto-autobuilder-helper] scripts: run-docs-build: make the script fail hard ASAP when there's an error
+  2022-02-23 11:31 [RFC] [PATCH yocto-autobuilder-helper] scripts: run-docs-build: make the script fail hard ASAP when there's an error Quentin Schulz
+@ 2022-02-23 13:05 ` Michael Opdenacker
+       [not found]   ` <c56d5311-6fb6-7656-3f57-e2181ae8e93f@theobroma-systems.com>
+  0 siblings, 1 reply; 3+ messages in thread
+From: Michael Opdenacker @ 2022-02-23 13:05 UTC (permalink / raw)
+  To: Quentin Schulz, yocto; +Cc: Quentin Schulz, Quentin Schulz
+
+Hi Quentin,
+
+On 2/23/22 12:31, Quentin Schulz wrote:
+> From: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+>
+> There are some intermittent issues with the script not publishing all
+> versions. So let's go extreme and fail the script if any error happens:
+>  - a command returns a non-zero code, even if piped,
+>  - a variable is used uninitialized,
+>
+> This also makes the script print each and every command being run so we
+> have a better idea where the script struggles.
+>
+> Cc: Quentin Schulz <foss+yocto@0leil.net>
+> Signed-off-by: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+> ---
+>
+> RFC:
+>  - I highly suspect this change to break the building script because
+>  Sphinx probably throws errors at old doc builds,
+>  - Also, with Sphinx updates, new warnings might arrise on
+>  old/unmaintained branches, we probably want to use virtualenv with
+>  specific Sphinx versions to make sure this is not an issue in the
+>  future? (and allows to bump Sphinx (or other dependencies) requirement
+>  for newer doc branches),
+>
+>  scripts/run-docs-build | 6 ++++++
+>  1 file changed, 6 insertions(+)
+>
+> diff --git a/scripts/run-docs-build b/scripts/run-docs-build
+> index 3bc35b3..b7b5773 100755
+> --- a/scripts/run-docs-build
+> +++ b/scripts/run-docs-build
+> @@ -2,6 +2,12 @@
+>  # Called with $1 as the build directory
+>  #             $2 as the path to yocto-docs
+>  #             $3 as the path to bitbake
+> +
+> +set -e
+> +set -u
+> +set -o pipefail
+> +set -x
+> +
+>  builddir=$1
+>  ypdocs=$2/documentation/
+>  bbdocs=$3/doc/
+
+Agreeing with the change.
+How would we get the script output?
+
+Thanks
+Michael.
+
+-- 
+Michael Opdenacker, Bootlin
+Embedded Linux and Kernel engineering
+https://bootlin.com
+
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] [RFC] [PATCH yocto-autobuilder-helper] scripts: run-docs-build: make the script fail hard ASAP when there's an error
+       [not found]   ` <c56d5311-6fb6-7656-3f57-e2181ae8e93f@theobroma-systems.com>
+@ 2022-02-23 15:26     ` Michael Opdenacker
+  0 siblings, 0 replies; 3+ messages in thread
+From: Michael Opdenacker @ 2022-02-23 15:26 UTC (permalink / raw)
+  To: Quentin Schulz, yocto; +Cc: Quentin Schulz
+
+
+On 2/23/22 15:52, Quentin Schulz wrote:
+>
+>> Agreeing with the change.
+>> How would we get the script output?
+>>
+>
+> https://autobuilder.yoctoproject.org/typhoon/#/builders/114
+>
+> seems to be a good place to start with?
+>
+Ah right, thanks. I won't forget it next time.
+Michael.
+
+-- 
+Michael Opdenacker, Bootlin
+Embedded Linux and Kernel engineering
+https://bootlin.com
+
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2022-02-23 15:26 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-02-23 11:31 [RFC] [PATCH yocto-autobuilder-helper] scripts: run-docs-build: make the script fail hard ASAP when there's an error Quentin Schulz
+2022-02-23 13:05 ` [yocto] " Michael Opdenacker
+     [not found]   ` <c56d5311-6fb6-7656-3f57-e2181ae8e93f@theobroma-systems.com>
+2022-02-23 15:26     ` Michael Opdenacker
+

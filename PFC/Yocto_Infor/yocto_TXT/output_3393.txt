@@ -1,0 +1,237 @@
+* [meta-dpdk][PATCH] dpdk: fix build with GCC 11
+@ 2021-05-20  7:38 Yu, Mingli
+  2021-05-24  1:18 ` [yocto] " Naveen Saini
+  0 siblings, 1 reply; 2+ messages in thread
+From: Yu, Mingli @ 2021-05-20  7:38 UTC (permalink / raw)
+  To: yocto
+
+From: Mingli Yu <mingli.yu@windriver.com>
+
+Fixes:
+ | In function 'memset',
+ |     inlined from 'test_table_stub' at test_table_tables.c:151:4:
+ | /buildarea/tmp/work/intel_x86_64-wrs-linux/dpdk/19.11.5-r0/recipe-sysroot/usr/include/bits/string_fortified.h:59:10: error: '__builtin_memset' offset [0, 31] is out of the bounds [0, 0] [-Werror=array-bounds]
+
+Signed-off-by: Mingli Yu <mingli.yu@windriver.com>
+---
+ ...001-test-table-fix-build-with-GCC-11.patch | 56 +++++++++++++++++++
+ recipes-extended/dpdk/dpdk_19.11.5.bb         |  3 +-
+ 2 files changed, 58 insertions(+), 1 deletion(-)
+ create mode 100644 recipes-extended/dpdk/dpdk/0001-test-table-fix-build-with-GCC-11.patch
+
+diff --git a/recipes-extended/dpdk/dpdk/0001-test-table-fix-build-with-GCC-11.patch b/recipes-extended/dpdk/dpdk/0001-test-table-fix-build-with-GCC-11.patch
+new file mode 100644
+index 0000000..4f76290
+--- /dev/null
++++ b/recipes-extended/dpdk/dpdk/0001-test-table-fix-build-with-GCC-11.patch
+@@ -0,0 +1,56 @@
++From 33c12ac5ba5f09727c6de807e71403dd260a7bbc Mon Sep 17 00:00:00 2001
++From: Ferruh Yigit <ferruh.yigit@intel.com>
++Date: Mon, 17 May 2021 16:57:39 +0100
++Subject: [PATCH] test/table: fix build with GCC 11
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Build error:
++../app/test/test_table_tables.c: In function ‘test_table_stub’:
++../app/test/test_table_tables.c:31:9:
++	warning: ‘memset’ offset [0, 31] is out of the bounds [0, 0]
++	[-Warray-bounds]
++         memset((uint8_t *)mbuf + sizeof(struct rte_mbuf) + 32, 0, 32); \
++         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
++../app/test/test_table_tables.c:151:25:
++	note: in expansion of macro ‘PREPARE_PACKET’
++  151 |                         PREPARE_PACKET(mbufs[i], 0xadadadad);
++      |                         ^~~~~~~~~~~~~~
++
++'key' points to mbuf header + 32 bytes, and memset clears next 32 bytes
++of 'key', so overall there needs to be 64 bytes after mbuf header.
++Adding a mbuf size check before memset.
++
++The original code has an assumption that mbuf data buffer follows mbuf
++header, this patch accepts same assumption.
++
++Bugzilla ID: 677
++Fixes: 5205954791cb ("app/test: packet framework unit tests")
++Cc: stable@dpdk.org
++
++Upstream-Status: Backport [https://github.com/DPDK/dpdk/commit/33c12ac5ba5f09727c6de807e71403dd260a7bbc]
++
++Signed-off-by: Ferruh Yigit <ferruh.yigit@intel.com>
++Signed-off-by: Mingli Yu <mingli.yu@windriver.com>
++---
++ app/test/test_table_tables.c | 3 ++-
++ 1 file changed, 2 insertions(+), 1 deletion(-)
++
++diff --git a/app/test/test_table_tables.c b/app/test/test_table_tables.c
++index 1aa269f95..4ff6ab16a 100644
++--- a/app/test/test_table_tables.c
+++++ b/app/test/test_table_tables.c
++@@ -28,7 +28,8 @@ table_test table_tests[] = {
++ 			APP_METADATA_OFFSET(0));			\
++ 	key = RTE_MBUF_METADATA_UINT8_PTR(mbuf,			\
++ 			APP_METADATA_OFFSET(32));			\
++-	memset(key, 0, 32);						\
+++	if (mbuf->priv_size + mbuf->buf_len >= 64)			\
+++		memset(key, 0, 32);					\
++ 	k32 = (uint32_t *) key;						\
++ 	k32[0] = (value);						\
++ 	*signature = pipeline_test_hash(key, NULL, 0, 0);			\
++-- 
++2.17.1
++
+diff --git a/recipes-extended/dpdk/dpdk_19.11.5.bb b/recipes-extended/dpdk/dpdk_19.11.5.bb
+index 8410c8a..2ae9b43 100644
+--- a/recipes-extended/dpdk/dpdk_19.11.5.bb
++++ b/recipes-extended/dpdk/dpdk_19.11.5.bb
+@@ -4,7 +4,8 @@ SRC_URI += " \
+             file://dpdk-16.04-add-RTE_KERNELDIR_OUT-to-split-kernel-bu.patch \
+             file://dpdk-16.07-add-sysroot-option-within-app-makefile.patch \
+             file://0001-Starting-from-Linux-5.9-get_user_pages_remote-API-do.patch \
+-            file://usertools-devbind-fix-binding-for-built-in-kernel-dr.patch"
++            file://usertools-devbind-fix-binding-for-built-in-kernel-dr.patch \
++            file://0001-test-table-fix-build-with-GCC-11.patch"
+ 
+ 
+ STABLE = "-stable"
+-- 
+2.29.2
+
+
+^ permalink raw reply related	[flat|nested] 2+ messages in thread
+* Re: [yocto] [meta-dpdk][PATCH] dpdk: fix build with GCC 11
+  2021-05-20  7:38 [meta-dpdk][PATCH] dpdk: fix build with GCC 11 Yu, Mingli
+@ 2021-05-24  1:18 ` Naveen Saini
+  0 siblings, 0 replies; 2+ messages in thread
+From: Naveen Saini @ 2021-05-24  1:18 UTC (permalink / raw)
+  To: Yu, Mingli, yocto
+
+Please send this patch to meta-intel mailing list.
+
+
+> -----Original Message-----
+> From: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org> On
+> Behalf Of Yu, Mingli
+> Sent: Thursday, May 20, 2021 3:38 PM
+> To: yocto@yoctoproject.org
+> Subject: [yocto] [meta-dpdk][PATCH] dpdk: fix build with GCC 11
+> 
+> From: Mingli Yu <mingli.yu@windriver.com>
+> 
+> Fixes:
+>  | In function 'memset',
+>  |     inlined from 'test_table_stub' at test_table_tables.c:151:4:
+>  | /buildarea/tmp/work/intel_x86_64-wrs-linux/dpdk/19.11.5-r0/recipe-
+> sysroot/usr/include/bits/string_fortified.h:59:10: error: '__builtin_memset'
+> offset [0, 31] is out of the bounds [0, 0] [-Werror=array-bounds]
+> 
+> Signed-off-by: Mingli Yu <mingli.yu@windriver.com>
+> ---
+>  ...001-test-table-fix-build-with-GCC-11.patch | 56 +++++++++++++++++++
+>  recipes-extended/dpdk/dpdk_19.11.5.bb         |  3 +-
+>  2 files changed, 58 insertions(+), 1 deletion(-)  create mode 100644 recipes-
+> extended/dpdk/dpdk/0001-test-table-fix-build-with-GCC-11.patch
+> 
+> diff --git a/recipes-extended/dpdk/dpdk/0001-test-table-fix-build-with-GCC-
+> 11.patch b/recipes-extended/dpdk/dpdk/0001-test-table-fix-build-with-
+> GCC-11.patch
+> new file mode 100644
+> index 0000000..4f76290
+> --- /dev/null
+> +++ b/recipes-extended/dpdk/dpdk/0001-test-table-fix-build-with-GCC-
+> 11.p
+> +++ atch
+> @@ -0,0 +1,56 @@
+> +From 33c12ac5ba5f09727c6de807e71403dd260a7bbc Mon Sep 17 00:00:00
+> 2001
+> +From: Ferruh Yigit <ferruh.yigit@intel.com>
+> +Date: Mon, 17 May 2021 16:57:39 +0100
+> +Subject: [PATCH] test/table: fix build with GCC 11
+> +MIME-Version: 1.0
+> +Content-Type: text/plain; charset=UTF-8
+> +Content-Transfer-Encoding: 8bit
+> +
+> +Build error:
+> +../app/test/test_table_tables.c: In function ‘test_table_stub’:
+> +../app/test/test_table_tables.c:31:9:
+> +	warning: ‘memset’ offset [0, 31] is out of the bounds [0, 0]
+> +	[-Warray-bounds]
+> +         memset((uint8_t *)mbuf + sizeof(struct rte_mbuf) + 32, 0, 32); \
+> +
+> ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+> ~~~
+> +../app/test/test_table_tables.c:151:25:
+> +	note: in expansion of macro ‘PREPARE_PACKET’
+> +  151 |                         PREPARE_PACKET(mbufs[i], 0xadadadad);
+> +      |                         ^~~~~~~~~~~~~~
+> +
+> +'key' points to mbuf header + 32 bytes, and memset clears next 32 bytes
+> +of 'key', so overall there needs to be 64 bytes after mbuf header.
+> +Adding a mbuf size check before memset.
+> +
+> +The original code has an assumption that mbuf data buffer follows mbuf
+> +header, this patch accepts same assumption.
+> +
+> +Bugzilla ID: 677
+> +Fixes: 5205954791cb ("app/test: packet framework unit tests")
+> +Cc: stable@dpdk.org
+> +
+> +Upstream-Status: Backport
+> +[https://github.com/DPDK/dpdk/commit/33c12ac5ba5f09727c6de807e7140
+> 3dd26
+> +0a7bbc]
+> +
+> +Signed-off-by: Ferruh Yigit <ferruh.yigit@intel.com>
+> +Signed-off-by: Mingli Yu <mingli.yu@windriver.com>
+> +---
+> + app/test/test_table_tables.c | 3 ++-
+> + 1 file changed, 2 insertions(+), 1 deletion(-)
+> +
+> +diff --git a/app/test/test_table_tables.c
+> +b/app/test/test_table_tables.c index 1aa269f95..4ff6ab16a 100644
+> +--- a/app/test/test_table_tables.c
+> ++++ b/app/test/test_table_tables.c
+> +@@ -28,7 +28,8 @@ table_test table_tests[] = {
+> + 			APP_METADATA_OFFSET(0));			\
+> + 	key = RTE_MBUF_METADATA_UINT8_PTR(mbuf,
+> 	\
+> + 			APP_METADATA_OFFSET(32));			\
+> +-	memset(key, 0, 32);						\
+> ++	if (mbuf->priv_size + mbuf->buf_len >= 64)			\
+> ++		memset(key, 0, 32);					\
+> + 	k32 = (uint32_t *) key;						\
+> + 	k32[0] = (value);						\
+> + 	*signature = pipeline_test_hash(key, NULL, 0, 0);
+> 	\
+> +--
+> +2.17.1
+> +
+> diff --git a/recipes-extended/dpdk/dpdk_19.11.5.bb b/recipes-
+> extended/dpdk/dpdk_19.11.5.bb
+> index 8410c8a..2ae9b43 100644
+> --- a/recipes-extended/dpdk/dpdk_19.11.5.bb
+> +++ b/recipes-extended/dpdk/dpdk_19.11.5.bb
+> @@ -4,7 +4,8 @@ SRC_URI += " \
+>              file://dpdk-16.04-add-RTE_KERNELDIR_OUT-to-split-kernel-bu.patch \
+>              file://dpdk-16.07-add-sysroot-option-within-app-makefile.patch \
+>              file://0001-Starting-from-Linux-5.9-get_user_pages_remote-API-
+> do.patch \
+> -            file://usertools-devbind-fix-binding-for-built-in-kernel-dr.patch"
+> +            file://usertools-devbind-fix-binding-for-built-in-kernel-dr.patch \
+> +            file://0001-test-table-fix-build-with-GCC-11.patch"
+> 
+> 
+>  STABLE = "-stable"
+> --
+> 2.29.2
+
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2021-05-24  1:19 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-05-20  7:38 [meta-dpdk][PATCH] dpdk: fix build with GCC 11 Yu, Mingli
+2021-05-24  1:18 ` [yocto] " Naveen Saini
+

@@ -1,0 +1,60 @@
+* [ptest-runner2] [PATCH] utils: Ensure buffers are flushed after child exits
+@ 2023-06-18  9:08 Richard Purdie
+  0 siblings, 0 replies; only message in thread
+From: Richard Purdie @ 2023-06-18  9:08 UTC (permalink / raw)
+  To: yocto
+
+We currently wait for the child to exit but we don't flush the buffers.
+This can mean the output ends up out of sync and the END: line isn't at
+the end of the logs.
+
+We've recently seen a lot of issues related to this on the autobuilder.
+Add in a flush call for all fds to ensure buffers are in sync. This
+does appear to improve warnings on the autobuilder now we started detecting
+the issue.
+
+Signed-off-by: Richard Purdie <richard.purdie@linuxfoundation.org>
+---
+ README.md | 2 +-
+ utils.c   | 3 +++
+ 2 files changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/README.md b/README.md
+index 85ef58a..e6f548e 100644
+--- a/README.md
++++ b/README.md
+@@ -49,7 +49,7 @@ $ mtrace ./ptest-runner $MALLOC_TRACE
+ ## Contributions
+ 
+ For contribute please send a patch with subject prefix "[ptest-runner]" to 
+-yocto@yoctoproject.org.
++yocto@lists.yoctoproject.org.
+ 
+ ## Links
+ 
+diff --git a/utils.c b/utils.c
+index a67ac11..ec57fa4 100644
+--- a/utils.c
++++ b/utils.c
+@@ -535,6 +535,9 @@ run_ptests(struct ptest_list *head, const struct ptest_options opts,
+ 				entime = time(NULL);
+ 				duration = entime - sttime;
+ 
++				/* Now the child has exited, ensure buffers are in sync before writing */
++				fflush(NULL);
++
+ 				if (status) {
+ 					fprintf(fp, "\nERROR: Exit status is %d\n", status);
+ 					rc += 1;
+-- 
+2.39.2
+
+
+
+^ permalink raw reply related	[flat|nested] only message in thread
+only message in thread, other threads:[~2023-06-18  9:08 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-06-18  9:08 [ptest-runner2] [PATCH] utils: Ensure buffers are flushed after child exits Richard Purdie
+

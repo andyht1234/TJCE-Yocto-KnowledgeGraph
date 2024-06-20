@@ -1,0 +1,1447 @@
+* do_kernel_configme - Could not generate configuration queue
+@ 2022-10-15  0:45 Rudolf J Streif
+  2022-10-15  1:11 ` [yocto] " Jose Quaresma
+  0 siblings, 1 reply; 11+ messages in thread
+From: Rudolf J Streif @ 2022-10-15  0:45 UTC (permalink / raw)
+  To: yocto
+
+I am running into a bizarre problem with kernel configuration.
+
+I have an existing build environment that builds for an i.MX6ul machine. 
+That works fine and the linux-fslc kernel 5.18 builds without any 
+problems. Now within the that build environment I changed the machine to 
+imx6ullevk and then the kernel configuration fails with this error message:
+
+| DEBUG: Executing shell function do_kernel_configme
+| NOTE: do_kernel_metadata: for summary/debug, set KCONF_AUDIT_LEVEL > 0
+| [ERROR]: processing of file /tmp/tmp.owmBptYrba failed
+| /develop/projects/altec/tcu/build/tmp/hosttools/dirname: missing operand
+| Try '/develop/projects/altec/tcu/build/tmp/hosttools/dirname --help' 
+for more information.
+| ERROR: Could not generate configuration queue for imx6ullevk.
+| WARNING: 
+/develop/projects/altec/tcu/build/tmp/work/imx6ullevk-altec-linux-gnueabi/linux-fslc/5.18.5+gitAUTOINC+1d6b3055ae-r0/temp/run.do_kernel_configme.287395:209 
+exit 1 from 'exit 1'
+| WARNING: Backtrace (BB generated script):
+|     #1: bbfatal_log, 
+/develop/projects/altec/tcu/build/tmp/work/imx6ullevk-altec-linux-gnueabi/linux-fslc/5.18.5+gitAUTOINC+1d6b3055ae-r0/temp/run.do_kernel_configme.287395, 
+line 209
+|     #2: do_kernel_metadata, 
+/develop/projects/altec/tcu/build/tmp/work/imx6ullevk-altec-linux-gnueabi/linux-fslc/5.18.5+gitAUTOINC+1d6b3055ae-r0/temp/run.do_kernel_configme.287395, 
+line 382
+|     #3: do_kernel_configme, 
+/develop/projects/altec/tcu/build/tmp/work/imx6ullevk-altec-linux-gnueabi/linux-fslc/5.18.5+gitAUTOINC+1d6b3055ae-r0/temp/run.do_kernel_configme.287395, 
+line 150
+|     #4: main, 
+/develop/projects/altec/tcu/build/tmp/work/imx6ullevk-altec-linux-gnueabi/linux-fslc/5.18.5+gitAUTOINC+1d6b3055ae-r0/temp/run.do_kernel_configme.287395, 
+line 484
+ERROR: Task 
+(/develop/projects/altec/tcu/build/../meta-freescale/recipes-kernel/linux/linux-fslc_5.18.bb:do_kernel_configme) 
+failed with exit code '1'
+
+I tried to debug do_kernel_configme. The issue seems in the scc script 
+more specifically, I think, in the kconf command that is called by scc 
+when parsing the temporary configuration queue file in /tmp: tmp.owmBptYrba
+
+#
+# spp v0.8
+# processed: Fri Oct 14 09:49:02 PM UTC 2022
+#
+# This is a preprocessor output file, do not edit
+#
+#
+prefix 
+/develop/projects/altec/tcu/build/../meta-freescale/recipes-kernel/linux/linux-fslc/defconfig
+kconf non-hardware 
+/develop/projects/altec/tcu/build/../meta-freescale/recipes-kernel/linux/linux-fslc/defconfig
+# run time: 0 seconds
+# processed files:
+# _cfg 
+/develop/projects/altec/tcu/build/../meta-freescale/recipes-kernel/linux/linux-fslc/defconfig
+
+Apparently a call to dirname is missing the argument. However, I do not 
+understand why.
+
+I wiped out build/tmp directory entirely, ran a cleanall on 
+virtual/kernel but to no avail. The problem remains the same.
+
+Has anybody seen this issue before?
+
+
+Rudi
+
+
+
+
+^ permalink raw reply	[flat|nested] 11+ messages in thread
+* Re: [yocto] do_kernel_configme - Could not generate configuration queue
+  2022-10-15  0:45 do_kernel_configme - Could not generate configuration queue Rudolf J Streif
+@ 2022-10-15  1:11 ` Jose Quaresma
+  2022-10-15  1:52   ` Bruce Ashfield
+  0 siblings, 1 reply; 11+ messages in thread
+From: Jose Quaresma @ 2022-10-15  1:11 UTC (permalink / raw)
+  To: Rudolf J Streif; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 3969 bytes --]
+
+Hi Rudolf,
+
+I have reported this issue and together with a path [1] to fix it.
+Anyway Bruce has fixed the issue in another way in [2] and this works for
+me as well.
+
+[1] https://lists.yoctoproject.org/g/linux-yocto/message/11746
+[2]
+https://git.yoctoproject.org/yocto-kernel-tools/commit/?id=6a4752ebbe7d242c02b3c74a5772926edd243626
+
+Jose
+
+Rudolf J Streif <rudolf.streif@ibeeto.com> escreveu no dia sábado,
+15/10/2022 à(s) 01:45:
+
+> I am running into a bizarre problem with kernel configuration.
+>
+> I have an existing build environment that builds for an i.MX6ul machine.
+> That works fine and the linux-fslc kernel 5.18 builds without any
+> problems. Now within the that build environment I changed the machine to
+> imx6ullevk and then the kernel configuration fails with this error message:
+>
+> | DEBUG: Executing shell function do_kernel_configme
+> | NOTE: do_kernel_metadata: for summary/debug, set KCONF_AUDIT_LEVEL > 0
+> | [ERROR]: processing of file /tmp/tmp.owmBptYrba failed
+> | /develop/projects/altec/tcu/build/tmp/hosttools/dirname: missing operand
+> | Try '/develop/projects/altec/tcu/build/tmp/hosttools/dirname --help'
+> for more information.
+> | ERROR: Could not generate configuration queue for imx6ullevk.
+> | WARNING:
+> /develop/projects/altec/tcu/build/tmp/work/imx6ullevk-altec-linux-gnueabi/linux-fslc/5.18.5+gitAUTOINC+1d6b3055ae-r0/temp/run.do_kernel_configme.287395:209
+>
+> exit 1 from 'exit 1'
+> | WARNING: Backtrace (BB generated script):
+> |     #1: bbfatal_log,
+> /develop/projects/altec/tcu/build/tmp/work/imx6ullevk-altec-linux-gnueabi/linux-fslc/5.18.5+gitAUTOINC+1d6b3055ae-r0/temp/run.do_kernel_configme.287395,
+>
+> line 209
+> |     #2: do_kernel_metadata,
+> /develop/projects/altec/tcu/build/tmp/work/imx6ullevk-altec-linux-gnueabi/linux-fslc/5.18.5+gitAUTOINC+1d6b3055ae-r0/temp/run.do_kernel_configme.287395,
+>
+> line 382
+> |     #3: do_kernel_configme,
+> /develop/projects/altec/tcu/build/tmp/work/imx6ullevk-altec-linux-gnueabi/linux-fslc/5.18.5+gitAUTOINC+1d6b3055ae-r0/temp/run.do_kernel_configme.287395,
+>
+> line 150
+> |     #4: main,
+> /develop/projects/altec/tcu/build/tmp/work/imx6ullevk-altec-linux-gnueabi/linux-fslc/5.18.5+gitAUTOINC+1d6b3055ae-r0/temp/run.do_kernel_configme.287395,
+>
+> line 484
+> ERROR: Task
+>
+> (/develop/projects/altec/tcu/build/../meta-freescale/recipes-kernel/linux/linux-fslc_5.18.bb:do_kernel_configme)
+>
+> failed with exit code '1'
+>
+> I tried to debug do_kernel_configme. The issue seems in the scc script
+> more specifically, I think, in the kconf command that is called by scc
+> when parsing the temporary configuration queue file in /tmp: tmp.owmBptYrba
+>
+> #
+> # spp v0.8
+> # processed: Fri Oct 14 09:49:02 PM UTC 2022
+> #
+> # This is a preprocessor output file, do not edit
+> #
+> #
+> prefix
+>
+> /develop/projects/altec/tcu/build/../meta-freescale/recipes-kernel/linux/linux-fslc/defconfig
+> kconf non-hardware
+>
+> /develop/projects/altec/tcu/build/../meta-freescale/recipes-kernel/linux/linux-fslc/defconfig
+> # run time: 0 seconds
+> # processed files:
+> # _cfg
+>
+> /develop/projects/altec/tcu/build/../meta-freescale/recipes-kernel/linux/linux-fslc/defconfig
+>
+> Apparently a call to dirname is missing the argument. However, I do not
+> understand why.
+>
+> I wiped out build/tmp directory entirely, ran a cleanall on
+> virtual/kernel but to no avail. The problem remains the same.
+>
+> Has anybody seen this issue before?
+>
+>
+> Rudi
+>
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#58337):
+> https://lists.yoctoproject.org/g/yocto/message/58337
+> Mute This Topic: https://lists.yoctoproject.org/mt/94339433/5052612
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> quaresma.jose@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+-- 
+Best regards,
+
+José Quaresma
+
+[-- Attachment #2: Type: text/html, Size: 5189 bytes --]
+
+^ permalink raw reply	[flat|nested] 11+ messages in thread
+* Re: [yocto] do_kernel_configme - Could not generate configuration queue
+  2022-10-15  1:11 ` [yocto] " Jose Quaresma
+@ 2022-10-15  1:52   ` Bruce Ashfield
+  2022-10-15  3:57     ` Rudolf Streif
+  2022-10-18 21:00     ` Jeremy Puhlman
+  0 siblings, 2 replies; 11+ messages in thread
+From: Bruce Ashfield @ 2022-10-15  1:52 UTC (permalink / raw)
+  To: Jose Quaresma; +Cc: Rudolf J Streif, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 4545 bytes --]
+
+On Fri, Oct 14, 2022 at 10:11 PM Jose Quaresma <quaresma.jose@gmail.com>
+wrote:
+
+> Hi Rudolf,
+>
+> I have reported this issue and together with a path [1] to fix it.
+> Anyway Bruce has fixed the issue in another way in [2] and this works for
+> me as well.
+>
+> [1] https://lists.yoctoproject.org/g/linux-yocto/message/11746
+> [2]
+> https://git.yoctoproject.org/yocto-kernel-tools/commit/?id=6a4752ebbe7d242c02b3c74a5772926edd243626
+>
+>
+Yes indeed. This has also passed my other regression testing, but I was
+traveling today and couldn't send my pull request.
+
+I'll send it over the weekend, so hopefully it'll be merged shortly!
+
+Bruce
+
+
+
+> Jose
+>
+> Rudolf J Streif <rudolf.streif@ibeeto.com> escreveu no dia sábado,
+> 15/10/2022 à(s) 01:45:
+>
+>> I am running into a bizarre problem with kernel configuration.
+>>
+>> I have an existing build environment that builds for an i.MX6ul machine.
+>> That works fine and the linux-fslc kernel 5.18 builds without any
+>> problems. Now within the that build environment I changed the machine to
+>> imx6ullevk and then the kernel configuration fails with this error
+>> message:
+>>
+>> | DEBUG: Executing shell function do_kernel_configme
+>> | NOTE: do_kernel_metadata: for summary/debug, set KCONF_AUDIT_LEVEL > 0
+>> | [ERROR]: processing of file /tmp/tmp.owmBptYrba failed
+>> | /develop/projects/altec/tcu/build/tmp/hosttools/dirname: missing operand
+>> | Try '/develop/projects/altec/tcu/build/tmp/hosttools/dirname --help'
+>> for more information.
+>> | ERROR: Could not generate configuration queue for imx6ullevk.
+>> | WARNING:
+>> /develop/projects/altec/tcu/build/tmp/work/imx6ullevk-altec-linux-gnueabi/linux-fslc/5.18.5+gitAUTOINC+1d6b3055ae-r0/temp/run.do_kernel_configme.287395:209
+>>
+>> exit 1 from 'exit 1'
+>> | WARNING: Backtrace (BB generated script):
+>> |     #1: bbfatal_log,
+>> /develop/projects/altec/tcu/build/tmp/work/imx6ullevk-altec-linux-gnueabi/linux-fslc/5.18.5+gitAUTOINC+1d6b3055ae-r0/temp/run.do_kernel_configme.287395,
+>>
+>> line 209
+>> |     #2: do_kernel_metadata,
+>> /develop/projects/altec/tcu/build/tmp/work/imx6ullevk-altec-linux-gnueabi/linux-fslc/5.18.5+gitAUTOINC+1d6b3055ae-r0/temp/run.do_kernel_configme.287395,
+>>
+>> line 382
+>> |     #3: do_kernel_configme,
+>> /develop/projects/altec/tcu/build/tmp/work/imx6ullevk-altec-linux-gnueabi/linux-fslc/5.18.5+gitAUTOINC+1d6b3055ae-r0/temp/run.do_kernel_configme.287395,
+>>
+>> line 150
+>> |     #4: main,
+>> /develop/projects/altec/tcu/build/tmp/work/imx6ullevk-altec-linux-gnueabi/linux-fslc/5.18.5+gitAUTOINC+1d6b3055ae-r0/temp/run.do_kernel_configme.287395,
+>>
+>> line 484
+>> ERROR: Task
+>>
+>> (/develop/projects/altec/tcu/build/../meta-freescale/recipes-kernel/linux/linux-fslc_5.18.bb:do_kernel_configme)
+>>
+>> failed with exit code '1'
+>>
+>> I tried to debug do_kernel_configme. The issue seems in the scc script
+>> more specifically, I think, in the kconf command that is called by scc
+>> when parsing the temporary configuration queue file in /tmp:
+>> tmp.owmBptYrba
+>>
+>> #
+>> # spp v0.8
+>> # processed: Fri Oct 14 09:49:02 PM UTC 2022
+>> #
+>> # This is a preprocessor output file, do not edit
+>> #
+>> #
+>> prefix
+>>
+>> /develop/projects/altec/tcu/build/../meta-freescale/recipes-kernel/linux/linux-fslc/defconfig
+>> kconf non-hardware
+>>
+>> /develop/projects/altec/tcu/build/../meta-freescale/recipes-kernel/linux/linux-fslc/defconfig
+>> # run time: 0 seconds
+>> # processed files:
+>> # _cfg
+>>
+>> /develop/projects/altec/tcu/build/../meta-freescale/recipes-kernel/linux/linux-fslc/defconfig
+>>
+>> Apparently a call to dirname is missing the argument. However, I do not
+>> understand why.
+>>
+>> I wiped out build/tmp directory entirely, ran a cleanall on
+>> virtual/kernel but to no avail. The problem remains the same.
+>>
+>> Has anybody seen this issue before?
+>>
+>>
+>> Rudi
+>>
+>>
+>>
+>>
+>>
+>>
+>
+> --
+> Best regards,
+>
+> José Quaresma
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#58338):
+> https://lists.yoctoproject.org/g/yocto/message/58338
+> Mute This Topic: https://lists.yoctoproject.org/mt/94339433/1050810
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> bruce.ashfield@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+-- 
+- Thou shalt not follow the NULL pointer, for chaos and madness await thee
+at its end
+- "Use the force Harry" - Gandalf, Star Trek II
+
+[-- Attachment #2: Type: text/html, Size: 6616 bytes --]
+
+^ permalink raw reply	[flat|nested] 11+ messages in thread
+* Re: [yocto] do_kernel_configme - Could not generate configuration queue
+  2022-10-15  1:52   ` Bruce Ashfield
+@ 2022-10-15  3:57     ` Rudolf Streif
+  2022-10-18 21:00     ` Jeremy Puhlman
+  1 sibling, 0 replies; 11+ messages in thread
+From: Rudolf Streif @ 2022-10-15  3:57 UTC (permalink / raw)
+  To: Bruce Ashfield; +Cc: Jose Quaresma, Yocto
+
+[-- Attachment #1: Type: text/plain, Size: 4844 bytes --]
+
+On Fri, Oct 14, 2022, 18:53 Bruce Ashfield <bruce.ashfield@gmail.com> wrote:
+
+>
+>
+> On Fri, Oct 14, 2022 at 10:11 PM Jose Quaresma <quaresma.jose@gmail.com>
+> wrote:
+>
+>> Hi Rudolf,
+>>
+>> I have reported this issue and together with a path [1] to fix it.
+>> Anyway Bruce has fixed the issue in another way in [2] and this works for
+>> me as well.
+>>
+>> [1] https://lists.yoctoproject.org/g/linux-yocto/message/11746
+>> [2]
+>> https://git.yoctoproject.org/yocto-kernel-tools/commit/?id=6a4752ebbe7d242c02b3c74a5772926edd243626
+>>
+>>
+> Yes indeed. This has also passed my other regression testing, but I was
+> traveling today and couldn't send my pull request.
+>
+> I'll send it over the weekend, so hopefully it'll be merged shortly!
+>
+
+Thank you, Jose and Bruce. Much appreciated.
+
+Rudi
+
+>
+> Bruce
+>
+>
+>
+>> Jose
+>>
+>> Rudolf J Streif <rudolf.streif@ibeeto.com> escreveu no dia sábado,
+>> 15/10/2022 à(s) 01:45:
+>>
+>>> I am running into a bizarre problem with kernel configuration.
+>>>
+>>> I have an existing build environment that builds for an i.MX6ul machine.
+>>> That works fine and the linux-fslc kernel 5.18 builds without any
+>>> problems. Now within the that build environment I changed the machine to
+>>> imx6ullevk and then the kernel configuration fails with this error
+>>> message:
+>>>
+>>> | DEBUG: Executing shell function do_kernel_configme
+>>> | NOTE: do_kernel_metadata: for summary/debug, set KCONF_AUDIT_LEVEL > 0
+>>> | [ERROR]: processing of file /tmp/tmp.owmBptYrba failed
+>>> | /develop/projects/altec/tcu/build/tmp/hosttools/dirname: missing
+>>> operand
+>>> | Try '/develop/projects/altec/tcu/build/tmp/hosttools/dirname --help'
+>>> for more information.
+>>> | ERROR: Could not generate configuration queue for imx6ullevk.
+>>> | WARNING:
+>>> /develop/projects/altec/tcu/build/tmp/work/imx6ullevk-altec-linux-gnueabi/linux-fslc/5.18.5+gitAUTOINC+1d6b3055ae-r0/temp/run.do_kernel_configme.287395:209
+>>>
+>>> exit 1 from 'exit 1'
+>>> | WARNING: Backtrace (BB generated script):
+>>> |     #1: bbfatal_log,
+>>> /develop/projects/altec/tcu/build/tmp/work/imx6ullevk-altec-linux-gnueabi/linux-fslc/5.18.5+gitAUTOINC+1d6b3055ae-r0/temp/run.do_kernel_configme.287395,
+>>>
+>>> line 209
+>>> |     #2: do_kernel_metadata,
+>>> /develop/projects/altec/tcu/build/tmp/work/imx6ullevk-altec-linux-gnueabi/linux-fslc/5.18.5+gitAUTOINC+1d6b3055ae-r0/temp/run.do_kernel_configme.287395,
+>>>
+>>> line 382
+>>> |     #3: do_kernel_configme,
+>>> /develop/projects/altec/tcu/build/tmp/work/imx6ullevk-altec-linux-gnueabi/linux-fslc/5.18.5+gitAUTOINC+1d6b3055ae-r0/temp/run.do_kernel_configme.287395,
+>>>
+>>> line 150
+>>> |     #4: main,
+>>> /develop/projects/altec/tcu/build/tmp/work/imx6ullevk-altec-linux-gnueabi/linux-fslc/5.18.5+gitAUTOINC+1d6b3055ae-r0/temp/run.do_kernel_configme.287395,
+>>>
+>>> line 484
+>>> ERROR: Task
+>>>
+>>> (/develop/projects/altec/tcu/build/../meta-freescale/recipes-kernel/linux/linux-fslc_5.18.bb:do_kernel_configme)
+>>>
+>>> failed with exit code '1'
+>>>
+>>> I tried to debug do_kernel_configme. The issue seems in the scc script
+>>> more specifically, I think, in the kconf command that is called by scc
+>>> when parsing the temporary configuration queue file in /tmp:
+>>> tmp.owmBptYrba
+>>>
+>>> #
+>>> # spp v0.8
+>>> # processed: Fri Oct 14 09:49:02 PM UTC 2022
+>>> #
+>>> # This is a preprocessor output file, do not edit
+>>> #
+>>> #
+>>> prefix
+>>>
+>>> /develop/projects/altec/tcu/build/../meta-freescale/recipes-kernel/linux/linux-fslc/defconfig
+>>> kconf non-hardware
+>>>
+>>> /develop/projects/altec/tcu/build/../meta-freescale/recipes-kernel/linux/linux-fslc/defconfig
+>>> # run time: 0 seconds
+>>> # processed files:
+>>> # _cfg
+>>>
+>>> /develop/projects/altec/tcu/build/../meta-freescale/recipes-kernel/linux/linux-fslc/defconfig
+>>>
+>>> Apparently a call to dirname is missing the argument. However, I do not
+>>> understand why.
+>>>
+>>> I wiped out build/tmp directory entirely, ran a cleanall on
+>>> virtual/kernel but to no avail. The problem remains the same.
+>>>
+>>> Has anybody seen this issue before?
+>>>
+>>>
+>>> Rudi
+>>>
+>>>
+>>>
+>>>
+>>>
+>>>
+>>
+>> --
+>> Best regards,
+>>
+>> José Quaresma
+>>
+>> -=-=-=-=-=-=-=-=-=-=-=-
+>> Links: You receive all messages sent to this group.
+>> View/Reply Online (#58338):
+>> https://lists.yoctoproject.org/g/yocto/message/58338
+>> Mute This Topic: https://lists.yoctoproject.org/mt/94339433/1050810
+>> Group Owner: yocto+owner@lists.yoctoproject.org
+>> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+>> bruce.ashfield@gmail.com]
+>> -=-=-=-=-=-=-=-=-=-=-=-
+>>
+>>
+>
+> --
+> - Thou shalt not follow the NULL pointer, for chaos and madness await thee
+> at its end
+> - "Use the force Harry" - Gandalf, Star Trek II
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 7479 bytes --]
+
+^ permalink raw reply	[flat|nested] 11+ messages in thread
+* Re: [yocto] do_kernel_configme - Could not generate configuration queue
+  2022-10-15  1:52   ` Bruce Ashfield
+  2022-10-15  3:57     ` Rudolf Streif
+@ 2022-10-18 21:00     ` Jeremy Puhlman
+  2022-10-18 22:31       ` Bruce Ashfield
+  1 sibling, 1 reply; 11+ messages in thread
+From: Jeremy Puhlman @ 2022-10-18 21:00 UTC (permalink / raw)
+  To: Bruce Ashfield, Jose Quaresma; +Cc: Rudolf J Streif, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 5151 bytes --]
+
+On 10/14/2022 6:52 PM, Bruce Ashfield wrote:
+>
+>
+> On Fri, Oct 14, 2022 at 10:11 PM Jose Quaresma 
+> <quaresma.jose@gmail.com> wrote:
+>
+>     Hi Rudolf,
+>
+>     I have reported this issue and together with a path [1] to fix it.
+>     Anyway Bruce has fixed the issue in another way in [2] and this
+>     works for me as well.
+>
+>     [1] https://lists.yoctoproject.org/g/linux-yocto/message/11746
+>     [2]
+>     https://git.yoctoproject.org/yocto-kernel-tools/commit/?id=6a4752ebbe7d242c02b3c74a5772926edd243626
+>
+>
+> Yes indeed. This has also passed my other regression testing, but I 
+> was traveling today and couldn't send my pull request.
+>
+> I'll send it over the weekend, so hopefully it'll be merged shortly!
+>
+> Bruce
+
+Did this end up getting sen to the list? I also validated updating to 
+the specific hash resolved my issue too.
+
+>     Jose
+>
+>     Rudolf J Streif <rudolf.streif@ibeeto.com> escreveu no dia sábado,
+>     15/10/2022 à(s) 01:45:
+>
+>         I am running into a bizarre problem with kernel configuration.
+>
+>         I have an existing build environment that builds for an
+>         i.MX6ul machine.
+>         That works fine and the linux-fslc kernel 5.18 builds without any
+>         problems. Now within the that build environment I changed the
+>         machine to
+>         imx6ullevk and then the kernel configuration fails with this
+>         error message:
+>
+>         | DEBUG: Executing shell function do_kernel_configme
+>         | NOTE: do_kernel_metadata: for summary/debug, set
+>         KCONF_AUDIT_LEVEL > 0
+>         | [ERROR]: processing of file /tmp/tmp.owmBptYrba failed
+>         | /develop/projects/altec/tcu/build/tmp/hosttools/dirname:
+>         missing operand
+>         | Try '/develop/projects/altec/tcu/build/tmp/hosttools/dirname
+>         --help'
+>         for more information.
+>         | ERROR: Could not generate configuration queue for imx6ullevk.
+>         | WARNING:
+>         /develop/projects/altec/tcu/build/tmp/work/imx6ullevk-altec-linux-gnueabi/linux-fslc/5.18.5+gitAUTOINC+1d6b3055ae-r0/temp/run.do_kernel_configme.287395:209
+>
+>         exit 1 from 'exit 1'
+>         | WARNING: Backtrace (BB generated script):
+>         |     #1: bbfatal_log,
+>         /develop/projects/altec/tcu/build/tmp/work/imx6ullevk-altec-linux-gnueabi/linux-fslc/5.18.5+gitAUTOINC+1d6b3055ae-r0/temp/run.do_kernel_configme.287395,
+>
+>         line 209
+>         |     #2: do_kernel_metadata,
+>         /develop/projects/altec/tcu/build/tmp/work/imx6ullevk-altec-linux-gnueabi/linux-fslc/5.18.5+gitAUTOINC+1d6b3055ae-r0/temp/run.do_kernel_configme.287395,
+>
+>         line 382
+>         |     #3: do_kernel_configme,
+>         /develop/projects/altec/tcu/build/tmp/work/imx6ullevk-altec-linux-gnueabi/linux-fslc/5.18.5+gitAUTOINC+1d6b3055ae-r0/temp/run.do_kernel_configme.287395,
+>
+>         line 150
+>         |     #4: main,
+>         /develop/projects/altec/tcu/build/tmp/work/imx6ullevk-altec-linux-gnueabi/linux-fslc/5.18.5+gitAUTOINC+1d6b3055ae-r0/temp/run.do_kernel_configme.287395,
+>
+>         line 484
+>         ERROR: Task
+>         (/develop/projects/altec/tcu/build/../meta-freescale/recipes-kernel/linux/linux-fslc_5.18.bb:do_kernel_configme)
+>
+>         failed with exit code '1'
+>
+>         I tried to debug do_kernel_configme. The issue seems in the
+>         scc script
+>         more specifically, I think, in the kconf command that is
+>         called by scc
+>         when parsing the temporary configuration queue file in /tmp:
+>         tmp.owmBptYrba
+>
+>         #
+>         # spp v0.8
+>         # processed: Fri Oct 14 09:49:02 PM UTC 2022
+>         #
+>         # This is a preprocessor output file, do not edit
+>         #
+>         #
+>         prefix
+>         /develop/projects/altec/tcu/build/../meta-freescale/recipes-kernel/linux/linux-fslc/defconfig
+>         kconf non-hardware
+>         /develop/projects/altec/tcu/build/../meta-freescale/recipes-kernel/linux/linux-fslc/defconfig
+>         # run time: 0 seconds
+>         # processed files:
+>         # _cfg
+>         /develop/projects/altec/tcu/build/../meta-freescale/recipes-kernel/linux/linux-fslc/defconfig
+>
+>         Apparently a call to dirname is missing the argument. However,
+>         I do not
+>         understand why.
+>
+>         I wiped out build/tmp directory entirely, ran a cleanall on
+>         virtual/kernel but to no avail. The problem remains the same.
+>
+>         Has anybody seen this issue before?
+>
+>
+>         Rudi
+>
+>
+>
+>
+>
+>
+>
+>     -- 
+>     Best regards,
+>
+>     José Quaresma
+>
+>
+>
+>
+>
+> -- 
+> - Thou shalt not follow the NULL pointer, for chaos and madness await 
+> thee at its end
+> - "Use the force Harry" - Gandalf, Star Trek II
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#58339):https://lists.yoctoproject.org/g/yocto/message/58339
+> Mute This Topic:https://lists.yoctoproject.org/mt/94339433/2167262
+> Group Owner:yocto+owner@lists.yoctoproject.org
+> Unsubscribe:https://lists.yoctoproject.org/g/yocto/unsub  [jpuhlman@mvista.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+-- 
+Jeremy A. Puhlman
+jpuhlman@mvista.com
+
+[-- Attachment #2: Type: text/html, Size: 10477 bytes --]
+
+^ permalink raw reply	[flat|nested] 11+ messages in thread
+* Re: [yocto] do_kernel_configme - Could not generate configuration queue
+  2022-10-18 21:00     ` Jeremy Puhlman
+@ 2022-10-18 22:31       ` Bruce Ashfield
+  2022-10-18 22:52         ` Rudolf J Streif
+  2022-10-18 22:54         ` Jeremy Puhlman
+  0 siblings, 2 replies; 11+ messages in thread
+From: Bruce Ashfield @ 2022-10-18 22:31 UTC (permalink / raw)
+  To: Jeremy Puhlman; +Cc: Jose Quaresma, Rudolf J Streif, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 5262 bytes --]
+
+On Tue, Oct 18, 2022 at 5:01 PM Jeremy Puhlman <jpuhlman@mvista.com> wrote:
+
+> On 10/14/2022 6:52 PM, Bruce Ashfield wrote:
+>
+>
+>
+> On Fri, Oct 14, 2022 at 10:11 PM Jose Quaresma <quaresma.jose@gmail.com>
+> wrote:
+>
+>> Hi Rudolf,
+>>
+>> I have reported this issue and together with a path [1] to fix it.
+>> Anyway Bruce has fixed the issue in another way in [2] and this works for
+>> me as well.
+>>
+>> [1] https://lists.yoctoproject.org/g/linux-yocto/message/11746
+>> [2]
+>> https://git.yoctoproject.org/yocto-kernel-tools/commit/?id=6a4752ebbe7d242c02b3c74a5772926edd243626
+>>
+>>
+> Yes indeed. This has also passed my other regression testing, but I was
+> traveling today and couldn't send my pull request.
+>
+> I'll send it over the weekend, so hopefully it'll be merged shortly!
+>
+> Bruce
+>
+>
+> Did this end up getting sen to the list? I also validated updating to the
+> specific hash resolved my issue too.
+>
+>
+Nope. I got tied up with some other issues, I'll send it tonight when I get
+a moment!
+
+Bruce
+
+
+
+>
+>
+>> Jose
+>>
+>> Rudolf J Streif <rudolf.streif@ibeeto.com> escreveu no dia sábado,
+>> 15/10/2022 à(s) 01:45:
+>>
+>>> I am running into a bizarre problem with kernel configuration.
+>>>
+>>> I have an existing build environment that builds for an i.MX6ul machine.
+>>> That works fine and the linux-fslc kernel 5.18 builds without any
+>>> problems. Now within the that build environment I changed the machine to
+>>> imx6ullevk and then the kernel configuration fails with this error
+>>> message:
+>>>
+>>> | DEBUG: Executing shell function do_kernel_configme
+>>> | NOTE: do_kernel_metadata: for summary/debug, set KCONF_AUDIT_LEVEL > 0
+>>> | [ERROR]: processing of file /tmp/tmp.owmBptYrba failed
+>>> | /develop/projects/altec/tcu/build/tmp/hosttools/dirname: missing
+>>> operand
+>>> | Try '/develop/projects/altec/tcu/build/tmp/hosttools/dirname --help'
+>>> for more information.
+>>> | ERROR: Could not generate configuration queue for imx6ullevk.
+>>> | WARNING:
+>>> /develop/projects/altec/tcu/build/tmp/work/imx6ullevk-altec-linux-gnueabi/linux-fslc/5.18.5+gitAUTOINC+1d6b3055ae-r0/temp/run.do_kernel_configme.287395:209
+>>>
+>>> exit 1 from 'exit 1'
+>>> | WARNING: Backtrace (BB generated script):
+>>> |     #1: bbfatal_log,
+>>> /develop/projects/altec/tcu/build/tmp/work/imx6ullevk-altec-linux-gnueabi/linux-fslc/5.18.5+gitAUTOINC+1d6b3055ae-r0/temp/run.do_kernel_configme.287395,
+>>>
+>>> line 209
+>>> |     #2: do_kernel_metadata,
+>>> /develop/projects/altec/tcu/build/tmp/work/imx6ullevk-altec-linux-gnueabi/linux-fslc/5.18.5+gitAUTOINC+1d6b3055ae-r0/temp/run.do_kernel_configme.287395,
+>>>
+>>> line 382
+>>> |     #3: do_kernel_configme,
+>>> /develop/projects/altec/tcu/build/tmp/work/imx6ullevk-altec-linux-gnueabi/linux-fslc/5.18.5+gitAUTOINC+1d6b3055ae-r0/temp/run.do_kernel_configme.287395,
+>>>
+>>> line 150
+>>> |     #4: main,
+>>> /develop/projects/altec/tcu/build/tmp/work/imx6ullevk-altec-linux-gnueabi/linux-fslc/5.18.5+gitAUTOINC+1d6b3055ae-r0/temp/run.do_kernel_configme.287395,
+>>>
+>>> line 484
+>>> ERROR: Task
+>>>
+>>> (/develop/projects/altec/tcu/build/../meta-freescale/recipes-kernel/linux/linux-fslc_5.18.bb:do_kernel_configme)
+>>>
+>>> failed with exit code '1'
+>>>
+>>> I tried to debug do_kernel_configme. The issue seems in the scc script
+>>> more specifically, I think, in the kconf command that is called by scc
+>>> when parsing the temporary configuration queue file in /tmp:
+>>> tmp.owmBptYrba
+>>>
+>>> #
+>>> # spp v0.8
+>>> # processed: Fri Oct 14 09:49:02 PM UTC 2022
+>>> #
+>>> # This is a preprocessor output file, do not edit
+>>> #
+>>> #
+>>> prefix
+>>>
+>>> /develop/projects/altec/tcu/build/../meta-freescale/recipes-kernel/linux/linux-fslc/defconfig
+>>> kconf non-hardware
+>>>
+>>> /develop/projects/altec/tcu/build/../meta-freescale/recipes-kernel/linux/linux-fslc/defconfig
+>>> # run time: 0 seconds
+>>> # processed files:
+>>> # _cfg
+>>>
+>>> /develop/projects/altec/tcu/build/../meta-freescale/recipes-kernel/linux/linux-fslc/defconfig
+>>>
+>>> Apparently a call to dirname is missing the argument. However, I do not
+>>> understand why.
+>>>
+>>> I wiped out build/tmp directory entirely, ran a cleanall on
+>>> virtual/kernel but to no avail. The problem remains the same.
+>>>
+>>> Has anybody seen this issue before?
+>>>
+>>>
+>>> Rudi
+>>>
+>>>
+>>>
+>>>
+>>>
+>>>
+>>
+>> --
+>> Best regards,
+>>
+>> José Quaresma
+>>
+>>
+>>
+>>
+>
+> --
+> - Thou shalt not follow the NULL pointer, for chaos and madness await thee
+> at its end
+> - "Use the force Harry" - Gandalf, Star Trek II
+>
+>
+>
+> --
+> Jeremy A. Puhlmanjpuhlman@mvista.com
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#58359):
+> https://lists.yoctoproject.org/g/yocto/message/58359
+> Mute This Topic: https://lists.yoctoproject.org/mt/94339433/1050810
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> bruce.ashfield@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+-- 
+- Thou shalt not follow the NULL pointer, for chaos and madness await thee
+at its end
+- "Use the force Harry" - Gandalf, Star Trek II
+
+[-- Attachment #2: Type: text/html, Size: 10855 bytes --]
+
+^ permalink raw reply	[flat|nested] 11+ messages in thread
+* Re: [yocto] do_kernel_configme - Could not generate configuration queue
+  2022-10-18 22:31       ` Bruce Ashfield
+@ 2022-10-18 22:52         ` Rudolf J Streif
+  2022-10-18 22:54         ` Jeremy Puhlman
+  1 sibling, 0 replies; 11+ messages in thread
+From: Rudolf J Streif @ 2022-10-18 22:52 UTC (permalink / raw)
+  To: Bruce Ashfield, Jeremy Puhlman; +Cc: Jose Quaresma, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 6372 bytes --]
+
+
+On 10/18/22 15:31, Bruce Ashfield wrote:
+>
+>
+> On Tue, Oct 18, 2022 at 5:01 PM Jeremy Puhlman <jpuhlman@mvista.com> 
+> wrote:
+>
+>     On 10/14/2022 6:52 PM, Bruce Ashfield wrote:
+>>
+>>
+>>     On Fri, Oct 14, 2022 at 10:11 PM Jose Quaresma
+>>     <quaresma.jose@gmail.com> wrote:
+>>
+>>         Hi Rudolf,
+>>
+>>         I have reported this issue and together with a path [1] to
+>>         fix it.
+>>         Anyway Bruce has fixed the issue in another way in [2] and
+>>         this works for me as well.
+>>
+>>         [1] https://lists.yoctoproject.org/g/linux-yocto/message/11746
+>>         [2]
+>>         https://git.yoctoproject.org/yocto-kernel-tools/commit/?id=6a4752ebbe7d242c02b3c74a5772926edd243626
+>>
+>>
+>>     Yes indeed. This has also passed my other regression testing, but
+>>     I was traveling today and couldn't send my pull request.
+>>
+>>     I'll send it over the weekend, so hopefully it'll be merged shortly!
+>>
+>>     Bruce
+>
+>     Did this end up getting sen to the list? I also validated updating
+>     to the specific hash resolved my issue too.
+>
+>
+> Nope. I got tied up with some other issues, I'll send it tonight when 
+> I get a moment!
+I can confirm that updating kern-tools-native to6a4752eb resolved the 
+issue for me.
+>
+> Bruce
+>
+>>         Jose
+>>
+>>         Rudolf J Streif <rudolf.streif@ibeeto.com> escreveu no dia
+>>         sábado, 15/10/2022 à(s) 01:45:
+>>
+>>             I am running into a bizarre problem with kernel
+>>             configuration.
+>>
+>>             I have an existing build environment that builds for an
+>>             i.MX6ul machine.
+>>             That works fine and the linux-fslc kernel 5.18 builds
+>>             without any
+>>             problems. Now within the that build environment I changed
+>>             the machine to
+>>             imx6ullevk and then the kernel configuration fails with
+>>             this error message:
+>>
+>>             | DEBUG: Executing shell function do_kernel_configme
+>>             | NOTE: do_kernel_metadata: for summary/debug, set
+>>             KCONF_AUDIT_LEVEL > 0
+>>             | [ERROR]: processing of file /tmp/tmp.owmBptYrba failed
+>>             |
+>>             /develop/projects/altec/tcu/build/tmp/hosttools/dirname:
+>>             missing operand
+>>             | Try
+>>             '/develop/projects/altec/tcu/build/tmp/hosttools/dirname
+>>             --help'
+>>             for more information.
+>>             | ERROR: Could not generate configuration queue for
+>>             imx6ullevk.
+>>             | WARNING:
+>>             /develop/projects/altec/tcu/build/tmp/work/imx6ullevk-altec-linux-gnueabi/linux-fslc/5.18.5+gitAUTOINC+1d6b3055ae-r0/temp/run.do_kernel_configme.287395:209
+>>
+>>             exit 1 from 'exit 1'
+>>             | WARNING: Backtrace (BB generated script):
+>>             |     #1: bbfatal_log,
+>>             /develop/projects/altec/tcu/build/tmp/work/imx6ullevk-altec-linux-gnueabi/linux-fslc/5.18.5+gitAUTOINC+1d6b3055ae-r0/temp/run.do_kernel_configme.287395,
+>>
+>>             line 209
+>>             |     #2: do_kernel_metadata,
+>>             /develop/projects/altec/tcu/build/tmp/work/imx6ullevk-altec-linux-gnueabi/linux-fslc/5.18.5+gitAUTOINC+1d6b3055ae-r0/temp/run.do_kernel_configme.287395,
+>>
+>>             line 382
+>>             |     #3: do_kernel_configme,
+>>             /develop/projects/altec/tcu/build/tmp/work/imx6ullevk-altec-linux-gnueabi/linux-fslc/5.18.5+gitAUTOINC+1d6b3055ae-r0/temp/run.do_kernel_configme.287395,
+>>
+>>             line 150
+>>             |     #4: main,
+>>             /develop/projects/altec/tcu/build/tmp/work/imx6ullevk-altec-linux-gnueabi/linux-fslc/5.18.5+gitAUTOINC+1d6b3055ae-r0/temp/run.do_kernel_configme.287395,
+>>
+>>             line 484
+>>             ERROR: Task
+>>             (/develop/projects/altec/tcu/build/../meta-freescale/recipes-kernel/linux/linux-fslc_5.18.bb:do_kernel_configme)
+>>
+>>             failed with exit code '1'
+>>
+>>             I tried to debug do_kernel_configme. The issue seems in
+>>             the scc script
+>>             more specifically, I think, in the kconf command that is
+>>             called by scc
+>>             when parsing the temporary configuration queue file in
+>>             /tmp: tmp.owmBptYrba
+>>
+>>             #
+>>             # spp v0.8
+>>             # processed: Fri Oct 14 09:49:02 PM UTC 2022
+>>             #
+>>             # This is a preprocessor output file, do not edit
+>>             #
+>>             #
+>>             prefix
+>>             /develop/projects/altec/tcu/build/../meta-freescale/recipes-kernel/linux/linux-fslc/defconfig
+>>             kconf non-hardware
+>>             /develop/projects/altec/tcu/build/../meta-freescale/recipes-kernel/linux/linux-fslc/defconfig
+>>             # run time: 0 seconds
+>>             # processed files:
+>>             # _cfg
+>>             /develop/projects/altec/tcu/build/../meta-freescale/recipes-kernel/linux/linux-fslc/defconfig
+>>
+>>             Apparently a call to dirname is missing the argument.
+>>             However, I do not
+>>             understand why.
+>>
+>>             I wiped out build/tmp directory entirely, ran a cleanall on
+>>             virtual/kernel but to no avail. The problem remains the same.
+>>
+>>             Has anybody seen this issue before?
+>>
+>>
+>>             Rudi
+>>
+>>
+>>
+>>
+>>
+>>
+>>
+>>         -- 
+>>         Best regards,
+>>
+>>         José Quaresma
+>>
+>>
+>>
+>>
+>>
+>>     -- 
+>>     - Thou shalt not follow the NULL pointer, for chaos and madness
+>>     await thee at its end
+>>     - "Use the force Harry" - Gandalf, Star Trek II
+>>
+>>
+>
+>     -- 
+>     Jeremy A. Puhlman
+>     jpuhlman@mvista.com
+>
+>
+>     -=-=-=-=-=-=-=-=-=-=-=-
+>     Links: You receive all messages sent to this group.
+>     View/Reply Online (#58359):
+>     https://lists.yoctoproject.org/g/yocto/message/58359
+>     Mute This Topic: https://lists.yoctoproject.org/mt/94339433/1050810
+>     Group Owner: yocto+owner@lists.yoctoproject.org
+>     <mailto:yocto%2Bowner@lists.yoctoproject.org>
+>     Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub
+>     [bruce.ashfield@gmail.com]
+>     -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+>
+> -- 
+> - Thou shalt not follow the NULL pointer, for chaos and madness await 
+> thee at its end
+> - "Use the force Harry" - Gandalf, Star Trek II
+>
+-- 
+Rudolf J Streif
+CEO/CTO
+1.855.442.3386
+
+[-- Attachment #2: Type: text/html, Size: 15312 bytes --]
+
+^ permalink raw reply	[flat|nested] 11+ messages in thread
+* Re: [yocto] do_kernel_configme - Could not generate configuration queue
+  2022-10-18 22:31       ` Bruce Ashfield
+  2022-10-18 22:52         ` Rudolf J Streif
+@ 2022-10-18 22:54         ` Jeremy Puhlman
+  2022-11-02  0:06           ` Ricardo Salveti
+  1 sibling, 1 reply; 11+ messages in thread
+From: Jeremy Puhlman @ 2022-10-18 22:54 UTC (permalink / raw)
+  To: Bruce Ashfield; +Cc: Jose Quaresma, Rudolf J Streif, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 6302 bytes --]
+
+
+
+On 10/18/2022 3:31 PM, Bruce Ashfield wrote:
+>
+>
+> On Tue, Oct 18, 2022 at 5:01 PM Jeremy Puhlman <jpuhlman@mvista.com> 
+> wrote:
+>
+>     On 10/14/2022 6:52 PM, Bruce Ashfield wrote:
+>>
+>>
+>>     On Fri, Oct 14, 2022 at 10:11 PM Jose Quaresma
+>>     <quaresma.jose@gmail.com> wrote:
+>>
+>>         Hi Rudolf,
+>>
+>>         I have reported this issue and together with a path [1] to
+>>         fix it.
+>>         Anyway Bruce has fixed the issue in another way in [2] and
+>>         this works for me as well.
+>>
+>>         [1] https://lists.yoctoproject.org/g/linux-yocto/message/11746
+>>         [2]
+>>         https://git.yoctoproject.org/yocto-kernel-tools/commit/?id=6a4752ebbe7d242c02b3c74a5772926edd243626
+>>
+>>
+>>     Yes indeed. This has also passed my other regression testing, but
+>>     I was traveling today and couldn't send my pull request.
+>>
+>>     I'll send it over the weekend, so hopefully it'll be merged shortly!
+>>
+>>     Bruce
+>
+>     Did this end up getting sen to the list? I also validated updating
+>     to the specific hash resolved my issue too.
+>
+>
+> Nope. I got tied up with some other issues, I'll send it tonight when 
+> I get a moment!
+>
+> Bruce
+>
+Thanks!
+>
+>>         Jose
+>>
+>>         Rudolf J Streif <rudolf.streif@ibeeto.com> escreveu no dia
+>>         sábado, 15/10/2022 à(s) 01:45:
+>>
+>>             I am running into a bizarre problem with kernel
+>>             configuration.
+>>
+>>             I have an existing build environment that builds for an
+>>             i.MX6ul machine.
+>>             That works fine and the linux-fslc kernel 5.18 builds
+>>             without any
+>>             problems. Now within the that build environment I changed
+>>             the machine to
+>>             imx6ullevk and then the kernel configuration fails with
+>>             this error message:
+>>
+>>             | DEBUG: Executing shell function do_kernel_configme
+>>             | NOTE: do_kernel_metadata: for summary/debug, set
+>>             KCONF_AUDIT_LEVEL > 0
+>>             | [ERROR]: processing of file /tmp/tmp.owmBptYrba failed
+>>             |
+>>             /develop/projects/altec/tcu/build/tmp/hosttools/dirname:
+>>             missing operand
+>>             | Try
+>>             '/develop/projects/altec/tcu/build/tmp/hosttools/dirname
+>>             --help'
+>>             for more information.
+>>             | ERROR: Could not generate configuration queue for
+>>             imx6ullevk.
+>>             | WARNING:
+>>             /develop/projects/altec/tcu/build/tmp/work/imx6ullevk-altec-linux-gnueabi/linux-fslc/5.18.5+gitAUTOINC+1d6b3055ae-r0/temp/run.do_kernel_configme.287395:209
+>>
+>>             exit 1 from 'exit 1'
+>>             | WARNING: Backtrace (BB generated script):
+>>             |     #1: bbfatal_log,
+>>             /develop/projects/altec/tcu/build/tmp/work/imx6ullevk-altec-linux-gnueabi/linux-fslc/5.18.5+gitAUTOINC+1d6b3055ae-r0/temp/run.do_kernel_configme.287395,
+>>
+>>             line 209
+>>             |     #2: do_kernel_metadata,
+>>             /develop/projects/altec/tcu/build/tmp/work/imx6ullevk-altec-linux-gnueabi/linux-fslc/5.18.5+gitAUTOINC+1d6b3055ae-r0/temp/run.do_kernel_configme.287395,
+>>
+>>             line 382
+>>             |     #3: do_kernel_configme,
+>>             /develop/projects/altec/tcu/build/tmp/work/imx6ullevk-altec-linux-gnueabi/linux-fslc/5.18.5+gitAUTOINC+1d6b3055ae-r0/temp/run.do_kernel_configme.287395,
+>>
+>>             line 150
+>>             |     #4: main,
+>>             /develop/projects/altec/tcu/build/tmp/work/imx6ullevk-altec-linux-gnueabi/linux-fslc/5.18.5+gitAUTOINC+1d6b3055ae-r0/temp/run.do_kernel_configme.287395,
+>>
+>>             line 484
+>>             ERROR: Task
+>>             (/develop/projects/altec/tcu/build/../meta-freescale/recipes-kernel/linux/linux-fslc_5.18.bb:do_kernel_configme)
+>>
+>>             failed with exit code '1'
+>>
+>>             I tried to debug do_kernel_configme. The issue seems in
+>>             the scc script
+>>             more specifically, I think, in the kconf command that is
+>>             called by scc
+>>             when parsing the temporary configuration queue file in
+>>             /tmp: tmp.owmBptYrba
+>>
+>>             #
+>>             # spp v0.8
+>>             # processed: Fri Oct 14 09:49:02 PM UTC 2022
+>>             #
+>>             # This is a preprocessor output file, do not edit
+>>             #
+>>             #
+>>             prefix
+>>             /develop/projects/altec/tcu/build/../meta-freescale/recipes-kernel/linux/linux-fslc/defconfig
+>>             kconf non-hardware
+>>             /develop/projects/altec/tcu/build/../meta-freescale/recipes-kernel/linux/linux-fslc/defconfig
+>>             # run time: 0 seconds
+>>             # processed files:
+>>             # _cfg
+>>             /develop/projects/altec/tcu/build/../meta-freescale/recipes-kernel/linux/linux-fslc/defconfig
+>>
+>>             Apparently a call to dirname is missing the argument.
+>>             However, I do not
+>>             understand why.
+>>
+>>             I wiped out build/tmp directory entirely, ran a cleanall on
+>>             virtual/kernel but to no avail. The problem remains the same.
+>>
+>>             Has anybody seen this issue before?
+>>
+>>
+>>             Rudi
+>>
+>>
+>>
+>>
+>>
+>>
+>>
+>>         -- 
+>>         Best regards,
+>>
+>>         José Quaresma
+>>
+>>
+>>
+>>
+>>
+>>     -- 
+>>     - Thou shalt not follow the NULL pointer, for chaos and madness
+>>     await thee at its end
+>>     - "Use the force Harry" - Gandalf, Star Trek II
+>>
+>>
+>
+>     -- 
+>     Jeremy A. Puhlman
+>     jpuhlman@mvista.com
+>
+>
+>     -=-=-=-=-=-=-=-=-=-=-=-
+>     Links: You receive all messages sent to this group.
+>     View/Reply Online (#58359):
+>     https://lists.yoctoproject.org/g/yocto/message/58359
+>     Mute This Topic: https://lists.yoctoproject.org/mt/94339433/1050810
+>     Group Owner: yocto+owner@lists.yoctoproject.org
+>     <mailto:yocto%2Bowner@lists.yoctoproject.org>
+>     Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub
+>     [bruce.ashfield@gmail.com]
+>     -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+>
+> -- 
+> - Thou shalt not follow the NULL pointer, for chaos and madness await 
+> thee at its end
+> - "Use the force Harry" - Gandalf, Star Trek II
+>
+
+-- 
+Jeremy A. Puhlman
+jpuhlman@mvista.com
+
+[-- Attachment #2: Type: text/html, Size: 15116 bytes --]
+
+^ permalink raw reply	[flat|nested] 11+ messages in thread
+* Re: [yocto] do_kernel_configme - Could not generate configuration queue
+  2022-10-18 22:54         ` Jeremy Puhlman
+@ 2022-11-02  0:06           ` Ricardo Salveti
+  2022-11-04 14:38             ` Steve Sakoman
+  0 siblings, 1 reply; 11+ messages in thread
+From: Ricardo Salveti @ 2022-11-02  0:06 UTC (permalink / raw)
+  To: Jeremy Puhlman
+  Cc: Bruce Ashfield, Jose Quaresma, Rudolf J Streif, yocto, steve
+
+ On Tue, Oct 18, 2022 at 7:54 PM Jeremy Puhlman <jpuhlman@mvista.com> wrote:
+>
+> On 10/18/2022 3:31 PM, Bruce Ashfield wrote:
+>
+> On Tue, Oct 18, 2022 at 5:01 PM Jeremy Puhlman <jpuhlman@mvista.com> wrote:
+>>
+>> On 10/14/2022 6:52 PM, Bruce Ashfield wrote:
+>>
+>> On Fri, Oct 14, 2022 at 10:11 PM Jose Quaresma <quaresma.jose@gmail.com> wrote:
+>>>
+>>> Hi Rudolf,
+>>>
+>>> I have reported this issue and together with a path [1] to fix it.
+>>> Anyway Bruce has fixed the issue in another way in [2] and this works for me as well.
+>>>
+>>> [1] https://lists.yoctoproject.org/g/linux-yocto/message/11746
+>>> [2] https://git.yoctoproject.org/yocto-kernel-tools/commit/?id=6a4752ebbe7d242c02b3c74a5772926edd243626
+>>>
+>>
+>> Yes indeed. This has also passed my other regression testing, but I was traveling today and couldn't send my pull request.
+>>
+>> I'll send it over the weekend, so hopefully it'll be merged shortly!
+>>
+>> Bruce
+>>
+>>
+>> Did this end up getting sen to the list? I also validated updating to the specific hash resolved my issue too.
+>>
+>
+> Nope. I got tied up with some other issues, I'll send it tonight when I get a moment!
+>
+> Bruce
+>
+> Thanks!
+
+Just noticed the same issue is now happening on kirkstone, since the
+kern-tools-native was also updated there.
+
+Seems we're missing backporting
+533720a1756454447341769c4a0969fce8d6f287 (kern-tools: fix relative
+path processing).
+
+Sakoman, is that one already on your list? Otherwise we can send it to
+the list as well.
+
+Thanks,
+-- 
+Ricardo Salveti
+
+
+^ permalink raw reply	[flat|nested] 11+ messages in thread
+* Re: [yocto] do_kernel_configme - Could not generate configuration queue
+  2022-11-02  0:06           ` Ricardo Salveti
+@ 2022-11-04 14:38             ` Steve Sakoman
+  2022-11-04 14:55               ` Ricardo Salveti
+  0 siblings, 1 reply; 11+ messages in thread
+From: Steve Sakoman @ 2022-11-04 14:38 UTC (permalink / raw)
+  To: Ricardo Salveti
+  Cc: Jeremy Puhlman, Bruce Ashfield, Jose Quaresma, Rudolf J Streif, yocto
+
+On Tue, Nov 1, 2022 at 2:06 PM Ricardo Salveti <ricardo@foundries.io> wrote:
+>
+>  On Tue, Oct 18, 2022 at 7:54 PM Jeremy Puhlman <jpuhlman@mvista.com> wrote:
+> >
+> > On 10/18/2022 3:31 PM, Bruce Ashfield wrote:
+> >
+> > On Tue, Oct 18, 2022 at 5:01 PM Jeremy Puhlman <jpuhlman@mvista.com> wrote:
+> >>
+> >> On 10/14/2022 6:52 PM, Bruce Ashfield wrote:
+> >>
+> >> On Fri, Oct 14, 2022 at 10:11 PM Jose Quaresma <quaresma.jose@gmail.com> wrote:
+> >>>
+> >>> Hi Rudolf,
+> >>>
+> >>> I have reported this issue and together with a path [1] to fix it.
+> >>> Anyway Bruce has fixed the issue in another way in [2] and this works for me as well.
+> >>>
+> >>> [1] https://lists.yoctoproject.org/g/linux-yocto/message/11746
+> >>> [2] https://git.yoctoproject.org/yocto-kernel-tools/commit/?id=6a4752ebbe7d242c02b3c74a5772926edd243626
+> >>>
+> >>
+> >> Yes indeed. This has also passed my other regression testing, but I was traveling today and couldn't send my pull request.
+> >>
+> >> I'll send it over the weekend, so hopefully it'll be merged shortly!
+> >>
+> >> Bruce
+> >>
+> >>
+> >> Did this end up getting sen to the list? I also validated updating to the specific hash resolved my issue too.
+> >>
+> >
+> > Nope. I got tied up with some other issues, I'll send it tonight when I get a moment!
+> >
+> > Bruce
+> >
+> > Thanks!
+>
+> Just noticed the same issue is now happening on kirkstone, since the
+> kern-tools-native was also updated there.
+>
+> Seems we're missing backporting
+> 533720a1756454447341769c4a0969fce8d6f287 (kern-tools: fix relative
+> path processing).
+>
+> Sakoman, is that one already on your list? Otherwise we can send it to
+> the list as well.
+
+Yes, it is now :-)
+
+Steve
+
+
+^ permalink raw reply	[flat|nested] 11+ messages in thread
+* Re: [yocto] do_kernel_configme - Could not generate configuration queue
+  2022-11-04 14:38             ` Steve Sakoman
+@ 2022-11-04 14:55               ` Ricardo Salveti
+  0 siblings, 0 replies; 11+ messages in thread
+From: Ricardo Salveti @ 2022-11-04 14:55 UTC (permalink / raw)
+  To: Steve Sakoman
+  Cc: Jeremy Puhlman, Bruce Ashfield, Jose Quaresma, Rudolf J Streif, yocto
+
+On Fri, Nov 4, 2022 at 11:38 AM Steve Sakoman <steve@sakoman.com> wrote:
+>
+> On Tue, Nov 1, 2022 at 2:06 PM Ricardo Salveti <ricardo@foundries.io> wrote:
+> >
+> >  On Tue, Oct 18, 2022 at 7:54 PM Jeremy Puhlman <jpuhlman@mvista.com> wrote:
+> > >
+> > > On 10/18/2022 3:31 PM, Bruce Ashfield wrote:
+> > >
+> > > On Tue, Oct 18, 2022 at 5:01 PM Jeremy Puhlman <jpuhlman@mvista.com> wrote:
+> > >>
+> > >> On 10/14/2022 6:52 PM, Bruce Ashfield wrote:
+> > >>
+> > >> On Fri, Oct 14, 2022 at 10:11 PM Jose Quaresma <quaresma.jose@gmail.com> wrote:
+> > >>>
+> > >>> Hi Rudolf,
+> > >>>
+> > >>> I have reported this issue and together with a path [1] to fix it.
+> > >>> Anyway Bruce has fixed the issue in another way in [2] and this works for me as well.
+> > >>>
+> > >>> [1] https://lists.yoctoproject.org/g/linux-yocto/message/11746
+> > >>> [2] https://git.yoctoproject.org/yocto-kernel-tools/commit/?id=6a4752ebbe7d242c02b3c74a5772926edd243626
+> > >>>
+> > >>
+> > >> Yes indeed. This has also passed my other regression testing, but I was traveling today and couldn't send my pull request.
+> > >>
+> > >> I'll send it over the weekend, so hopefully it'll be merged shortly!
+> > >>
+> > >> Bruce
+> > >>
+> > >>
+> > >> Did this end up getting sen to the list? I also validated updating to the specific hash resolved my issue too.
+> > >>
+> > >
+> > > Nope. I got tied up with some other issues, I'll send it tonight when I get a moment!
+> > >
+> > > Bruce
+> > >
+> > > Thanks!
+> >
+> > Just noticed the same issue is now happening on kirkstone, since the
+> > kern-tools-native was also updated there.
+> >
+> > Seems we're missing backporting
+> > 533720a1756454447341769c4a0969fce8d6f287 (kern-tools: fix relative
+> > path processing).
+> >
+> > Sakoman, is that one already on your list? Otherwise we can send it to
+> > the list as well.
+>
+> Yes, it is now :-)
+
+Awesome, thanks!
+
+Cheers,
+-- 
+Ricardo Salveti
+
+
+^ permalink raw reply	[flat|nested] 11+ messages in thread
+end of thread, other threads:[~2022-11-04 14:56 UTC | newest]
+
+Thread overview: 11+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-10-15  0:45 do_kernel_configme - Could not generate configuration queue Rudolf J Streif
+2022-10-15  1:11 ` [yocto] " Jose Quaresma
+2022-10-15  1:52   ` Bruce Ashfield
+2022-10-15  3:57     ` Rudolf Streif
+2022-10-18 21:00     ` Jeremy Puhlman
+2022-10-18 22:31       ` Bruce Ashfield
+2022-10-18 22:52         ` Rudolf J Streif
+2022-10-18 22:54         ` Jeremy Puhlman
+2022-11-02  0:06           ` Ricardo Salveti
+2022-11-04 14:38             ` Steve Sakoman
+2022-11-04 14:55               ` Ricardo Salveti
+

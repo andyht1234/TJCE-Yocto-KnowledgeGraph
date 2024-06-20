@@ -1,0 +1,37 @@
+* libsemanage 3.4 issue
+@ 2022-09-20  9:10 Oleksiy Obitotskyi -X (oobitots - GLOBALLOGIC INC at Cisco)
+  0 siblings, 0 replies; only message in thread
+From: Oleksiy Obitotskyi -X (oobitots - GLOBALLOGIC INC at Cisco) @ 2022-09-20  9:10 UTC (permalink / raw)
+  To: yocto, yi.zhao; +Cc: Ruslan Bilovol -X (rbilovol - GLOBALLOGIC INC at Cisco)
+
+Hi,
+
+We are trying to use meta-selinux master branch and I got issue during compilation.
+nativesdk-libsemanage failed to compile with error:
+
+make[1]: Entering directory '<...>/sdk-master-next/build/tmp/work/x86_64-nativesdk-xesdk-linux/nativesdk-libsemanage/3.4-r0/git/libsemanage/src'
+swig -Wall -python -o semanageswig_wrap.c -outdir ./ semanageswig_python.i
+x86_64-xesdk-linux-gcc  --sysroot=<...>/sdk-master-next/build/tmp/work/x86_64-nativesdk-xesdk-linux/nativesdk-libsemanage/3.4-r0/recipe-sysroot  -O2 -pipe -g -feliminate-unused-debug-types -fmacro-prefix-map=<...>/sdk-master-next/build/tmp/work/x86_64-nativesdk-xesdk-linux/nativesdk-libsemanage/3.4-r0/git/libsemanage=/usr/src/debug/nativesdk-libsemanage/3.4-r0  -fdebug-prefix-map=<...>/sdk-master-next/build/tmp/work/x86_64-nativesdk-xesdk-linux/nativesdk-libsemanage/3.4-r0/git/libsemanage=/usr/src/debug/nativesdk-libsemanage/3.4-r0  -fmacro-prefix-map=<...>/sdk-master-next/build/tmp/work/x86_64-nativesdk-xesdk-linux/nativesdk-libsemanage/3.4-r0/git/libsemanage=/usr/src/debug/nativesdk-libsemanage/3.4-r0  -fdebug-prefix-map=<...>/sdk-master-next/build/tmp/work/x86_64-nativesdk-xesdk-linux/nativesdk-libsemanage/3.4-r0/git/libsemanage=/usr/src/debug/nativesdk-libsemanage/3.4-r0  -fdebug-prefix-map=<...>/sdk-master-next/build/tmp/work/x86_64-nativesdk-xesdk-linux/nativesdk-libsemanage/3.4-r0/recipe-sysroot=  -fmacro-prefix-map=<...>/sdk-master-next/build/tmp/work/x86_64-nativesdk-xesdk-linux/nativesdk-libsemanage/3.4-r0/recipe-sysroot=  -fdebug-prefix-map=<...>/sdk-master-next/build/tmp/work/x86_64-nativesdk-xesdk-linux/nativesdk-libsemanage/3.4-r0/recipe-sysroot-native=  -fmacro-prefix-map=<...>/sdk-master-next/build/tmp/work/x86_64-nativesdk-xesdk-linux/nativesdk-libsemanage/3.4-r0/git/libsemanage=/usr/src/debug/nativesdk-libsemanage/3.4-r0  -fdebug-prefix-map=<...>/sdk-master-next/build/tmp/work/x86_64-nativesdk-xesdk-linux/nativesdk-libsemanage/3.4-r0/git/libsemanage=/usr/src/debug/nativesdk-libsemanage/3.4-r0  -fmacro-prefix-map=<...>/sdk-master-next/build/tmp/work/x86_64-nativesdk-xesdk-linux/nativesdk-libsemanage/3.4-r0/git/libsemanage=/usr/src/debug/nativesdk-libsemanage/3.4-r0  -fdebug-prefix-map=<...>/sdk-master-next/build/tmp/work/x86_64-nativesdk-xesdk-linux/nativesdk-libsemanage/3.4-r0/git/libsemanage=/usr/src/debug/nativesdk-libsemanage/3.4-r0  -fdebug-prefix-map=<...>/sdk-master-next/build/tmp/work/x86_64-nativesdk-xesdk-linux/nativesdk-libsemanage/3.4-r0/recipe-sysroot=  -fmacro-prefix-map=<...>/sdk-master-next/build/tmp/work/x86_64-nativesdk-xesdk-linux/nativesdk-libsemanage/3.4-r0/recipe-sysroot=  -fdebug-prefix-map=<...>/sdk-master-next/build/tmp/work/x86_64-nativesdk-xesdk-linux/nativesdk-libsemanage/3.4-r0/recipe-sysroot-native=  -mtune=generic -DDISABLE_AUDIT -I../include -D_GNU_SOURCE -Wno-error -Wno-unused-but-set-variable -Wno-unused-variable -Wno-shadow -Wno-unused-parameter -Wno-missing-prototypes -I<...>/sdk-master-next/build/tmp/work/x86_64-nativesdk-xesdk-linux/nativesdk-libsemanage/3.4-r0/recipe-sysroot/usr/local/oe-sdk-hardcoded-buildpath/sysroots/x86_64-xesdk-linux/usr/include/python3.10 -fPIC -DSHARED -c -o python-3.10semanageswig_wrap.lo semanageswig_wrap.c
+semanageswig_wrap.c:154:11: fatal error: Python.h: No such file or directory
+  154 | # include <Python.h>
+      |           ^~~~~~~~~~
+compilation terminated.
+
+It looks like for nativesdk-libsemanage we  have implicit dependency on native-python so recipe-sysroot-native populated with python header. But recipe looks for  recipe-sysroot for headers.
+
+Adding python3 to dependencies fix this issue:
+-DEPENDS = "libsepol libselinux bison-native swig-native"
++DEPENDS = "libsepol libselinux python3 bison-native swig-native"
+
+But I'm not sure this is right and probably issue is in global problem of yocto + python cross compilation issues.
+
+Regards,
+Oleksiy
+
+^ permalink raw reply	[flat|nested] only message in thread
+only message in thread, other threads:[~2022-09-20  9:10 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-09-20  9:10 libsemanage 3.4 issue Oleksiy Obitotskyi -X (oobitots - GLOBALLOGIC INC at Cisco)
+

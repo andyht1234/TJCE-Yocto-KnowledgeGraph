@@ -1,0 +1,286 @@
+* systemd, ELF binaries and runtime dependency tracking
+@ 2021-05-31 22:40 Paul Eggleton
+  2021-06-01 14:58 ` [yocto] " Khem Raj
+  0 siblings, 1 reply; 5+ messages in thread
+From: Paul Eggleton @ 2021-05-31 22:40 UTC (permalink / raw)
+  To: yocto; +Cc: Luca Boccassi
+
+Hi folks
+
+Upstream in the systemd project, a proposal has been made to add a special
+section to output ELF binaries to record soft runtime dependencies, so that
+they could be read and utilised by distribution build systems such as ours
+(they would be translated into RRECOMMENDS in our case). At the moment that
+doesn't seem to have generated a huge amount of interest in the traditional
+distro space, but would it be interesting for us?
+
+  https://github.com/systemd/systemd/pull/17416
+
+For clarity, we (Microsoft) will volunteer to do the integration assuming the
+above pull request gets reopened and merged, which is more likely if we
+express our interest.
+
+Cheers
+Paul
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] systemd, ELF binaries and runtime dependency tracking
+  2021-05-31 22:40 systemd, ELF binaries and runtime dependency tracking Paul Eggleton
+@ 2021-06-01 14:58 ` Khem Raj
+  2021-06-01 16:13   ` Luca Bocassi
+  0 siblings, 1 reply; 5+ messages in thread
+From: Khem Raj @ 2021-06-01 14:58 UTC (permalink / raw)
+  To: Paul Eggleton, yocto; +Cc: Luca Boccassi
+
+
+
+On 5/31/21 3:40 PM, Paul Eggleton wrote:
+> Hi folks
+> 
+> Upstream in the systemd project, a proposal has been made to add a special
+> section to output ELF binaries to record soft runtime dependencies, so that
+> they could be read and utilised by distribution build systems such as ours
+> (they would be translated into RRECOMMENDS in our case). At the moment that
+> doesn't seem to have generated a huge amount of interest in the traditional
+> distro space, but would it be interesting for us?
+> 
+>    https://github.com/systemd/systemd/pull/17416
+> 
+> For clarity, we (Microsoft) will volunteer to do the integration assuming the
+> above pull request gets reopened and merged, which is more likely if we
+> express our interest.
+
+Finding dlopen dependencies is a neat idea, but it has to be accepted 
+cross distro, and also applications have to manually declare it in code 
+if I understand systemd's patch correctly.  This will be hard to 
+accomplish as you can see changes are spread across apps from distro 
+point of view. Perhaps there is a smarter way of detecting adding them 
+in ELF spec itself and then have tools like linker help implement this
+and also possibly collect the information or guide the users to achieve 
+this would be helpful.
+
+> 
+> Cheers
+> Paul
+> 
+> 
+> 
+> 
+> 
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] systemd, ELF binaries and runtime dependency tracking
+  2021-06-01 14:58 ` [yocto] " Khem Raj
+@ 2021-06-01 16:13   ` Luca Bocassi
+  2021-06-01 16:23     ` Khem Raj
+  0 siblings, 1 reply; 5+ messages in thread
+From: Luca Bocassi @ 2021-06-01 16:13 UTC (permalink / raw)
+  To: Khem Raj, Paul Eggleton, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2265 bytes --]
+
+On Tue, 2021-06-01 at 07:58 -0700, Khem Raj wrote:
+> 
+> On 5/31/21 3:40 PM, Paul Eggleton wrote:
+> > Hi folks
+> > 
+> > Upstream in the systemd project, a proposal has been made to add a special
+> > section to output ELF binaries to record soft runtime dependencies, so that
+> > they could be read and utilised by distribution build systems such as ours
+> > (they would be translated into RRECOMMENDS in our case). At the moment that
+> > doesn't seem to have generated a huge amount of interest in the traditional
+> > distro space, but would it be interesting for us?
+> > 
+> >    https://github.com/systemd/systemd/pull/17416
+> > 
+> > For clarity, we (Microsoft) will volunteer to do the integration assuming the
+> > above pull request gets reopened and merged, which is more likely if we
+> > express our interest.
+> 
+> Finding dlopen dependencies is a neat idea, but it has to be accepted 
+> cross distro, and also applications have to manually declare it in code 
+> if I understand systemd's patch correctly.  This will be hard to 
+> accomplish as you can see changes are spread across apps from distro 
+> point of view. Perhaps there is a smarter way of detecting adding them 
+> in ELF spec itself and then have tools like linker help implement this
+> and also possibly collect the information or guide the users to achieve 
+> this would be helpful.
+
+Yes ideally ELF shared objects/the linker/the loader would support weak
+symbols (like dylib on OSX). Unfortunately they do not, and it seems
+there's no interest to add it becasue there's no concrete use case that
+shows it's useful. But that cannot happen until there's some support
+for it. Chicken and egg...
+
+There have been lots of theoretical discussions about pros and cons,
+and my hope was that if at least one distro could find it useful, and
+could show that it is in practice useful and the theoretical issues are
+not that problematic and could be solved, others would follow suit.
+
+So leaving aside other distros, is this something that would concretely
+benefit the Yocto project for handling the systemd recipe? There are
+currently 12 dlopen()-based optional dependencies in systemd, and the
+number grows with each release.
+
+-- 
+Kind regards,
+Luca Boccassi
+
+[-- Attachment #2: This is a digitally signed message part --]
+[-- Type: application/pgp-signature, Size: 849 bytes --]
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] systemd, ELF binaries and runtime dependency tracking
+  2021-06-01 16:13   ` Luca Bocassi
+@ 2021-06-01 16:23     ` Khem Raj
+  2021-06-02 11:02       ` Luca Bocassi
+  0 siblings, 1 reply; 5+ messages in thread
+From: Khem Raj @ 2021-06-01 16:23 UTC (permalink / raw)
+  To: Luca Boccassi, Paul Eggleton, yocto
+
+
+
+On 6/1/21 9:13 AM, Luca Boccassi wrote:
+> On Tue, 2021-06-01 at 07:58 -0700, Khem Raj wrote:
+>>
+>> On 5/31/21 3:40 PM, Paul Eggleton wrote:
+>>> Hi folks
+>>>
+>>> Upstream in the systemd project, a proposal has been made to add a special
+>>> section to output ELF binaries to record soft runtime dependencies, so that
+>>> they could be read and utilised by distribution build systems such as ours
+>>> (they would be translated into RRECOMMENDS in our case). At the moment that
+>>> doesn't seem to have generated a huge amount of interest in the traditional
+>>> distro space, but would it be interesting for us?
+>>>
+>>>     https://github.com/systemd/systemd/pull/17416
+>>>
+>>> For clarity, we (Microsoft) will volunteer to do the integration assuming the
+>>> above pull request gets reopened and merged, which is more likely if we
+>>> express our interest.
+>>
+>> Finding dlopen dependencies is a neat idea, but it has to be accepted
+>> cross distro, and also applications have to manually declare it in code
+>> if I understand systemd's patch correctly.  This will be hard to
+>> accomplish as you can see changes are spread across apps from distro
+>> point of view. Perhaps there is a smarter way of detecting adding them
+>> in ELF spec itself and then have tools like linker help implement this
+>> and also possibly collect the information or guide the users to achieve
+>> this would be helpful.
+> 
+> Yes ideally ELF shared objects/the linker/the loader would support weak
+> symbols (like dylib on OSX). Unfortunately they do not, and it seems
+> there's no interest to add it becasue there's no concrete use case that
+> shows it's useful. But that cannot happen until there's some support
+> for it. Chicken and egg...
+
+right and thats why I will be reluctant to go too far at distro level 
+unless there is general interest in wider communities as it can make us 
+an island.
+
+> 
+> There have been lots of theoretical discussions about pros and cons,
+> and my hope was that if at least one distro could find it useful, and
+> could show that it is in practice useful and the theoretical issues are
+> not that problematic and could be solved, others would follow suit.
+
+you could tool it as a packageconfig for systemd alone and run with it 
+and see how it pans out.
+
+> 
+> So leaving aside other distros, is this something that would concretely
+> benefit the Yocto project for handling the systemd recipe? There are
+> currently 12 dlopen()-based optional dependencies in systemd, and the
+> number grows with each release.
+
+we could certainly try that, provided systemd upstream is supportive of it.
+
+> 
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] systemd, ELF binaries and runtime dependency tracking
+  2021-06-01 16:23     ` Khem Raj
+@ 2021-06-02 11:02       ` Luca Bocassi
+  0 siblings, 0 replies; 5+ messages in thread
+From: Luca Bocassi @ 2021-06-02 11:02 UTC (permalink / raw)
+  To: Khem Raj, Paul Eggleton, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 3041 bytes --]
+
+On Tue, 2021-06-01 at 09:23 -0700, Khem Raj wrote:
+> 
+> On 6/1/21 9:13 AM, Luca Boccassi wrote:
+> > On Tue, 2021-06-01 at 07:58 -0700, Khem Raj wrote:
+> > > On 5/31/21 3:40 PM, Paul Eggleton wrote:
+> > > > Hi folks
+> > > > 
+> > > > Upstream in the systemd project, a proposal has been made to add a special
+> > > > section to output ELF binaries to record soft runtime dependencies, so that
+> > > > they could be read and utilised by distribution build systems such as ours
+> > > > (they would be translated into RRECOMMENDS in our case). At the moment that
+> > > > doesn't seem to have generated a huge amount of interest in the traditional
+> > > > distro space, but would it be interesting for us?
+> > > > 
+> > > >     https://github.com/systemd/systemd/pull/17416
+> > > > 
+> > > > For clarity, we (Microsoft) will volunteer to do the integration assuming the
+> > > > above pull request gets reopened and merged, which is more likely if we
+> > > > express our interest.
+> > > 
+> > > Finding dlopen dependencies is a neat idea, but it has to be accepted
+> > > cross distro, and also applications have to manually declare it in code
+> > > if I understand systemd's patch correctly.  This will be hard to
+> > > accomplish as you can see changes are spread across apps from distro
+> > > point of view. Perhaps there is a smarter way of detecting adding them
+> > > in ELF spec itself and then have tools like linker help implement this
+> > > and also possibly collect the information or guide the users to achieve
+> > > this would be helpful.
+> > 
+> > Yes ideally ELF shared objects/the linker/the loader would support weak
+> > symbols (like dylib on OSX). Unfortunately they do not, and it seems
+> > there's no interest to add it becasue there's no concrete use case that
+> > shows it's useful. But that cannot happen until there's some support
+> > for it. Chicken and egg...
+> 
+> right and thats why I will be reluctant to go too far at distro level 
+> unless there is general interest in wider communities as it can make us 
+> an island.
+> 
+> > There have been lots of theoretical discussions about pros and cons,
+> > and my hope was that if at least one distro could find it useful, and
+> > could show that it is in practice useful and the theoretical issues are
+> > not that problematic and could be solved, others would follow suit.
+> 
+> you could tool it as a packageconfig for systemd alone and run with it 
+> and see how it pans out.
+> 
+> > So leaving aside other distros, is this something that would concretely
+> > benefit the Yocto project for handling the systemd recipe? There are
+> > currently 12 dlopen()-based optional dependencies in systemd, and the
+> > number grows with each release.
+> 
+> we could certainly try that, provided systemd upstream is supportive of it.
+
+Yeah, I was thinking of starting from the systemd recipe only. Given
+the project has to add support for it, a distro-wide rollout wouldn't
+make much sense anyway.
+
+-- 
+Kind regards,
+Luca Boccassi
+
+[-- Attachment #2: This is a digitally signed message part --]
+[-- Type: application/pgp-signature, Size: 849 bytes --]
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+end of thread, other threads:[~2021-06-02 11:02 UTC | newest]
+
+Thread overview: 5+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-05-31 22:40 systemd, ELF binaries and runtime dependency tracking Paul Eggleton
+2021-06-01 14:58 ` [yocto] " Khem Raj
+2021-06-01 16:13   ` Luca Bocassi
+2021-06-01 16:23     ` Khem Raj
+2021-06-02 11:02       ` Luca Bocassi
+

@@ -1,0 +1,132 @@
+* [meta-openssl102-fips][dunfell][PATCH 1/2] conf: Make layer compatible with dunfell
+@ 2022-03-17  8:16 Harshal Gohel
+  2022-03-17  8:16 ` [meta-openssl102-fips][dunfell][PATCH 2/2] openssh: Adapt the patch for CVE-2020-14145 fix on poky/dunfell Harshal Gohel
+  0 siblings, 1 reply; 2+ messages in thread
+From: Harshal Gohel @ 2022-03-17  8:16 UTC (permalink / raw)
+  To: yocto
+
+From: Harshal Gohel <harshaldhruvkumar.gohel@philips.com>
+
+Create branch "dunfell" from 634d497355f4169237b97a57a2f32486b0972167
+---
+ conf/layer.conf | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/conf/layer.conf b/conf/layer.conf
+index 892cf79..fe6d6db 100644
+--- a/conf/layer.conf
++++ b/conf/layer.conf
+@@ -10,7 +10,7 @@ BBFILE_PRIORITY_meta-openssl-one-zero-two-fips = "5"
+ 
+ LAYERVERSION_meta-openssl-one-zero-two-fips = "1"
+ 
+-LAYERSERIES_COMPAT_meta-openssl-one-zero-two-fips = "zeus"
++LAYERSERIES_COMPAT_meta-openssl-one-zero-two-fips = "dunfell"
+ 
+ LAYERPATH_meta-openssl-one-zero-two-fips = "${LAYERDIR}"
+ 
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 2+ messages in thread
+* [meta-openssl102-fips][dunfell][PATCH 2/2] openssh: Adapt the patch for CVE-2020-14145 fix on poky/dunfell
+  2022-03-17  8:16 [meta-openssl102-fips][dunfell][PATCH 1/2] conf: Make layer compatible with dunfell Harshal Gohel
+@ 2022-03-17  8:16 ` Harshal Gohel
+  0 siblings, 0 replies; 2+ messages in thread
+From: Harshal Gohel @ 2022-03-17  8:16 UTC (permalink / raw)
+  To: yocto
+
+From: Harshal Gohel <harshaldhruvkumar.gohel@philips.com>
+
+openssh-8.2p1-fips.patch does not apply after CVE-2020-14145 patch
+introduced in (poky: f5882b194b58b6bbb06db511a2c3612f5d6430fd)
+
+CVE-2020-14145 added comments and introduced new code in sshconnect2.c
+
+This adaptation corrects diff offsets and replaces each occurance of
+`options.hostkeyalgorithms` with the FIPS_mode() conditional just as in
+original patch.
+---
+ .../openssh/0001-openssh-8.2p1-fips.patch     | 31 ++++++++++++++-----
+ 1 file changed, 24 insertions(+), 7 deletions(-)
+
+diff --git a/recipes-connectivity/openssh/openssh/0001-openssh-8.2p1-fips.patch b/recipes-connectivity/openssh/openssh/0001-openssh-8.2p1-fips.patch
+index c1de130..5b8814d 100644
+--- a/recipes-connectivity/openssh/openssh/0001-openssh-8.2p1-fips.patch
++++ b/recipes-connectivity/openssh/openssh/0001-openssh-8.2p1-fips.patch
+@@ -27,10 +27,10 @@ Signed-off-by: Yi Zhao <yi.zhao@windriver.com>
+  servconf.c               | 15 ++++++++++-----
+  ssh-keygen.c             | 16 +++++++++++++++-
+  ssh.c                    | 16 ++++++++++++++++
+- sshconnect2.c            |  8 ++++++--
++ sshconnect2.c            | 14 ++++++++++----
+  sshd.c                   | 19 +++++++++++++++++++
+  sshkey.c                 |  4 ++++
+- 16 files changed, 178 insertions(+), 23 deletions(-)
++ 16 files changed, 182 insertions(+), 25 deletions(-)
+ 
+ diff --git a/Makefile.in b/Makefile.in
+ index e754947..57f94f4 100644
+@@ -408,7 +408,7 @@ index 15aee56..49331fc 100644
+  	 * Discard other fds that are hanging around. These can cause problem
+  	 * with backgrounded ssh processes started by ControlPersist.
+ diff --git a/sshconnect2.c b/sshconnect2.c
+-index af00fb3..639fc51 100644
++index 5df94779..df3cd317 100644
+ --- a/sshconnect2.c
+ +++ b/sshconnect2.c
+ @@ -44,6 +44,8 @@
+@@ -420,17 +420,34 @@ index af00fb3..639fc51 100644
+  #include "openbsd-compat/sys-queue.h"
+  
+  #include "xmalloc.h"
+-@@ -119,7 +121,8 @@ order_hostkeyalgs(char *host, struct sockaddr *hostaddr, u_short port)
+- 	for (i = 0; i < options.num_system_hostfiles; i++)
+- 		load_hostkeys(hostkeys, hostname, options.system_hostfiles[i]);
++@@ -139,12 +141,14 @@ order_hostkeyalgs(char *host, struct sockaddr *hostaddr, u_short port)
++ 	 * certificate type, as sshconnect.c will downgrade certs to
++ 	 * plain keys if necessary.
++ 	 */
++-	best = first_alg(options.hostkeyalgorithms);
+++	best = first_alg(FIPS_mode() 
+++			? KEX_FIPS_PK_ALG : options.hostkeyalgorithms);
++ 	if (lookup_key_in_hostkeys_by_type(hostkeys,
++ 	    sshkey_type_plain(sshkey_type_from_name(best)), NULL)) {
++ 		debug3("%s: have matching best-preference key type %s, "
++ 		    "using HostkeyAlgorithms verbatim", __func__, best);
++-		ret = xstrdup(options.hostkeyalgorithms);
+++		ret = xstrdup(FIPS_mode()
+++				? KEX_FIPS_PK_ALG : options.hostkeyalgorithms);
++ 		goto out;
++ 	}
+  
++@@ -152,7 +156,8 @@ order_hostkeyalgs(char *host, struct sockaddr *hostaddr, u_short port)
++ 	 * Otherwise, prefer the host key algorithms that match known keys
++ 	 * while keeping the ordering of HostkeyAlgorithms as much as possible.
++ 	 */
+ -	oavail = avail = xstrdup(options.hostkeyalgorithms);
+ +	oavail = avail = xstrdup((FIPS_mode()
+ +	    ? KEX_FIPS_PK_ALG : options.hostkeyalgorithms));
+  	maxlen = strlen(avail) + 1;
+  	first = xmalloc(maxlen);
+  	last = xmalloc(maxlen);
+-@@ -179,7 +182,8 @@ ssh_kex2(struct ssh *ssh, char *host, struct sockaddr *hostaddr, u_short port)
++@@ -214,7 +219,8 @@ ssh_kex2(struct ssh *ssh, char *host, struct sockaddr *hostaddr, u_short port)
+  	/* Expand or fill in HostkeyAlgorithms */
+  	all_key = sshkey_alg_list(0, 0, 1, ',');
+  	if (kex_assemble_names(&options.hostkeyalgorithms,
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2022-03-17  8:16 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-03-17  8:16 [meta-openssl102-fips][dunfell][PATCH 1/2] conf: Make layer compatible with dunfell Harshal Gohel
+2022-03-17  8:16 ` [meta-openssl102-fips][dunfell][PATCH 2/2] openssh: Adapt the patch for CVE-2020-14145 fix on poky/dunfell Harshal Gohel
+

@@ -1,0 +1,115 @@
+* [meta-gplv2][PATCH] elfutils: ignore format-truncation and stringop-overflow issues to fix build with gcc-11
+@ 2021-05-03  6:41 Martin Jansa
+  2021-05-03 15:20 ` [yocto] " Khem Raj
+  0 siblings, 1 reply; 2+ messages in thread
+From: Martin Jansa @ 2021-05-03  6:41 UTC (permalink / raw)
+  To: yocto; +Cc: Martin Jansa
+
+* works around:
+  http://errors.yoctoproject.org/Errors/Details/580076/
+  elfutils-0.148/src/ar.c:1088:56: error: '%-*ld' directive output may be truncated writing between 6 and 10 bytes into a region of size 7 [-Werror=format-truncation=]
+   1088 |   snprintf (tmpbuf, sizeof (tmpbuf), ofmt ? "%-*lo" : "%-*ld", bufsize, val);
+        |                                                        ^~~~~
+  elfutils-0.148/src/ar.c:1088:55: note: directive argument in the range [0, 4294967295]
+   1088 |   snprintf (tmpbuf, sizeof (tmpbuf), ofmt ? "%-*lo" : "%-*ld", bufsize, val);
+        |                                                       ^~~~~~~
+
+  http://errors.yoctoproject.org/Errors/Details/580078/
+  elfutils-0.148/tests/addrcfi.c:90:16: error: 'dwarf_frame_register' accessing 96 bytes in a region of size 64 [-Werror=stringop-overflow=]
+     90 |   int result = dwarf_frame_register (stuff->frame, regno, ops_mem, &ops, &nops);
+        |                ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Signed-off-by: Martin Jansa <Martin.Jansa@gmail.com>
+---
+ recipes-devtools/elfutils/elfutils_0.148.bb | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/recipes-devtools/elfutils/elfutils_0.148.bb b/recipes-devtools/elfutils/elfutils_0.148.bb
+index 1f07a28..654a715 100644
+--- a/recipes-devtools/elfutils/elfutils_0.148.bb
++++ b/recipes-devtools/elfutils/elfutils_0.148.bb
+@@ -61,6 +61,14 @@ inherit autotools gettext
+ # but 0.175 has different license, so to be safe don't backport the fix, just ignore the issue
+ CFLAGS += "-Wno-error=missing-attributes"
+ 
++# There is a fix in 0.171 version (commit b10d7eb74064c5906f031cd17c0f82041c6a4ca1)
++# but 0.171 has different license, so to be safe don't backport the fix, just ignore the issue
++CFLAGS += "-Wno-error=format-truncation="
++
++# There is a fix in 0.182 version (commit 5621fe5443da23112170235dd5cac161e5c75e65)
++# but 0.182 has different license, so to be safe don't backport the fix, just ignore the issue
++CFLAGS += "-Wno-error=stringop-overflow="
++
+ EXTRA_OECONF = "--program-prefix=eu- --without-lzma"
+ EXTRA_OECONF_append_class-native = " --without-bzlib"
+ EXTRA_OECONF_append_libc-uclibc = " --enable-uclibc"
+-- 
+2.30.2
+
+
+^ permalink raw reply related	[flat|nested] 2+ messages in thread
+* Re: [yocto] [meta-gplv2][PATCH] elfutils: ignore format-truncation and stringop-overflow issues to fix build with gcc-11
+  2021-05-03  6:41 [meta-gplv2][PATCH] elfutils: ignore format-truncation and stringop-overflow issues to fix build with gcc-11 Martin Jansa
+@ 2021-05-03 15:20 ` Khem Raj
+  0 siblings, 0 replies; 2+ messages in thread
+From: Khem Raj @ 2021-05-03 15:20 UTC (permalink / raw)
+  To: Martin Jansa, yocto
+
+
+
+On 5/2/21 11:41 PM, Martin Jansa wrote:
+> * works around:
+>    http://errors.yoctoproject.org/Errors/Details/580076/
+>    elfutils-0.148/src/ar.c:1088:56: error: '%-*ld' directive output may be truncated writing between 6 and 10 bytes into a region of size 7 [-Werror=format-truncation=]
+>     1088 |   snprintf (tmpbuf, sizeof (tmpbuf), ofmt ? "%-*lo" : "%-*ld", bufsize, val);
+>          |                                                        ^~~~~
+>    elfutils-0.148/src/ar.c:1088:55: note: directive argument in the range [0, 4294967295]
+>     1088 |   snprintf (tmpbuf, sizeof (tmpbuf), ofmt ? "%-*lo" : "%-*ld", bufsize, val);
+>          |                                                       ^~~~~~~
+> 
+>    http://errors.yoctoproject.org/Errors/Details/580078/
+>    elfutils-0.148/tests/addrcfi.c:90:16: error: 'dwarf_frame_register' accessing 96 bytes in a region of size 64 [-Werror=stringop-overflow=]
+>       90 |   int result = dwarf_frame_register (stuff->frame, regno, ops_mem, &ops, &nops);
+>          |                ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+> 
+
+looks ok. Thanks for fixing it
+
+> Signed-off-by: Martin Jansa <Martin.Jansa@gmail.com>
+> ---
+>   recipes-devtools/elfutils/elfutils_0.148.bb | 8 ++++++++
+>   1 file changed, 8 insertions(+)
+> 
+> diff --git a/recipes-devtools/elfutils/elfutils_0.148.bb b/recipes-devtools/elfutils/elfutils_0.148.bb
+> index 1f07a28..654a715 100644
+> --- a/recipes-devtools/elfutils/elfutils_0.148.bb
+> +++ b/recipes-devtools/elfutils/elfutils_0.148.bb
+> @@ -61,6 +61,14 @@ inherit autotools gettext
+>   # but 0.175 has different license, so to be safe don't backport the fix, just ignore the issue
+>   CFLAGS += "-Wno-error=missing-attributes"
+>   
+> +# There is a fix in 0.171 version (commit b10d7eb74064c5906f031cd17c0f82041c6a4ca1)
+> +# but 0.171 has different license, so to be safe don't backport the fix, just ignore the issue
+> +CFLAGS += "-Wno-error=format-truncation="
+> +
+> +# There is a fix in 0.182 version (commit 5621fe5443da23112170235dd5cac161e5c75e65)
+> +# but 0.182 has different license, so to be safe don't backport the fix, just ignore the issue
+> +CFLAGS += "-Wno-error=stringop-overflow="
+> +
+>   EXTRA_OECONF = "--program-prefix=eu- --without-lzma"
+>   EXTRA_OECONF_append_class-native = " --without-bzlib"
+>   EXTRA_OECONF_append_libc-uclibc = " --enable-uclibc"
+> 
+> 
+> 
+> 
+> 
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2021-05-03 15:20 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-05-03  6:41 [meta-gplv2][PATCH] elfutils: ignore format-truncation and stringop-overflow issues to fix build with gcc-11 Martin Jansa
+2021-05-03 15:20 ` [yocto] " Khem Raj
+

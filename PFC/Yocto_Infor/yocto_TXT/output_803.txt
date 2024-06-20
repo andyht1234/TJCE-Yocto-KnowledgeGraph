@@ -1,0 +1,147 @@
+* Conditionally starting the swupdate webserver
+@ 2023-03-29 14:39 Morten Bruun
+  2023-03-30 20:06 ` [yocto] " Stefano Babic
+  0 siblings, 1 reply; 2+ messages in thread
+From: Morten Bruun @ 2023-03-29 14:39 UTC (permalink / raw)
+  To: Yocto-mailing-list
+
+[-- Attachment #1: Type: text/plain, Size: 997 bytes --]
+
+Hi Yocto experts!
+
+Background
+----------------
+I have a device that I build two different images for (test and prod). For
+the prod variant I do not want the swupdate service to start the webserver.
+
+Currently I have a swupdate.service that overwrites the default from
+swupdate.
+
+I have been experimenting with an approach where I use OVERRIDES to control
+the inclusion of the systemd service.
+
+Is this a "good" (tm) way of doing this? Or is there a better way?
+
+my-test-image.bb
+-----------------------
+
+DISTRO_VARIANT = "test"
+
+
+my-prod-image.bb
+-----------------------
+
+DISTRO_VARIANT = "prod"
+
+
+swupdate_%.bbappend
+-------------------------------
+
+OVERRIDES:append = ":${DISTRO_VARIANT}"
+
+do_install:test:append() {
+  install -d ${D}/${systemd_unitdir}/system
+  install -m 0644 ${WORKDIR}/hello-test.service ${D}/${systemd_unitdir}/system
+}
+
+do_install:prod:append() {
+  install -d ${D}/${systemd_unitdir}/system
+  install -m 0644 ${WORKDIR}/hello-prod.service ${D}/${systemd_unitdir}/system
+}
+
+[-- Attachment #2: Type: text/html, Size: 3278 bytes --]
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+* Re: [yocto] Conditionally starting the swupdate webserver
+  2023-03-29 14:39 Conditionally starting the swupdate webserver Morten Bruun
+@ 2023-03-30 20:06 ` Stefano Babic
+  0 siblings, 0 replies; 2+ messages in thread
+From: Stefano Babic @ 2023-03-30 20:06 UTC (permalink / raw)
+  To: Morten Bruun, Yocto-mailing-list
+
+Hi Morten,
+
+On 29.03.23 16:39, Morten Bruun wrote:
+> Hi Yocto experts!
+> 
+> Background
+> ----------------
+> I have a device that I build two different images for (test and prod). 
+> For the prod variant I do not want the swupdate service to start the 
+> webserver.
+> 
+> Currently I have a swupdate.service that overwrites the default from 
+> swupdate.
+
+Why ? the default service will load configuration script from 
+/usr/lib/swupdate, and you can already override what yo need.
+
+
+> 
+> I have been experimenting with an approach where I use OVERRIDES to 
+> control the inclusion of the systemd service.
+> 
+> Is this a "good" (tm) way of doing this? Or is there a better way?
+
+It is enough you do not install the swupdate-www package in the prod 
+image. No Webserver is started.
+
+Best regards,
+Stefano Babic
+
+> 
+> my-test-image.bb <http://my-test-image.bb>
+> -----------------------
+> 
+> DISTRO_VARIANT = "test"
+> 
+> 
+> my-prod-image.bb <http://my-prod-image.bb>
+> -----------------------
+> 
+> DISTRO_VARIANT = "prod"
+> 
+> 
+> swupdate_%.bbappend
+> -------------------------------
+> 
+> OVERRIDES:append = ":${DISTRO_VARIANT}"
+> 
+> do_install:test:append() {
+>    install -d ${D}/${systemd_unitdir}/system
+>    install -m 0644 ${WORKDIR}/hello-test.service ${D}/${systemd_unitdir}/system
+> }
+> 
+> do_install:prod:append() {
+>    install -d ${D}/${systemd_unitdir}/system
+>    install -m 0644 ${WORKDIR}/hello-prod.service ${D}/${systemd_unitdir}/system
+> }
+> 
+> 
+> 
+> 
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#59545): https://lists.yoctoproject.org/g/yocto/message/59545
+> Mute This Topic: https://lists.yoctoproject.org/mt/97929833/3618551
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [sbabic@denx.de]
+> -=-=-=-=-=-=-=-=-=-=-=-
+> 
+
+-- 
+=====================================================================
+DENX Software Engineering GmbH,        Managing Director: Erika Unter
+HRB 165235 Munich,   Office: Kirchenstr.5, 82194 Groebenzell, Germany
+Phone: +49-8142-66989-53 Fax: +49-8142-66989-80 Email: sbabic@denx.de
+=====================================================================
+
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2023-03-30 20:06 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-03-29 14:39 Conditionally starting the swupdate webserver Morten Bruun
+2023-03-30 20:06 ` [yocto] " Stefano Babic
+

@@ -1,0 +1,1085 @@
+* Re: [yocto] [meta-rockchip][PATCH] use uuid instead of hard-coding root device
+       [not found] <16A5BB09DD6D5F75.29722@lists.yoctoproject.org>
+@ 2021-09-20 16:54 ` Trevor Woerner
+  0 siblings, 0 replies; 13+ messages in thread
+From: Trevor Woerner @ 2021-09-20 16:54 UTC (permalink / raw)
+  To: yocto
+
+On Fri 2021-09-17 @ 06:01:21 PM, Trevor Woerner via lists.yoctoproject.org wrote:
+> Recent upstream kernel changes have made the mmc probing order unpredictable.
+> Therefore, boards with both an emmc and sdmmc interface aren't guaranteed to
+> boot with a hard-coded root device selected.
+> 
+> For example, on the rock64, with linux-yocto 5.10.y, using the uSD card (i.e.
+> the sdmmc interface) about 50% of the time the boot would succeed, and roughly
+> 50% of the time it wouldn't:
+> 
+> 	...
+> 	[    0.612233] Waiting for root device /dev/mmcblk1p7...
+> 	[    0.634551] mmc_host mmc1: Bus speed (slot 0) = 300000Hz (slot req 300000Hz, actual 300000HZ div = 0)
+> 	[    0.639064] mmc_host mmc0: Bus speed (slot 0) = 50000000Hz (slot req 50000000Hz, actual 50000000HZ di)
+> 	[    0.640007] mmc0: new high speed SDXC card at address 5048
+> 	[    0.641176] mmcblk0: mmc0:5048 SD64G 58.0 GiB
+> 	[    0.647610] random: fast init done
+> 	[    0.648279] GPT:Primary header thinks Alt. header is not at the end of the disk.
+> 	[    0.648941] GPT:376479 != 121634815
+> 	[    0.649252] GPT:Alternate GPT header not at the end of the disk.
+> 	[    0.649796] GPT:376479 != 121634815
+> 	[    0.650106] GPT: Use GNU Parted to correct GPT errors.
+> 	[    0.650598]  mmcblk0: p1 p2 p3 p4 p5 p6 p7
+> 
+> NOTE the discrepancy between the kernel waiting for device /dev/mmcblk1p7,
+> which comes from the hard-coded kernel cmdline, and the kernel probing putting
+> the sdmmc on mmcblk0.
+> 
+> With linux-yocto 5.13.y on the rock64 using the uSD card the board would never
+> boot, the sdmmc always appears on mmcblk0.
+> 
+> Instead of simply changing the hard-coded root device (i.e. from mmcblk0 to
+> mmcblk1) switch to using partition UUIDs instead. Hard-coding the boot device
+> would work with 5.13.y but would fail 50% of the time with 5.10.y; who knows
+> what other kernels will do?
+> 
+> In any case, switching to UUIDs works regardless of board, kernel, or
+> available mmc interfaces.
+> 
+> Boot tested on:
+> - rock64
+> - nanopi-m4-2gb
+> - tinker-board
+> - rock-pi-e
+> - rock-pi-4b
+> 
+> Signed-off-by: Trevor Woerner <twoerner@gmail.com>
+> ---
+>  conf/machine/include/nanopi-m4.inc    |  2 --
+>  conf/machine/include/rock-pi-4.inc    |  2 --
+>  conf/machine/include/rockchip-wic.inc |  4 ----
+>  conf/machine/rock64.conf              |  3 ---
+>  conf/machine/tinker-board-s.conf      |  2 --
+>  conf/machine/vyasa-rk3288.conf        |  2 --
+>  wic/rockchip.wks                      | 16 ++++++++--------
+>  7 files changed, 8 insertions(+), 23 deletions(-)
+
+Applied to meta-rockchip master.
+
+^ permalink raw reply	[flat|nested] 13+ messages in thread
+* [yocto] [meta-rockchip][PATCH] use uuid instead of hard-coding root device
+       [not found] <bf6d701e-f884-57dd-7ab2-fdb513d7699e@t-online.de>
+@ 2021-09-27 10:25 ` Markus Volk
+  0 siblings, 0 replies; 13+ messages in thread
+From: Markus Volk @ 2021-09-27 10:25 UTC (permalink / raw)
+  To: Yocto-mailing-list
+
+[-- Attachment #1: Type: text/plain, Size: 625 bytes --]
+
+
+Am 25.09.21 um 17:09 schrieb Trevor Woerner:
+> You'll need to re-send this with a better subject line and commit
+> message so the right people will notice it. Otherwise they'll think it's
+> meta-rockchip-specific.
+>
+> If (when) this patch gets applied upstream, then we can remove our
+> work-around.
+
+The patch has been applied :)
+
+I had a quick look where this sda entries come from and i guess we fall to the default value here:
+https://git.yoctoproject.org/cgit/cgit.cgi/poky/tree/scripts/lib/wic/ksparser.py#n166
+
+We may avoid getting /dev/sda entries in fstab by either setting --use-uuid or --use-label for '/boot' ?
+
+
+[-- Attachment #2: Type: text/html, Size: 1206 bytes --]
+
+^ permalink raw reply	[flat|nested] 13+ messages in thread
+* Re: [yocto] [meta-rockchip][PATCH] use uuid instead of hard-coding root device
+  2021-09-25  7:56         ` Markus Volk
+@ 2021-09-25 15:09           ` Trevor Woerner
+  0 siblings, 0 replies; 13+ messages in thread
+From: Trevor Woerner @ 2021-09-25 15:09 UTC (permalink / raw)
+  To: Markus Volk; +Cc: yocto
+
+On Sat 2021-09-25 @ 09:56:21 AM, Markus Volk wrote:
+> 
+> Am 23.09.21 um 22:55 schrieb Trevor Woerner:
+> > We can add the --use-uuid line to the /boot entry if you really think it
+> > should be mounted on boot, but we shouldn't use it on the others and cause wic
+> > to generate a bad fstab. There are examples of other boards that don't mount
+> > /boot by default (raspi for sure, and I think bbb too).
+> 
+> Could the solution be as simple as this?
+
+Probably.
+
+You'll need to re-send this with a better subject line and commit
+message so the right people will notice it. Otherwise they'll think it's
+meta-rockchip-specific.
+
+> 
+> From b8ba56d84fbac53901e5b7ca122498320e51fbf4 Mon Sep 17 00:00:00 2001
+> From: MarkusVolk <f_l_k@t-online.de>
+> Date: Sat, 25 Sep 2021 09:21:15 +0200
+> Subject: [PATCH] wic:direct.py: improve filter for fstab update
+> 
+> Signed-off-by: MarkusVolk <f_l_k@t-online.de>
+> ---
+>  scripts/lib/wic/plugins/imager/direct.py | 2 +-
+>  1 file changed, 1 insertion(+), 1 deletion(-)
+> 
+> diff --git a/scripts/lib/wic/plugins/imager/direct.py b/scripts/lib/wic/plugins/imager/direct.py
+> index 9d10ec01d0..15fa47356f 100644
+> --- a/scripts/lib/wic/plugins/imager/direct.py
+> +++ b/scripts/lib/wic/plugins/imager/direct.py
+> @@ -117,7 +117,7 @@ class DirectPlugin(ImagerPlugin):
+>          updated = False
+>          for part in self.parts:
+>              if not part.realnum or not part.mountpoint \
+> -               or part.mountpoint == "/":
+> +               or part.mountpoint == "/" or not part.mountpoint.startswith('/'):
+>                  continue
+>              if part.use_uuid:
+> -- 
+> 2.25.1
+> 
+> With this patch wic only adds the /boot mountpoint. The invalid entries get filtered out.
+> We would then only need to set --use-uuid for /boot to avoid the system from crashing if
+> 'no-fstab-update' isn't expicitly given as an argument
+
+If (when) this patch gets applied upstream, then we can remove our
+work-around.
+
+This is a fantastic find, I'm guessing other BSP layers might find it useful.
+I was thinking of investigating adding a per-line "--no-fstab" option to wic
+to indicate specific lines not desired in the fstab, but this looks much
+nicer.
+
+
+^ permalink raw reply	[flat|nested] 13+ messages in thread
+* Re: [yocto] [meta-rockchip][PATCH] use uuid instead of hard-coding root device
+  2021-09-23 20:55       ` Trevor Woerner
+  2021-09-23 22:23         ` Markus Volk
+@ 2021-09-25  7:56         ` Markus Volk
+  2021-09-25 15:09           ` Trevor Woerner
+  1 sibling, 1 reply; 13+ messages in thread
+From: Markus Volk @ 2021-09-25  7:56 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1577 bytes --]
+
+
+Am 23.09.21 um 22:55 schrieb Trevor Woerner:
+> We can add the --use-uuid line to the /boot entry if you really think it
+> should be mounted on boot, but we shouldn't use it on the others and cause wic
+> to generate a bad fstab. There are examples of other boards that don't mount
+> /boot by default (raspi for sure, and I think bbb too).
+
+Could the solution be as simple as this?
+
+ From b8ba56d84fbac53901e5b7ca122498320e51fbf4 Mon Sep 17 00:00:00 2001
+From: MarkusVolk <f_l_k@t-online.de>
+Date: Sat, 25 Sep 2021 09:21:15 +0200
+Subject: [PATCH] wic:direct.py: improve filter for fstab update
+
+Signed-off-by: MarkusVolk <f_l_k@t-online.de>
+---
+  scripts/lib/wic/plugins/imager/direct.py | 2 +-
+  1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/scripts/lib/wic/plugins/imager/direct.py b/scripts/lib/wic/plugins/imager/direct.py
+index 9d10ec01d0..15fa47356f 100644
+--- a/scripts/lib/wic/plugins/imager/direct.py
++++ b/scripts/lib/wic/plugins/imager/direct.py
+@@ -117,7 +117,7 @@ class DirectPlugin(ImagerPlugin):
+          updated = False
+          for part in self.parts:
+              if not part.realnum or not part.mountpoint \
+-               or part.mountpoint == "/":
++               or part.mountpoint == "/" or not part.mountpoint.startswith('/'):
+                  continue
+  
+              if part.use_uuid:
+-- 
+2.25.1
+
+With this patch wic only adds the /boot mountpoint. The invalid entries get filtered out.
+We would then only need to set --use-uuid for /boot to avoid the system from crashing if
+'no-fstab-update' isn't expicitly given as an argument
+
+
+[-- Attachment #2: Type: text/html, Size: 2060 bytes --]
+
+^ permalink raw reply related	[flat|nested] 13+ messages in thread
+* Re: [yocto] [meta-rockchip][PATCH] use uuid instead of hard-coding root device
+  2021-09-24  4:46           ` Khem Raj
+  2021-09-24 10:07             ` Markus Volk
+@ 2021-09-24 13:08             ` Trevor Woerner
+  1 sibling, 0 replies; 13+ messages in thread
+From: Trevor Woerner @ 2021-09-24 13:08 UTC (permalink / raw)
+  To: Khem Raj; +Cc: Markus Volk, Yocto-mailing-list
+
+On Thu 2021-09-23 @ 09:46:40 PM, Khem Raj wrote:
+> are you both using systemd or sysvinit
+
+Ah, good catch. I'm using sysvinit.
+
+
+^ permalink raw reply	[flat|nested] 13+ messages in thread
+* Re: [yocto] [meta-rockchip][PATCH] use uuid instead of hard-coding root device
+  2021-09-24  4:46           ` Khem Raj
+@ 2021-09-24 10:07             ` Markus Volk
+  2021-09-24 13:08             ` Trevor Woerner
+  1 sibling, 0 replies; 13+ messages in thread
+From: Markus Volk @ 2021-09-24 10:07 UTC (permalink / raw)
+  To: Khem Raj; +Cc: Trevor Woerner, Yocto-mailing-list
+
+[-- Attachment #1: Type: text/plain, Size: 102 bytes --]
+
+
+Am 24.09.21 um 06:46 schrieb Khem Raj:
+> are you both using systemd or sysvinit
+
+I am using systemd
+
+
+[-- Attachment #2: Type: text/html, Size: 480 bytes --]
+
+^ permalink raw reply	[flat|nested] 13+ messages in thread
+* Re: [yocto] [meta-rockchip][PATCH] use uuid instead of hard-coding root device
+  2021-09-23 22:23         ` Markus Volk
+@ 2021-09-24  4:46           ` Khem Raj
+  2021-09-24 10:07             ` Markus Volk
+  2021-09-24 13:08             ` Trevor Woerner
+  0 siblings, 2 replies; 13+ messages in thread
+From: Khem Raj @ 2021-09-24  4:46 UTC (permalink / raw)
+  To: Markus Volk; +Cc: Trevor Woerner, Yocto-mailing-list
+
+are you both using systemd or sysvinit
+
+On Thu, Sep 23, 2021 at 3:26 PM Markus Volk <f_l_k@t-online.de> wrote:
+>
+> I'm surprised mount doesn't complain about those first 5 lines! Those are not
+> properly-formed fstab(5) entries.
+>
+> No, it doesn't. Those entries are ignored except /boot.
+> One interesting thing: i always had that bunch of malformed fstab entries.
+> Before the change from static to uuid it looked like this in fstab:
+>
+> /dev/mmcblk1p1 loader1 vfat defaults 0 0
+> /dev/mmcblk1p2 reserved1 vfat defaults 0 0
+> /dev/mmcblk1p3 reserved2 vfat defaults 0 0
+> /dev/mmcblk1p4 loader2 vfat defaults 0 0
+> /dev/mmcblk1p5 atf vfat defaults 0 0
+> /dev/mmcblk1p6 /boot vfat defaults 0 0
+>
+> Now it looks like wic fails in getting the correct value and uses sda as a best bet
+>
+> you're proposing (a bunch of malformed fstab(5) entries) should be considered
+> correct.
+>
+> I guess i just got used to it because it has always been like this since i build for the rock-pi
+>
+> In the mean time I'd like to apply your patch 2/2, if you could please add
+> your SoB line?
+>
+> Have sent new patches. Just delete the first one if you dont need it
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> You automatically follow any topics you start or reply to.
+> View/Reply Online (#54827): https://lists.yoctoproject.org/g/yocto/message/54827
+> Unfollow This Topic: https://lists.yoctoproject.org/unft/85688479/1997914
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [raj.khem@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 13+ messages in thread
+* Re: [yocto] [meta-rockchip][PATCH] use uuid instead of hard-coding root device
+  2021-09-23 20:55       ` Trevor Woerner
+@ 2021-09-23 22:23         ` Markus Volk
+  2021-09-24  4:46           ` Khem Raj
+  2021-09-25  7:56         ` Markus Volk
+  1 sibling, 1 reply; 13+ messages in thread
+From: Markus Volk @ 2021-09-23 22:23 UTC (permalink / raw)
+  To: Trevor Woerner; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1002 bytes --]
+
+> I'm surprised mount doesn't complain about those first 5 lines! Those are not
+> properly-formed fstab(5) entries.
+
+No, it doesn't. Those entries are ignored except /boot.
+One interesting thing: i always had that bunch of malformed fstab entries.
+Before the change from static to uuid it looked like this in fstab:
+
+/dev/mmcblk1p1	loader1	vfat	defaults	0	0
+/dev/mmcblk1p2	reserved1	vfat	defaults	0	0
+/dev/mmcblk1p3	reserved2	vfat	defaults	0	0
+/dev/mmcblk1p4	loader2	vfat	defaults	0	0
+/dev/mmcblk1p5	atf	vfat	defaults	0	0
+/dev/mmcblk1p6	/boot	vfat	defaults	0	0
+
+Now it looks like wic fails in getting the correct value and uses sda as a best bet
+
+> you're proposing (a bunch of malformed fstab(5) entries) should be considered
+> correct.
+
+I guess i just got used to it because it has always been like this since i build for the rock-pi
+
+> In the mean time I'd like to apply your patch 2/2, if you could please add
+> your SoB line?
+
+Have sent new patches. Just delete the first one if you dont need it
+
+
+[-- Attachment #2: Type: text/html, Size: 1586 bytes --]
+
+^ permalink raw reply	[flat|nested] 13+ messages in thread
+* Re: [yocto] [meta-rockchip][PATCH] use uuid instead of hard-coding root device
+  2021-09-23 19:45     ` Markus Volk
+@ 2021-09-23 20:55       ` Trevor Woerner
+  2021-09-23 22:23         ` Markus Volk
+  2021-09-25  7:56         ` Markus Volk
+  0 siblings, 2 replies; 13+ messages in thread
+From: Trevor Woerner @ 2021-09-23 20:55 UTC (permalink / raw)
+  To: Markus Volk; +Cc: yocto
+
+On Thu 2021-09-23 @ 09:45:06 PM, Markus Volk wrote:
+> 
+> Am 23.09.21 um 13:59 schrieb Trevor Woerner:
+> > Curious. I boot tested my patch on multiple boards and I've built and booted
+> > numerous images on my rock-pi-4b and rock64 boards in the last day or so since
+> > I applied the patch. I'll try some "clean" builds and see if that makes a
+> > difference. I don't doubt your report (especially since Khem confirmed it),
+> > I'd just like to know for myself what's different.
+> 
+> That is really strange. As soon as there are those /dev/sda* entries in my fstab
+> my rock-pi-4c doesn't boot up anymore. As soon as i comment them out or delete them,
+> everything is working again.
+
+Thanks for testing. It's also strange that my fstab also has those entries,
+but they're apparently ignored in my setup since, commented in or commented
+out, they don't seem to affect my board's ability to boot.
+
+> > I wonder if just applying your 2nd patch would be enough (i.e. the one that
+> > removes the /dev/sda* lines from /etc/fstab)? It's odd that the first 6
+> > entries in the wic file would need UUIDs since it's the SoC's ROM firmware
+> > that uses them, and I'm pretty sure the Rockchip firmware isn't using UUIDs
+> > (my guess is it's just blindly grabbing whatever it finds at specific
+> > offsets). The things stored in those partitions are u-boot related bits (atf,
+> > spl, the u-boot binary itself) so by the time Linux starts, those things are
+> > already "behind" us. I can't see how adding UUIDs to the partitions holding
+> > u-boot would affect how the kernel finds the root partition (?).
+> 
+> Applying only the second patch should be enough to hide the problem, but as soon as
+> one decides to disable WIC_CREATE_EXTRA_ARGS for example because he/she wants /boot to be
+> mounted automatically, those non working /dev/sda* entries will be written into fstab again.
+> With the first patch they are included like this and are mountable via fstab:
+> 
+> 
+> UUID=0C48-9342	loader1	vfat	defaults	0	0
+> UUID=C4D3-D17A	reserved1	vfat	defaults	0	0
+> UUID=8FBE-2551	reserved2	vfat	defaults	0	0
+> UUID=35FA-8BBB	loader2	vfat	defaults	0	0
+> UUID=CFF3-5D80	atf	vfat	defaults	0	0
+> UUID=832C-48C4	/boot	vfat	defaults	0	0
+
+I'm surprised mount doesn't complain about those first 5 lines! Those are not
+properly-formed fstab(5) entries.
+
+I wouldn't call only applying your second patch a form of "hiding the
+problem". Neither what we had before (a bunch of /dev/sda entries) and what
+you're proposing (a bunch of malformed fstab(5) entries) should be considered
+correct. If a user messes with BSP-level variables, then they should expect
+what they get (?).
+
+We can add the --use-uuid line to the /boot entry if you really think it
+should be mounted on boot, but we shouldn't use it on the others and cause wic
+to generate a bad fstab. There are examples of other boards that don't mount
+/boot by default (raspi for sure, and I think bbb too).
+
+I'll try to look deeper to figure out what's generating those /dev/sda
+entries. Maybe there's a way to disable them without resorting to
+WIC_CREATE_EXTRA_ARGS?
+
+In the mean time I'd like to apply your patch 2/2, if you could please add
+your SoB line?
+
+> u-boot is able to find its partitons even if '--use-uuid' is set. As you mentioned u-boot doesn't
+> know about uuid but it seems to be able to find its partitions nevertheless. But if '--use-uuid'
+> is not set, wic writes /dev/sda* instead of the correct  UUID values to fstab. So its not u-boot that
+> needs uuid to be set but fstab.
+> Of course it would be nice, if wic didn't try to add the u-boot partitions to fstab at all.
+> I guess nobody ever needs to have them mounted into userspace ( except possibly /boot).
+
+Sorry, I wasn't clear. u-boot doesn't use those labels to find u-boot, my
+guess is that the SoC's ROM firmware blindly looks at fixed offsets for the
+"what to boot" (and therefore isn't using UUIDs either). Either the ROM loads
+the atf, which then loads u-boot's spl, or the ROM loads the atf and then
+loads u-boot's spl from fixed locations. Perhaps u-boot's spl uses labels to
+find u-boot proper, but that's irrelevant.
+
+> > Are you using poky or a distro other than "nodistro"? Perhaps other
+> > layers/distros are affecting the build?
+> 
+> Thats not unlikely. I have a long layer-list in bblayers.conf to build my image:
+> 
+>   /home/flk/build/poky/meta \
+>   /home/flk/build/poky/meta-poky \
+>   /home/flk/build/poky/meta-yocto-bsp \
+>   /home/flk/build/poky/meta-rockchip \
+>   /home/flk/build/poky/meta-rockchip-extras \
+>   /home/flk/build/poky/meta-wayland \
+>   /home/flk/build/poky/meta-retro \
+>   /home/flk/build/poky/meta-retro-wayland \
+>   /home/flk/build/poky/meta-rauc \
+>   /home/flk/build/poky/meta-openembedded/meta-oe \
+>   /home/flk/build/poky/meta-openembedded/meta-multimedia \
+>   /home/flk/build/poky/meta-openembedded/meta-networking \
+>   /home/flk/build/poky/meta-openembedded/meta-xfce \
+>   /home/flk/build/poky/meta-openembedded/meta-gnome \
+>   /home/flk/build/poky/meta-openembedded/meta-python \
+>   /home/flk/build/poky/meta-openembedded/meta-filesystems \
+>   /home/flk/build/poky/meta-arm/meta-arm \
+>   /home/flk/build/poky/meta-arm/meta-arm-toolchain \
+>   /home/flk/build/poky/meta-kodi \
+>   /home/flk/build/poky/meta-browser/meta-chromium \
+>   /home/flk/build/poky/meta-browser/meta-firefox \
+>   /home/flk/build/poky/meta-clang \
+
+My guess is that Khem probably likes building with a long list of layers as
+well ;-) I'll try using poky to see if that changes anything. Using oecore,
+bitbake, meta-arm, and meta-rockchip I can't reproduce what you and Khem are
+seeing. One of these days I'll have to check to make sure meta-rockchip is
+behaving like it should when mixed with other layers.
+
+
+^ permalink raw reply	[flat|nested] 13+ messages in thread
+* Re: [yocto] [meta-rockchip][PATCH] use uuid instead of hard-coding root device
+  2021-09-23 11:59   ` Trevor Woerner
+@ 2021-09-23 19:45     ` Markus Volk
+  2021-09-23 20:55       ` Trevor Woerner
+  0 siblings, 1 reply; 13+ messages in thread
+From: Markus Volk @ 2021-09-23 19:45 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 3722 bytes --]
+
+
+Am 23.09.21 um 13:59 schrieb Trevor Woerner:
+> Curious. I boot tested my patch on multiple boards and I've built and booted
+> numerous images on my rock-pi-4b and rock64 boards in the last day or so since
+> I applied the patch. I'll try some "clean" builds and see if that makes a
+> difference. I don't doubt your report (especially since Khem confirmed it),
+> I'd just like to know for myself what's different.
+
+That is really strange. As soon as there are those /dev/sda* entries in my fstab
+my rock-pi-4c doesn't boot up anymore. As soon as i comment them out or delete them,
+everything is working again.
+
+> I wonder if just applying your 2nd patch would be enough (i.e. the one that
+> removes the /dev/sda* lines from /etc/fstab)? It's odd that the first 6
+> entries in the wic file would need UUIDs since it's the SoC's ROM firmware
+> that uses them, and I'm pretty sure the Rockchip firmware isn't using UUIDs
+> (my guess is it's just blindly grabbing whatever it finds at specific
+> offsets). The things stored in those partitions are u-boot related bits (atf,
+> spl, the u-boot binary itself) so by the time Linux starts, those things are
+> already "behind" us. I can't see how adding UUIDs to the partitions holding
+> u-boot would affect how the kernel finds the root partition (?).
+
+Applying only the second patch should be enough to hide the problem, but as soon as
+one decides to disable WIC_CREATE_EXTRA_ARGS for example because he/she wants /boot to be
+mounted automatically, those non working /dev/sda* entries will be written into fstab again.
+With the first patch they are included like this and are mountable via fstab:
+
+
+UUID=0C48-9342	loader1	vfat	defaults	0	0
+UUID=C4D3-D17A	reserved1	vfat	defaults	0	0
+UUID=8FBE-2551	reserved2	vfat	defaults	0	0
+UUID=35FA-8BBB	loader2	vfat	defaults	0	0
+UUID=CFF3-5D80	atf	vfat	defaults	0	0
+UUID=832C-48C4	/boot	vfat	defaults	0	0
+
+
+u-boot is able to find its partitons even if '--use-uuid' is set. As you mentioned u-boot doesn't
+know about uuid but it seems to be able to find its partitions nevertheless. But if '--use-uuid'
+is not set, wic writes /dev/sda* instead of the correct  UUID values to fstab. So its not u-boot that
+needs uuid to be set but fstab.
+Of course it would be nice, if wic didn't try to add the u-boot partitions to fstab at all.
+I guess nobody ever needs to have them mounted into userspace ( except possibly /boot).
+
+> Are you using poky or a distro other than "nodistro"? Perhaps other
+> layers/distros are affecting the build?
+
+Thats not unlikely. I have a long layer-list in bblayers.conf to build my image:
+
+   /home/flk/build/poky/meta \
+   /home/flk/build/poky/meta-poky \
+   /home/flk/build/poky/meta-yocto-bsp \
+   /home/flk/build/poky/meta-rockchip \
+   /home/flk/build/poky/meta-rockchip-extras \
+   /home/flk/build/poky/meta-wayland \
+   /home/flk/build/poky/meta-retro \
+   /home/flk/build/poky/meta-retro-wayland \
+   /home/flk/build/poky/meta-rauc \
+   /home/flk/build/poky/meta-openembedded/meta-oe \
+   /home/flk/build/poky/meta-openembedded/meta-multimedia \
+   /home/flk/build/poky/meta-openembedded/meta-networking \
+   /home/flk/build/poky/meta-openembedded/meta-xfce \
+   /home/flk/build/poky/meta-openembedded/meta-gnome \
+   /home/flk/build/poky/meta-openembedded/meta-python \
+   /home/flk/build/poky/meta-openembedded/meta-filesystems \
+   /home/flk/build/poky/meta-arm/meta-arm \
+   /home/flk/build/poky/meta-arm/meta-arm-toolchain \
+   /home/flk/build/poky/meta-kodi \
+   /home/flk/build/poky/meta-browser/meta-chromium \
+   /home/flk/build/poky/meta-browser/meta-firefox \
+   /home/flk/build/poky/meta-clang \
+
+
+best regards,
+
+   Markus
+
+
+[-- Attachment #2: Type: text/html, Size: 4401 bytes --]
+
+^ permalink raw reply	[flat|nested] 13+ messages in thread
+* Re: [yocto] [meta-rockchip][PATCH] use uuid instead of hard-coding root device
+  2021-09-22 18:49 ` [yocto] " Markus Volk
+  2021-09-22 18:55   ` Khem Raj
+@ 2021-09-23 11:59   ` Trevor Woerner
+  2021-09-23 19:45     ` Markus Volk
+  1 sibling, 1 reply; 13+ messages in thread
+From: Trevor Woerner @ 2021-09-23 11:59 UTC (permalink / raw)
+  To: Markus Volk; +Cc: yocto
+
+On Wed 2021-09-22 @ 08:49:43 PM, Markus Volk wrote:
+> Hi,
+
+Hi Markus, thanks for your report. I appreciate the feedback!
+
+> with this change my rock-pi-4 doesnt boot up and falls to emergency shell
+> because wic includes wrong devices into fstab. For some reason it assumes
+> /dev/sda1.
+
+The next thing, literally, on my TODO list was to investigate why this is
+happening (and fix it). I had noticed it a while back and have been wondering
+what is injecting those incorrect lines at the end of our fstab. Thanks for
+the patch!
+
+> I was able to fix this for my machine by using uuid for all
+> partitions.
+
+Curious. I boot tested my patch on multiple boards and I've built and booted
+numerous images on my rock-pi-4b and rock64 boards in the last day or so since
+I applied the patch. I'll try some "clean" builds and see if that makes a
+difference. I don't doubt your report (especially since Khem confirmed it),
+I'd just like to know for myself what's different.
+
+I wonder if just applying your 2nd patch would be enough (i.e. the one that
+removes the /dev/sda* lines from /etc/fstab)? It's odd that the first 6
+entries in the wic file would need UUIDs since it's the SoC's ROM firmware
+that uses them, and I'm pretty sure the Rockchip firmware isn't using UUIDs
+(my guess is it's just blindly grabbing whatever it finds at specific
+offsets). The things stored in those partitions are u-boot related bits (atf,
+spl, the u-boot binary itself) so by the time Linux starts, those things are
+already "behind" us. I can't see how adding UUIDs to the partitions holding
+u-boot would affect how the kernel finds the root partition (?).
+
+Are you using poky or a distro other than "nodistro"? Perhaps other
+layers/distros are affecting the build?
+
+Thanks and best regards,
+	Trevor
+
+^ permalink raw reply	[flat|nested] 13+ messages in thread
+* Re: [yocto] [meta-rockchip][PATCH] use uuid instead of hard-coding root device
+  2021-09-22 18:49 ` [yocto] " Markus Volk
+@ 2021-09-22 18:55   ` Khem Raj
+  2021-09-23 11:59   ` Trevor Woerner
+  1 sibling, 0 replies; 13+ messages in thread
+From: Khem Raj @ 2021-09-22 18:55 UTC (permalink / raw)
+  To: Markus Volk, Trevor Woerner; +Cc: yocto
+
+
+
+On 9/22/21 11:49 AM, Markus Volk wrote:
+> Hi,
+> 
+> with this change my rock-pi-4 doesnt boot up and falls to emergency 
+> shell because wic includes wrong devices into fstab. For some reason it 
+> assumes /dev/sda1. I was able to fix this for my machine by using uuid 
+> for all partitions.
+> 
+> diff --git a/wic/rockchip.wks b/wic/rockchip.wks
+> index 5ee276b..90bdb27 100644
+> --- a/wic/rockchip.wks
+> +++ b/wic/rockchip.wks
+> @@ -15,12 +15,12 @@
+>   #   boot        32768           229376
+>   #   root        262144          -           (suggested)
+> 
+> -part loader1    --offset 32     --fixed-size 4000K --source rawcopy 
+> --sourceparams="file=${SPL_BINARY}"
+> -part reserved1  --offset 4032   --fixed-size 64K
+> -part reserved2  --offset 4096   --fixed-size 4096K
+> -part loader2    --offset 8192   --fixed-size 4096K --source rawcopy 
+> --sourceparams="file=u-boot.${UBOOT_SUFFIX}"
+> -part atf        --offset 12288  --fixed-size 4096K
+> -part /boot      --offset 16384  --size       114688K --active --source 
+> bootimg-partition --fstype=vfat --label boot --sourceparams="loader=u-boot"
+> -part / --source rootfs            --fstype=ext4 --label root --use-uuid
+> +part loader1   --offset 32 --fixed-size 4000K --source rawcopy 
+> --sourceparams="file=${SPL_BINARY}" --use-uuid
+> +part reserved1 --offset 4032 --fixed-size 64K --use-uuid
+> +part reserved2 --offset 4096 --fixed-size 4096K --use-uuid
+> +part loader2   --offset 8192 --fixed-size 4096K --source rawcopy 
+> --sourceparams="file=u-boot.${UBOOT_SUFFIX}" --use-uuid
+> +part atf       --offset 12288 --fixed-size 4096K --use-uuid
+> +part /boot     --offset 16384 --size 114688K --active --source 
+> bootimg-partition --fstype=vfat --label boot 
+> --sourceparams="loader=u-boot" --use-uuid
+> +part /         --source rootfs --fstype=ext4 --label root --use-uuid
+> 
+> -bootloader --ptable gpt --append="console=tty1 
+> console=${RK_CONSOLE_DEVICE},${RK_CONSOLE_BAUD}n8 rw rootfstype=ext4 
+> init=/sbin/init"
+> +bootloader     --ptable gpt --append="console=tty1 
+> console=${RK_CONSOLE_DEVICE},${RK_CONSOLE_BAUD}n8 rw rootfstype=ext4 
+> init=/sbin/init"
+> 
+> 
+> In addition i added an option that avoids editing fstab by wic at all 
+> since the image also boots without mounting /boot, but i guess this is 
+> just a matter of taste.
+> 
+> diff --git a/conf/machine/include/rockchip-wic.inc 
+> b/conf/machine/include/rockchip-wic.inc
+> index 15010a0..30b0d57 100644
+> --- a/conf/machine/include/rockchip-wic.inc
+> +++ b/conf/machine/include/rockchip-wic.inc
+> @@ -26,3 +26,6 @@ WICVARS:append = " \
+>          SPL_BINARY \
+>          UBOOT_SUFFIX \
+>          "
+> +
+> +# Do not update fstab file while creating wic images
+> +WIC_CREATE_EXTRA_ARGS ?= "--no-fstab-update"
+> 
+
+yes was seeing same. Can you turn this into a patch and send?
+
+> 
+> Am 18.09.21 um 00:01 schrieb Trevor Woerner:
+>> Recent upstream kernel changes have made the mmc probing order unpredictable.
+>> Therefore, boards with both an emmc and sdmmc interface aren't guaranteed to
+>> boot with a hard-coded root device selected.
+>>
+>> For example, on the rock64, with linux-yocto 5.10.y, using the uSD card (i.e.
+>> the sdmmc interface) about 50% of the time the boot would succeed, and roughly
+>> 50% of the time it wouldn't:
+>>
+>> 	...
+>> 	[    0.612233] Waiting for root device /dev/mmcblk1p7...
+>> 	[    0.634551] mmc_host mmc1: Bus speed (slot 0) = 300000Hz (slot req 300000Hz, actual 300000HZ div = 0)
+>> 	[    0.639064] mmc_host mmc0: Bus speed (slot 0) = 50000000Hz (slot req 50000000Hz, actual 50000000HZ di)
+>> 	[    0.640007] mmc0: new high speed SDXC card at address 5048
+>> 	[    0.641176] mmcblk0: mmc0:5048 SD64G 58.0 GiB
+>> 	[    0.647610] random: fast init done
+>> 	[    0.648279] GPT:Primary header thinks Alt. header is not at the end of the disk.
+>> 	[    0.648941] GPT:376479 != 121634815
+>> 	[    0.649252] GPT:Alternate GPT header not at the end of the disk.
+>> 	[    0.649796] GPT:376479 != 121634815
+>> 	[    0.650106] GPT: Use GNU Parted to correct GPT errors.
+>> 	[    0.650598]  mmcblk0: p1 p2 p3 p4 p5 p6 p7
+>>
+>> NOTE the discrepancy between the kernel waiting for device /dev/mmcblk1p7,
+>> which comes from the hard-coded kernel cmdline, and the kernel probing putting
+>> the sdmmc on mmcblk0.
+>>
+>> With linux-yocto 5.13.y on the rock64 using the uSD card the board would never
+>> boot, the sdmmc always appears on mmcblk0.
+>>
+>> Instead of simply changing the hard-coded root device (i.e. from mmcblk0 to
+>> mmcblk1) switch to using partition UUIDs instead. Hard-coding the boot device
+>> would work with 5.13.y but would fail 50% of the time with 5.10.y; who knows
+>> what other kernels will do?
+>>
+>> In any case, switching to UUIDs works regardless of board, kernel, or
+>> available mmc interfaces.
+>>
+>> Boot tested on:
+>> - rock64
+>> - nanopi-m4-2gb
+>> - tinker-board
+>> - rock-pi-e
+>> - rock-pi-4b
+>>
+>> Signed-off-by: Trevor Woerner<twoerner@gmail.com>
+>> ---
+>>   conf/machine/include/nanopi-m4.inc    |  2 --
+>>   conf/machine/include/rock-pi-4.inc    |  2 --
+>>   conf/machine/include/rockchip-wic.inc |  4 ----
+>>   conf/machine/rock64.conf              |  3 ---
+>>   conf/machine/tinker-board-s.conf      |  2 --
+>>   conf/machine/vyasa-rk3288.conf        |  2 --
+>>   wic/rockchip.wks                      | 16 ++++++++--------
+>>   7 files changed, 8 insertions(+), 23 deletions(-)
+>>
+>> diff --git a/conf/machine/include/nanopi-m4.inc b/conf/machine/include/nanopi-m4.inc
+>> index ac6479d..3870b51 100644
+>> --- a/conf/machine/include/nanopi-m4.inc
+>> +++ b/conf/machine/include/nanopi-m4.inc
+>> @@ -7,5 +7,3 @@ MACHINE_FEATURES += "usbhost serial"
+>>   
+>>   KMACHINE = "nanopi-m4"
+>>   KERNEL_DEVICETREE = "rockchip/rk3399-nanopi-m4.dtb"
+>> -
+>> -RK_BOOT_DEVICE = "mmcblk1"
+>> diff --git a/conf/machine/include/rock-pi-4.inc b/conf/machine/include/rock-pi-4.inc
+>> index b6fb3dd..0a86846 100644
+>> --- a/conf/machine/include/rock-pi-4.inc
+>> +++ b/conf/machine/include/rock-pi-4.inc
+>> @@ -3,6 +3,4 @@ MACHINEOVERRIDES =. "rock-pi-4:"
+>>   
+>>   require conf/machine/include/rk3399.inc
+>>   
+>> -RK_BOOT_DEVICE = "mmcblk1"
+>> -
+>>   MACHINE_EXTRA_RRECOMMENDS += "kernel-modules"
+>> diff --git a/conf/machine/include/rockchip-wic.inc b/conf/machine/include/rockchip-wic.inc
+>> index b5939f7..15010a0 100644
+>> --- a/conf/machine/include/rockchip-wic.inc
+>> +++ b/conf/machine/include/rockchip-wic.inc
+>> @@ -20,11 +20,7 @@ IMAGE_BOOT_FILES = " \
+>>   RK_CONSOLE_BAUD ?="${@d.getVar('SERIAL_CONSOLES').split(';')[0]}"
+>>   RK_CONSOLE_DEVICE ?="${@d.getVar('SERIAL_CONSOLES').split(';')[1].split()[0]}"
+>>   
+>> -# boot device (sd-card/emmc)
+>> -RK_BOOT_DEVICE ??= "mmcblk0"
+>> -
+>>   WICVARS:append = " \
+>> -	RK_BOOT_DEVICE \
+>>   	RK_CONSOLE_BAUD \
+>>   	RK_CONSOLE_DEVICE \
+>>   	SPL_BINARY \
+>> diff --git a/conf/machine/rock64.conf b/conf/machine/rock64.conf
+>> index 21755a8..fa75a51 100644
+>> --- a/conf/machine/rock64.conf
+>> +++ b/conf/machine/rock64.conf
+>> @@ -12,7 +12,4 @@ MACHINE_FEATURES += "usbhost serial"
+>>   UBOOT_MACHINE = "rock64-rk3328_defconfig"
+>>   KERNEL_DEVICETREE = "rockchip/rk3328-rock64.dtb"
+>>   
+>> -# set to mmcblk0 for booting from optional eMMC
+>> -RK_BOOT_DEVICE ?= "mmcblk1"
+>> -
+>>   KBUILD_DEFCONFIG = "defconfig"
+>> diff --git a/conf/machine/tinker-board-s.conf b/conf/machine/tinker-board-s.conf
+>> index 9f44f2f..870b9bc 100644
+>> --- a/conf/machine/tinker-board-s.conf
+>> +++ b/conf/machine/tinker-board-s.conf
+>> @@ -9,5 +9,3 @@ require conf/machine/include/tinker.inc
+>>   
+>>   KERNEL_DEVICETREE = "rk3288-tinker-s.dtb"
+>>   UBOOT_MACHINE = "tinker-s-rk3288_defconfig"
+>> -
+>> -RK_BOOT_DEVICE ?= "mmcblk1"
+>> diff --git a/conf/machine/vyasa-rk3288.conf b/conf/machine/vyasa-rk3288.conf
+>> index 9ad1ed4..5b44257 100644
+>> --- a/conf/machine/vyasa-rk3288.conf
+>> +++ b/conf/machine/vyasa-rk3288.conf
+>> @@ -13,5 +13,3 @@ KERNEL_DEVICETREE = "rk3288-vyasa.dtb"
+>>   KERNEL_EXTRA_ARGS += "LOADADDR=0x02000000"
+>>   
+>>   UBOOT_MACHINE = "vyasa-rk3288_defconfig"
+>> -
+>> -RK_BOOT_DEVICE = "mmcblk2"
+>> diff --git a/wic/rockchip.wks b/wic/rockchip.wks
+>> index eedae0d..5ee276b 100644
+>> --- a/wic/rockchip.wks
+>> +++ b/wic/rockchip.wks
+>> @@ -15,12 +15,12 @@
+>>   #   boot        32768           229376
+>>   #   root        262144          -           (suggested)
+>>   
+>> -part loader1    --offset 32     --fixed-size 4000K            --ondisk ${RK_BOOT_DEVICE} --source rawcopy                                      --sourceparams="file=${SPL_BINARY}"
+>> -part reserved1  --offset 4032   --fixed-size 64K              --ondisk ${RK_BOOT_DEVICE}
+>> -part reserved2  --offset 4096   --fixed-size 4096K            --ondisk ${RK_BOOT_DEVICE}
+>> -part loader2    --offset 8192   --fixed-size 4096K            --ondisk ${RK_BOOT_DEVICE} --source rawcopy                                      --sourceparams="file=u-boot.${UBOOT_SUFFIX}"
+>> -part atf        --offset 12288  --fixed-size 4096K            --ondisk ${RK_BOOT_DEVICE}
+>> -part /boot      --offset 16384  --size       114688K --active --ondisk ${RK_BOOT_DEVICE} --source bootimg-partition --fstype=vfat --label boot --sourceparams="loader=u-boot"
+>> -part /                                                        --ondisk ${RK_BOOT_DEVICE} --source rootfs            --fstype=ext4 --label root
+>> +part loader1    --offset 32     --fixed-size 4000K            --source rawcopy                                                 --sourceparams="file=${SPL_BINARY}"
+>> +part reserved1  --offset 4032   --fixed-size 64K
+>> +part reserved2  --offset 4096   --fixed-size 4096K
+>> +part loader2    --offset 8192   --fixed-size 4096K            --source rawcopy                                                 --sourceparams="file=u-boot.${UBOOT_SUFFIX}"
+>> +part atf        --offset 12288  --fixed-size 4096K
+>> +part /boot      --offset 16384  --size       114688K --active --source bootimg-partition --fstype=vfat --label boot            --sourceparams="loader=u-boot"
+>> +part /                                                        --source rootfs            --fstype=ext4 --label root --use-uuid
+>>   
+>> -bootloader --ptable gpt --append="console=tty1 console=${RK_CONSOLE_DEVICE},${RK_CONSOLE_BAUD}n8 rw root=/dev/${RK_BOOT_DEVICE}p7 rootfstype=ext4 init=/sbin/init"
+>> +bootloader --ptable gpt --append="console=tty1 console=${RK_CONSOLE_DEVICE},${RK_CONSOLE_BAUD}n8 rw rootfstype=ext4 init=/sbin/init"
+>>
+> 
+> 
+> 
+> 
+
+^ permalink raw reply	[flat|nested] 13+ messages in thread
+* Re: [yocto] [meta-rockchip][PATCH] use uuid instead of hard-coding root device
+  2021-09-17 22:01 Trevor Woerner
+@ 2021-09-22 18:49 ` Markus Volk
+  2021-09-22 18:55   ` Khem Raj
+  2021-09-23 11:59   ` Trevor Woerner
+  0 siblings, 2 replies; 13+ messages in thread
+From: Markus Volk @ 2021-09-22 18:49 UTC (permalink / raw)
+  To: Trevor Woerner; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 10373 bytes --]
+
+Hi,
+
+with this change my rock-pi-4 doesnt boot up and falls to emergency 
+shell because wic includes wrong devices into fstab. For some reason it 
+assumes /dev/sda1. I was able to fix this for my machine by using uuid 
+for all partitions.
+
+diff --git a/wic/rockchip.wks b/wic/rockchip.wks
+index 5ee276b..90bdb27 100644
+--- a/wic/rockchip.wks
++++ b/wic/rockchip.wks
+@@ -15,12 +15,12 @@
+  #   boot        32768           229376
+  #   root        262144          -           (suggested)
+
+-part loader1    --offset 32     --fixed-size 4000K --source rawcopy 
+--sourceparams="file=${SPL_BINARY}"
+-part reserved1  --offset 4032   --fixed-size 64K
+-part reserved2  --offset 4096   --fixed-size 4096K
+-part loader2    --offset 8192   --fixed-size 4096K --source rawcopy 
+--sourceparams="file=u-boot.${UBOOT_SUFFIX}"
+-part atf        --offset 12288  --fixed-size 4096K
+-part /boot      --offset 16384  --size       114688K --active --source 
+bootimg-partition --fstype=vfat --label boot --sourceparams="loader=u-boot"
+-part / --source rootfs            --fstype=ext4 --label root --use-uuid
++part loader1   --offset 32 --fixed-size 4000K --source rawcopy 
+--sourceparams="file=${SPL_BINARY}" --use-uuid
++part reserved1 --offset 4032 --fixed-size 64K --use-uuid
++part reserved2 --offset 4096 --fixed-size 4096K --use-uuid
++part loader2   --offset 8192 --fixed-size 4096K --source rawcopy 
+--sourceparams="file=u-boot.${UBOOT_SUFFIX}" --use-uuid
++part atf       --offset 12288 --fixed-size 4096K --use-uuid
++part /boot     --offset 16384 --size 114688K --active --source 
+bootimg-partition --fstype=vfat --label boot 
+--sourceparams="loader=u-boot" --use-uuid
++part /         --source rootfs --fstype=ext4 --label root --use-uuid
+
+-bootloader --ptable gpt --append="console=tty1 
+console=${RK_CONSOLE_DEVICE},${RK_CONSOLE_BAUD}n8 rw rootfstype=ext4 
+init=/sbin/init"
++bootloader     --ptable gpt --append="console=tty1 
+console=${RK_CONSOLE_DEVICE},${RK_CONSOLE_BAUD}n8 rw rootfstype=ext4 
+init=/sbin/init"
+
+
+In addition i added an option that avoids editing fstab by wic at all 
+since the image also boots without mounting /boot, but i guess this is 
+just a matter of taste.
+
+diff --git a/conf/machine/include/rockchip-wic.inc 
+b/conf/machine/include/rockchip-wic.inc
+index 15010a0..30b0d57 100644
+--- a/conf/machine/include/rockchip-wic.inc
++++ b/conf/machine/include/rockchip-wic.inc
+@@ -26,3 +26,6 @@ WICVARS:append = " \
+         SPL_BINARY \
+         UBOOT_SUFFIX \
+         "
++
++# Do not update fstab file while creating wic images
++WIC_CREATE_EXTRA_ARGS ?= "--no-fstab-update"
+
+
+Am 18.09.21 um 00:01 schrieb Trevor Woerner:
+> Recent upstream kernel changes have made the mmc probing order unpredictable.
+> Therefore, boards with both an emmc and sdmmc interface aren't guaranteed to
+> boot with a hard-coded root device selected.
+>
+> For example, on the rock64, with linux-yocto 5.10.y, using the uSD card (i.e.
+> the sdmmc interface) about 50% of the time the boot would succeed, and roughly
+> 50% of the time it wouldn't:
+>
+> 	...
+> 	[    0.612233] Waiting for root device /dev/mmcblk1p7...
+> 	[    0.634551] mmc_host mmc1: Bus speed (slot 0) = 300000Hz (slot req 300000Hz, actual 300000HZ div = 0)
+> 	[    0.639064] mmc_host mmc0: Bus speed (slot 0) = 50000000Hz (slot req 50000000Hz, actual 50000000HZ di)
+> 	[    0.640007] mmc0: new high speed SDXC card at address 5048
+> 	[    0.641176] mmcblk0: mmc0:5048 SD64G 58.0 GiB
+> 	[    0.647610] random: fast init done
+> 	[    0.648279] GPT:Primary header thinks Alt. header is not at the end of the disk.
+> 	[    0.648941] GPT:376479 != 121634815
+> 	[    0.649252] GPT:Alternate GPT header not at the end of the disk.
+> 	[    0.649796] GPT:376479 != 121634815
+> 	[    0.650106] GPT: Use GNU Parted to correct GPT errors.
+> 	[    0.650598]  mmcblk0: p1 p2 p3 p4 p5 p6 p7
+>
+> NOTE the discrepancy between the kernel waiting for device /dev/mmcblk1p7,
+> which comes from the hard-coded kernel cmdline, and the kernel probing putting
+> the sdmmc on mmcblk0.
+>
+> With linux-yocto 5.13.y on the rock64 using the uSD card the board would never
+> boot, the sdmmc always appears on mmcblk0.
+>
+> Instead of simply changing the hard-coded root device (i.e. from mmcblk0 to
+> mmcblk1) switch to using partition UUIDs instead. Hard-coding the boot device
+> would work with 5.13.y but would fail 50% of the time with 5.10.y; who knows
+> what other kernels will do?
+>
+> In any case, switching to UUIDs works regardless of board, kernel, or
+> available mmc interfaces.
+>
+> Boot tested on:
+> - rock64
+> - nanopi-m4-2gb
+> - tinker-board
+> - rock-pi-e
+> - rock-pi-4b
+>
+> Signed-off-by: Trevor Woerner <twoerner@gmail.com>
+> ---
+>   conf/machine/include/nanopi-m4.inc    |  2 --
+>   conf/machine/include/rock-pi-4.inc    |  2 --
+>   conf/machine/include/rockchip-wic.inc |  4 ----
+>   conf/machine/rock64.conf              |  3 ---
+>   conf/machine/tinker-board-s.conf      |  2 --
+>   conf/machine/vyasa-rk3288.conf        |  2 --
+>   wic/rockchip.wks                      | 16 ++++++++--------
+>   7 files changed, 8 insertions(+), 23 deletions(-)
+>
+> diff --git a/conf/machine/include/nanopi-m4.inc b/conf/machine/include/nanopi-m4.inc
+> index ac6479d..3870b51 100644
+> --- a/conf/machine/include/nanopi-m4.inc
+> +++ b/conf/machine/include/nanopi-m4.inc
+> @@ -7,5 +7,3 @@ MACHINE_FEATURES += "usbhost serial"
+>   
+>   KMACHINE = "nanopi-m4"
+>   KERNEL_DEVICETREE = "rockchip/rk3399-nanopi-m4.dtb"
+> -
+> -RK_BOOT_DEVICE = "mmcblk1"
+> diff --git a/conf/machine/include/rock-pi-4.inc b/conf/machine/include/rock-pi-4.inc
+> index b6fb3dd..0a86846 100644
+> --- a/conf/machine/include/rock-pi-4.inc
+> +++ b/conf/machine/include/rock-pi-4.inc
+> @@ -3,6 +3,4 @@ MACHINEOVERRIDES =. "rock-pi-4:"
+>   
+>   require conf/machine/include/rk3399.inc
+>   
+> -RK_BOOT_DEVICE = "mmcblk1"
+> -
+>   MACHINE_EXTRA_RRECOMMENDS += "kernel-modules"
+> diff --git a/conf/machine/include/rockchip-wic.inc b/conf/machine/include/rockchip-wic.inc
+> index b5939f7..15010a0 100644
+> --- a/conf/machine/include/rockchip-wic.inc
+> +++ b/conf/machine/include/rockchip-wic.inc
+> @@ -20,11 +20,7 @@ IMAGE_BOOT_FILES = " \
+>   RK_CONSOLE_BAUD ?= "${@d.getVar('SERIAL_CONSOLES').split(';')[0]}"
+>   RK_CONSOLE_DEVICE ?= "${@d.getVar('SERIAL_CONSOLES').split(';')[1].split()[0]}"
+>   
+> -# boot device (sd-card/emmc)
+> -RK_BOOT_DEVICE ??= "mmcblk0"
+> -
+>   WICVARS:append = " \
+> -	RK_BOOT_DEVICE \
+>   	RK_CONSOLE_BAUD \
+>   	RK_CONSOLE_DEVICE \
+>   	SPL_BINARY \
+> diff --git a/conf/machine/rock64.conf b/conf/machine/rock64.conf
+> index 21755a8..fa75a51 100644
+> --- a/conf/machine/rock64.conf
+> +++ b/conf/machine/rock64.conf
+> @@ -12,7 +12,4 @@ MACHINE_FEATURES += "usbhost serial"
+>   UBOOT_MACHINE = "rock64-rk3328_defconfig"
+>   KERNEL_DEVICETREE = "rockchip/rk3328-rock64.dtb"
+>   
+> -# set to mmcblk0 for booting from optional eMMC
+> -RK_BOOT_DEVICE ?= "mmcblk1"
+> -
+>   KBUILD_DEFCONFIG = "defconfig"
+> diff --git a/conf/machine/tinker-board-s.conf b/conf/machine/tinker-board-s.conf
+> index 9f44f2f..870b9bc 100644
+> --- a/conf/machine/tinker-board-s.conf
+> +++ b/conf/machine/tinker-board-s.conf
+> @@ -9,5 +9,3 @@ require conf/machine/include/tinker.inc
+>   
+>   KERNEL_DEVICETREE = "rk3288-tinker-s.dtb"
+>   UBOOT_MACHINE = "tinker-s-rk3288_defconfig"
+> -
+> -RK_BOOT_DEVICE ?= "mmcblk1"
+> diff --git a/conf/machine/vyasa-rk3288.conf b/conf/machine/vyasa-rk3288.conf
+> index 9ad1ed4..5b44257 100644
+> --- a/conf/machine/vyasa-rk3288.conf
+> +++ b/conf/machine/vyasa-rk3288.conf
+> @@ -13,5 +13,3 @@ KERNEL_DEVICETREE = "rk3288-vyasa.dtb"
+>   KERNEL_EXTRA_ARGS += "LOADADDR=0x02000000"
+>   
+>   UBOOT_MACHINE = "vyasa-rk3288_defconfig"
+> -
+> -RK_BOOT_DEVICE = "mmcblk2"
+> diff --git a/wic/rockchip.wks b/wic/rockchip.wks
+> index eedae0d..5ee276b 100644
+> --- a/wic/rockchip.wks
+> +++ b/wic/rockchip.wks
+> @@ -15,12 +15,12 @@
+>   #   boot        32768           229376
+>   #   root        262144          -           (suggested)
+>   
+> -part loader1    --offset 32     --fixed-size 4000K            --ondisk ${RK_BOOT_DEVICE} --source rawcopy                                      --sourceparams="file=${SPL_BINARY}"
+> -part reserved1  --offset 4032   --fixed-size 64K              --ondisk ${RK_BOOT_DEVICE}
+> -part reserved2  --offset 4096   --fixed-size 4096K            --ondisk ${RK_BOOT_DEVICE}
+> -part loader2    --offset 8192   --fixed-size 4096K            --ondisk ${RK_BOOT_DEVICE} --source rawcopy                                      --sourceparams="file=u-boot.${UBOOT_SUFFIX}"
+> -part atf        --offset 12288  --fixed-size 4096K            --ondisk ${RK_BOOT_DEVICE}
+> -part /boot      --offset 16384  --size       114688K --active --ondisk ${RK_BOOT_DEVICE} --source bootimg-partition --fstype=vfat --label boot --sourceparams="loader=u-boot"
+> -part /                                                        --ondisk ${RK_BOOT_DEVICE} --source rootfs            --fstype=ext4 --label root
+> +part loader1    --offset 32     --fixed-size 4000K            --source rawcopy                                                 --sourceparams="file=${SPL_BINARY}"
+> +part reserved1  --offset 4032   --fixed-size 64K
+> +part reserved2  --offset 4096   --fixed-size 4096K
+> +part loader2    --offset 8192   --fixed-size 4096K            --source rawcopy                                                 --sourceparams="file=u-boot.${UBOOT_SUFFIX}"
+> +part atf        --offset 12288  --fixed-size 4096K
+> +part /boot      --offset 16384  --size       114688K --active --source bootimg-partition --fstype=vfat --label boot            --sourceparams="loader=u-boot"
+> +part /                                                        --source rootfs            --fstype=ext4 --label root --use-uuid
+>   
+> -bootloader --ptable gpt --append="console=tty1 console=${RK_CONSOLE_DEVICE},${RK_CONSOLE_BAUD}n8 rw root=/dev/${RK_BOOT_DEVICE}p7 rootfstype=ext4 init=/sbin/init"
+> +bootloader --ptable gpt --append="console=tty1 console=${RK_CONSOLE_DEVICE},${RK_CONSOLE_BAUD}n8 rw rootfstype=ext4 init=/sbin/init"
+>
+> 
+>
+
+[-- Attachment #2: Type: text/html, Size: 11747 bytes --]
+
+^ permalink raw reply related	[flat|nested] 13+ messages in thread
+end of thread, other threads:[~2021-09-27 10:26 UTC | newest]
+
+Thread overview: 13+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+     [not found] <16A5BB09DD6D5F75.29722@lists.yoctoproject.org>
+2021-09-20 16:54 ` [yocto] [meta-rockchip][PATCH] use uuid instead of hard-coding root device Trevor Woerner
+     [not found] <bf6d701e-f884-57dd-7ab2-fdb513d7699e@t-online.de>
+2021-09-27 10:25 ` Markus Volk
+2021-09-17 22:01 Trevor Woerner
+2021-09-22 18:49 ` [yocto] " Markus Volk
+2021-09-22 18:55   ` Khem Raj
+2021-09-23 11:59   ` Trevor Woerner
+2021-09-23 19:45     ` Markus Volk
+2021-09-23 20:55       ` Trevor Woerner
+2021-09-23 22:23         ` Markus Volk
+2021-09-24  4:46           ` Khem Raj
+2021-09-24 10:07             ` Markus Volk
+2021-09-24 13:08             ` Trevor Woerner
+2021-09-25  7:56         ` Markus Volk
+2021-09-25 15:09           ` Trevor Woerner
+

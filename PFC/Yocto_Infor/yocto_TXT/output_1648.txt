@@ -1,0 +1,126 @@
+* Recipe fails at do_rm_work due to failed attempt to delete a named pipe (FIFO)
+@ 2022-07-11 22:33 David Antliff
+  0 siblings, 0 replies; only message in thread
+From: David Antliff @ 2022-07-11 22:33 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 3937 bytes --]
+
+Hi,
+
+I'm working with a PetaLinux 2021.2 project, which defines a recipe called "petalinux-initramfs-image".
+
+# Simple petalinux initramfs image.
+DESCRIPTION = "Small image capable of booting a device. The kernel includes \
+the Minimal RAM-based Initial Root Filesystem (initramfs), which finds the \
+first 'init' program more efficiently."
+
+INITRAMFS_SCRIPTS ?= "initramfs-framework-base \
+            initramfs-module-e2fs \
+            initramfs-module-udhcpc \
+            initramfs-module-searche2fs \
+            "
+
+INITRAMFS_SCRIPTS_append_k26 = " initramfs-module-exec"
+
+INITRAMFS_PACKAGES ?= "${VIRTUAL-RUNTIME_base-utils} \
+            base-passwd \
+            e2fsprogs \
+            ${ROOTFS_BOOTSTRAP_INSTALL} \
+            ${MACHINE_ESSENTIAL_EXTRA_RDEPENDS} \
+            "
+
+BAD_RECOMMENDATIONS += "initramfs-module-rootfs"
+
+PACKAGE_INSTALL ?= "packagegroup-core-boot ${INITRAMFS_PACKAGES} ${INITRAMFS_SCRIPTS}"
+
+# Do not pollute the initrd image with rootfs features
+IMAGE_FEATURES = ""
+
+export IMAGE_BASENAME = "petalinux-initramfs-image"
+IMAGE_LINGUAS = ""
+
+LICENSE = "MIT"
+
+IMAGE_FSTYPES = "${INITRAMFS_FSTYPES}"
+inherit core-image
+
+IMAGE_ROOTFS_SIZE = "8192"
+IMAGE_ROOTFS_EXTRA_SPACE = "0"
+
+rm_work_rootfs[noexec] = "1"
+rm_work_rootfs[cleandirs] = ""
+RM_WORK_EXCLUDE_ITEMS = "rootfs"
+
+
+For reasons I don't understand, this recipe fails to build at the do_rm_work task. Looking at the bitbake -v log, I can see that this recipe is somehow causing the temp directory in the build directory to be deleted:
+
++ rm -rf recipe-sysroot-native
+
++ for dir in *
+
++ '[' rootfs = pseudo ']'
+
++ echo rootfs
+
++ grep -q -w rootfs
+
++ for dir in *
+
++ '[' temp = pseudo ']'
+
++ echo rootfs
+
++ grep -q -w temp
+
++ rm -rf temp
+
++ ret=0
+
++ trap '' 0
+
++ exit 0
+
+ERROR: petalinux-initramfs-image-1.0-r0 do_rm_work: [Errno 2] No such file or directory: '/[removed]/build/tmp/work/zynqmp_generic-xilinx-linux/petalinux-initramfs-image/1.0-r0/temp/fifo.59670'
+
+I think whatever is calling do_rm_work (in rm_work.bbclass) is creating a named pipe (FIFO) file in the build/...petalinux-initramfs-image/1.0-r0/temp directory, for whatever purpose, and then when this recipe (for whatever reason) causes the deletion of the temp directory and exits, this outer entity then expects to be able to clean up the FIFO file it created, fails to do so, and raises the fatal error.
+
+I'm assuming that this is a problem with the recipe itself, but I (with my limited knowledge and experience in this area) cannot see anything obvious in there that would lead to the inadvertent deletion of the temp directory.
+
+Note that if I add RM_WORK_EXCLUDE += "petalinux-initramfs-image" then the build does not fail and I see this instead:
+
+NOTE: Executing Tasks
++ do_rm_work
++ for p in petalinux-initramfs-image
+
+NOTE: petalinux-initramfs-image-1.0-r0 do_rm_work: rm_work: Skipping petalinux-initramfs-image since it is in RM_WORK_EXCLUDE
++ '[' petalinux-initramfs-image = petalinux-initramfs-image ']'
++ bbnote 'rm_work: Skipping petalinux-initramfs-image since it is in RM_WORK_EXCLUDE'
++ '[' -p /[removed]/build/tmp/work/zynqmp_generic-xilinx-linux/petalinux-initramfs-image/1.0-r0/temp/fifo.60213 ']'
++ printf '%b\0' 'bbnote rm_work: Skipping petalinux-initramfs-image since it is in RM_WORK_EXCLUDE'
++ exit 0
++ bb_bash_exit_handler 'exit 0'
++ ret=0
+
++ set +x
+
+There the named pipe file is mentioned, but I'm not sure why a test for its existence is here, interleaved with output from rm_work.bbclass. I don't see that in rm_work.bbclass anywhere - or is it a part of bbnote​?
+
+Any idea what's going on with this recipe?
+
+-- David.
+
+
+
+
+
+
+[-- Attachment #2: Type: text/html, Size: 15257 bytes --]
+
+^ permalink raw reply	[flat|nested] only message in thread
+only message in thread, other threads:[~2022-07-11 22:33 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-07-11 22:33 Recipe fails at do_rm_work due to failed attempt to delete a named pipe (FIFO) David Antliff
+

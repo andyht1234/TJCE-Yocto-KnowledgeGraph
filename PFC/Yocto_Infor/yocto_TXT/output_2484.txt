@@ -1,0 +1,181 @@
+* [OE-core] [PATCH] libva: move wayland PACKAGECONFIG to libva.inc
+@ 2021-12-10  5:38 MarkusVolk
+  2021-12-10 10:33 ` [yocto] " Alexander Kanavin
+  0 siblings, 1 reply; 2+ messages in thread
+From: MarkusVolk @ 2021-12-10  5:38 UTC (permalink / raw)
+  To: yocto; +Cc: MarkusVolk
+
+I encountered an error while trying to build libva under wayland. libva-initial
+was missing wayland-native dependency and failed like this:
+
+| Run-time dependency xfixes found: NO (tried pkgconfig and cmake)
+| Run-time dependency wayland-client found: YES 1.19.0
+| Program wayland-scanner /usr/bin/wayland-scanner found: NO
+|
+| ../libva-2.13.0/meson.build:107:4: ERROR: Program 'wayland-scanner /usr/bin/wayland-scanner' not found
+|
+| A full log can be found at /home/flk/build/poky/build-rock/tmp/work/cortexa72-cortexa53-crypto-poky-linux/libva-initial/2.13.0-r0/build/meson-logs/meson-log.txt
+| ERROR: meson failed
+| WARNING: exit code 1 from a shell command.
+
+This commit moves the PACKAGECONFIG[wayland] to libva.inc to make it available to libva-initial also
+
+Signed-off-by: MarkusVolk <f_l_k@t-online.de>
+---
+ meta/recipes-graphics/libva/libva.inc       | 7 +++++++
+ meta/recipes-graphics/libva/libva_2.13.0.bb | 4 +---
+ 2 files changed, 8 insertions(+), 3 deletions(-)
+
+diff --git a/meta/recipes-graphics/libva/libva.inc b/meta/recipes-graphics/libva/libva.inc
+index bcf9757c1a..0e2721e291 100644
+--- a/meta/recipes-graphics/libva/libva.inc
++++ b/meta/recipes-graphics/libva/libva.inc
+@@ -27,3 +27,10 @@ UPSTREAM_CHECK_URI = "https://github.com/intel/libva/releases"
+ DEPENDS = "libdrm"
+ 
+ inherit meson pkgconfig
++
++PACKAGECONFIG:append = " \
++    ${@bb.utils.filter('DISTRO_FEATURES', 'wayland', d)} \
++"
++
++PACKAGECONFIG[wayland] = "-Dwith_wayland=yes,-Dwith_wayland=no,wayland-native wayland"
++
+diff --git a/meta/recipes-graphics/libva/libva_2.13.0.bb b/meta/recipes-graphics/libva/libva_2.13.0.bb
+index ed2be289fc..a8c6355b01 100644
+--- a/meta/recipes-graphics/libva/libva_2.13.0.bb
++++ b/meta/recipes-graphics/libva/libva_2.13.0.bb
+@@ -2,14 +2,12 @@ require libva.inc
+ 
+ PACKAGECONFIG ??= " \
+     ${@bb.utils.contains('DISTRO_FEATURES', 'x11 opengl', 'glx', '', d)} \
+-    ${@bb.utils.filter('DISTRO_FEATURES', 'x11 wayland', d)} \
++    ${@bb.utils.filter('DISTRO_FEATURES', 'x11', d)} \
+ "
+ 
+ PACKAGECONFIG[x11] = "-Dwith_x11=yes,-Dwith_x11=no,virtual/libx11 libxext libxfixes"
+ PACKAGECONFIG[glx] = "-Dwith_glx=yes,-Dwith_glx=no,virtual/mesa"
+ 
+-PACKAGECONFIG[wayland] = "-Dwith_wayland=yes,-Dwith_wayland=no,wayland-native wayland"
+-
+ PACKAGES =+ "${PN}-x11 ${PN}-glx ${PN}-wayland"
+ 
+ RDEPENDS:${PN}-x11 =+ "${PN}"
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 2+ messages in thread
+* Re: [yocto] [OE-core] [PATCH] libva: move wayland PACKAGECONFIG to libva.inc
+  2021-12-10  5:38 [OE-core] [PATCH] libva: move wayland PACKAGECONFIG to libva.inc MarkusVolk
+@ 2021-12-10 10:33 ` Alexander Kanavin
+  0 siblings, 0 replies; 2+ messages in thread
+From: Alexander Kanavin @ 2021-12-10 10:33 UTC (permalink / raw)
+  To: Markus Volk; +Cc: Yocto-mailing-list
+
+[-- Attachment #1: Type: text/plain, Size: 3145 bytes --]
+
+Please send the patch to openembedded-core list.
+
+Also I wonder about this:
+| Run-time dependency wayland-client found: YES 1.19.0
+
+How does it happen? Is something else building wayland items?
+
+Alex
+
+On Fri, 10 Dec 2021 at 06:40, Markus Volk <f_l_k@t-online.de> wrote:
+
+> I encountered an error while trying to build libva under wayland.
+> libva-initial
+> was missing wayland-native dependency and failed like this:
+>
+> | Run-time dependency xfixes found: NO (tried pkgconfig and cmake)
+> | Run-time dependency wayland-client found: YES 1.19.0
+> | Program wayland-scanner /usr/bin/wayland-scanner found: NO
+> |
+> | ../libva-2.13.0/meson.build:107:4: ERROR: Program 'wayland-scanner
+> /usr/bin/wayland-scanner' not found
+> |
+> | A full log can be found at
+> /home/flk/build/poky/build-rock/tmp/work/cortexa72-cortexa53-crypto-poky-linux/libva-initial/2.13.0-r0/build/meson-logs/meson-log.txt
+> | ERROR: meson failed
+> | WARNING: exit code 1 from a shell command.
+>
+> This commit moves the PACKAGECONFIG[wayland] to libva.inc to make it
+> available to libva-initial also
+>
+> Signed-off-by: MarkusVolk <f_l_k@t-online.de>
+> ---
+>  meta/recipes-graphics/libva/libva.inc       | 7 +++++++
+>  meta/recipes-graphics/libva/libva_2.13.0.bb | 4 +---
+>  2 files changed, 8 insertions(+), 3 deletions(-)
+>
+> diff --git a/meta/recipes-graphics/libva/libva.inc
+> b/meta/recipes-graphics/libva/libva.inc
+> index bcf9757c1a..0e2721e291 100644
+> --- a/meta/recipes-graphics/libva/libva.inc
+> +++ b/meta/recipes-graphics/libva/libva.inc
+> @@ -27,3 +27,10 @@ UPSTREAM_CHECK_URI = "
+> https://github.com/intel/libva/releases"
+>  DEPENDS = "libdrm"
+>
+>  inherit meson pkgconfig
+> +
+> +PACKAGECONFIG:append = " \
+> +    ${@bb.utils.filter('DISTRO_FEATURES', 'wayland', d)} \
+> +"
+> +
+> +PACKAGECONFIG[wayland] =
+> "-Dwith_wayland=yes,-Dwith_wayland=no,wayland-native wayland"
+> +
+> diff --git a/meta/recipes-graphics/libva/libva_2.13.0.bb
+> b/meta/recipes-graphics/libva/libva_2.13.0.bb
+> index ed2be289fc..a8c6355b01 100644
+> --- a/meta/recipes-graphics/libva/libva_2.13.0.bb
+> +++ b/meta/recipes-graphics/libva/libva_2.13.0.bb
+> @@ -2,14 +2,12 @@ require libva.inc
+>
+>  PACKAGECONFIG ??= " \
+>      ${@bb.utils.contains('DISTRO_FEATURES', 'x11 opengl', 'glx', '', d)} \
+> -    ${@bb.utils.filter('DISTRO_FEATURES', 'x11 wayland', d)} \
+> +    ${@bb.utils.filter('DISTRO_FEATURES', 'x11', d)} \
+>  "
+>
+>  PACKAGECONFIG[x11] = "-Dwith_x11=yes,-Dwith_x11=no,virtual/libx11 libxext
+> libxfixes"
+>  PACKAGECONFIG[glx] = "-Dwith_glx=yes,-Dwith_glx=no,virtual/mesa"
+>
+> -PACKAGECONFIG[wayland] =
+> "-Dwith_wayland=yes,-Dwith_wayland=no,wayland-native wayland"
+> -
+>  PACKAGES =+ "${PN}-x11 ${PN}-glx ${PN}-wayland"
+>
+>  RDEPENDS:${PN}-x11 =+ "${PN}"
+> --
+> 2.25.1
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#55544):
+> https://lists.yoctoproject.org/g/yocto/message/55544
+> Mute This Topic: https://lists.yoctoproject.org/mt/87630461/1686489
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> alex.kanavin@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 4848 bytes --]
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2021-12-10 10:33 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-12-10  5:38 [OE-core] [PATCH] libva: move wayland PACKAGECONFIG to libva.inc MarkusVolk
+2021-12-10 10:33 ` [yocto] " Alexander Kanavin
+

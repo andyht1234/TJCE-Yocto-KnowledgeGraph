@@ -1,0 +1,717 @@
+* [meta-security][PATCH 0/2] Drop a kernel patch and a kernel config option
+@ 2023-05-09 17:54 Stefan Berger
+  2023-05-09 17:54 ` [meta-security][PATCH 1/2] linux: overlayfs: Drop kernel patch resolving a file change notification issue Stefan Berger
+                   ` (2 more replies)
+  0 siblings, 3 replies; 9+ messages in thread
+From: Stefan Berger @ 2023-05-09 17:54 UTC (permalink / raw)
+  To: yocto; +Cc: akuster808, quaresma.jose, Stefan Berger
+
+This PR removes a kernel patch related to overlayfs and IMA appraisal file change
+notifictions and a squashfs xattr kernel config option.
+
+   Stefan
+
+Stefan Berger (2):
+  linux: overlayfs: Drop kernel patch resolving a file change
+    notification issue
+  ima: Drop kernel config option CONFIG_SQUASHFS_XATTR=y from ima.cfg
+
+ ...Increment-iversion-upon-file-changes.patch | 42 -------------------
+ .../recipes-kernel/linux/linux/ima.cfg        |  1 -
+ .../recipes-kernel/linux/linux_ima.inc        |  1 -
+ 3 files changed, 44 deletions(-)
+ delete mode 100644 meta-integrity/recipes-kernel/linux/linux/0001-ovl-Increment-iversion-upon-file-changes.patch
+
+-- 
+2.34.1
+
+
+
+^ permalink raw reply	[flat|nested] 9+ messages in thread
+* [meta-security][PATCH 1/2] linux: overlayfs: Drop kernel patch resolving a file change notification issue
+  2023-05-09 17:54 [meta-security][PATCH 0/2] Drop a kernel patch and a kernel config option Stefan Berger
+@ 2023-05-09 17:54 ` Stefan Berger
+  2023-05-09 17:54 ` [meta-security][PATCH 2/2] ima: Drop kernel config option CONFIG_SQUASHFS_XATTR=y from ima.cfg Stefan Berger
+  2023-05-09 18:11 ` [meta-security][PATCH 0/2] Drop a kernel patch and a kernel config option Jose Quaresma
+  2 siblings, 0 replies; 9+ messages in thread
+From: Stefan Berger @ 2023-05-09 17:54 UTC (permalink / raw)
+  To: yocto; +Cc: akuster808, quaresma.jose, Stefan Berger
+
+Revert the patch resolving a file change notitfication issue (for IMA
+appraisal) since this patch fails in 'many downstream kernels'.
+
+- https://lists.yoctoproject.org/g/yocto/message/59928
+- https://lists.yoctoproject.org/g/yocto/message/59929
+
+Signed-off-by: Stefan Berger <stefanb@linux.ibm.com>
+---
+ ...Increment-iversion-upon-file-changes.patch | 42 -------------------
+ .../recipes-kernel/linux/linux_ima.inc        |  1 -
+ 2 files changed, 43 deletions(-)
+ delete mode 100644 meta-integrity/recipes-kernel/linux/linux/0001-ovl-Increment-iversion-upon-file-changes.patch
+
+diff --git a/meta-integrity/recipes-kernel/linux/linux/0001-ovl-Increment-iversion-upon-file-changes.patch b/meta-integrity/recipes-kernel/linux/linux/0001-ovl-Increment-iversion-upon-file-changes.patch
+deleted file mode 100644
+index d2b5c28..0000000
+--- a/meta-integrity/recipes-kernel/linux/linux/0001-ovl-Increment-iversion-upon-file-changes.patch
++++ /dev/null
+@@ -1,42 +0,0 @@
+-From e9ed62e8d1d3eee7ffe862d9812c5320d3b9bd88 Mon Sep 17 00:00:00 2001
+-From: Stefan Berger <stefanb@linux.ibm.com>
+-Date: Thu, 6 Apr 2023 11:27:29 -0400
+-Subject: [PATCH] ovl: Increment iversion upon file changes
+-
+-This is a temporary patch for kernels that do not implement
+-STATX_CHANGE_COOKIE (<= 6.2). The successor patch will be this one:
+-
+-https://lore.kernel.org/linux-integrity/20230418-engste-gastwirtschaft-601fb389bba5@brauner/T/#m3bf84296fe9e6499abb6e3191693948add2ff459
+-
+-Increment the lower inode's iversion for IMA to be able to recognize
+-changes to the file.
+-
+-Signed-off-by: Stefan Berger <stefanb@linux.ibm.com>
+----
+- fs/overlayfs/file.c | 3 +++
+- 1 file changed, 3 insertions(+)
+-
+-diff --git a/fs/overlayfs/file.c b/fs/overlayfs/file.c
+-index 6011f955436b..1dfe5e7bfe1c 100644
+---- a/fs/overlayfs/file.c
+-+++ b/fs/overlayfs/file.c
+-@@ -13,6 +13,7 @@
+- #include <linux/security.h>
+- #include <linux/mm.h>
+- #include <linux/fs.h>
+-+#include <linux/iversion.h>
+- #include "overlayfs.h"
+- 
+- struct ovl_aio_req {
+-@@ -408,6 +409,8 @@ static ssize_t ovl_write_iter(struct kiocb *iocb, struct iov_iter *iter)
+- 		if (ret != -EIOCBQUEUED)
+- 			ovl_aio_cleanup_handler(aio_req);
+- 	}
+-+	if (ret > 0)
+-+		inode_maybe_inc_iversion(inode, false);
+- out:
+- 	revert_creds(old_cred);
+- out_fdput:
+--- 
+-2.34.1
+-
+diff --git a/meta-integrity/recipes-kernel/linux/linux_ima.inc b/meta-integrity/recipes-kernel/linux/linux_ima.inc
+index 9d48e5c..0b6f530 100644
+--- a/meta-integrity/recipes-kernel/linux/linux_ima.inc
++++ b/meta-integrity/recipes-kernel/linux/linux_ima.inc
+@@ -2,7 +2,6 @@ FILESEXTRAPATHS:append := "${THISDIR}/linux:"
+ 
+ SRC_URI += " \
+     ${@bb.utils.contains('DISTRO_FEATURES', 'ima', 'file://ima.scc', '', d)} \
+-    file://0001-ovl-Increment-iversion-upon-file-changes.patch \
+ "
+ 
+ do_configure() {
+-- 
+2.34.1
+
+
+
+^ permalink raw reply related	[flat|nested] 9+ messages in thread
+* [meta-security][PATCH 2/2] ima: Drop kernel config option CONFIG_SQUASHFS_XATTR=y from ima.cfg
+  2023-05-09 17:54 [meta-security][PATCH 0/2] Drop a kernel patch and a kernel config option Stefan Berger
+  2023-05-09 17:54 ` [meta-security][PATCH 1/2] linux: overlayfs: Drop kernel patch resolving a file change notification issue Stefan Berger
+@ 2023-05-09 17:54 ` Stefan Berger
+  2023-05-09 18:11 ` [meta-security][PATCH 0/2] Drop a kernel patch and a kernel config option Jose Quaresma
+  2 siblings, 0 replies; 9+ messages in thread
+From: Stefan Berger @ 2023-05-09 17:54 UTC (permalink / raw)
+  To: yocto; +Cc: akuster808, quaresma.jose, Stefan Berger
+
+Drop the kernel config option CONFIG_SQUASHFS_XATTR=y from ima.cfg.
+Instead, require projects that use squashfs to set this option.
+
+Signed-off-by: Stefan Berger <stefanb@linux.ibm.com>
+---
+ meta-integrity/recipes-kernel/linux/linux/ima.cfg | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/meta-integrity/recipes-kernel/linux/linux/ima.cfg b/meta-integrity/recipes-kernel/linux/linux/ima.cfg
+index 86fb3aa..d7d80a6 100644
+--- a/meta-integrity/recipes-kernel/linux/linux/ima.cfg
++++ b/meta-integrity/recipes-kernel/linux/linux/ima.cfg
+@@ -1,4 +1,3 @@
+-CONFIG_SQUASHFS_XATTR=y
+ CONFIG_KEYS=y
+ CONFIG_ASYMMETRIC_KEY_TYPE=y
+ CONFIG_SYSTEM_TRUSTED_KEYRING=y
+-- 
+2.34.1
+
+
+
+^ permalink raw reply related	[flat|nested] 9+ messages in thread
+* Re: [meta-security][PATCH 0/2] Drop a kernel patch and a kernel config option
+  2023-05-09 17:54 [meta-security][PATCH 0/2] Drop a kernel patch and a kernel config option Stefan Berger
+  2023-05-09 17:54 ` [meta-security][PATCH 1/2] linux: overlayfs: Drop kernel patch resolving a file change notification issue Stefan Berger
+  2023-05-09 17:54 ` [meta-security][PATCH 2/2] ima: Drop kernel config option CONFIG_SQUASHFS_XATTR=y from ima.cfg Stefan Berger
+@ 2023-05-09 18:11 ` Jose Quaresma
+  2023-05-09 18:19   ` [yocto] " Stefan Berger
+  2 siblings, 1 reply; 9+ messages in thread
+From: Jose Quaresma @ 2023-05-09 18:11 UTC (permalink / raw)
+  To: Stefan Berger; +Cc: yocto, akuster808
+
+[-- Attachment #1: Type: text/plain, Size: 1455 bytes --]
+
+Hi Stefan,
+
+Stefan Berger <stefanb@linux.ibm.com> escreveu no dia terça, 9/05/2023 à(s)
+18:55:
+
+> This PR removes a kernel patch related to overlayfs and IMA appraisal file
+> change
+> notifictions and a squashfs xattr kernel config option.
+>
+>    Stefan
+>
+> Stefan Berger (2):
+>   linux: overlayfs: Drop kernel patch resolving a file change
+>     notification issue
+>   ima: Drop kernel config option CONFIG_SQUASHFS_XATTR=y from ima.cfg
+>
+>  ...Increment-iversion-upon-file-changes.patch | 42 -------------------
+>  .../recipes-kernel/linux/linux/ima.cfg        |  1 -
+>  .../recipes-kernel/linux/linux_ima.inc        |  1 -
+>
+
+Unfortunately this is not enough because in the full patchset you are
+overriding the do_configure task
+on meta-integrity/recipes-kernel/linux/linux_ima.inc and this file is
+included in every recipe that follies the
+pattern starting by linux- (recipes-kernel/linux/linux-%.bbappend).
+
+This breaks many recipes like linux-firmware and maybe others.
+The root cause of the issue is now on f4f7624d2e but because this patch is
+too evasive, maybe everything has to be reversed.
+I am now building with the full patchset revert and so far the build is
+looking good.
+
+Jose
+
+
+>  3 files changed, 44 deletions(-)
+>  delete mode 100644
+> meta-integrity/recipes-kernel/linux/linux/0001-ovl-Increment-iversion-upon-file-changes.patch
+>
+> --
+> 2.34.1
+>
+>
+
+-- 
+Best regards,
+
+José Quaresma
+
+[-- Attachment #2: Type: text/html, Size: 2161 bytes --]
+
+^ permalink raw reply	[flat|nested] 9+ messages in thread
+* Re: [yocto] [meta-security][PATCH 0/2] Drop a kernel patch and a kernel config option
+  2023-05-09 18:11 ` [meta-security][PATCH 0/2] Drop a kernel patch and a kernel config option Jose Quaresma
+@ 2023-05-09 18:19   ` Stefan Berger
+  2023-05-09 18:43     ` Stefan Berger
+  2023-05-09 18:43     ` Jose Quaresma
+  0 siblings, 2 replies; 9+ messages in thread
+From: Stefan Berger @ 2023-05-09 18:19 UTC (permalink / raw)
+  To: Jose Quaresma; +Cc: yocto, akuster808
+
+
+
+On 5/9/23 14:11, Jose Quaresma wrote:
+> Hi Stefan, Stefan Berger <stefanb@ linux. ibm. com> escreveu no dia terça, 9/05/2023 à(s) 18: 55: This PR removes a kernel patch related to overlayfs and IMA appraisal file change notifictions and a squashfs xattr kernel config option.
+> ZjQcmQRYFpfptBannerStart
+> This Message Is From an External Sender
+> This message came from outside your organization.
+> ZjQcmQRYFpfptBannerEnd
+> Hi Stefan,
+> 
+> Stefan Berger <stefanb@linux.ibm.com <mailto:stefanb@linux.ibm.com>> escreveu no dia terça, 9/05/2023 à(s) 18:55:
+> 
+>     This PR removes a kernel patch related to overlayfs and IMA appraisal file change
+>     notifictions and a squashfs xattr kernel config option.
+> 
+>         Stefan
+> 
+>     Stefan Berger (2):
+>        linux: overlayfs: Drop kernel patch resolving a file change
+>          notification issue
+>        ima: Drop kernel config option CONFIG_SQUASHFS_XATTR=y from ima.cfg
+> 
+>       ...Increment-iversion-upon-file-changes.patch | 42 -------------------
+>       .../recipes-kernel/linux/linux/ima.cfg        |  1 -
+>       .../recipes-kernel/linux/linux_ima.inc        |  1 -
+> 
+> CONFIG_SYSTEM_TRUSTED_KEYS=
+> Unfortunately this is not enough because in the full patchset you are overriding the do_configure task
+> on meta-integrity/recipes-kernel/linux/linux_ima.inc and this file is included in every recipe that follies the
+> pattern starting by linux- (recipes-kernel/linux/linux-%.bbappend).
+
+You are referring tho this here?
+
+do_configure() {
+     sed -i "s|^CONFIG_SYSTEM_TRUSTED_KEYS=.*|CONFIG_SYSTEM_TRUSTED_KEYS=\"${IMA_EVM_ROOT_CA}\"|" .config
+}
+
+You are saying that this deactivates some other do_configure's ? If this is the case, what would be the right syntax to fix it?
+
+
+It's a no-op on a .config that does not contain the CONFIG_SYSTEM_TRUSTED_KEYS= option already.=
+
+    Stefan
+
+> 
+> This breaks many recipes like linux-firmware and maybe others.
+> The root cause of the issue is now on f4f7624d2e but because this patch is too evasive, maybe everything has to be reversed.
+> I am now building with the full patchset revert and so far the build is looking good.
+
+
+> 
+> Jose
+> 
+>       3 files changed, 44 deletions(-)
+>       delete mode 100644 meta-integrity/recipes-kernel/linux/linux/0001-ovl-Increment-iversion-upon-file-changes.patch
+> 
+>     -- 
+>     2.34.1
+> 
+> 
+> 
+> -- 
+> Best regards,
+> 
+> José Quaresma
+> 
+> 
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#59940): https://lists.yoctoproject.org/g/yocto/message/59940
+> Mute This Topic: https://lists.yoctoproject.org/mt/98789504/1792208
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [stefanb@linux.ibm.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+> 
+
+
+^ permalink raw reply	[flat|nested] 9+ messages in thread
+* Re: [yocto] [meta-security][PATCH 0/2] Drop a kernel patch and a kernel config option
+  2023-05-09 18:19   ` [yocto] " Stefan Berger
+@ 2023-05-09 18:43     ` Stefan Berger
+  2023-05-09 18:43     ` Jose Quaresma
+  1 sibling, 0 replies; 9+ messages in thread
+From: Stefan Berger @ 2023-05-09 18:43 UTC (permalink / raw)
+  To: Jose Quaresma; +Cc: yocto, akuster808
+
+
+
+On 5/9/23 14:19, Stefan Berger wrote:
+> 
+> 
+> On 5/9/23 14:11, Jose Quaresma wrote:
+
+>> CONFIG_SYSTEM_TRUSTED_KEYS=
+>> Unfortunately this is not enough because in the full patchset you are overriding the do_configure task
+>> on meta-integrity/recipes-kernel/linux/linux_ima.inc and this file is included in every recipe that follies the
+>> pattern starting by linux- (recipes-kernel/linux/linux-%.bbappend).
+> 
+> You are referring tho this here?
+> 
+> do_configure() {
+>      sed -i "s|^CONFIG_SYSTEM_TRUSTED_KEYS=.*|CONFIG_SYSTEM_TRUSTED_KEYS=\"${IMA_EVM_ROOT_CA}\"|" .config
+> }
+> 
+> You are saying that this deactivates some other do_configure's ? If this is the case, what would be the right syntax to fix it?
+> 
+
+Jose, is the correct syntax to use do_configure:append () ? Can you try with this syntax?
+
+    Stefan
+
+> 
+> It's a no-op on a .config that does not contain the CONFIG_SYSTEM_TRUSTED_KEYS= option already.=
+> 
+>     Stefan
+> 
+>>
+>> This breaks many recipes like linux-firmware and maybe others.
+>> The root cause of the issue is now on f4f7624d2e but because this patch is too evasive, maybe everything has to be reversed.
+>> I am now building with the full patchset revert and so far the build is looking good.
+> 
+> 
+>>
+>> Jose
+>>
+>>       3 files changed, 44 deletions(-)
+>>       delete mode 100644 meta-integrity/recipes-kernel/linux/linux/0001-ovl-Increment-iversion-upon-file-changes.patch
+>>
+>>     --     2.34.1
+>>
+>>
+>>
+>> -- 
+>> Best regards,
+>>
+>> José Quaresma
+>>
+>>
+>> -=-=-=-=-=-=-=-=-=-=-=-
+>> Links: You receive all messages sent to this group.
+>> View/Reply Online (#59940): https://lists.yoctoproject.org/g/yocto/message/59940
+>> Mute This Topic: https://lists.yoctoproject.org/mt/98789504/1792208
+>> Group Owner: yocto+owner@lists.yoctoproject.org
+>> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [stefanb@linux.ibm.com]
+>> -=-=-=-=-=-=-=-=-=-=-=-
+>>
+
+
+^ permalink raw reply	[flat|nested] 9+ messages in thread
+* Re: [yocto] [meta-security][PATCH 0/2] Drop a kernel patch and a kernel config option
+  2023-05-09 18:19   ` [yocto] " Stefan Berger
+  2023-05-09 18:43     ` Stefan Berger
+@ 2023-05-09 18:43     ` Jose Quaresma
+  2023-05-09 19:40       ` Bruce Ashfield
+  2023-05-09 20:33       ` Stefan Berger
+  1 sibling, 2 replies; 9+ messages in thread
+From: Jose Quaresma @ 2023-05-09 18:43 UTC (permalink / raw)
+  To: Stefan Berger; +Cc: yocto, akuster808
+
+[-- Attachment #1: Type: text/plain, Size: 3758 bytes --]
+
+Stefan Berger <stefanb@linux.ibm.com> escreveu no dia terça, 9/05/2023 à(s)
+19:19:
+
+>
+>
+> On 5/9/23 14:11, Jose Quaresma wrote:
+> > Hi Stefan, Stefan Berger <stefanb@ linux. ibm. com> escreveu no dia
+> terça, 9/05/2023 à(s) 18: 55: This PR removes a kernel patch related to
+> overlayfs and IMA appraisal file change notifictions and a squashfs xattr
+> kernel config option.
+> > ZjQcmQRYFpfptBannerStart
+> > This Message Is From an External Sender
+> > This message came from outside your organization.
+> > ZjQcmQRYFpfptBannerEnd
+> > Hi Stefan,
+> >
+> > Stefan Berger <stefanb@linux.ibm.com <mailto:stefanb@linux.ibm.com>>
+> escreveu no dia terça, 9/05/2023 à(s) 18:55:
+> >
+> >     This PR removes a kernel patch related to overlayfs and IMA
+> appraisal file change
+> >     notifictions and a squashfs xattr kernel config option.
+> >
+> >         Stefan
+> >
+> >     Stefan Berger (2):
+> >        linux: overlayfs: Drop kernel patch resolving a file change
+> >          notification issue
+> >        ima: Drop kernel config option CONFIG_SQUASHFS_XATTR=y from
+> ima.cfg
+> >
+> >       ...Increment-iversion-upon-file-changes.patch | 42
+> -------------------
+> >       .../recipes-kernel/linux/linux/ima.cfg        |  1 -
+> >       .../recipes-kernel/linux/linux_ima.inc        |  1 -
+> >
+> > CONFIG_SYSTEM_TRUSTED_KEYS=
+> > Unfortunately this is not enough because in the full patchset you are
+> overriding the do_configure task
+> > on meta-integrity/recipes-kernel/linux/linux_ima.inc and this file is
+> included in every recipe that follies the
+> > pattern starting by linux- (recipes-kernel/linux/linux-%.bbappend).
+>
+> You are referring tho this here?
+>
+> do_configure() {
+>      sed -i
+> "s|^CONFIG_SYSTEM_TRUSTED_KEYS=.*|CONFIG_SYSTEM_TRUSTED_KEYS=\"${IMA_EVM_ROOT_CA}\"|"
+> .config
+> }
+>
+> You are saying that this deactivates some other do_configure's ? If this
+> is the case, what would be the right syntax to fix it?
+>
+
+Yes, this is the problem. The right fix IMHO is reverting because we can't
+assume that the .config it's always there
+on the bitbake build directory and this only happens when building the
+kernel.
+
+Another no less significant side effect is that this change is also applied
+to a wide range of recipes,
+anyone starting with the name linux-*.bb.
+
+So the full patch set should be reverted in my opinion and be more tested
+locally, building for example
+some recipe that respects the pattern linux-*.bb and also other kernels and
+re-submitted again.
+
+Jose
+
+
+>
+> It's a no-op on a .config that does not contain the
+> CONFIG_SYSTEM_TRUSTED_KEYS= option already.=
+>
+>     Stefan
+>
+> >
+> > This breaks many recipes like linux-firmware and maybe others.
+> > The root cause of the issue is now on f4f7624d2e but because this patch
+> is too evasive, maybe everything has to be reversed.
+> > I am now building with the full patchset revert and so far the build is
+> looking good.
+>
+>
+> >
+> > Jose
+> >
+> >       3 files changed, 44 deletions(-)
+> >       delete mode 100644
+> meta-integrity/recipes-kernel/linux/linux/0001-ovl-Increment-iversion-upon-file-changes.patch
+> >
+> >     --
+> >     2.34.1
+> >
+> >
+> >
+> > --
+> > Best regards,
+> >
+> > José Quaresma
+> >
+> >
+> > -=-=-=-=-=-=-=-=-=-=-=-
+> > Links: You receive all messages sent to this group.
+> > View/Reply Online (#59940):
+> https://lists.yoctoproject.org/g/yocto/message/59940
+> > Mute This Topic: https://lists.yoctoproject.org/mt/98789504/1792208
+> > Group Owner: yocto+owner@lists.yoctoproject.org
+> > Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> stefanb@linux.ibm.com]
+> > -=-=-=-=-=-=-=-=-=-=-=-
+> >
+>
+
+
+-- 
+Best regards,
+
+José Quaresma
+
+[-- Attachment #2: Type: text/html, Size: 5438 bytes --]
+
+^ permalink raw reply	[flat|nested] 9+ messages in thread
+* Re: [yocto] [meta-security][PATCH 0/2] Drop a kernel patch and a kernel config option
+  2023-05-09 18:43     ` Jose Quaresma
+@ 2023-05-09 19:40       ` Bruce Ashfield
+  2023-05-09 20:33       ` Stefan Berger
+  1 sibling, 0 replies; 9+ messages in thread
+From: Bruce Ashfield @ 2023-05-09 19:40 UTC (permalink / raw)
+  To: Jose Quaresma; +Cc: Stefan Berger, yocto, akuster808
+
+On Tue, May 9, 2023 at 2:43 PM Jose Quaresma <quaresma.jose@gmail.com> wrote:
+>
+>
+>
+> Stefan Berger <stefanb@linux.ibm.com> escreveu no dia terça, 9/05/2023 à(s) 19:19:
+>>
+>>
+>>
+>> On 5/9/23 14:11, Jose Quaresma wrote:
+>> > Hi Stefan, Stefan Berger <stefanb@ linux. ibm. com> escreveu no dia terça, 9/05/2023 à(s) 18: 55: This PR removes a kernel patch related to overlayfs and IMA appraisal file change notifictions and a squashfs xattr kernel config option.
+>> > ZjQcmQRYFpfptBannerStart
+>> > This Message Is From an External Sender
+>> > This message came from outside your organization.
+>> > ZjQcmQRYFpfptBannerEnd
+>> > Hi Stefan,
+>> >
+>> > Stefan Berger <stefanb@linux.ibm.com <mailto:stefanb@linux.ibm.com>> escreveu no dia terça, 9/05/2023 à(s) 18:55:
+>> >
+>> >     This PR removes a kernel patch related to overlayfs and IMA appraisal file change
+>> >     notifictions and a squashfs xattr kernel config option.
+>> >
+>> >         Stefan
+>> >
+>> >     Stefan Berger (2):
+>> >        linux: overlayfs: Drop kernel patch resolving a file change
+>> >          notification issue
+>> >        ima: Drop kernel config option CONFIG_SQUASHFS_XATTR=y from ima.cfg
+>> >
+>> >       ...Increment-iversion-upon-file-changes.patch | 42 -------------------
+>> >       .../recipes-kernel/linux/linux/ima.cfg        |  1 -
+>> >       .../recipes-kernel/linux/linux_ima.inc        |  1 -
+>> >
+>> > CONFIG_SYSTEM_TRUSTED_KEYS=
+>> > Unfortunately this is not enough because in the full patchset you are overriding the do_configure task
+>> > on meta-integrity/recipes-kernel/linux/linux_ima.inc and this file is included in every recipe that follies the
+>> > pattern starting by linux- (recipes-kernel/linux/linux-%.bbappend).
+>>
+>> You are referring tho this here?
+>>
+>> do_configure() {
+>>      sed -i "s|^CONFIG_SYSTEM_TRUSTED_KEYS=.*|CONFIG_SYSTEM_TRUSTED_KEYS=\"${IMA_EVM_ROOT_CA}\"|" .config
+>> }
+>>
+>> You are saying that this deactivates some other do_configure's ? If this is the case, what would be the right syntax to fix it?
+>
+>
+> Yes, this is the problem. The right fix IMHO is reverting because we can't assume that the .config it's always there
+> on the bitbake build directory and this only happens when building the kernel.
+>
+> Another no less significant side effect is that this change is also applied to a wide range of recipes,
+> anyone starting with the name linux-*.bb.
+>
+> So the full patch set should be reverted in my opinion and be more tested locally, building for example
+> some recipe that respects the pattern linux-*.bb and also other kernels and re-submitted again.
+
+I had to deal with the need for a similarly broad bbappend, and both
+distro / kernel version
+conditions in meta-virtualization.
+
+This isn't exactly what Stefan is looking for, but it is a starting point:
+
+https://git.yoctoproject.org/meta-virtualization/tree/recipes-kernel/linux/linux-%25.bbappend
+
+Bruce
+
+>
+> Jose
+>
+>>
+>>
+>> It's a no-op on a .config that does not contain the CONFIG_SYSTEM_TRUSTED_KEYS= option already.=
+>>
+>>     Stefan
+>>
+>> >
+>> > This breaks many recipes like linux-firmware and maybe others.
+>> > The root cause of the issue is now on f4f7624d2e but because this patch is too evasive, maybe everything has to be reversed.
+>> > I am now building with the full patchset revert and so far the build is looking good.
+>>
+>>
+>> >
+>> > Jose
+>> >
+>> >       3 files changed, 44 deletions(-)
+>> >       delete mode 100644 meta-integrity/recipes-kernel/linux/linux/0001-ovl-Increment-iversion-upon-file-changes.patch
+>> >
+>> >     --
+>> >     2.34.1
+>> >
+>> >
+>> >
+>> > --
+>> > Best regards,
+>> >
+>> > José Quaresma
+>> >
+>> >
+>> >
+>> >
+>
+>
+>
+> --
+> Best regards,
+>
+> José Quaresma
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#59945): https://lists.yoctoproject.org/g/yocto/message/59945
+> Mute This Topic: https://lists.yoctoproject.org/mt/98789504/1050810
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [bruce.ashfield@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+-- 
+- Thou shalt not follow the NULL pointer, for chaos and madness await
+thee at its end
+- "Use the force Harry" - Gandalf, Star Trek II
+
+
+^ permalink raw reply	[flat|nested] 9+ messages in thread
+* Re: [yocto] [meta-security][PATCH 0/2] Drop a kernel patch and a kernel config option
+  2023-05-09 18:43     ` Jose Quaresma
+  2023-05-09 19:40       ` Bruce Ashfield
+@ 2023-05-09 20:33       ` Stefan Berger
+  1 sibling, 0 replies; 9+ messages in thread
+From: Stefan Berger @ 2023-05-09 20:33 UTC (permalink / raw)
+  To: Jose Quaresma; +Cc: yocto, akuster808
+
+
+
+On 5/9/23 14:43, Jose Quaresma wrote:
+
+> 
+>     You are referring tho this here?
+> 
+>     do_configure() {
+>           sed -i "s|^CONFIG_SYSTEM_TRUSTED_KEYS=.*|CONFIG_SYSTEM_TRUSTED_KEYS=\"${IMA_EVM_ROOT_CA}\"|" .config
+>     }
+> 
+>     You are saying that this deactivates some other do_configure's ? If this is the case, what would be the right syntax to fix it?
+> 
+> 
+> Yes, this is the problem. The right fix IMHO is reverting because we can't assume that the .config it's always there
+> on the bitbake build directory and this only happens when building the kernel.
+> 
+> Another no less significant side effect is that this change is also applied to a wide range of recipes,
+> anyone starting with the name linux-*.bb.
+
+I suppose it only included linux_ima.inc since 'integrity' was set in DISTRO_FEATURES.
+
+$ cat meta-security/meta-integrity/recipes-kernel/linux/linux-%.bbappend
+require ${@bb.utils.contains_any('DISTRO_FEATURES', 'integrity ', 'linux_ima.inc', '', d)}
+
+
+I modified the linux_ima.inc to look like this here now:
+
+
+$ cat meta-security/meta-integrity/recipes-kernel/linux/linux_ima.inc
+FILESEXTRAPATHS:append := "${THISDIR}/linux:"
+
+SRC_URI += " \
+     ${@bb.utils.contains('DISTRO_FEATURES', 'ima', 'file://ima.scc', '', d)} \
+"
+
+do_configure:append() {
+     if [ "${@bb.utils.contains('DISTRO_FEATURES', 'ima', 'yes', '', d)}" = "yes" ]; then
+         sed -i "s|^CONFIG_SYSTEM_TRUSTED_KEYS=.*|CONFIG_SYSTEM_TRUSTED_KEYS=\"${IMA_EVM_ROOT_CA}\"|" .config
+     fi
+}
+
+KERNEL_FEATURES:append = " ${@bb.utils.contains('DISTRO_FEATURES', 'modsign', ' features/ima/modsign.scc', '', d)}"
+
+inherit ${@bb.utils.contains('DISTRO_FEATURES', 'modsign', 'kernel-modsign', '', d)}
+----------------------------------------------------------------------------------------
+
+This now filters the inclusion of ima.scc and the configure only runs under that same condition.
+
+    Stefan
+
+
+^ permalink raw reply	[flat|nested] 9+ messages in thread
+end of thread, other threads:[~2023-05-09 20:33 UTC | newest]
+
+Thread overview: 9+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-05-09 17:54 [meta-security][PATCH 0/2] Drop a kernel patch and a kernel config option Stefan Berger
+2023-05-09 17:54 ` [meta-security][PATCH 1/2] linux: overlayfs: Drop kernel patch resolving a file change notification issue Stefan Berger
+2023-05-09 17:54 ` [meta-security][PATCH 2/2] ima: Drop kernel config option CONFIG_SQUASHFS_XATTR=y from ima.cfg Stefan Berger
+2023-05-09 18:11 ` [meta-security][PATCH 0/2] Drop a kernel patch and a kernel config option Jose Quaresma
+2023-05-09 18:19   ` [yocto] " Stefan Berger
+2023-05-09 18:43     ` Stefan Berger
+2023-05-09 18:43     ` Jose Quaresma
+2023-05-09 19:40       ` Bruce Ashfield
+2023-05-09 20:33       ` Stefan Berger
+

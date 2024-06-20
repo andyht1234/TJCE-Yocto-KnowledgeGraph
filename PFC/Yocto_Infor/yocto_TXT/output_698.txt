@@ -1,0 +1,173 @@
+* [PATCH yocto-autobuilder-helper] auh: publish output on https://autobuilder.yocto.io/pub/auh/
+@ 2023-04-28  7:01 Alexander Kanavin
+  2023-05-04 14:23 ` [yocto] " Yoann Congal
+  0 siblings, 1 reply; 2+ messages in thread
+From: Alexander Kanavin @ 2023-04-28  7:01 UTC (permalink / raw)
+  To: yocto; +Cc: Alexander Kanavin
+
+AUH itself already has an option to include the link into
+its email reports; the option just needs to be enabled.
+
+[YOCTO #15103]
+
+Signed-off-by: Alexander Kanavin <alex.kanavin@gmail.com>
+---
+ config.json                            | 2 +-
+ scripts/auh-config/upgrade-helper.conf | 2 +-
+ scripts/run-auh                        | 6 +++++-
+ 3 files changed, 7 insertions(+), 3 deletions(-)
+
+diff --git a/config.json b/config.json
+index 9da4d85..a2ba46e 100644
+--- a/config.json
++++ b/config.json
+@@ -1186,7 +1186,7 @@
+         },
+         "auh" : {
+             "EXTRAPLAINCMDS" : [
+-                "${SCRIPTSDIR}/setup-auh ${HELPERBUILDDIR}; ${SCRIPTSDIR}/run-auh ${HELPERBUILDDIR}"
++                "${SCRIPTSDIR}/setup-auh ${HELPERBUILDDIR}; ${SCRIPTSDIR}/run-auh ${HELPERBUILDDIR} ${WEBPUBLISH_DIR}/pub/auh/"
+             ]
+         },
+         "a-quick" : {
+diff --git a/scripts/auh-config/upgrade-helper.conf b/scripts/auh-config/upgrade-helper.conf
+index 3a0aa6c..e0fed11 100644
+--- a/scripts/auh-config/upgrade-helper.conf
++++ b/scripts/auh-config/upgrade-helper.conf
+@@ -29,7 +29,7 @@ buildhistory=yes
+ #testimage_name=core-image-minimal
+ 
+ #workdir=/home/auh/work/
+-#publish_work_url=https://logs.yoctoproject.org/auh/
++publish_work_url=https://autobuilder.yocto.io/pub/auh
+ 
+ commit_revert_policy=all
+ 
+diff --git a/scripts/run-auh b/scripts/run-auh
+index 527ff96..0419dd1 100755
+--- a/scripts/run-auh
++++ b/scripts/run-auh
+@@ -7,7 +7,7 @@
+ # Called with $1 - the directory where the setup was created
+ 
+ if [ -z $1 ]; then
+-  echo "Use: $0 auh_setup_dir"
++  echo "Use: $0 auh_setup_dir [publish_dir]"
+   exit 1
+ fi
+ 
+@@ -27,4 +27,8 @@ git checkout -B tmp-auh-upgrades origin/master
+ source $poky_dir/oe-init-build-env $build_dir
+ $auh_dir/upgrade-helper.py -e all
+ 
++if [ -n $2 ]; then
++  cp -rf $build_dir/upgrade-helper/* $2
++fi
++
+ popd
+-- 
+2.40.0
+
+
+
+^ permalink raw reply related	[flat|nested] 2+ messages in thread
+* Re: [yocto] [PATCH yocto-autobuilder-helper] auh: publish output on https://autobuilder.yocto.io/pub/auh/
+  2023-04-28  7:01 [PATCH yocto-autobuilder-helper] auh: publish output on https://autobuilder.yocto.io/pub/auh/ Alexander Kanavin
+@ 2023-05-04 14:23 ` Yoann Congal
+  0 siblings, 0 replies; 2+ messages in thread
+From: Yoann Congal @ 2023-05-04 14:23 UTC (permalink / raw)
+  To: yocto
+
+On 4/28/23 09:01, Alexander Kanavin wrote:
+> AUH itself already has an option to include the link into
+> its email reports; the option just needs to be enabled.
+> 
+> [YOCTO #15103]
+> 
+> Signed-off-by: Alexander Kanavin <alex.kanavin@gmail.com>
+
+Looks good to me!
+
+Reviewed-by: Yoann Congal <yoann.congal@smile.fr>
+
+Thanks!
+
+> ---
+>  config.json                            | 2 +-
+>  scripts/auh-config/upgrade-helper.conf | 2 +-
+>  scripts/run-auh                        | 6 +++++-
+>  3 files changed, 7 insertions(+), 3 deletions(-)
+> 
+> diff --git a/config.json b/config.json
+> index 9da4d85..a2ba46e 100644
+> --- a/config.json
+> +++ b/config.json
+> @@ -1186,7 +1186,7 @@
+>          },
+>          "auh" : {
+>              "EXTRAPLAINCMDS" : [
+> -                "${SCRIPTSDIR}/setup-auh ${HELPERBUILDDIR}; ${SCRIPTSDIR}/run-auh ${HELPERBUILDDIR}"
+> +                "${SCRIPTSDIR}/setup-auh ${HELPERBUILDDIR}; ${SCRIPTSDIR}/run-auh ${HELPERBUILDDIR} ${WEBPUBLISH_DIR}/pub/auh/"
+>              ]
+>          },
+>          "a-quick" : {
+> diff --git a/scripts/auh-config/upgrade-helper.conf b/scripts/auh-config/upgrade-helper.conf
+> index 3a0aa6c..e0fed11 100644
+> --- a/scripts/auh-config/upgrade-helper.conf
+> +++ b/scripts/auh-config/upgrade-helper.conf
+> @@ -29,7 +29,7 @@ buildhistory=yes
+>  #testimage_name=core-image-minimal
+>  
+>  #workdir=/home/auh/work/
+> -#publish_work_url=https://logs.yoctoproject.org/auh/
+> +publish_work_url=https://autobuilder.yocto.io/pub/auh
+>  
+>  commit_revert_policy=all
+>  
+> diff --git a/scripts/run-auh b/scripts/run-auh
+> index 527ff96..0419dd1 100755
+> --- a/scripts/run-auh
+> +++ b/scripts/run-auh
+> @@ -7,7 +7,7 @@
+>  # Called with $1 - the directory where the setup was created
+>  
+>  if [ -z $1 ]; then
+> -  echo "Use: $0 auh_setup_dir"
+> +  echo "Use: $0 auh_setup_dir [publish_dir]"
+>    exit 1
+>  fi
+>  
+> @@ -27,4 +27,8 @@ git checkout -B tmp-auh-upgrades origin/master
+>  source $poky_dir/oe-init-build-env $build_dir
+>  $auh_dir/upgrade-helper.py -e all
+>  
+> +if [ -n $2 ]; then
+> +  cp -rf $build_dir/upgrade-helper/* $2
+> +fi
+> +
+>  popd
+> 
+> 
+> 
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#59790): https://lists.yoctoproject.org/g/yocto/message/59790
+> Mute This Topic: https://lists.yoctoproject.org/mt/98553558/4316185
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [yoann.congal@smile.fr]
+> -=-=-=-=-=-=-=-=-=-=-=-
+> 
+
+-- 
+Yoann Congal
+Smile ECS - Tech Expert
+
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2023-05-04 14:23 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-04-28  7:01 [PATCH yocto-autobuilder-helper] auh: publish output on https://autobuilder.yocto.io/pub/auh/ Alexander Kanavin
+2023-05-04 14:23 ` [yocto] " Yoann Congal
+

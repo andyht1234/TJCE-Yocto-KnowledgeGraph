@@ -1,0 +1,480 @@
+* AppArmor with BusyBox
+@ 2021-04-26 10:45 Konstantin Aladyshev
+  2021-04-26 14:08 ` [yocto] " Quentin Schulz
+  0 siblings, 1 reply; 7+ messages in thread
+From: Konstantin Aladyshev @ 2021-04-26 10:45 UTC (permalink / raw)
+  To: yocto
+
+I'm using the OpenBMC system (https://github.com/openbmc/openbmc) and
+I've tried to enable AppArmor functionality from the 'meta-security'
+layer.
+
+To achieve this I've added these strings to my local.conf file:
+DISTRO_FEATURES_append = " apparmor"
+IMAGE_INSTALL += "apparmor"
+
+The AppArmor functionality was installed to my image, but
+unfortunately I've come to this issue:
+
+kernel: AppArmor: AppArmor initialized
+kernel: AppArmor: AppArmor Filesystem Enabled
+kernel: AppArmor: AppArmor sha1 policy hashing enabled
+systemd[1]: systemd 247.3+ running in system mode. (+PAM -AUDIT
+-SELINUX -IMA -APPARMOR -SMACK +SYSVINIT -UTMP -LIBCRYPTSETUP -GCRYPT
+-GNUTLS -ACL +XZ -LZ4 -ZSTD -SECCOMP +BLKID -ELFUTILS +KMOD -IDN2 -IDN
+-PCRE2 default-hierarchy=hybrid)
+systemd[1]: Starting AppArmor initialization...
+apparmor[113]: Starting AppArmor profiles
+apparmor[128]: xargs: invalid option -- 'd'
+apparmor[128]: BusyBox v1.33.0 (2021-04-01 10:05:19 UTC) multi-call binary.
+apparmor[128]: Usage: xargs [OPTIONS] [PROG ARGS]
+apparmor[131]: /lib/apparmor/functions: line 76: echo: write error: Broken pipe
+apparmor[131]: /lib/apparmor/functions: line 76: echo: write error: Broken pipe
+...
+apparmor[131]: /lib/apparmor/functions: line 76: echo: write error: Broken pipe
+apparmor[131]: /lib/apparmor/functions: line 76: echo: write error: Broken pipe
+apparmor[138]: xargs: invalid option -- 'd'
+apparmor[138]: BusyBox v1.33.0 (2021-04-01 10:05:19 UTC) multi-call binary.
+apparmor[138]: Usage: xargs [OPTIONS] [PROG ARGS]
+apparmor[142]: /lib/apparmor/functions: line 92: echo: write error: Broken pipe
+apparmor[142]: /lib/apparmor/functions: line 92: echo: write error: Broken pipe
+...
+apparmor[142]: /lib/apparmor/functions: line 92: echo: write error: Broken pipe
+apparmor[142]: /lib/apparmor/functions: line 92: echo: write error: Broken pipe
+apparmor[113]:  failed!
+systemd[1]: apparmor.service: Main process exited, code=exited, status=1/FAILURE
+systemd[1]: apparmor.service: Failed with result 'exit-code'.
+systemd[1]: Failed to start AppArmor initialization.
+dbus-broker-launch[152]: AppArmor enabled, but not supported. Ignoring.
+
+
+From the way I see it the problems start from this output:
+xargs: invalid option -- 'd'
+
+This error comes from a fact that `xargs` from the `busybox` doesn't
+have the `-d` option
+(https://git.busybox.net/busybox/tree/findutils/xargs.c)
+but this functionality is used in the file:
+https://git.yoctoproject.org/cgit/cgit.cgi/meta-security/tree/recipes-mac/AppArmor/files/functions
+
+Once I've discovered it, I started to wonder if I'm doing everything correctly.
+Is my issue a simple bug, or AppArmor is not supposed to be run in an
+environment like mine?
+
+Best regards,
+Konstantin Aladyshev
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] AppArmor with BusyBox
+  2021-04-26 10:45 AppArmor with BusyBox Konstantin Aladyshev
+@ 2021-04-26 14:08 ` Quentin Schulz
+  2021-04-27 15:57   ` Konstantin Aladyshev
+  0 siblings, 1 reply; 7+ messages in thread
+From: Quentin Schulz @ 2021-04-26 14:08 UTC (permalink / raw)
+  To: Konstantin Aladyshev; +Cc: yocto
+
+Hi Konstantin,
+
+On Mon, Apr 26, 2021 at 01:45:30PM +0300, Konstantin Aladyshev wrote:
+> I'm using the OpenBMC system (https://github.com/openbmc/openbmc) and
+> I've tried to enable AppArmor functionality from the 'meta-security'
+> layer.
+> 
+> To achieve this I've added these strings to my local.conf file:
+> DISTRO_FEATURES_append = " apparmor"
+> IMAGE_INSTALL += "apparmor"
+> 
+> The AppArmor functionality was installed to my image, but
+> unfortunately I've come to this issue:
+> 
+> kernel: AppArmor: AppArmor initialized
+> kernel: AppArmor: AppArmor Filesystem Enabled
+> kernel: AppArmor: AppArmor sha1 policy hashing enabled
+> systemd[1]: systemd 247.3+ running in system mode. (+PAM -AUDIT
+> -SELINUX -IMA -APPARMOR -SMACK +SYSVINIT -UTMP -LIBCRYPTSETUP -GCRYPT
+> -GNUTLS -ACL +XZ -LZ4 -ZSTD -SECCOMP +BLKID -ELFUTILS +KMOD -IDN2 -IDN
+> -PCRE2 default-hierarchy=hybrid)
+> systemd[1]: Starting AppArmor initialization...
+> apparmor[113]: Starting AppArmor profiles
+> apparmor[128]: xargs: invalid option -- 'd'
+
+Busybox implementation of xargs does not support specifying a delimiter.
+
+I suggest you to install the full-featured xargs which is provided by
+the findutils recipe.
+
+You probably need to disable xargs Busybox implementation otherwise
+there'll be a conflict (you'll know, Yocto won't create the image).
+
+Cheers,
+Quentin
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] AppArmor with BusyBox
+  2021-04-26 14:08 ` [yocto] " Quentin Schulz
+@ 2021-04-27 15:57   ` Konstantin Aladyshev
+  2021-04-28  3:33     ` Khem Raj
+  0 siblings, 1 reply; 7+ messages in thread
+From: Konstantin Aladyshev @ 2021-04-27 15:57 UTC (permalink / raw)
+  To: yocto
+
+I've added `IMAGE_INSTALL += "findutils"` to my `conf/local.conf`
+file, and it seems like it was enough. There weren't any build
+conflicts.
+
+Should the AppArmor recipe be upgraded in some way to indicate that it
+needs a full-featured findutils package instead of a busybox one?
+
+Best regards,
+Konstantin Aladyshev
+
+On Mon, Apr 26, 2021 at 5:08 PM Quentin Schulz
+<quentin.schulz@streamunlimited.com> wrote:
+>
+> Hi Konstantin,
+>
+> On Mon, Apr 26, 2021 at 01:45:30PM +0300, Konstantin Aladyshev wrote:
+> > I'm using the OpenBMC system (https://github.com/openbmc/openbmc) and
+> > I've tried to enable AppArmor functionality from the 'meta-security'
+> > layer.
+> >
+> > To achieve this I've added these strings to my local.conf file:
+> > DISTRO_FEATURES_append = " apparmor"
+> > IMAGE_INSTALL += "apparmor"
+> >
+> > The AppArmor functionality was installed to my image, but
+> > unfortunately I've come to this issue:
+> >
+> > kernel: AppArmor: AppArmor initialized
+> > kernel: AppArmor: AppArmor Filesystem Enabled
+> > kernel: AppArmor: AppArmor sha1 policy hashing enabled
+> > systemd[1]: systemd 247.3+ running in system mode. (+PAM -AUDIT
+> > -SELINUX -IMA -APPARMOR -SMACK +SYSVINIT -UTMP -LIBCRYPTSETUP -GCRYPT
+> > -GNUTLS -ACL +XZ -LZ4 -ZSTD -SECCOMP +BLKID -ELFUTILS +KMOD -IDN2 -IDN
+> > -PCRE2 default-hierarchy=hybrid)
+> > systemd[1]: Starting AppArmor initialization...
+> > apparmor[113]: Starting AppArmor profiles
+> > apparmor[128]: xargs: invalid option -- 'd'
+>
+> Busybox implementation of xargs does not support specifying a delimiter.
+>
+> I suggest you to install the full-featured xargs which is provided by
+> the findutils recipe.
+>
+> You probably need to disable xargs Busybox implementation otherwise
+> there'll be a conflict (you'll know, Yocto won't create the image).
+>
+> Cheers,
+> Quentin
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] AppArmor with BusyBox
+  2021-04-27 15:57   ` Konstantin Aladyshev
+@ 2021-04-28  3:33     ` Khem Raj
+  2021-04-28  3:43       ` Armin Kuster
+  2021-04-28  8:34       ` Quentin Schulz
+  0 siblings, 2 replies; 7+ messages in thread
+From: Khem Raj @ 2021-04-28  3:33 UTC (permalink / raw)
+  To: Konstantin Aladyshev; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2342 bytes --]
+
+On Tue, Apr 27, 2021 at 3:34 PM Konstantin Aladyshev <aladyshev22@gmail.com>
+wrote:
+
+> I've added `IMAGE_INSTALL += "findutils"` to my `conf/local.conf`
+> file, and it seems like it was enough. There weren't any build
+> conflicts.
+>
+> Should the AppArmor recipe be upgraded in some way to indicate that it
+> needs a full-featured findutils package instead of a busybox one?
+
+
+I think it will be useful to dig a bit further and find out what option
+does it need from findutils package sometimes this could be solved by using
+compatible options etc
+
+If we find out that it has hard dependency on findutils then it should be
+added to apparmor recipe RDEPENDS
+
+
+>
+> Best regards,
+> Konstantin Aladyshev
+>
+> On Mon, Apr 26, 2021 at 5:08 PM Quentin Schulz
+> <quentin.schulz@streamunlimited.com> wrote:
+> >
+> > Hi Konstantin,
+> >
+> > On Mon, Apr 26, 2021 at 01:45:30PM +0300, Konstantin Aladyshev wrote:
+> > > I'm using the OpenBMC system (https://github.com/openbmc/openbmc) and
+> > > I've tried to enable AppArmor functionality from the 'meta-security'
+> > > layer.
+> > >
+> > > To achieve this I've added these strings to my local.conf file:
+> > > DISTRO_FEATURES_append = " apparmor"
+> > > IMAGE_INSTALL += "apparmor"
+> > >
+> > > The AppArmor functionality was installed to my image, but
+> > > unfortunately I've come to this issue:
+> > >
+> > > kernel: AppArmor: AppArmor initialized
+> > > kernel: AppArmor: AppArmor Filesystem Enabled
+> > > kernel: AppArmor: AppArmor sha1 policy hashing enabled
+> > > systemd[1]: systemd 247.3+ running in system mode. (+PAM -AUDIT
+> > > -SELINUX -IMA -APPARMOR -SMACK +SYSVINIT -UTMP -LIBCRYPTSETUP -GCRYPT
+> > > -GNUTLS -ACL +XZ -LZ4 -ZSTD -SECCOMP +BLKID -ELFUTILS +KMOD -IDN2 -IDN
+> > > -PCRE2 default-hierarchy=hybrid)
+> > > systemd[1]: Starting AppArmor initialization...
+> > > apparmor[113]: Starting AppArmor profiles
+> > > apparmor[128]: xargs: invalid option -- 'd'
+> >
+> > Busybox implementation of xargs does not support specifying a delimiter.
+> >
+> > I suggest you to install the full-featured xargs which is provided by
+> > the findutils recipe.
+> >
+> > You probably need to disable xargs Busybox implementation otherwise
+> > there'll be a conflict (you'll know, Yocto won't create the image).
+> >
+> > Cheers,
+> > Quentin
+>
+> 
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 3482 bytes --]
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] AppArmor with BusyBox
+  2021-04-28  3:33     ` Khem Raj
+@ 2021-04-28  3:43       ` Armin Kuster
+  2021-04-28  8:34       ` Quentin Schulz
+  1 sibling, 0 replies; 7+ messages in thread
+From: Armin Kuster @ 2021-04-28  3:43 UTC (permalink / raw)
+  To: Khem Raj, Konstantin Aladyshev; +Cc: yocto
+
+
+
+On 4/27/21 8:33 PM, Khem Raj wrote:
+>
+>
+> On Tue, Apr 27, 2021 at 3:34 PM Konstantin Aladyshev
+> <aladyshev22@gmail.com <mailto:aladyshev22@gmail.com>> wrote:
+>
+>     I've added `IMAGE_INSTALL += "findutils"` to my `conf/local.conf`
+>     file, and it seems like it was enough. There weren't any build
+>     conflicts.
+>
+>     Should the AppArmor recipe be upgraded in some way to indicate that it
+>     needs a full-featured findutils package instead of a busybox one?
+>
+>
+> I think it will be useful to dig a bit further and find out what
+> option does it need from findutils package sometimes this could be
+> solved by using compatible options etc 
+>
+> If we find out that it has hard dependency on findutils then it should
+> be added to apparmor recipe RDEPENDS
+
+You are using systemd.
+
+There is a comment regarding coreutils and findutils
+
+|# Add coreutils and findutils only if sysvinit scripts are in use
+
+Patches welcome.
+
+- Armin
+
+
+|
+>
+>
+>
+>     Best regards,
+>     Konstantin Aladyshev
+>
+>     On Mon, Apr 26, 2021 at 5:08 PM Quentin Schulz
+>     <quentin.schulz@streamunlimited.com
+>     <mailto:quentin.schulz@streamunlimited.com>> wrote:
+>     >
+>     > Hi Konstantin,
+>     >
+>     > On Mon, Apr 26, 2021 at 01:45:30PM +0300, Konstantin Aladyshev
+>     wrote:
+>     > > I'm using the OpenBMC system
+>     (https://github.com/openbmc/openbmc) and
+>     > > I've tried to enable AppArmor functionality from the
+>     'meta-security'
+>     > > layer.
+>     > >
+>     > > To achieve this I've added these strings to my local.conf file:
+>     > > DISTRO_FEATURES_append = " apparmor"
+>     > > IMAGE_INSTALL += "apparmor"
+>     > >
+>     > > The AppArmor functionality was installed to my image, but
+>     > > unfortunately I've come to this issue:
+>     > >
+>     > > kernel: AppArmor: AppArmor initialized
+>     > > kernel: AppArmor: AppArmor Filesystem Enabled
+>     > > kernel: AppArmor: AppArmor sha1 policy hashing enabled
+>     > > systemd[1]: systemd 247.3+ running in system mode. (+PAM -AUDIT
+>     > > -SELINUX -IMA -APPARMOR -SMACK +SYSVINIT -UTMP -LIBCRYPTSETUP
+>     -GCRYPT
+>     > > -GNUTLS -ACL +XZ -LZ4 -ZSTD -SECCOMP +BLKID -ELFUTILS +KMOD
+>     -IDN2 -IDN
+>     > > -PCRE2 default-hierarchy=hybrid)
+>     > > systemd[1]: Starting AppArmor initialization...
+>     > > apparmor[113]: Starting AppArmor profiles
+>     > > apparmor[128]: xargs: invalid option -- 'd'
+>     >
+>     > Busybox implementation of xargs does not support specifying a
+>     delimiter.
+>     >
+>     > I suggest you to install the full-featured xargs which is
+>     provided by
+>     > the findutils recipe.
+>     >
+>     > You probably need to disable xargs Busybox implementation otherwise
+>     > there'll be a conflict (you'll know, Yocto won't create the image).
+>     >
+>     > Cheers,
+>     > Quentin
+>
+>
+>
+>
+> 
+>
+
+
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] AppArmor with BusyBox
+  2021-04-28  3:33     ` Khem Raj
+  2021-04-28  3:43       ` Armin Kuster
+@ 2021-04-28  8:34       ` Quentin Schulz
+  1 sibling, 0 replies; 7+ messages in thread
+From: Quentin Schulz @ 2021-04-28  8:34 UTC (permalink / raw)
+  To: Khem Raj; +Cc: Konstantin Aladyshev, yocto
+
+Hi Khem,
+
+On Tue, Apr 27, 2021 at 08:33:08PM -0700, Khem Raj wrote:
+> On Tue, Apr 27, 2021 at 3:34 PM Konstantin Aladyshev <aladyshev22@gmail.com>
+> wrote:
+> 
+> > I've added `IMAGE_INSTALL += "findutils"` to my `conf/local.conf`
+> > file, and it seems like it was enough. There weren't any build
+> > conflicts.
+> >
+> > Should the AppArmor recipe be upgraded in some way to indicate that it
+> > needs a full-featured findutils package instead of a busybox one?
+> 
+> 
+> I think it will be useful to dig a bit further and find out what option
+> does it need from findutils package sometimes this could be solved by using
+> compatible options etc
+> 
+
+Not sure to really understand the question, but the -d option of xargs
+is for specifying a delimiter different than the default space.
+
+There is no support for such a thing in Busybox implementation of
+xargs. Usually options for tools in Busybox are specified at the
+beginning of the C file:
+https://git.busybox.net/busybox/tree/findutils/xargs.c
+Line 17 to 71.
+
+If one looks for delimiter keyword in the file, nothing configurable is
+available, it's either space or EOF that is matched.
+
+I'm naive enough to think it might be not too hard to add this option to\
+Busybox implementation.
+
+Cheers,
+Quentin
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* AppArmor with BusyBox
+@ 2021-04-26 10:29 aladyshev22
+  0 siblings, 0 replies; 7+ messages in thread
+From: aladyshev22 @ 2021-04-26 10:29 UTC (permalink / raw)
+  To: yocto, main
+
+I'm using the OpenBMC system (https://github.com/openbmc/openbmc) and
+I've tried to enable AppArmor functionality from the 'meta-security'
+layer.
+
+To achieve this I've added these strings to my local.conf file:
+DISTRO_FEATURES_append = " apparmor"
+IMAGE_INSTALL += "apparmor"
+
+The AppArmor functionality was installed to my image, but
+unfortunately I've come to this issue:
+
+kernel: AppArmor: AppArmor initialized
+kernel: AppArmor: AppArmor Filesystem Enabled
+kernel: AppArmor: AppArmor sha1 policy hashing enabled
+systemd[1]: systemd 247.3+ running in system mode. (+PAM -AUDIT
+-SELINUX -IMA -APPARMOR -SMACK +SYSVINIT -UTMP -LIBCRYPTSETUP -GCRYPT
+-GNUTLS -ACL +XZ -LZ4 -ZSTD -SECCOMP +BLKID -ELFUTILS +KMOD -IDN2 -IDN
+-PCRE2 default-hierarchy=hybrid)
+systemd[1]: Starting AppArmor initialization...
+apparmor[113]: Starting AppArmor profiles
+apparmor[128]: xargs: invalid option -- 'd'
+apparmor[128]: BusyBox v1.33.0 (2021-04-01 10:05:19 UTC) multi-call binary.
+apparmor[128]: Usage: xargs [OPTIONS] [PROG ARGS]
+apparmor[131]: /lib/apparmor/functions: line 76: echo: write error: Broken pipe
+apparmor[131]: /lib/apparmor/functions: line 76: echo: write error: Broken pipe
+...
+apparmor[131]: /lib/apparmor/functions: line 76: echo: write error: Broken pipe
+apparmor[131]: /lib/apparmor/functions: line 76: echo: write error: Broken pipe
+apparmor[138]: xargs: invalid option -- 'd'
+apparmor[138]: BusyBox v1.33.0 (2021-04-01 10:05:19 UTC) multi-call binary.
+apparmor[138]: Usage: xargs [OPTIONS] [PROG ARGS]
+apparmor[142]: /lib/apparmor/functions: line 92: echo: write error: Broken pipe
+apparmor[142]: /lib/apparmor/functions: line 92: echo: write error: Broken pipe
+...
+apparmor[142]: /lib/apparmor/functions: line 92: echo: write error: Broken pipe
+apparmor[142]: /lib/apparmor/functions: line 92: echo: write error: Broken pipe
+apparmor[113]:  failed!
+systemd[1]: apparmor.service: Main process exited, code=exited, status=1/FAILURE
+systemd[1]: apparmor.service: Failed with result 'exit-code'.
+systemd[1]: Failed to start AppArmor initialization.
+dbus-broker-launch[152]: AppArmor enabled, but not supported. Ignoring.
+
+
+From the way I see it the problems start from this output:
+xargs: invalid option -- 'd'
+
+This error comes from a fact that `xargs` from the `busybox` doesn't
+have the `-d` option
+(https://git.busybox.net/busybox/tree/findutils/xargs.c)
+but this functionality is used in the file:
+https://git.yoctoproject.org/cgit/cgit.cgi/meta-security/tree/recipes-mac/AppArmor/files/functions
+
+Once I've discovered it, I started to wonder if I'm doing everything correctly.
+Is my issue a simple bug, or AppArmor is not supposed to be run in an
+environment like mine?
+
+Best regards,
+Konstantin Aladyshev
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+end of thread, other threads:[~2021-04-28  8:34 UTC | newest]
+
+Thread overview: 7+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-04-26 10:45 AppArmor with BusyBox Konstantin Aladyshev
+2021-04-26 14:08 ` [yocto] " Quentin Schulz
+2021-04-27 15:57   ` Konstantin Aladyshev
+2021-04-28  3:33     ` Khem Raj
+2021-04-28  3:43       ` Armin Kuster
+2021-04-28  8:34       ` Quentin Schulz
+  -- strict thread matches above, loose matches on Subject: below --
+2021-04-26 10:29 aladyshev22
+

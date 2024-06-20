@@ -1,0 +1,527 @@
+* Problem Building python3-cryptography in kirkstone + chirpstack mixins - building for Layerscape
+@ 2023-05-11 19:24 Darcy Watkins
+  0 siblings, 0 replies; only message in thread
+From: Darcy Watkins @ 2023-05-11 19:24 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 29968 bytes --]
+
+Hi,
+
+I am facing a challenge related to getting LoRa chirpstack to build into a Yocto based image.
+
+The Yocto based image is part of a project based on ‘kirkstone’ to build for a Layerscape LS1021A SoC (Freescale/NXP).  This normally builds without issue, including to build the python3-cryptography package.
+
+I then added meta-clang (kirkstone) to it and integrated chunks of chirpstack-gateway-os into it as a layer (I just named it meta-lorawan).  Chirpstack-gateway-os is an openembedded based project that uses a different scheme than Yocto.  It has a layer (meta) that assembles packages together, with a handful of dependent openembedded layers integrated as layers using git submodules.
+
+It appears that chirpstack is based on kirkstone, but there are components that appear to be mixins from newer branches.  In fact the mixins from rust/cargo appear to be an intermediate version from between Yocto releases.  It includes upgrades to handle “crates” better than implemented in kirkstone.  I had to copy / paste chunks in because their layer.conf has too many platform specific directives in it.
+
+Chirpstack-gateway-os normally builds an image for rPi.  I want to build for Layerscape (and later, i.MX).
+
+I have been able to get all the individual packages copied in from chirpstack to build OK.
+
+My problem is that I have python3-cryptography pulled in as a dependency in my system and have not yet succeeded to get it to build.  I don’t think they build it in chirpstack (or it work ok building for rPi).
+
+At this point my suppositions are:
+
+  1.  Everything is OK in kirkstone (as I have seen).
+  2.  I presume everything is ok in the latest released Yocto.
+  3.  I can only presume that chirpstack-gateway-os doesn’t need python3-cryptography so they didn’t bother to check if it built (or it is all ok for rPi).
+
+The error appears to be related to compiler tuples so maybe there is a conflict between what was mixin as backports versus Layerscape arch/board support (that is in sync with kirkstone).
+
+I don’t know much about working with rust and especially how it builds python modules or selects compilers.  I am hoping that someone can point me in the right direction.
+
+Below is the error…
+
+dwatkins@carmd-ed-n11377-docker-dwatkins_voyager1:64bit build $ bitbake python3-cryptography
+Loading cache: 100% |#####################################################################################################################################################################################| Time: 0:00:00
+Loaded 4867 entries from dependency cache.
+WARNING: /home/dwatkins/workspace/mgos/voyager1/meta-mgos-core/recipes-opt-apps/webportal/opt-wpupdated_extsrc.bb: distutils-common-base.bbclass is deprecated, please use setuptools3-base.bbclass insteadETA:  --:--:--
+WARNING: /home/dwatkins/workspace/mgos/voyager1/meta-mgos-core/recipes-core/yaml/libomgyaml_extsrc.bb: distutils-common-base.bbclass is deprecated, please use setuptools3-base.bbclass instead
+WARNING: /home/dwatkins/workspace/mgos/voyager1/meta-mgos-core/recipes-opt-apps/ibeacon/opt-ibeacon_extsrc.bb: distutils-common-base.bbclass is deprecated, please use setuptools3-base.bbclass instead
+WARNING: /home/dwatkins/workspace/mgos/voyager1/meta-mgos-core/recipes-core/yaml/libyamlx_extsrc.bb: distutils-common-base.bbclass is deprecated, please use setuptools3-base.bbclass instead
+Parsing recipes: 100% |###################################################################################################################################################################################| Time: 0:00:01
+Parsing of 3290 .bb files complete (3281 cached, 9 parsed). 4876 targets, 207 skipped, 0 masked, 0 errors.
+WARNING: No recipes in default available for:
+  /home/dwatkins/workspace/mgos/voyager1/meta-mg90-bsp/recipes-kernel/firmware/linux-firmware_git.bbappend
+  /home/dwatkins/workspace/mgos/voyager1/meta-mg90-bsp/recipes-kernel/linux/linux-qoriq_4.19.bbappend
+  /home/dwatkins/workspace/mgos/voyager1/meta-mg90-bsp/recipes-kernel/linux/linux-qoriq_5.4.bbappend
+  /home/dwatkins/workspace/mgos/voyager1/meta-mgos-distro/meta-mgos/recipes-support/shadow/shadow_4.8.1.bbappend
+  /home/dwatkins/workspace/mgos/voyager1/meta-mgos-distro/meta-openssl-fips/recipes-support/openssl/openssl_1.0.2%.bbappend
+  /home/dwatkins/workspace/mgos/voyager1/meta-mgos-core/recipes-support/cherrypy/cherrypy-python_%.bbappend
+  /home/dwatkins/workspace/mgos/voyager1/meta-mgos-core/recipes-support/hostapd/hostapd_2.6.bbappend
+  /home/dwatkins/workspace/mgos/voyager1/meta-mgos-core/recipes-support/hostapd/hostapd_2.8.bbappend
+  /home/dwatkins/workspace/mgos/voyager1/meta-mgos-core/recipes-support/hostapd/hostapd_2.9.bbappend
+  /home/dwatkins/workspace/mgos/voyager1/meta-mgos-core/recipes-support/vim/vim_8.%.bbappend
+  /home/dwatkins/workspace/mgos/voyager1/meta-mgos-core/recipes-support/wpa-supplicant/wpa-supplicant_2.6.bbappend
+  /home/dwatkins/workspace/mgos/voyager1/meta-mgos-core/recipes-support/wpa-supplicant/wpa-supplicant_2.7.bbappend
+NOTE: Resolving any missing task queue dependencies
+
+Build Configuration:
+BB_VERSION           = "2.0.0"
+BUILD_SYS            = "x86_64-linux"
+NATIVELSBSTRING      = "universal"
+TARGET_SYS           = "arm-poky-linux-gnueabi"
+MACHINE              = "mg90"
+DISTRO               = "mgos"
+DISTRO_VERSION       = "4.0.9"
+TUNE_FEATURES        = "arm vfp cortexa7 neon callconvention-hard"
+TARGET_FPU           = "hard"
+meta-mgos-core       = "main:38ea2f74e0521b9b63322305264e59cac80e60c2"
+meta-mgos-release    = "main:8cb2e615f74dac237167b5219a453bd3636c3407"
+meta-mg90-bsp        = "main:28dc5cdca236cc6792107923b2dd030bd8b42f02"
+meta-mgos-airprime   = "HEAD:2a21c0b304372dbc36174d0615177287d2af0b3c"
+meta-mgos
+meta-daisy-cf
+meta-dunfell-cf
+meta-openssl-fips
+meta-sigma
+meta-lorawan         = "main:8eb3b0d1a5c9f94237bfadd5600859ade31dd69f"
+meta
+meta-poky
+meta-yocto-bsp       = "HEAD:75239ddd8d67c00139c6e88c1c2a790b471b12c5"
+meta-oe
+meta-networking
+meta-python
+meta-perl            = "HEAD:df452d9d98659b49888fa8a5428a0a8bd3e3aaec"
+meta-security
+meta-integrity
+meta-security-compliance
+meta-security-isafw  = "HEAD:cc20e2af2ae1c74e306f6c039c4963457c4cbd0f"
+meta-freescale       = "HEAD:82cbf4e5adac1017adc1e4a2ce056c57b3148ba0"
+meta-java            = "HEAD:8bf79fc2002bb83c6439d25bb63e4206894c2d10"
+meta-clang           = "HEAD:68ec449f97ffa58d835163581fc72afcb08f027b"
+workspace            = "<unknown>:<unknown>"
+
+WARNING: /home/dwatkins/workspace/mgos/voyager1/upstream/yocto/poky/meta/recipes-connectivity/openssl/openssl_3.0.8.bb:do_unpack is tainted from a forced run                                             | ETA:  0:00:00
+Initialising tasks: 100% |################################################################################################################################################################################| Time: 0:00:00
+Sstate summary: Wanted 30 Local 25 Mirrors 0 Missed 5 Current 243 (83% match, 98% complete)
+NOTE: Executing Tasks
+ERROR: python3-cryptography-39.0.2-r0 do_compile: 'python3 setup.py bdist_wheel ' execution failed.
+ERROR: python3-cryptography-39.0.2-r0 do_compile: ExecutionError('/home/dwatkins/workspace/mgos/voyager1/build/tmp/work/cortexa7hf-neon-poky-linux-gnueabi/python3-cryptography/39.0.2-r0/temp/run.do_compile.2705', 1, None, None)
+ERROR: Logfile of failure stored in: /home/dwatkins/workspace/mgos/voyager1/build/tmp/work/cortexa7hf-neon-poky-linux-gnueabi/python3-cryptography/39.0.2-r0/temp/log.do_compile.2705
+Log data follows:
+| DEBUG: Executing shell function do_compile
+| running bdist_wheel
+| running build
+| running build_py
+| running egg_info
+| writing src/cryptography.egg-info/PKG-INFO
+| writing dependency_links to src/cryptography.egg-info/dependency_links.txt
+| writing requirements to src/cryptography.egg-info/requires.txt
+| writing top-level names to src/cryptography.egg-info/top_level.txt
+| listing git files failed - pretending there aren't any
+| reading manifest file 'src/cryptography.egg-info/SOURCES.txt'
+| reading manifest template 'MANIFEST.in'
+| no previously-included directories found matching 'docs/_build'
+| warning: no previously-included files found matching 'vectors'
+| warning: no previously-included files matching '*' found under directory 'vectors'
+| warning: no previously-included files matching '*' found under directory '.github'
+| warning: no previously-included files found matching 'release.py'
+| warning: no previously-included files found matching '.readthedocs.yml'
+| warning: no previously-included files found matching 'ci-constraints-requirements.txt'
+| warning: no previously-included files found matching 'tox.ini'
+| warning: no previously-included files found matching 'mypy.ini'
+| adding license file 'LICENSE'
+| adding license file 'LICENSE.APACHE'
+| adding license file 'LICENSE.BSD'
+| adding license file 'LICENSE.PSF'
+| writing manifest file 'src/cryptography.egg-info/SOURCES.txt'
+| running build_ext
+| running build_rust
+| warning: build_rust: Forced Rust target `arm-poky-linux-gnueabi` is not compatible with deduced Rust target `arm-unknown-linux-gnueabi` - the built package  may not import successfully once installed.
+|
+| error: Error loading target specification: Could not find specification for target "arm-poky-linux-gnueabi". Run `rustc --print target-list` for a list of built-in targets
+|
+|
+|     =============================DEBUG ASSISTANCE=============================
+|     If you are seeing a compilation error please try the following steps to
+|     successfully install cryptography:
+|     1) Upgrade to the latest pip and try again. This will fix errors for most
+|        users. See: https://pip.pypa.io/en/stable/installing/#upgrading-pip
+|     2) Read https://cryptography.io/en/latest/installation/ for specific
+|        instructions for your platform.
+|     3) Check our frequently asked questions for more information:
+|        https://cryptography.io/en/latest/faq/
+|     4) Ensure you have a recent Rust toolchain installed:
+|        https://cryptography.io/en/latest/installation/#rust
+|
+|     Python: 3.10.9
+|     platform: Linux-3.10.0-1160.81.1.el7.x86_64-x86_64-with-glibc2.37
+|     pip: n/a
+|     setuptools: 59.5.0
+|     setuptools_rust: 1.1.2
+|     rustc: 1.66.1 (90743e729 2023-01-10) (built from a source tarball)
+|     =============================DEBUG ASSISTANCE=============================
+|
+| Traceback (most recent call last):
+|   File "/home/dwatkins/workspace/mgos/voyager1/build/tmp/work/cortexa7hf-neon-poky-linux-gnueabi/python3-cryptography/39.0.2-r0/cryptography-39.0.2/setup.py", line 48, in <module>
+|     setup(
+|   File "/home/dwatkins/workspace/mgos/voyager1/build/tmp/work/cortexa7hf-neon-poky-linux-gnueabi/python3-cryptography/39.0.2-r0/recipe-sysroot-native/usr/lib/python3.10/site-packages/setuptools/__init__.py", line 153, in setup
+|     return distutils.core.setup(**attrs)
+|   File "/home/dwatkins/workspace/mgos/voyager1/build/tmp/work/cortexa7hf-neon-poky-linux-gnueabi/python3-cryptography/39.0.2-r0/recipe-sysroot-native/usr/lib/python3.10/distutils/core.py", line 148, in setup
+|     dist.run_commands()
+|   File "/home/dwatkins/workspace/mgos/voyager1/build/tmp/work/cortexa7hf-neon-poky-linux-gnueabi/python3-cryptography/39.0.2-r0/recipe-sysroot-native/usr/lib/python3.10/distutils/dist.py", line 966, in run_commands
+|     self.run_command(cmd)
+|   File "/home/dwatkins/workspace/mgos/voyager1/build/tmp/work/cortexa7hf-neon-poky-linux-gnueabi/python3-cryptography/39.0.2-r0/recipe-sysroot-native/usr/lib/python3.10/distutils/dist.py", line 985, in run_command
+|     cmd_obj.run()
+|   File "/home/dwatkins/workspace/mgos/voyager1/build/tmp/work/cortexa7hf-neon-poky-linux-gnueabi/python3-cryptography/39.0.2-r0/recipe-sysroot-native/usr/lib/python3.10/site-packages/wheel/bdist_wheel.py", line 299, in run
+|     self.run_command('build')
+|   File "/home/dwatkins/workspace/mgos/voyager1/build/tmp/work/cortexa7hf-neon-poky-linux-gnueabi/python3-cryptography/39.0.2-r0/recipe-sysroot-native/usr/lib/python3.10/distutils/cmd.py", line 313, in run_command
+|     self.distribution.run_command(command)
+|   File "/home/dwatkins/workspace/mgos/voyager1/build/tmp/work/cortexa7hf-neon-poky-linux-gnueabi/python3-cryptography/39.0.2-r0/recipe-sysroot-native/usr/lib/python3.10/distutils/dist.py", line 985, in run_command
+|     cmd_obj.run()
+|   File "/home/dwatkins/workspace/mgos/voyager1/build/tmp/work/cortexa7hf-neon-poky-linux-gnueabi/python3-cryptography/39.0.2-r0/recipe-sysroot-native/usr/lib/python3.10/distutils/command/build.py", line 135, in run
+|     self.run_command(cmd_name)
+|   File "/home/dwatkins/workspace/mgos/voyager1/build/tmp/work/cortexa7hf-neon-poky-linux-gnueabi/python3-cryptography/39.0.2-r0/recipe-sysroot-native/usr/lib/python3.10/distutils/cmd.py", line 313, in run_command
+|     self.distribution.run_command(command)
+|   File "/home/dwatkins/workspace/mgos/voyager1/build/tmp/work/cortexa7hf-neon-poky-linux-gnueabi/python3-cryptography/39.0.2-r0/recipe-sysroot-native/usr/lib/python3.10/distutils/dist.py", line 985, in run_command
+|     cmd_obj.run()
+|   File "/home/dwatkins/workspace/mgos/voyager1/build/tmp/work/cortexa7hf-neon-poky-linux-gnueabi/python3-cryptography/39.0.2-r0/recipe-sysroot-native/usr/lib/python3.10/site-packages/setuptools_rust/setuptools_ext.py", line 132, in run
+|     build_rust.run()
+|   File "/home/dwatkins/workspace/mgos/voyager1/build/tmp/work/cortexa7hf-neon-poky-linux-gnueabi/python3-cryptography/39.0.2-r0/recipe-sysroot-native/usr/lib/python3.10/site-packages/setuptools_rust/command.py", line 101, in run
+|     self.run_for_extension(ext)
+|   File "/home/dwatkins/workspace/mgos/voyager1/build/tmp/work/cortexa7hf-neon-poky-linux-gnueabi/python3-cryptography/39.0.2-r0/recipe-sysroot-native/usr/lib/python3.10/site-packages/setuptools_rust/build.py", line 108, in run_for_extension
+|     dylib_paths = self.build_extension(ext, self.target)
+|   File "/home/dwatkins/workspace/mgos/voyager1/build/tmp/work/cortexa7hf-neon-poky-linux-gnueabi/python3-cryptography/39.0.2-r0/recipe-sysroot-native/usr/lib/python3.10/site-packages/setuptools_rust/build.py", line 129, in build_extension
+|     rustc_cfgs = _get_rustc_cfgs(target_triple)
+|   File "/home/dwatkins/workspace/mgos/voyager1/build/tmp/work/cortexa7hf-neon-poky-linux-gnueabi/python3-cryptography/39.0.2-r0/recipe-sysroot-native/usr/lib/python3.10/site-packages/setuptools_rust/build.py", line 618, in _get_rustc_cfgs
+|     for entry in get_rust_target_info(target_triple):
+|   File "/home/dwatkins/workspace/mgos/voyager1/build/tmp/work/cortexa7hf-neon-poky-linux-gnueabi/python3-cryptography/39.0.2-r0/recipe-sysroot-native/usr/lib/python3.10/site-packages/setuptools_rust/utils.py", line 47, in get_rust_target_info
+|     output = subprocess.check_output(cmd, universal_newlines=True)
+|   File "/home/dwatkins/workspace/mgos/voyager1/build/tmp/work/cortexa7hf-neon-poky-linux-gnueabi/python3-cryptography/39.0.2-r0/recipe-sysroot-native/usr/lib/python3.10/subprocess.py", line 421, in check_output
+|     return run(*popenargs, stdout=PIPE, timeout=timeout, check=True,
+|   File "/home/dwatkins/workspace/mgos/voyager1/build/tmp/work/cortexa7hf-neon-poky-linux-gnueabi/python3-cryptography/39.0.2-r0/recipe-sysroot-native/usr/lib/python3.10/subprocess.py", line 526, in run
+|     raise CalledProcessError(retcode, process.args,
+| subprocess.CalledProcessError: Command '['rustc', '--print', 'cfg', '--target', 'arm-poky-linux-gnueabi']' returned non-zero exit status 1.
+| ERROR: 'python3 setup.py bdist_wheel ' execution failed.
+| WARNING: /home/dwatkins/workspace/mgos/voyager1/build/tmp/work/cortexa7hf-neon-poky-linux-gnueabi/python3-cryptography/39.0.2-r0/temp/run.do_compile.2705:184 exit 1 from 'exit 1'
+| WARNING: Backtrace (BB generated script):
+|              #1: bbfatal_log, /home/dwatkins/workspace/mgos/voyager1/build/tmp/work/cortexa7hf-neon-poky-linux-gnueabi/python3-cryptography/39.0.2-r0/temp/run.do_compile.2705, line 184
+|              #2: setuptools3_do_compile, /home/dwatkins/workspace/mgos/voyager1/build/tmp/work/cortexa7hf-neon-poky-linux-gnueabi/python3-cryptography/39.0.2-r0/temp/run.do_compile.2705, line 174
+|              #3: do_compile, /home/dwatkins/workspace/mgos/voyager1/build/tmp/work/cortexa7hf-neon-poky-linux-gnueabi/python3-cryptography/39.0.2-r0/temp/run.do_compile.2705, line 163
+|              #4: main, /home/dwatkins/workspace/mgos/voyager1/build/tmp/work/cortexa7hf-neon-poky-linux-gnueabi/python3-cryptography/39.0.2-r0/temp/run.do_compile.2705, line 188
+ERROR: Task (/home/dwatkins/workspace/mgos/voyager1/meta-mgos-distro/meta-lorawan/recipes-devtools/python/python3-cryptography_39.0.2.bb:do_compile) failed with exit code '1'
+NOTE: Tasks Summary: Attempted 1039 tasks of which 1035 didn't need to be rerun and 1 failed.
+NOTE: Generating JSON CVE summary
+Complete CVE JSON report summary created at: /home/dwatkins/workspace/mgos/voyager1/build/tmp/log/cve/cve-summary.json
+
+Summary: 1 task failed:
+  /home/dwatkins/workspace/mgos/voyager1/meta-mgos-distro/meta-lorawan/recipes-devtools/python/python3-cryptography_39.0.2.bb:do_compile
+Summary: There were 6 WARNING messages.
+Summary: There were 2 ERROR messages, returning a non-zero exit code.
+
+
+Below is output after I temporarily hacked in the following into the python3-cryptography recipe.
+do_compile:prepend() {
+    rustc --print target-list
+    echo yadda
+    false
+    exit 1
+}
+This was to run `rustc --print target-list` as suggested.
+
+
+dwatkins@carmd-ed-n11377-docker-dwatkins_voyager1:64bit build $ bitbake python3-cryptography
+Loading cache: 100% |#####################################################################################################################################################################################| Time: 0:00:01
+Loaded 4867 entries from dependency cache.
+WARNING: /home/dwatkins/workspace/mgos/voyager1/meta-mgos-core/recipes-core/yaml/libomgyaml_extsrc.bb: distutils-common-base.bbclass is deprecated, please use setuptools3-base.bbclass instead          | ETA:  --:--:--
+WARNING: /home/dwatkins/workspace/mgos/voyager1/meta-mgos-core/recipes-opt-apps/ibeacon/opt-ibeacon_extsrc.bb: distutils-common-base.bbclass is deprecated, please use setuptools3-base.bbclass instead
+WARNING: /home/dwatkins/workspace/mgos/voyager1/meta-mgos-core/recipes-core/yaml/libyamlx_extsrc.bb: distutils-common-base.bbclass is deprecated, please use setuptools3-base.bbclass instead
+WARNING: /home/dwatkins/workspace/mgos/voyager1/meta-mgos-core/recipes-opt-apps/webportal/opt-wpupdated_extsrc.bb: distutils-common-base.bbclass is deprecated, please use setuptools3-base.bbclass instead
+Parsing recipes: 100% |###################################################################################################################################################################################| Time: 0:00:01
+Parsing of 3290 .bb files complete (3280 cached, 10 parsed). 4876 targets, 207 skipped, 0 masked, 0 errors.
+WARNING: No recipes in default available for:
+  /home/dwatkins/workspace/mgos/voyager1/meta-mg90-bsp/recipes-kernel/firmware/linux-firmware_git.bbappend
+  /home/dwatkins/workspace/mgos/voyager1/meta-mg90-bsp/recipes-kernel/linux/linux-qoriq_4.19.bbappend
+  /home/dwatkins/workspace/mgos/voyager1/meta-mg90-bsp/recipes-kernel/linux/linux-qoriq_5.4.bbappend
+  /home/dwatkins/workspace/mgos/voyager1/meta-mgos-distro/meta-mgos/recipes-support/shadow/shadow_4.8.1.bbappend
+  /home/dwatkins/workspace/mgos/voyager1/meta-mgos-distro/meta-openssl-fips/recipes-support/openssl/openssl_1.0.2%.bbappend
+  /home/dwatkins/workspace/mgos/voyager1/meta-mgos-core/recipes-support/cherrypy/cherrypy-python_%.bbappend
+  /home/dwatkins/workspace/mgos/voyager1/meta-mgos-core/recipes-support/hostapd/hostapd_2.6.bbappend
+  /home/dwatkins/workspace/mgos/voyager1/meta-mgos-core/recipes-support/hostapd/hostapd_2.8.bbappend
+  /home/dwatkins/workspace/mgos/voyager1/meta-mgos-core/recipes-support/hostapd/hostapd_2.9.bbappend
+  /home/dwatkins/workspace/mgos/voyager1/meta-mgos-core/recipes-support/vim/vim_8.%.bbappend
+  /home/dwatkins/workspace/mgos/voyager1/meta-mgos-core/recipes-support/wpa-supplicant/wpa-supplicant_2.6.bbappend
+  /home/dwatkins/workspace/mgos/voyager1/meta-mgos-core/recipes-support/wpa-supplicant/wpa-supplicant_2.7.bbappend
+NOTE: Resolving any missing task queue dependencies
+
+Build Configuration:
+BB_VERSION           = "2.0.0"
+BUILD_SYS            = "x86_64-linux"
+NATIVELSBSTRING      = "universal"
+TARGET_SYS           = "arm-poky-linux-gnueabi"
+MACHINE              = "mg90"
+DISTRO               = "mgos"
+DISTRO_VERSION       = "4.0.9"
+TUNE_FEATURES        = "arm vfp cortexa7 neon callconvention-hard"
+TARGET_FPU           = "hard"
+meta-mgos-core       = "main:38ea2f74e0521b9b63322305264e59cac80e60c2"
+meta-mgos-release    = "main:8cb2e615f74dac237167b5219a453bd3636c3407"
+meta-mg90-bsp        = "main:28dc5cdca236cc6792107923b2dd030bd8b42f02"
+meta-mgos-airprime   = "HEAD:2a21c0b304372dbc36174d0615177287d2af0b3c"
+meta-mgos
+meta-daisy-cf
+meta-dunfell-cf
+meta-openssl-fips
+meta-sigma
+meta-lorawan         = "main:8eb3b0d1a5c9f94237bfadd5600859ade31dd69f"
+meta
+meta-poky
+meta-yocto-bsp       = "HEAD:75239ddd8d67c00139c6e88c1c2a790b471b12c5"
+meta-oe
+meta-networking
+meta-python
+meta-perl            = "HEAD:df452d9d98659b49888fa8a5428a0a8bd3e3aaec"
+meta-security
+meta-integrity
+meta-security-compliance
+meta-security-isafw  = "HEAD:cc20e2af2ae1c74e306f6c039c4963457c4cbd0f"
+meta-freescale       = "HEAD:82cbf4e5adac1017adc1e4a2ce056c57b3148ba0"
+meta-java            = "HEAD:8bf79fc2002bb83c6439d25bb63e4206894c2d10"
+meta-clang           = "HEAD:68ec449f97ffa58d835163581fc72afcb08f027b"
+workspace            = "<unknown>:<unknown>"
+
+WARNING: /home/dwatkins/workspace/mgos/voyager1/upstream/yocto/poky/meta/recipes-connectivity/openssl/openssl_3.0.8.bb:do_unpack is tainted from a forced run                                             | ETA:  0:00:00
+Initialising tasks: 100% |################################################################################################################################################################################| Time: 0:00:00
+Sstate summary: Wanted 30 Local 25 Mirrors 0 Missed 5 Current 243 (83% match, 98% complete)
+NOTE: Executing Tasks
+ERROR: python3-cryptography-39.0.2-r0 do_compile: ExecutionError('/home/dwatkins/workspace/mgos/voyager1/build/tmp/work/cortexa7hf-neon-poky-linux-gnueabi/python3-cryptography/39.0.2-r0/temp/run.do_compile.2839', 1, None, None)
+ERROR: Logfile of failure stored in: /home/dwatkins/workspace/mgos/voyager1/build/tmp/work/cortexa7hf-neon-poky-linux-gnueabi/python3-cryptography/39.0.2-r0/temp/log.do_compile.2839
+Log data follows:
+| DEBUG: Executing shell function do_compile
+| aarch64-apple-darwin
+| aarch64-apple-ios
+| aarch64-apple-ios-macabi
+| aarch64-apple-ios-sim
+| aarch64-apple-tvos
+| aarch64-apple-watchos-sim
+| aarch64-fuchsia
+| aarch64-kmc-solid_asp3
+| aarch64-linux-android
+| aarch64-nintendo-switch-freestanding
+| aarch64-pc-windows-gnullvm
+| aarch64-pc-windows-msvc
+| aarch64-unknown-freebsd
+| aarch64-unknown-hermit
+| aarch64-unknown-linux-gnu
+| aarch64-unknown-linux-gnu_ilp32
+| aarch64-unknown-linux-musl
+| aarch64-unknown-netbsd
+| aarch64-unknown-none
+| aarch64-unknown-none-softfloat
+| aarch64-unknown-openbsd
+| aarch64-unknown-redox
+| aarch64-unknown-uefi
+| aarch64-uwp-windows-msvc
+| aarch64-wrs-vxworks
+| aarch64_be-unknown-linux-gnu
+| aarch64_be-unknown-linux-gnu_ilp32
+| arm-linux-androideabi
+| arm-unknown-linux-gnueabi
+| arm-unknown-linux-gnueabihf
+| arm-unknown-linux-musleabi
+| arm-unknown-linux-musleabihf
+| arm64_32-apple-watchos
+| armeb-unknown-linux-gnueabi
+| armebv7r-none-eabi
+| armebv7r-none-eabihf
+| armv4t-none-eabi
+| armv4t-unknown-linux-gnueabi
+| armv5te-none-eabi
+| armv5te-unknown-linux-gnueabi
+| armv5te-unknown-linux-musleabi
+| armv5te-unknown-linux-uclibceabi
+| armv6-unknown-freebsd
+| armv6-unknown-netbsd-eabihf
+| armv6k-nintendo-3ds
+| armv7-apple-ios
+| armv7-linux-androideabi
+| armv7-unknown-freebsd
+| armv7-unknown-linux-gnueabi
+| armv7-unknown-linux-gnueabihf
+| armv7-unknown-linux-musleabi
+| armv7-unknown-linux-musleabihf
+| armv7-unknown-linux-uclibceabi
+| armv7-unknown-linux-uclibceabihf
+| armv7-unknown-netbsd-eabihf
+| armv7-wrs-vxworks-eabihf
+| armv7a-kmc-solid_asp3-eabi
+| armv7a-kmc-solid_asp3-eabihf
+| armv7a-none-eabi
+| armv7a-none-eabihf
+| armv7k-apple-watchos
+| armv7r-none-eabi
+| armv7r-none-eabihf
+| armv7s-apple-ios
+| asmjs-unknown-emscripten
+| avr-unknown-gnu-atmega328
+| bpfeb-unknown-none
+| bpfel-unknown-none
+| hexagon-unknown-linux-musl
+| i386-apple-ios
+| i586-pc-windows-msvc
+| i586-unknown-linux-gnu
+| i586-unknown-linux-musl
+| i686-apple-darwin
+| i686-linux-android
+| i686-pc-windows-gnu
+| i686-pc-windows-msvc
+| i686-unknown-freebsd
+| i686-unknown-haiku
+| i686-unknown-linux-gnu
+| i686-unknown-linux-musl
+| i686-unknown-netbsd
+| i686-unknown-openbsd
+| i686-unknown-uefi
+| i686-uwp-windows-gnu
+| i686-uwp-windows-msvc
+| i686-wrs-vxworks
+| m68k-unknown-linux-gnu
+| mips-unknown-linux-gnu
+| mips-unknown-linux-musl
+| mips-unknown-linux-uclibc
+| mips64-openwrt-linux-musl
+| mips64-unknown-linux-gnuabi64
+| mips64-unknown-linux-muslabi64
+| mips64el-unknown-linux-gnuabi64
+| mips64el-unknown-linux-muslabi64
+| mipsel-sony-psp
+| mipsel-unknown-linux-gnu
+| mipsel-unknown-linux-musl
+| mipsel-unknown-linux-uclibc
+| mipsel-unknown-none
+| mipsisa32r6-unknown-linux-gnu
+| mipsisa32r6el-unknown-linux-gnu
+| mipsisa64r6-unknown-linux-gnuabi64
+| mipsisa64r6el-unknown-linux-gnuabi64
+| msp430-none-elf
+| nvptx64-nvidia-cuda
+| powerpc-unknown-freebsd
+| powerpc-unknown-linux-gnu
+| powerpc-unknown-linux-gnuspe
+| powerpc-unknown-linux-musl
+| powerpc-unknown-netbsd
+| powerpc-unknown-openbsd
+| powerpc-wrs-vxworks
+| powerpc-wrs-vxworks-spe
+| powerpc64-unknown-freebsd
+| powerpc64-unknown-linux-gnu
+| powerpc64-unknown-linux-musl
+| powerpc64-unknown-openbsd
+| powerpc64-wrs-vxworks
+| powerpc64le-unknown-freebsd
+| powerpc64le-unknown-linux-gnu
+| powerpc64le-unknown-linux-musl
+| riscv32gc-unknown-linux-gnu
+| riscv32gc-unknown-linux-musl
+| riscv32i-unknown-none-elf
+| riscv32im-unknown-none-elf
+| riscv32imac-unknown-none-elf
+| riscv32imac-unknown-xous-elf
+| riscv32imc-esp-espidf
+| riscv32imc-unknown-none-elf
+| riscv64gc-unknown-freebsd
+| riscv64gc-unknown-linux-gnu
+| riscv64gc-unknown-linux-musl
+| riscv64gc-unknown-none-elf
+| riscv64gc-unknown-openbsd
+| riscv64imac-unknown-none-elf
+| s390x-unknown-linux-gnu
+| s390x-unknown-linux-musl
+| sparc-unknown-linux-gnu
+| sparc64-unknown-linux-gnu
+| sparc64-unknown-netbsd
+| sparc64-unknown-openbsd
+| sparcv9-sun-solaris
+| thumbv4t-none-eabi
+| thumbv5te-none-eabi
+| thumbv6m-none-eabi
+| thumbv7a-pc-windows-msvc
+| thumbv7a-uwp-windows-msvc
+| thumbv7em-none-eabi
+| thumbv7em-none-eabihf
+| thumbv7m-none-eabi
+| thumbv7neon-linux-androideabi
+| thumbv7neon-unknown-linux-gnueabihf
+| thumbv7neon-unknown-linux-musleabihf
+| thumbv8m.base-none-eabi
+| thumbv8m.main-none-eabi
+| thumbv8m.main-none-eabihf
+| wasm32-unknown-emscripten
+| wasm32-unknown-unknown
+| wasm32-wasi
+| wasm64-unknown-unknown
+| x86_64-apple-darwin
+| x86_64-apple-ios
+| x86_64-apple-ios-macabi
+| x86_64-apple-tvos
+| x86_64-apple-watchos-sim
+| x86_64-fortanix-unknown-sgx
+| x86_64-fuchsia
+| x86_64-linux-android
+| x86_64-pc-solaris
+| x86_64-pc-windows-gnu
+| x86_64-pc-windows-gnullvm
+| x86_64-pc-windows-msvc
+| x86_64-sun-solaris
+| x86_64-unknown-dragonfly
+| x86_64-unknown-freebsd
+| x86_64-unknown-haiku
+| x86_64-unknown-hermit
+| x86_64-unknown-illumos
+| x86_64-unknown-l4re-uclibc
+| x86_64-unknown-linux-gnu
+| x86_64-unknown-linux-gnux32
+| x86_64-unknown-linux-musl
+| x86_64-unknown-netbsd
+| x86_64-unknown-none
+| x86_64-unknown-none-linuxkernel
+| x86_64-unknown-openbsd
+| x86_64-unknown-redox
+| x86_64-unknown-uefi
+| x86_64-uwp-windows-gnu
+| x86_64-uwp-windows-msvc
+| x86_64-wrs-vxworks
+| yadda
+| WARNING: /home/dwatkins/workspace/mgos/voyager1/build/tmp/work/cortexa7hf-neon-poky-linux-gnueabi/python3-cryptography/39.0.2-r0/temp/run.do_compile.2839:163 exit 1 from 'false'
+| WARNING: Backtrace (BB generated script):
+|              #1: do_compile, /home/dwatkins/workspace/mgos/voyager1/build/tmp/work/cortexa7hf-neon-poky-linux-gnueabi/python3-cryptography/39.0.2-r0/temp/run.do_compile.2839, line 163
+|              #2: main, /home/dwatkins/workspace/mgos/voyager1/build/tmp/work/cortexa7hf-neon-poky-linux-gnueabi/python3-cryptography/39.0.2-r0/temp/run.do_compile.2839, line 192
+ERROR: Task (/home/dwatkins/workspace/mgos/voyager1/meta-mgos-distro/meta-lorawan/recipes-devtools/python/python3-cryptography_39.0.2.bb:do_compile) failed with exit code '1'
+NOTE: Tasks Summary: Attempted 1039 tasks of which 1035 didn't need to be rerun and 1 failed.
+NOTE: Generating JSON CVE summary
+Complete CVE JSON report summary created at: /home/dwatkins/workspace/mgos/voyager1/build/tmp/log/cve/cve-summary.json
+
+Summary: 1 task failed:
+  /home/dwatkins/workspace/mgos/voyager1/meta-mgos-distro/meta-lorawan/recipes-devtools/python/python3-cryptography_39.0.2.bb:do_compile
+Summary: There were 6 WARNING messages.
+Summary: There was 1 ERROR message, returning a non-zero exit code.
+dwatkins@carmd-ed-n11377-docker-dwatkins_voyager1:64bit build $
+
+
+
+
+
+Regards,
+
+Darcy
+
+Darcy Watkins ::  Senior Staff Engineer, Firmware
+
+Semtech | Sierra Wireless
+Office  +1 604 231 1100
+13811 Wireless Way  :: Richmond, BC Canada V6V 3A4
+[M4]
+dwatkins@sierrawireless.com<mailto:dwatkins@sierrawireless.com> :: www.semtech.com<http://www.semtech.com>
+
+[-- Attachment #2: Type: text/html, Size: 54475 bytes --]
+
+^ permalink raw reply	[flat|nested] only message in thread
+only message in thread, other threads:[~2023-05-11 19:24 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-05-11 19:24 Problem Building python3-cryptography in kirkstone + chirpstack mixins - building for Layerscape Darcy Watkins
+

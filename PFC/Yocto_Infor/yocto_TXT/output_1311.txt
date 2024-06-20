@@ -1,0 +1,158 @@
+* Disabling SSH by default (but keeping the service)
+@ 2022-10-13 13:17 Maik Vermeulen
+  2022-10-13 13:34 ` [yocto] " Leon Woestenberg
+  0 siblings, 1 reply; 3+ messages in thread
+From: Maik Vermeulen @ 2022-10-13 13:17 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1441 bytes --]
+
+Hi,
+
+We tried two things to disable SSH by default in our image recipe:
+inherit systemd
+SYSTEMD_AUTO_ENABLE_openssh-sshd = "disable"
+
+pkg_postinst_ontarget_openssh () {
+    systemctl disable --now sshd.socket
+}
+
+However, both methods don't seem to work. We can still SSH to the device.
+Furthermore, this is the unit list:
+sshdgenkeys.service            loaded active exited       OpenSSH Key
+Generation
+system-sshd.slice                 loaded active active
+system-sshd.slice
+sshd.socket                          loaded active listening    sshd.socket
+
+We are on openssh_7.6p1.
+
+Any ideas why this is happening?
+
+Kind regards,
+
+Maik Vermeulen
+
+Embedded Software Engineer — Lightyear <https://www.lightyear.one/>
++31 6 16 82 73 79 <+31616827379>
+
+-- 
+ 
+<https://lightyear.one/careers?utm_source=signature&utm_campaign=spotlightroles&utm_medium=email#vacancies>
+
+-- 
+
+
+Automotive Campus 70 —5708 JZ Helmond, the Netherlands
+www.lightyear.one 
+<https://lightyear.one/>
+ <https://www.linkedin.com/company/lightyear.one/>
+
+This email may contain information which is privileged and/or 
+confidential. If you received this e-mail in error, please notify us 
+immediately by e-mail and delete the email without copying or disclosing 
+its contents to any other person. Lightyear is a trade name of Atlas 
+Technologies B.V. and is registered at the Dutch Chamber of Commerce under 
+number 67264298. 
+
+[-- Attachment #2: Type: text/html, Size: 2855 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] Disabling SSH by default (but keeping the service)
+  2022-10-13 13:17 Disabling SSH by default (but keeping the service) Maik Vermeulen
+@ 2022-10-13 13:34 ` Leon Woestenberg
+  2022-10-13 19:11   ` Josef Holzmayr
+  0 siblings, 1 reply; 3+ messages in thread
+From: Leon Woestenberg @ 2022-10-13 13:34 UTC (permalink / raw)
+  To: Maik Vermeulen; +Cc: yocto
+
+Hello Maik,
+
+On Thu, Oct 13, 2022 at 3:17 PM Maik Vermeulen
+<maik.vermeulen@lightyear.one> wrote:
+> We tried two things to disable SSH by default in our image recipe:
+> However, both methods don't seem to work.
+
+Hmm, something else might override it elsewhere? I don't know.
+
+Seems like a similar question came up in stackoverflow, where some
+potential solutions are given that you might want to give a try:
+
+https://stackoverflow.com/questions/50651371/disable-a-standard-systemd-service-in-yocto-build
+
+Regards,
+
+Leon.
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] Disabling SSH by default (but keeping the service)
+  2022-10-13 13:34 ` [yocto] " Leon Woestenberg
+@ 2022-10-13 19:11   ` Josef Holzmayr
+  0 siblings, 0 replies; 3+ messages in thread
+From: Josef Holzmayr @ 2022-10-13 19:11 UTC (permalink / raw)
+  To: Leon Woestenberg; +Cc: Maik Vermeulen, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1759 bytes --]
+
+Hi Maik,
+
+this is a number of things being mixed up.
+1) a recipe cannot affect another recipe. the image is a recipe, sshd is a
+recipe. so you either can set this in a bbappend to thesshd recipe, or in a
+config file (distro, machine, local) - but not in the image.
+2) the override separator is : these days (since dunfell), not _, and you
+are targetting a specific recipe. so in a config file, it would be
+SYSTEMD_AUTO_ENABLE:pn-openssh-sshd
+[3] 7.6p1 suggests that you are on some release made in 2017, or
+comparable, and the first thing you should do is upgrade, or otherwise you
+will be shipping outdated and vulnerable software right from day 1.
+
+Greetz
+
+On Thu, Oct 13, 2022 at 3:34 PM Leon Woestenberg <leon@sidebranch.com>
+wrote:
+
+> Hello Maik,
+>
+> On Thu, Oct 13, 2022 at 3:17 PM Maik Vermeulen
+> <maik.vermeulen@lightyear.one> wrote:
+> > We tried two things to disable SSH by default in our image recipe:
+> > However, both methods don't seem to work.
+>
+> Hmm, something else might override it elsewhere? I don't know.
+>
+> Seems like a similar question came up in stackoverflow, where some
+> potential solutions are given that you might want to give a try:
+>
+>
+> https://stackoverflow.com/questions/50651371/disable-a-standard-systemd-service-in-yocto-build
+>
+> Regards,
+>
+> Leon.
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> You automatically follow any topics you start or reply to.
+> View/Reply Online (#58331):
+> https://lists.yoctoproject.org/g/yocto/message/58331
+> Mute This Topic: https://lists.yoctoproject.org/mt/94303163/4689568
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> jester@theyoctojester.info]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 2786 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2022-10-13 19:11 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-10-13 13:17 Disabling SSH by default (but keeping the service) Maik Vermeulen
+2022-10-13 13:34 ` [yocto] " Leon Woestenberg
+2022-10-13 19:11   ` Josef Holzmayr
+

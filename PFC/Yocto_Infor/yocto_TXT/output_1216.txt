@@ -1,0 +1,167 @@
+* Re: Ownership issue during do_image
+       [not found] <CA+cAkepRDYN9y-mbsvn87XPKEgnFhBD6T5f62yR_tkYGS1tCeQ@mail.gmail.com>
+@ 2022-11-15 17:24 ` Frederic Martinsons
+  2022-11-15 20:05   ` [yocto] " Tim Orling
+  0 siblings, 1 reply; 5+ messages in thread
+From: Frederic Martinsons @ 2022-11-15 17:24 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 213 bytes --]
+
+Hello list,
+
+Doesn't ring a bell to anybody ? Even the slightest clue will help me to continue to track down this weird behavior , nobody have ever problem of files/directories rights during image generation ?
+
+[-- Attachment #2: Type: text/html, Size: 227 bytes --]
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] Ownership issue during do_image
+  2022-11-15 17:24 ` Ownership issue during do_image Frederic Martinsons
+@ 2022-11-15 20:05   ` Tim Orling
+  2022-11-16 11:20     ` Frederic Martinsons
+  0 siblings, 1 reply; 5+ messages in thread
+From: Tim Orling @ 2022-11-15 20:05 UTC (permalink / raw)
+  To: Frederic Martinsons; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 762 bytes --]
+
+Are you building with a docker/podman container?
+
+On Tue, Nov 15, 2022 at 9:24 AM Frederic Martinsons <
+frederic.martinsons@gmail.com> wrote:
+
+> Hello list,
+>
+> Doesn't ring a bell to anybody ? Even the slightest clue will help me to
+> continue to track down this weird behavior , nobody have ever problem of
+> files/directories rights during image generation ?
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#58572):
+> https://lists.yoctoproject.org/g/yocto/message/58572
+> Mute This Topic: https://lists.yoctoproject.org/mt/94706311/924729
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> ticotimo@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 1524 bytes --]
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: Ownership issue during do_image
+  2022-11-15 20:05   ` [yocto] " Tim Orling
+@ 2022-11-16 11:20     ` Frederic Martinsons
+  2022-12-16  7:57       ` Frederic Martinsons
+  0 siblings, 1 reply; 5+ messages in thread
+From: Frederic Martinsons @ 2022-11-16 11:20 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 616 bytes --]
+
+Yes I do, I build under docker (ubuntu 20.04), I didn't mention that in my original post , sorry. Do you think it is related to my issue ?
+
+On Tue, Nov 15, 2022 at 09:06 PM, Tim Orling wrote:
+
+>
+> Are you building with a docker/podman container?
+> 
+> On Tue, Nov 15, 2022 at 9:24 AM Frederic Martinsons <
+> frederic.martinsons@gmail.com> wrote:
+> 
+> > Hello list,
+> >
+> > Doesn't ring a bell to anybody ? Even the slightest clue will help me to
+> > continue to track down this weird behavior , nobody have ever problem of
+> > files/directories rights during image generation ?
+> >
+> > 
+> >
+> >
+>
+
+[-- Attachment #2: Type: text/html, Size: 666 bytes --]
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: Ownership issue during do_image
+  2022-11-16 11:20     ` Frederic Martinsons
+@ 2022-12-16  7:57       ` Frederic Martinsons
+  2023-04-25  8:45         ` sebastien.raillet
+  0 siblings, 1 reply; 5+ messages in thread
+From: Frederic Martinsons @ 2022-12-16  7:57 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1019 bytes --]
+
+Hello, some news about this issue.
+
+Tim pointed me to the docker and the reason why crops container have some UID:GID manipulation: [see there](https://github.com/crops/extsdk-container/blob/master/usersetup.py).
+
+I used an ubuntu 20.04 VM to setup a build without docker and I fall into the exact same problem.
+
+But finally, I found that a workaround by creating and using another working directory inside my image creation command (though I clearly don't know why this work and the former way don't, despite it worked with yocto warrior)
+
+Before that, I have a working directory that was created in the bbclass :
+```
+SQSHDIR = "${S}/sqshimg/${MACHINE}"
+
+do_image_tapos_sqshimg[dirs] += "${SQSHDIR}"
+do_image_tapos_sqshimg[cleandirs] += "${SQSHDIR}"
+do_image_tapos_sqshimg[recrdeptask] += "do_deploy"
+
+IMAGE_CMD_tapos-sqshimg() {
+
+	install -d ${SQSHDIR}
+```
+
+I simply replaced the creation command by:
+```
+IMAGE_CMD_tapos-sqshimg() {
+
+     SQSHDIR_WORKDIR=$(mktemp -d)
+```
+
+and voilà !
+
+
+[-- Attachment #2: Type: text/html, Size: 1243 bytes --]
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: Ownership issue during do_image
+  2022-12-16  7:57       ` Frederic Martinsons
+@ 2023-04-25  8:45         ` sebastien.raillet
+  0 siblings, 0 replies; 5+ messages in thread
+From: sebastien.raillet @ 2023-04-25  8:45 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1210 bytes --]
+
+Hello,
+
+I was facing a similar issue some days ago and I've found your post.
+
+We are using also a custom image generation to split the final rootfs in many partitions. After upgrading our distro to dunfell, we encountered similar issue to the one you had. We were using temporary folders like this : IMAGE_ROOTFS_COPY="${DEPLOY_DIR_IMA GE}/rootfs-copy/"
+MM_SPLITDIR="${DEPLOY_DIR_IMAGE}/partitions/" Trying to dig into the issue, I've discovered the introduction of this commit ( https://github.com/yoctoproject/poky/commit/4e7c21160b74d0e63d90cae535ff73579cc4fa8b ) (integrated into Dunfell 3.1.6 and above). The goal is to make pseudo / fakeroot mechanism ignoring many paths to be stored inside its database.
+
+Sadly, ${DEPLOY_DIR_IMAGE} as well as ${S} you used are now part of these excluded paths. The fix I've made on my side is to use ${WORKDIR} instead of ${DEPLOY_DIR_IMAGE}.
+
+My assumption is that if one of the path you are using isn't tracked by pseudo / fakeroot mechanism, it will refuse to make the copy preserving the permissions as it isn't able to retrieve them inside the database.
+
+Hope it can help to better understand what happens if others people are facing similar issue :)
+
+[-- Attachment #2: Type: text/html, Size: 1576 bytes --]
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+end of thread, other threads:[~2023-04-25  8:45 UTC | newest]
+
+Thread overview: 5+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+     [not found] <CA+cAkepRDYN9y-mbsvn87XPKEgnFhBD6T5f62yR_tkYGS1tCeQ@mail.gmail.com>
+2022-11-15 17:24 ` Ownership issue during do_image Frederic Martinsons
+2022-11-15 20:05   ` [yocto] " Tim Orling
+2022-11-16 11:20     ` Frederic Martinsons
+2022-12-16  7:57       ` Frederic Martinsons
+2023-04-25  8:45         ` sebastien.raillet
+

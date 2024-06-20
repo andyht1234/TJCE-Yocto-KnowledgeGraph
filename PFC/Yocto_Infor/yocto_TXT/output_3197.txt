@@ -1,0 +1,157 @@
+* [meta-gplv2] [PATCH v2] coreutils_6.9.bb: Fix build with glibc 2.34
+@ 2021-07-04 18:52 Khem Raj
+  2021-07-04 18:57 ` Khem Raj
+  0 siblings, 1 reply; 2+ messages in thread
+From: Khem Raj @ 2021-07-04 18:52 UTC (permalink / raw)
+  To: yocto; +Cc: Khem Raj
+
+Signed-off-by: Khem Raj <raj.khem@gmail.com>
+---
+v2: Rebase the patch to respect other patches
+
+ ...-includes-for-glibc-2.34-portability.patch | 35 +++++++++++++++++++
+ recipes-core/coreutils/coreutils_6.9.bb       |  1 +
+ 2 files changed, 36 insertions(+)
+ create mode 100644 recipes-core/coreutils/coreutils-6.9/0001-sort.c-Reorder-includes-for-glibc-2.34-portability.patch
+
+diff --git a/recipes-core/coreutils/coreutils-6.9/0001-sort.c-Reorder-includes-for-glibc-2.34-portability.patch b/recipes-core/coreutils/coreutils-6.9/0001-sort.c-Reorder-includes-for-glibc-2.34-portability.patch
+new file mode 100644
+index 0000000..f37cb47
+--- /dev/null
++++ b/recipes-core/coreutils/coreutils-6.9/0001-sort.c-Reorder-includes-for-glibc-2.34-portability.patch
+@@ -0,0 +1,35 @@
++From e241a55767c4eaac7d14c412d880037cb6d2ee33 Mon Sep 17 00:00:00 2001
++From: Khem Raj <raj.khem@gmail.com>
++Date: Tue, 29 Jun 2021 22:43:16 -0700
++Subject: [PATCH] sort.c: Reorder includes for glibc 2.34 portability
++
++With glibc 2.34 config.h will include stdlib.h and that would disable
++sys/wait.h to include needed definitions from bits/waitflags.h since
++_STDLIB_H would have been defined already and sys/wait.h would think
++these paths are included already, this is fixed with newer gnulib and
++configure so this is to get this old version to compile with latest
++glibc headers
++
++Upstream-Status: Inappropriate [OE-Specific]
++Signed-off-by: Khem Raj <raj.khem@gmail.com>
++---
++ src/sort.c | 4 ++--
++ 1 file changed, 2 insertions(+), 2 deletions(-)
++
++--- a/src/sort.c
+++++ b/src/sort.c
++@@ -21,12 +21,12 @@
++
++    Ørn E. Hansen added NLS support in 1997.  */
++
+++#include <sys/types.h>
+++#include <sys/wait.h>
++ #include <config.h>
++
++ #include <assert.h>
++ #include <getopt.h>
++-#include <sys/types.h>
++-#include <sys/wait.h>
++ #include <signal.h>
++ #if HAVE_WCHAR_H
++ # include <wchar.h>
+diff --git a/recipes-core/coreutils/coreutils_6.9.bb b/recipes-core/coreutils/coreutils_6.9.bb
+index 42b4f3c..69e5489 100644
+--- a/recipes-core/coreutils/coreutils_6.9.bb
++++ b/recipes-core/coreutils/coreutils_6.9.bb
+@@ -27,6 +27,7 @@ SRC_URI = "${GNU_MIRROR}/coreutils/${BP}.tar.bz2 \
+            file://no-man.patch \
+            file://build-don-t-need-charset.alias-when-building-for-mus.patch \
+            file://no-su.patch \
++           file://0001-sort.c-Reorder-includes-for-glibc-2.34-portability.patch \
+            "
+
+ SRC_URI[md5sum] = "c9607d8495f16e98906e7ed2d9751a06"
+--
+2.32.0
+
+^ permalink raw reply related	[flat|nested] 2+ messages in thread
+* Re: [meta-gplv2] [PATCH v2] coreutils_6.9.bb: Fix build with glibc 2.34
+  2021-07-04 18:52 [meta-gplv2] [PATCH v2] coreutils_6.9.bb: Fix build with glibc 2.34 Khem Raj
+@ 2021-07-04 18:57 ` Khem Raj
+  0 siblings, 0 replies; 2+ messages in thread
+From: Khem Raj @ 2021-07-04 18:57 UTC (permalink / raw)
+  To: Yocto-mailing-list
+
+ignore this, as I sent a followup which applies on top of master.
+
+On Sun, Jul 4, 2021 at 11:52 AM Khem Raj <raj.khem@gmail.com> wrote:
+>
+> Signed-off-by: Khem Raj <raj.khem@gmail.com>
+> ---
+> v2: Rebase the patch to respect other patches
+>
+>  ...-includes-for-glibc-2.34-portability.patch | 35 +++++++++++++++++++
+>  recipes-core/coreutils/coreutils_6.9.bb       |  1 +
+>  2 files changed, 36 insertions(+)
+>  create mode 100644 recipes-core/coreutils/coreutils-6.9/0001-sort.c-Reorder-includes-for-glibc-2.34-portability.patch
+>
+> diff --git a/recipes-core/coreutils/coreutils-6.9/0001-sort.c-Reorder-includes-for-glibc-2.34-portability.patch b/recipes-core/coreutils/coreutils-6.9/0001-sort.c-Reorder-includes-for-glibc-2.34-portability.patch
+> new file mode 100644
+> index 0000000..f37cb47
+> --- /dev/null
+> +++ b/recipes-core/coreutils/coreutils-6.9/0001-sort.c-Reorder-includes-for-glibc-2.34-portability.patch
+> @@ -0,0 +1,35 @@
+> +From e241a55767c4eaac7d14c412d880037cb6d2ee33 Mon Sep 17 00:00:00 2001
+> +From: Khem Raj <raj.khem@gmail.com>
+> +Date: Tue, 29 Jun 2021 22:43:16 -0700
+> +Subject: [PATCH] sort.c: Reorder includes for glibc 2.34 portability
+> +
+> +With glibc 2.34 config.h will include stdlib.h and that would disable
+> +sys/wait.h to include needed definitions from bits/waitflags.h since
+> +_STDLIB_H would have been defined already and sys/wait.h would think
+> +these paths are included already, this is fixed with newer gnulib and
+> +configure so this is to get this old version to compile with latest
+> +glibc headers
+> +
+> +Upstream-Status: Inappropriate [OE-Specific]
+> +Signed-off-by: Khem Raj <raj.khem@gmail.com>
+> +---
+> + src/sort.c | 4 ++--
+> + 1 file changed, 2 insertions(+), 2 deletions(-)
+> +
+> +--- a/src/sort.c
+> ++++ b/src/sort.c
+> +@@ -21,12 +21,12 @@
+> +
+> +    Ørn E. Hansen added NLS support in 1997.  */
+> +
+> ++#include <sys/types.h>
+> ++#include <sys/wait.h>
+> + #include <config.h>
+> +
+> + #include <assert.h>
+> + #include <getopt.h>
+> +-#include <sys/types.h>
+> +-#include <sys/wait.h>
+> + #include <signal.h>
+> + #if HAVE_WCHAR_H
+> + # include <wchar.h>
+> diff --git a/recipes-core/coreutils/coreutils_6.9.bb b/recipes-core/coreutils/coreutils_6.9.bb
+> index 42b4f3c..69e5489 100644
+> --- a/recipes-core/coreutils/coreutils_6.9.bb
+> +++ b/recipes-core/coreutils/coreutils_6.9.bb
+> @@ -27,6 +27,7 @@ SRC_URI = "${GNU_MIRROR}/coreutils/${BP}.tar.bz2 \
+>             file://no-man.patch \
+>             file://build-don-t-need-charset.alias-when-building-for-mus.patch \
+>             file://no-su.patch \
+> +           file://0001-sort.c-Reorder-includes-for-glibc-2.34-portability.patch \
+>             "
+>
+>  SRC_URI[md5sum] = "c9607d8495f16e98906e7ed2d9751a06"
+> --
+> 2.32.0
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2021-07-04 18:58 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-07-04 18:52 [meta-gplv2] [PATCH v2] coreutils_6.9.bb: Fix build with glibc 2.34 Khem Raj
+2021-07-04 18:57 ` Khem Raj
+

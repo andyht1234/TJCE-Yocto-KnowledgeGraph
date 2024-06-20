@@ -1,0 +1,264 @@
+* question about PREFERRED_RPROVIDER
+@ 2022-08-13  9:57 John Wang
+  2022-08-13 10:43 ` [yocto] " Richard Purdie
+  2022-08-13 14:10 ` Khem Raj
+  0 siblings, 2 replies; 4+ messages in thread
+From: John Wang @ 2022-08-13  9:57 UTC (permalink / raw)
+  To: yocto
+
+Hi,
+
+There is a package with two versions, private and public.
+But when I use the PREFERRED_RPROVIDER to select the public version,
+bitbake still tries fetch the private one, and then bitabke terminates
+because do_fetch fails (no permission)
+
+What I expect is that when I select the public repository version, it
+should not fetch the private repository, am I right?
+Or, should I not use the PREFERRED_RPROVIDER to select a public/private repo ?
+
+Could someone guide me :)
+
+
+feature-public.bb
+
+```
+SRC_URI = "git://public"
+
+RPROVIDES:${PN} += " \
+    virtual-feature \
+"
+```
+
+feature-private.bb
+
+```
+SRC_URI= "git://private"
+
+RPROVIDES:${PN} += " \
+    virtual-feature \
+"
+```
+
+
+machine.conf
+
+```
+PREFERRED_RPROVIDER_virtual-feature = "feature-public"
+```
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] question about PREFERRED_RPROVIDER
+  2022-08-13  9:57 question about PREFERRED_RPROVIDER John Wang
+@ 2022-08-13 10:43 ` Richard Purdie
+  2022-08-13 14:10 ` Khem Raj
+  1 sibling, 0 replies; 4+ messages in thread
+From: Richard Purdie @ 2022-08-13 10:43 UTC (permalink / raw)
+  To: John Wang, yocto
+
+On Sat, 2022-08-13 at 17:57 +0800, John Wang wrote:
+> Hi,
+> 
+> There is a package with two versions, private and public.
+> But when I use the PREFERRED_RPROVIDER to select the public version,
+> bitbake still tries fetch the private one, and then bitabke terminates
+> because do_fetch fails (no permission)
+> 
+> What I expect is that when I select the public repository version, it
+> should not fetch the private repository, am I right?
+> Or, should I not use the PREFERRED_RPROVIDER to select a public/private repo ?
+> 
+> Could someone guide me :)
+
+"virtual" entries only work in PROVIDES and PREFERRED_PROVIDER, not in
+the runtime version of the variable.
+
+Cheers,
+
+Richard
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] question about PREFERRED_RPROVIDER
+  2022-08-13  9:57 question about PREFERRED_RPROVIDER John Wang
+  2022-08-13 10:43 ` [yocto] " Richard Purdie
+@ 2022-08-13 14:10 ` Khem Raj
+  2022-08-15  6:01   ` John Wang
+  1 sibling, 1 reply; 4+ messages in thread
+From: Khem Raj @ 2022-08-13 14:10 UTC (permalink / raw)
+  To: John Wang; +Cc: yocto
+
+fetcher will try to get versions of recipes during parse phase and if
+your recipes are using AUTOREV they will try to poke at git server for
+latest commit SHA
+are you using AUTOREV by chance ?
+
+On Sat, Aug 13, 2022 at 2:57 AM John Wang <wangzq.jn@gmail.com> wrote:
+>
+> Hi,
+>
+> There is a package with two versions, private and public.
+> But when I use the PREFERRED_RPROVIDER to select the public version,
+> bitbake still tries fetch the private one, and then bitabke terminates
+> because do_fetch fails (no permission)
+>
+> What I expect is that when I select the public repository version, it
+> should not fetch the private repository, am I right?
+> Or, should I not use the PREFERRED_RPROVIDER to select a public/private repo ?
+>
+> Could someone guide me :)
+>
+>
+> feature-public.bb
+>
+> ```
+> SRC_URI = "git://public"
+>
+> RPROVIDES:${PN} += " \
+>     virtual-feature \
+> "
+> ```
+>
+> feature-private.bb
+>
+> ```
+> SRC_URI= "git://private"
+>
+> RPROVIDES:${PN} += " \
+>     virtual-feature \
+> "
+> ```
+>
+>
+> machine.conf
+>
+> ```
+> PREFERRED_RPROVIDER_virtual-feature = "feature-public"
+> ```
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> You automatically follow any topics you start or reply to.
+> View/Reply Online (#57835): https://lists.yoctoproject.org/g/yocto/message/57835
+> Mute This Topic: https://lists.yoctoproject.org/mt/92997258/1997914
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [raj.khem@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] question about PREFERRED_RPROVIDER
+  2022-08-13 14:10 ` Khem Raj
+@ 2022-08-15  6:01   ` John Wang
+  0 siblings, 0 replies; 4+ messages in thread
+From: John Wang @ 2022-08-15  6:01 UTC (permalink / raw)
+  To: Khem Raj, richard.purdie; +Cc: yocto
+
+I did as Richard suggested, It worked as expected now
+
+feature-public.bb or feature-private.bb:
+SRC_URI = "git://public or git://private"
+
+PROVIDES +=  "virtual/feature"
+RPROVIDES:${PN} += " \
+virtual-feature \
+"
+
+machine.conf:
+PREFERRED_PROVIDER_virtual/feature = "feature-public"
+
+
+Khem Raj <raj.khem@gmail.com> 于2022年8月13日周六 22:11写道：
+>
+> fetcher will try to get versions of recipes during parse phase and if
+> your recipes are using AUTOREV they will try to poke at git server for
+> latest commit SHA
+> are you using AUTOREV by chance ?
+
+No,  and I will avoid to use AUTOREV, thank you
+
+I checked the yocto-manual, and saw
+
+If you use a virtual/\* item with PREFERRED_PROVIDER, then any recipe
+that PROVIDES that item but is not selected (defined) by
+PREFERRED_PROVIDER is prevented from building, which is usually
+desirable since this mechanism is designed to select between mutually
+exclusive alternative providers[1].
+
+Do you mean if I use AUTOREV, bitbake sill tries to fetch ?
+
+And, I am confused about the "PREFERRED_RPROVIDER" ,  I saw someone
+use this variable[2], but I cannot find any thing about it In the
+manual [3]
+
+[1] https://docs.yoctoproject.org/ref-manual/variables.html#term-PREFERRED_PROVIDER
+[2] https://github.com/search?q=PREFERRED_RPROVIDER_virtual&type=code
+[3] https://docs.yoctoproject.org/genindex.html#P
+
+>
+> On Sat, Aug 13, 2022 at 2:57 AM John Wang <wangzq.jn@gmail.com> wrote:
+> >
+> > Hi,
+> >
+> > There is a package with two versions, private and public.
+> > But when I use the PREFERRED_RPROVIDER to select the public version,
+> > bitbake still tries fetch the private one, and then bitabke terminates
+> > because do_fetch fails (no permission)
+> >
+> > What I expect is that when I select the public repository version, it
+> > should not fetch the private repository, am I right?
+> > Or, should I not use the PREFERRED_RPROVIDER to select a public/private repo ?
+> >
+> > Could someone guide me :)
+> >
+> >
+> > feature-public.bb
+> >
+> > ```
+> > SRC_URI = "git://public"
+> >
+> > RPROVIDES:${PN} += " \
+> >     virtual-feature \
+> > "
+> > ```
+> >
+> > feature-private.bb
+> >
+> > ```
+> > SRC_URI= "git://private"
+> >
+> > RPROVIDES:${PN} += " \
+> >     virtual-feature \
+> > "
+> > ```
+> >
+> >
+> > machine.conf
+> >
+> > ```
+> > PREFERRED_RPROVIDER_virtual-feature = "feature-public"
+> > ```
+> >
+> > -=-=-=-=-=-=-=-=-=-=-=-
+> > Links: You receive all messages sent to this group.
+> > You automatically follow any topics you start or reply to.
+> > View/Reply Online (#57835): https://lists.yoctoproject.org/g/yocto/message/57835
+> > Mute This Topic: https://lists.yoctoproject.org/mt/92997258/1997914
+> > Group Owner: yocto+owner@lists.yoctoproject.org
+> > Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [raj.khem@gmail.com]
+> > -=-=-=-=-=-=-=-=-=-=-=-
+> >
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+end of thread, other threads:[~2022-08-15  6:02 UTC | newest]
+
+Thread overview: 4+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-08-13  9:57 question about PREFERRED_RPROVIDER John Wang
+2022-08-13 10:43 ` [yocto] " Richard Purdie
+2022-08-13 14:10 ` Khem Raj
+2022-08-15  6:01   ` John Wang
+

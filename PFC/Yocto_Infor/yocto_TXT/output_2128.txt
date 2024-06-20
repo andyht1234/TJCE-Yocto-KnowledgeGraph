@@ -1,0 +1,161 @@
+* [meta-security][PATCH 1/2] swtpm: update to 0.7.1
+@ 2022-03-05  0:30 Armin Kuster
+  2022-03-05  0:30 ` [meta-security][PATCH 2/2] libtpm: update to 0.9.2 Armin Kuster
+  0 siblings, 1 reply; 2+ messages in thread
+From: Armin Kuster @ 2022-03-05  0:30 UTC (permalink / raw)
+  To: yocto
+
+fixes: CVE-2022-23645.
+Add implementation of SWTPM_HMAC using OpenSSL 3.0 APIs
+
+Signed-off-by: Armin Kuster <akuster808@gmail.com>
+---
+ .../swtpm/files/oe_configure.patch            | 65 -------------------
+ .../swtpm/{swtpm_0.6.1.bb => swtpm_0.7.1.bb}  |  5 +-
+ 2 files changed, 2 insertions(+), 68 deletions(-)
+ delete mode 100644 meta-tpm/recipes-tpm/swtpm/files/oe_configure.patch
+ rename meta-tpm/recipes-tpm/swtpm/{swtpm_0.6.1.bb => swtpm_0.7.1.bb} (94%)
+
+diff --git a/meta-tpm/recipes-tpm/swtpm/files/oe_configure.patch b/meta-tpm/recipes-tpm/swtpm/files/oe_configure.patch
+deleted file mode 100644
+index 5aee933..0000000
+--- a/meta-tpm/recipes-tpm/swtpm/files/oe_configure.patch
++++ /dev/null
+@@ -1,65 +0,0 @@
+-Don't check for tscd deamon on host.
+-
+-Upstream-Status: OE Specific
+-
+-Signed-off-by: Armin Kuster <akuster808@gmail.com>
+-
+-Index: git/configure.ac
+-===================================================================
+---- git.orig/configure.ac
+-+++ git/configure.ac
+-@@ -179,15 +179,6 @@ AC_SUBST([LIBTPMS_LIBS])
+- AC_CHECK_LIB(c, clock_gettime, LIBRT_LIBS="", LIBRT_LIBS="-lrt")
+- AC_SUBST([LIBRT_LIBS])
+- 
+--AC_PATH_PROG([TCSD], tcsd)
+--if test "x$TCSD" = "x"; then
+--    have_tcsd=no
+--    AC_MSG_WARN([tcsd could not be found; typically need it for tss user account and tests])
+--else
+--    have_tcsd=yes
+--fi
+--AM_CONDITIONAL([HAVE_TCSD], test "$have_tcsd" != "no")
+--
+- dnl We either need netstat (more common across systems) or 'ss' for test cases
+- AC_PATH_PROG([NETSTAT], [netstat])
+- if test "x$NETSTAT" = "x"; then
+-@@ -440,23 +431,6 @@ AC_ARG_WITH([tss-group],
+-             [TSS_GROUP="tss"]
+- )
+- 
+--case $have_tcsd in
+--yes)
+--	AC_MSG_CHECKING([whether TSS_USER $TSS_USER is available])
+--	if ! test $(id -u $TSS_USER); then
+--		AC_MSG_ERROR(["$TSS_USER is not available"])
+--	else
+--		AC_MSG_RESULT([yes])
+--	fi
+--	AC_MSG_CHECKING([whether TSS_GROUP $TSS_GROUP is available])
+--	if ! test $(id -g $TSS_GROUP); then
+--		AC_MSG_ERROR(["$TSS_GROUP is not available"])
+--	else
+--		AC_MSG_RESULT([yes])
+--	fi
+--	;;
+--esac
+--
+- AC_SUBST([TSS_USER])
+- AC_SUBST([TSS_GROUP])
+- 
+-Index: git/tests/Makefile.am
+-===================================================================
+---- git.orig/tests/Makefile.am
+-+++ git/tests/Makefile.am
+-@@ -83,10 +83,6 @@ TESTS += \
+- 	test_tpm2_swtpm_cert \
+- 	test_tpm2_swtpm_cert_ecc \
+- 	test_tpm2_swtpm_setup_create_cert
+--if HAVE_TCSD
+--TESTS += \
+--	test_tpm2_samples_create_tpmca
+--endif
+- endif
+- 
+- EXTRA_DIST=$(TESTS) \
+diff --git a/meta-tpm/recipes-tpm/swtpm/swtpm_0.6.1.bb b/meta-tpm/recipes-tpm/swtpm/swtpm_0.7.1.bb
+similarity index 94%
+rename from meta-tpm/recipes-tpm/swtpm/swtpm_0.6.1.bb
+rename to meta-tpm/recipes-tpm/swtpm/swtpm_0.7.1.bb
+index 63734b9..85e4c5d 100644
+--- a/meta-tpm/recipes-tpm/swtpm/swtpm_0.6.1.bb
++++ b/meta-tpm/recipes-tpm/swtpm/swtpm_0.7.1.bb
+@@ -6,10 +6,9 @@ SECTION = "apps"
+ # expect-native, socat-native, coreutils-native and net-tools-native are reportedly only required for the tests
+ DEPENDS = "libtasn1 coreutils-native expect-native socat-native glib-2.0 net-tools-native libtpm json-glib"
+ 
+-SRCREV = "98187d24fe14851653a7c46eb16e9c5f0b9beaa1"
+-SRC_URI = "git://github.com/stefanberger/swtpm.git;branch=stable-0.6;protocol=https \
++SRCREV = "92a7035f45d9b08aa7c6b8bd6fa4c6916ef07a9e"
++SRC_URI = "git://github.com/stefanberger/swtpm.git;branch=stable-0.7-next;protocol=https \
+            file://ioctl_h.patch \
+-           file://oe_configure.patch \
+            "
+ PE = "1"
+ 
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 2+ messages in thread
+* [meta-security][PATCH 2/2] libtpm: update to 0.9.2
+  2022-03-05  0:30 [meta-security][PATCH 1/2] swtpm: update to 0.7.1 Armin Kuster
+@ 2022-03-05  0:30 ` Armin Kuster
+  0 siblings, 0 replies; 2+ messages in thread
+From: Armin Kuster @ 2022-03-05  0:30 UTC (permalink / raw)
+  To: yocto
+
+includes: CVE-2021-3623
+
+Signed-off-by: Armin Kuster <akuster808@gmail.com>
+---
+ .../recipes-tpm/libtpm/{libtpm_0.8.7.bb => libtpm_0.9.3.bb}   | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+ rename meta-tpm/recipes-tpm/libtpm/{libtpm_0.8.7.bb => libtpm_0.9.3.bb} (84%)
+
+diff --git a/meta-tpm/recipes-tpm/libtpm/libtpm_0.8.7.bb b/meta-tpm/recipes-tpm/libtpm/libtpm_0.9.3.bb
+similarity index 84%
+rename from meta-tpm/recipes-tpm/libtpm/libtpm_0.8.7.bb
+rename to meta-tpm/recipes-tpm/libtpm/libtpm_0.9.3.bb
+index 8fe62cf..c03c44c 100644
+--- a/meta-tpm/recipes-tpm/libtpm/libtpm_0.8.7.bb
++++ b/meta-tpm/recipes-tpm/libtpm/libtpm_0.9.3.bb
+@@ -2,8 +2,8 @@ SUMMARY = "LIBPM - Software TPM Library"
+ LICENSE = "BSD-3-Clause"
+ LIC_FILES_CHKSUM = "file://LICENSE;md5=e73f0786a936da3814896df06ad225a9"
+ 
+-SRCREV = "f6dd8f55eab4910131ec6a6a570dcd7951bd10e4"
+-SRC_URI = "git://github.com/stefanberger/libtpms.git;branch=stable-0.8;protocol=https"
++SRCREV = "3f8fbc831b7bc3a6cc8422c432f577596b4cf3df"
++SRC_URI = "git://github.com/stefanberger/libtpms.git;branch=stable-0.9;protocol=https"
+ 
+ PE = "1"
+ 
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2022-03-05  0:30 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-03-05  0:30 [meta-security][PATCH 1/2] swtpm: update to 0.7.1 Armin Kuster
+2022-03-05  0:30 ` [meta-security][PATCH 2/2] libtpm: update to 0.9.2 Armin Kuster
+

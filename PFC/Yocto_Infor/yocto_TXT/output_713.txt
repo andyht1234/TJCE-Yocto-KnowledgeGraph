@@ -1,0 +1,255 @@
+* [meta-security] Unnecessary/optional dependencies in tpm2-tools
+@ 2023-04-21 23:15 Peter Kjellerstedt
+  2023-04-24 12:09 ` akuster808
+  0 siblings, 1 reply; 3+ messages in thread
+From: Peter Kjellerstedt @ 2023-04-21 23:15 UTC (permalink / raw)
+  To: Armin Kuster; +Cc: Yocto (yocto@lists.yoctoproject.org)
+
+I have a team that is looking at starting to use some of the 
+recipes from meta-security and I am currently reviewing their 
+changes to our layers. In a bbappend for tpm2-tools they 
+removed the build dependency on tpm2-abrmd, which got me 
+wondering why it was there in the first place. After doing 
+some experimentation, I came up with the following patch:
+
+diff --git a/meta-tpm/recipes-tpm2/tpm2-tools/tpm2-tools_5.5.bb b/meta-tpm/recipes-tpm2/tpm2-tools/tpm2-tools_5.5.bb
+index ef73238..8119bb1 100644
+--- a/meta-tpm/recipes-tpm2/tpm2-tools/tpm2-tools_5.5.bb
++++ b/meta-tpm/recipes-tpm2/tpm2-tools/tpm2-tools_5.5.bb
+@@ -4,7 +4,7 @@ LICENSE = "BSD-3-Clause"
+ LIC_FILES_CHKSUM = "file://docs/LICENSE;md5=a846608d090aa64494c45fc147cc12e3"
+ SECTION = "tpm"
+
+-DEPENDS = "tpm2-abrmd tpm2-tss openssl curl autoconf-archive"
++DEPENDS = "tpm2-tss openssl curl"
+
+ SRC_URI = "https://github.com/tpm2-software/${BPN}/releases/download/${PV}/${BPN}-${PV}.tar.gz"
+
+@@ -13,6 +13,3 @@ SRC_URI[sha256sum] = "1fdb49c730537bfdaed088884881a61e3bfd121e957ec0bdceeec02612
+ UPSTREAM_CHECK_URI = "https://github.com/tpm2-software/${BPN}/releases"
+
+ inherit autotools pkgconfig bash-completion
+-
+-# need tss-esys
+-RDEPENDS:${PN} = "libtss2 tpm2-abrmd"
+
+Motivation for the proposed changes above:
+
+* The dependency on autoconf-archive is only needed when 
+  building from the Git repository (and it should really be 
+  autoconf-archive-native). This dependency can probably be 
+  removed from more recipes that now build from tar balls 
+  where they originally built from Git repositories.
+* Removing the build dependency on tpm2-abrmd does not change 
+  the output in any way, i.e., nothing is used from it.
+* The runtime dependency on libtss2 is added automatically by 
+  bitbake since /usr/bin/tpm2 is linked with libtss2-esys.so.0.
+* The runtime dependency on tpm2-abrmd is AFAICT optional. And 
+  in my book such dependencies are better handled at a higher 
+  level, e.g., by depending on packagegroup-security-tpm2. If 
+  it is removed, the instructions in meta-parsec/README.md that 
+  references tpm2-tools may need to be complemented by a 
+  reference to tpm2-abrmd. Similar for the runtime dependencies 
+  in tpm2-pkcs11. An alternative to removing the runtime 
+  dependency would be to instead introduce a PACKAGECONFIG for 
+  it, but I do not like PACKAGECONFIGs that only add runtime 
+  dependencies.
+
+Bear in mind that I know nothing about tpm2. I am looking at 
+this strictly from what is produced when building the recipe.
+
+Comments?
+
+//Peter
+
+
+
+^ permalink raw reply related	[flat|nested] 3+ messages in thread
+* Re: [meta-security] Unnecessary/optional dependencies in tpm2-tools
+  2023-04-21 23:15 [meta-security] Unnecessary/optional dependencies in tpm2-tools Peter Kjellerstedt
+@ 2023-04-24 12:09 ` akuster808
+  2023-04-24 15:53   ` Peter Kjellerstedt
+  0 siblings, 1 reply; 3+ messages in thread
+From: akuster808 @ 2023-04-24 12:09 UTC (permalink / raw)
+  To: Peter Kjellerstedt; +Cc: Yocto (yocto@lists.yoctoproject.org)
+
+Hello Peter,
+
+On 4/21/23 7:15 PM, Peter Kjellerstedt wrote:
+> I have a team that is looking at starting to use some of the
+> recipes from meta-security and I am currently reviewing their
+> changes to our layers. In a bbappend for tpm2-tools they
+> removed the build dependency on tpm2-abrmd, which got me
+> wondering why it was there in the first place. After doing
+> some experimentation, I came up with the following patch:
+>
+> diff --git a/meta-tpm/recipes-tpm2/tpm2-tools/tpm2-tools_5.5.bb b/meta-tpm/recipes-tpm2/tpm2-tools/tpm2-tools_5.5.bb
+> index ef73238..8119bb1 100644
+> --- a/meta-tpm/recipes-tpm2/tpm2-tools/tpm2-tools_5.5.bb
+> +++ b/meta-tpm/recipes-tpm2/tpm2-tools/tpm2-tools_5.5.bb
+> @@ -4,7 +4,7 @@ LICENSE = "BSD-3-Clause"
+>   LIC_FILES_CHKSUM = "file://docs/LICENSE;md5=a846608d090aa64494c45fc147cc12e3"
+>   SECTION = "tpm"
+>
+> -DEPENDS = "tpm2-abrmd tpm2-tss openssl curl autoconf-archive"
+> +DEPENDS = "tpm2-tss openssl curl"
+>
+>   SRC_URI = "https://github.com/tpm2-software/${BPN}/releases/download/${PV}/${BPN}-${PV}.tar.gz"
+>
+> @@ -13,6 +13,3 @@ SRC_URI[sha256sum] = "1fdb49c730537bfdaed088884881a61e3bfd121e957ec0bdceeec02612
+>   UPSTREAM_CHECK_URI = "https://github.com/tpm2-software/${BPN}/releases"
+>
+>   inherit autotools pkgconfig bash-completion
+> -
+> -# need tss-esys
+> -RDEPENDS:${PN} = "libtss2 tpm2-abrmd"
+>
+> Motivation for the proposed changes above:
+>
+> * The dependency on autoconf-archive is only needed when
+>    building from the Git repository (and it should really be
+>    autoconf-archive-native). This dependency can probably be
+>    removed from more recipes that now build from tar balls
+>    where they originally built from Git repositories.
+> * Removing the build dependency on tpm2-abrmd does not change
+>    the output in any way, i.e., nothing is used from it.
+> * The runtime dependency on libtss2 is added automatically by
+>    bitbake since /usr/bin/tpm2 is linked with libtss2-esys.so.0.
+> * The runtime dependency on tpm2-abrmd is AFAICT optional. And
+>    in my book such dependencies are better handled at a higher
+>    level, e.g., by depending on packagegroup-security-tpm2. If
+>    it is removed, the instructions in meta-parsec/README.md that
+>    references tpm2-tools may need to be complemented by a
+>    reference to tpm2-abrmd. Similar for the runtime dependencies
+>    in tpm2-pkcs11. An alternative to removing the runtime
+>    dependency would be to instead introduce a PACKAGECONFIG for
+>    it, but I do not like PACKAGECONFIGs that only add runtime
+>    dependencies.
+
+Thanks for the write up and bringing it to my attention.
+If you didn't know already, there are some basic QA tests for TPM2. I 
+ran those with your changes above and they pass.
+any plans of sending a patch?
+
+BR,
+Armin
+
+>
+> Bear in mind that I know nothing about tpm2. I am looking at
+> this strictly from what is produced when building the recipe.
+>
+> Comments?
+
+>
+> //Peter
+>
+
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* RE: [meta-security] Unnecessary/optional dependencies in tpm2-tools
+  2023-04-24 12:09 ` akuster808
+@ 2023-04-24 15:53   ` Peter Kjellerstedt
+  0 siblings, 0 replies; 3+ messages in thread
+From: Peter Kjellerstedt @ 2023-04-24 15:53 UTC (permalink / raw)
+  To: akuster808; +Cc: Yocto (yocto@lists.yoctoproject.org)
+
+> -----Original Message-----
+> From: akuster808 <akuster808@gmail.com>
+> Sent: den 24 april 2023 14:09
+> To: Peter Kjellerstedt <peter.kjellerstedt@axis.com>
+> Cc: Yocto (yocto@lists.yoctoproject.org) <yocto@lists.yoctoproject.org>
+> Subject: Re: [meta-security] Unnecessary/optional dependencies in tpm2-
+> tools
+> 
+> Hello Peter,
+> 
+> On 4/21/23 7:15 PM, Peter Kjellerstedt wrote:
+> > I have a team that is looking at starting to use some of the
+> > recipes from meta-security and I am currently reviewing their
+> > changes to our layers. In a bbappend for tpm2-tools they
+> > removed the build dependency on tpm2-abrmd, which got me
+> > wondering why it was there in the first place. After doing
+> > some experimentation, I came up with the following patch:
+> >
+> > diff --git a/meta-tpm/recipes-tpm2/tpm2-tools/tpm2-tools_5.5.bb b/meta-
+> tpm/recipes-tpm2/tpm2-tools/tpm2-tools_5.5.bb
+> > index ef73238..8119bb1 100644
+> > --- a/meta-tpm/recipes-tpm2/tpm2-tools/tpm2-tools_5.5.bb
+> > +++ b/meta-tpm/recipes-tpm2/tpm2-tools/tpm2-tools_5.5.bb
+> > @@ -4,7 +4,7 @@ LICENSE = "BSD-3-Clause"
+> >   LIC_FILES_CHKSUM =
+> "file://docs/LICENSE;md5=a846608d090aa64494c45fc147cc12e3"
+> >   SECTION = "tpm"
+> >
+> > -DEPENDS = "tpm2-abrmd tpm2-tss openssl curl autoconf-archive"
+> > +DEPENDS = "tpm2-tss openssl curl"
+> >
+> >   SRC_URI = "https://github.com/tpm2-
+> software/${BPN}/releases/download/${PV}/${BPN}-${PV}.tar.gz"
+> >
+> > @@ -13,6 +13,3 @@ SRC_URI[sha256sum] =
+> "1fdb49c730537bfdaed088884881a61e3bfd121e957ec0bdceeec02612
+> >   UPSTREAM_CHECK_URI = "https://github.com/tpm2-
+> software/${BPN}/releases"
+> >
+> >   inherit autotools pkgconfig bash-completion
+> > -
+> > -# need tss-esys
+> > -RDEPENDS:${PN} = "libtss2 tpm2-abrmd"
+> >
+> > Motivation for the proposed changes above:
+> >
+> > * The dependency on autoconf-archive is only needed when
+> >    building from the Git repository (and it should really be
+> >    autoconf-archive-native). This dependency can probably be
+> >    removed from more recipes that now build from tar balls
+> >    where they originally built from Git repositories.
+> > * Removing the build dependency on tpm2-abrmd does not change
+> >    the output in any way, i.e., nothing is used from it.
+> > * The runtime dependency on libtss2 is added automatically by
+> >    bitbake since /usr/bin/tpm2 is linked with libtss2-esys.so.0.
+> > * The runtime dependency on tpm2-abrmd is AFAICT optional. And
+> >    in my book such dependencies are better handled at a higher
+> >    level, e.g., by depending on packagegroup-security-tpm2. If
+> >    it is removed, the instructions in meta-parsec/README.md that
+> >    references tpm2-tools may need to be complemented by a
+> >    reference to tpm2-abrmd. Similar for the runtime dependencies
+> >    in tpm2-pkcs11. An alternative to removing the runtime
+> >    dependency would be to instead introduce a PACKAGECONFIG for
+> >    it, but I do not like PACKAGECONFIGs that only add runtime
+> >    dependencies.
+> 
+> Thanks for the write up and bringing it to my attention.
+> If you didn't know already, there are some basic QA tests for TPM2. I
+> ran those with your changes above and they pass.
+> any plans of sending a patch?
+
+Yes, I will. I just wanted to check if the above seemed correct to 
+do first.
+
+> 
+> BR,
+> Armin
+> 
+> >
+> > Bear in mind that I know nothing about tpm2. I am looking at
+> > this strictly from what is produced when building the recipe.
+> >
+> > Comments?
+> 
+> >
+> > //Peter
+
+//Peter
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2023-04-24 15:53 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-04-21 23:15 [meta-security] Unnecessary/optional dependencies in tpm2-tools Peter Kjellerstedt
+2023-04-24 12:09 ` akuster808
+2023-04-24 15:53   ` Peter Kjellerstedt
+

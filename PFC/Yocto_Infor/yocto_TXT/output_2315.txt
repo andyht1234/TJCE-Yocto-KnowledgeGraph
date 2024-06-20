@@ -1,0 +1,119 @@
+* [meta-zephyr][PATCH 1/2] bossa-native: Add Arduino variant of the bossa flashing tool
+@ 2022-01-24 12:43 Andrei Gherzan
+  2022-01-24 12:43 ` [meta-zephyr][PATCH 2/2] zephyr-flash-bossac.bbclass: Use internal bossac tool instead looking up PATH Andrei Gherzan
+  0 siblings, 1 reply; 2+ messages in thread
+From: Andrei Gherzan @ 2022-01-24 12:43 UTC (permalink / raw)
+  To: yocto; +Cc: andrei, Stefan Schmidt, Andrei Gherzan
+
+From: Stefan Schmidt <stefan.schmidt@huawei.com>
+
+This native recipe will be used to streamline the flashing of out
+Arduino Nano 33 BLE target. Until now we have pointed to the full
+Arduino IDE to get it installed and setting the PATH correctly before
+any flashing would work. Having the tool supplied under the hood for
+flashing will simplify documentation and support.
+
+Signed-off-by: Stefan Schmidt <stefan.schmidt@huawei.com>
+Signed-off-by: Andrei Gherzan <andrei.gherzan@huawei.com>
+---
+ .../bossa/bossa-native_git.bb                 | 23 +++++++++++++++++++
+ 1 file changed, 23 insertions(+)
+ create mode 100644 meta-zephyr-core/recipes-devtools/bossa/bossa-native_git.bb
+
+diff --git a/meta-zephyr-core/recipes-devtools/bossa/bossa-native_git.bb b/meta-zephyr-core/recipes-devtools/bossa/bossa-native_git.bb
+new file mode 100644
+index 0000000..b645ecf
+--- /dev/null
++++ b/meta-zephyr-core/recipes-devtools/bossa/bossa-native_git.bb
+@@ -0,0 +1,23 @@
++SUMMARY = "Arduino variant of the BOSSA flashing tool"
++HOMEPAGE = "https://github.com/arduino/BOSSA"
++SECTION = "devel"
++LICENSE = "BSD-3-Clause"
++LIC_FILES_CHKSUM = "file://LICENSE;md5=bcf9399f7b9b96149837290bcdc3ad39"
++
++SRC_URI = "git://github.com/arduino/BOSSA.git;protocol=https;branch=nrf"
++
++PV = "1.9.1+git${SRCPV}"
++SRCREV = "89f3556a761833522cd93c199581265ad689310b"
++
++S = "${WORKDIR}/git"
++
++inherit native
++
++do_compile() {
++    # We only compile the bossac commandline tool, not the graphical version.
++    oe_runmake bossac
++}
++
++do_install() {
++    install -D -m 0755 ${B}/bin/bossac ${D}${bindir}/bossac
++}
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 2+ messages in thread
+* [meta-zephyr][PATCH 2/2] zephyr-flash-bossac.bbclass: Use internal bossac tool instead looking up PATH
+  2022-01-24 12:43 [meta-zephyr][PATCH 1/2] bossa-native: Add Arduino variant of the bossa flashing tool Andrei Gherzan
+@ 2022-01-24 12:43 ` Andrei Gherzan
+  0 siblings, 0 replies; 2+ messages in thread
+From: Andrei Gherzan @ 2022-01-24 12:43 UTC (permalink / raw)
+  To: yocto; +Cc: andrei, Stefan Schmidt, Andrei Gherzan
+
+From: Stefan Schmidt <stefan.schmidt@huawei.com>
+
+Instead of looking in PATH on the host to find bossac we now depend on the
+native variant we build and set the path to our yocto build tool.
+
+Signed-off-by: Stefan Schmidt <stefan.schmidt@huawei.com>
+Signed-off-by: Andrei Gherzan <andrei.gherzan@huawei.com>
+---
+ meta-zephyr-core/classes/zephyr-flash-bossac.bbclass | 9 ++++-----
+ 1 file changed, 4 insertions(+), 5 deletions(-)
+
+diff --git a/meta-zephyr-core/classes/zephyr-flash-bossac.bbclass b/meta-zephyr-core/classes/zephyr-flash-bossac.bbclass
+index 50222d5..51f2dd3 100644
+--- a/meta-zephyr-core/classes/zephyr-flash-bossac.bbclass
++++ b/meta-zephyr-core/classes/zephyr-flash-bossac.bbclass
+@@ -1,17 +1,17 @@
+ #@DESCRIPTION: class file to flash boards like Arduino Nano BLE which depends on bossac for flashing
+ 
++DEPENDS += "bossa-native"
++
+ python do_flash_usb() {
+     import shutil
+     import subprocess
+     import serial.tools.list_ports
+ 
+-    # Note: make sure the installed bossac is set to PATH before running flash_usb()
+     # Check if bossac is avaiable for flashing
+-    origbbenv = d.getVar("BB_ORIGENV", False)
+-    bossac_path = shutil.which("bossac", path=origbbenv.getVar('PATH'))
++    bossac_path = shutil.which("bossac")
+ 
+     if not bossac_path:
+-       bb.fatal("ERROR: bossac not found, please install first and add to PATH")
++       bb.fatal("ERROR: bossac not found.")
+ 
+     board = d.getVar('BOARD')
+ 
+@@ -47,4 +47,3 @@ python do_flash_usb() {
+ addtask do_flash_usb after do_deploy
+ 
+ do_flash_usb[nostamp] = "1"
+-do_flash_usb[vardepsexclude] = "BB_ORIGENV"
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2022-01-24 12:43 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-01-24 12:43 [meta-zephyr][PATCH 1/2] bossa-native: Add Arduino variant of the bossa flashing tool Andrei Gherzan
+2022-01-24 12:43 ` [meta-zephyr][PATCH 2/2] zephyr-flash-bossac.bbclass: Use internal bossac tool instead looking up PATH Andrei Gherzan
+

@@ -1,0 +1,106 @@
+* [meta-rockchip][PATCH 1/2] rockchip.wks: use uuid for all partitions
+@ 2021-09-22 19:09 Markus Volk
+  2021-09-22 19:09 ` [meta-rockchip][PATCH 2/2] rockchip-wic.inc: dont let wic edit fstab by default Markus Volk
+  0 siblings, 1 reply; 3+ messages in thread
+From: Markus Volk @ 2021-09-22 19:09 UTC (permalink / raw)
+  To: yocto; +Cc: MarkusVolk
+
+My rock pi 4 refused to boot with the latest changes because there are false entries
+written to fstab. Fix this by using uuid for all partitions
+---
+ wic/rockchip.wks | 16 ++++++++--------
+ 1 file changed, 8 insertions(+), 8 deletions(-)
+
+diff --git a/wic/rockchip.wks b/wic/rockchip.wks
+index 5ee276b..90bdb27 100644
+--- a/wic/rockchip.wks
++++ b/wic/rockchip.wks
+@@ -15,12 +15,12 @@
+ #   boot        32768           229376
+ #   root        262144          -           (suggested)
+ 
+-part loader1    --offset 32     --fixed-size 4000K            --source rawcopy                                                 --sourceparams="file=${SPL_BINARY}"
+-part reserved1  --offset 4032   --fixed-size 64K
+-part reserved2  --offset 4096   --fixed-size 4096K
+-part loader2    --offset 8192   --fixed-size 4096K            --source rawcopy                                                 --sourceparams="file=u-boot.${UBOOT_SUFFIX}"
+-part atf        --offset 12288  --fixed-size 4096K
+-part /boot      --offset 16384  --size       114688K --active --source bootimg-partition --fstype=vfat --label boot            --sourceparams="loader=u-boot"
+-part /                                                        --source rootfs            --fstype=ext4 --label root --use-uuid
++part loader1	--offset 32 --fixed-size 4000K --source rawcopy --sourceparams="file=${SPL_BINARY}" --use-uuid
++part reserved1	--offset 4032 --fixed-size 64K --use-uuid
++part reserved2	--offset 4096 --fixed-size 4096K --use-uuid
++part loader2	--offset 8192 --fixed-size 4096K --source rawcopy --sourceparams="file=u-boot.${UBOOT_SUFFIX}" --use-uuid
++part atf	--offset 12288 --fixed-size 4096K --use-uuid
++part /boot	--offset 16384 --size 114688K --active --source bootimg-partition --fstype=vfat --label boot --sourceparams="loader=u-boot" --use-uuid
++part /		--source rootfs --fstype=ext4 --label root --use-uuid
+ 
+-bootloader --ptable gpt --append="console=tty1 console=${RK_CONSOLE_DEVICE},${RK_CONSOLE_BAUD}n8 rw rootfstype=ext4 init=/sbin/init"
++bootloader	--ptable gpt --append="console=tty1 console=${RK_CONSOLE_DEVICE},${RK_CONSOLE_BAUD}n8 rw rootfstype=ext4 init=/sbin/init"
+-- 
+2.25.1
+
+
+^ permalink raw reply related	[flat|nested] 3+ messages in thread
+* [meta-rockchip][PATCH 2/2] rockchip-wic.inc: dont let wic edit fstab by default
+  2021-09-22 19:09 [meta-rockchip][PATCH 1/2] rockchip.wks: use uuid for all partitions Markus Volk
+@ 2021-09-22 19:09 ` Markus Volk
+  2021-09-23 12:22   ` [yocto] " Trevor Woerner
+  0 siblings, 1 reply; 3+ messages in thread
+From: Markus Volk @ 2021-09-22 19:09 UTC (permalink / raw)
+  To: yocto; +Cc: MarkusVolk
+
+---
+ conf/machine/include/rockchip-wic.inc | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/conf/machine/include/rockchip-wic.inc b/conf/machine/include/rockchip-wic.inc
+index 15010a0..30b0d57 100644
+--- a/conf/machine/include/rockchip-wic.inc
++++ b/conf/machine/include/rockchip-wic.inc
+@@ -26,3 +26,6 @@ WICVARS:append = " \
+ 	SPL_BINARY \
+ 	UBOOT_SUFFIX \
+ 	"
++
++# Do not update fstab file while creating wic images
++WIC_CREATE_EXTRA_ARGS ?= "--no-fstab-update"
+-- 
+2.25.1
+
+
+^ permalink raw reply related	[flat|nested] 3+ messages in thread
+* Re: [yocto] [meta-rockchip][PATCH 2/2] rockchip-wic.inc: dont let wic edit fstab by default
+  2021-09-22 19:09 ` [meta-rockchip][PATCH 2/2] rockchip-wic.inc: dont let wic edit fstab by default Markus Volk
+@ 2021-09-23 12:22   ` Trevor Woerner
+  0 siblings, 0 replies; 3+ messages in thread
+From: Trevor Woerner @ 2021-09-23 12:22 UTC (permalink / raw)
+  To: Markus Volk; +Cc: yocto
+
+On Wed 2021-09-22 @ 09:09:50 PM, Markus Volk wrote:
+> ---
+>  conf/machine/include/rockchip-wic.inc | 3 +++
+>  1 file changed, 3 insertions(+)
+> 
+> diff --git a/conf/machine/include/rockchip-wic.inc b/conf/machine/include/rockchip-wic.inc
+> index 15010a0..30b0d57 100644
+> --- a/conf/machine/include/rockchip-wic.inc
+> +++ b/conf/machine/include/rockchip-wic.inc
+> @@ -26,3 +26,6 @@ WICVARS:append = " \
+>  	SPL_BINARY \
+>  	UBOOT_SUFFIX \
+>  	"
+> +
+> +# Do not update fstab file while creating wic images
+> +WIC_CREATE_EXTRA_ARGS ?= "--no-fstab-update"
+
+Thank you for your patch. Could you please include your Signed-off-by line?
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2021-09-23 12:22 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-09-22 19:09 [meta-rockchip][PATCH 1/2] rockchip.wks: use uuid for all partitions Markus Volk
+2021-09-22 19:09 ` [meta-rockchip][PATCH 2/2] rockchip-wic.inc: dont let wic edit fstab by default Markus Volk
+2021-09-23 12:22   ` [yocto] " Trevor Woerner
+

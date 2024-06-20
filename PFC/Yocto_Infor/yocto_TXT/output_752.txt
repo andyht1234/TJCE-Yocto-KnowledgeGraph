@@ -1,0 +1,54 @@
+* [meta-parsec][langdale][PATCH] Fix PACKAGECONFIG check in Parsec OEQA tests
+@ 2023-04-12 15:05 Anton Antonov
+  0 siblings, 0 replies; only message in thread
+From: Anton Antonov @ 2023-04-12 15:05 UTC (permalink / raw)
+  To: yocto; +Cc: Anton.Antonov, Anton Antonov, Armin Kuster
+
+From: Anton Antonov <anton.antonov@arm.com>
+
+If PACKAGECONFIG is not defined in local.conf then
+its default value is not included in cls.tc.td map.
+
+Signed-off-by: Anton Antonov <Anton.Antonov@arm.com>
+Signed-off-by: Armin Kuster <akuster808@gmail.com>
+---
+ meta-parsec/lib/oeqa/runtime/cases/parsec.py | 13 +++++++++++--
+ 1 file changed, 11 insertions(+), 2 deletions(-)
+
+diff --git a/meta-parsec/lib/oeqa/runtime/cases/parsec.py b/meta-parsec/lib/oeqa/runtime/cases/parsec.py
+index 6be84ba..c6e7893 100644
+--- a/meta-parsec/lib/oeqa/runtime/cases/parsec.py
++++ b/meta-parsec/lib/oeqa/runtime/cases/parsec.py
+@@ -61,9 +61,18 @@ class ParsecTest(OERuntimeTestCase):
+ 
+     def check_packageconfig(self, prov):
+         """ Check that the require provider is included in Parsec """
+-        if prov not in self.tc.td['PACKAGECONFIG:pn-parsec-service']:
++
++        if 'PACKAGECONFIG:pn-parsec-service' in self.tc.td.keys():
++            providers = self.tc.td['PACKAGECONFIG:pn-parsec-service']
++        else:
++            # PACKAGECONFIG is not defined in local.conf
++            # Let's use the default value
++            providers = "PKCS11 MBED-CRYPTO"
++            if 'tpm2' in self.tc.td['DISTRO_FEATURES']:
++                providers += " TPM"
++        if prov not in providers:
+             self.skipTest('%s provider is not included in Parsec. Parsec PACKAGECONFIG: "%s"' % \
+-                          (prov, self.tc.td['PACKAGECONFIG:pn-parsec-service']))
++                          (prov, providers))
+ 
+     def check_packages(self, prov, packages):
+         """ Check for the required packages for Parsec providers software backends """
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] only message in thread
+only message in thread, other threads:[~2023-04-12 15:06 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-04-12 15:05 [meta-parsec][langdale][PATCH] Fix PACKAGECONFIG check in Parsec OEQA tests Anton Antonov
+

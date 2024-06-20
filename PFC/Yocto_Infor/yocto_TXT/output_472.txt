@@ -1,0 +1,1061 @@
+* [yocto-autobuilder-helper][PATCH 0/3] fix test results storage for mickledore
+@ 2023-06-14  8:56 alexis.lothore
+  2023-06-14  8:56 ` [yocto-autobuilder-helper][PATCH 1/3] scripts/send-qa-email: use logger instead of raw prints alexis.lothore
+                   ` (4 more replies)
+  0 siblings, 5 replies; 14+ messages in thread
+From: alexis.lothore @ 2023-06-14  8:56 UTC (permalink / raw)
+  To: yocto; +Cc: Thomas Petazzoni, Alexandre Belloni
+
+From: Alexis Lothoré <alexis.lothore@bootlin.com>
+
+This series is a follow-up for the 4.3_M1.rc1 regression report issue.
+
+It has been observed that the report is empty. This issue is linked to
+configuration description in yocto-autobuilder-helper, and has been
+identified through the following steps:
+- empty report is supposed to be a comparison between yocto-4.2 (4.2.rc3)
+  and 4.3_M1.rc1
+- yocto-4.2 results are almost empty: we only find test results from Intel
+  QA (pushed _after_ the AB build) and not the AB test results
+- tests results are managed by send-qa-email.send-qa-email uses resulttool
+  to systematically gather and store test results in local git directory
+- however, it looks for basebranch/comparebranch to know if those results
+  can be pushed onto git server, and those variables depend on config.json
+  content
+- yocto-4.2 (4.2.rc3) has been built on release branch mickledore
+  (https://autobuilder.yoctoproject.org/typhoon/#/builders/83/builds/5212)
+- since mickledore is not yet described in config.json, send-qa-email
+  considers it as a "work" branch (contrary to a "release" branch) and does
+  not push test results
+
+As a consequence:
+- first commit brings in python logger
+- second commit adds a warning when such case happen, since we are able to
+  detect it
+- third fix actually adds mickledore as a release branch to properly store
+  again test results
+
+There must be a more robust rework to do (because the issue will likely
+happen on each major delivery), but I aimed for the quick and small fix to
+quickly bring back tests results storage without breaking other things in
+the process
+
+Alexis Lothoré (3):
+  scripts/send-qa-email: use logger instead of raw prints
+  scripts/send-qa-email: print warning when test results are not stored
+  config.json: add mickledore as direct push branch for test results
+
+ config.json              |  2 +-
+ scripts/send_qa_email.py | 17 ++++++++++++-----
+ 2 files changed, 13 insertions(+), 6 deletions(-)
+
+-- 
+2.41.0
+
+
+
+^ permalink raw reply	[flat|nested] 14+ messages in thread
+* [yocto-autobuilder-helper][PATCH 1/3] scripts/send-qa-email: use logger instead of raw prints
+  2023-06-14  8:56 [yocto-autobuilder-helper][PATCH 0/3] fix test results storage for mickledore alexis.lothore
+@ 2023-06-14  8:56 ` alexis.lothore
+  2023-06-14  8:56 ` [yocto-autobuilder-helper][PATCH 2/3] scripts/send-qa-email: print warning when test results are not stored alexis.lothore
+                   ` (3 subsequent siblings)
+  4 siblings, 0 replies; 14+ messages in thread
+From: alexis.lothore @ 2023-06-14  8:56 UTC (permalink / raw)
+  To: yocto; +Cc: Thomas Petazzoni, Alexandre Belloni
+
+From: Alexis Lothoré <alexis.lothore@bootlin.com>
+
+As for other scripts in yocto-autobuilder-helper or oecore, use python
+logger class instead of raw print calls to allow log level distinction
+
+Signed-off-by: Alexis Lothoré <alexis.lothore@bootlin.com>
+---
+ scripts/send_qa_email.py | 15 ++++++++++-----
+ 1 file changed, 10 insertions(+), 5 deletions(-)
+
+diff --git a/scripts/send_qa_email.py b/scripts/send_qa_email.py
+index 4613bff892e0..8a8454d09c2f 100755
+--- a/scripts/send_qa_email.py
++++ b/scripts/send_qa_email.py
+@@ -11,6 +11,7 @@ import sys
+ import subprocess
+ import tempfile
+ import re
++import logging
+ 
+ import utils
+ 
+@@ -64,8 +65,8 @@ def get_regression_base_and_target(basebranch, comparebranch, release, targetrep
+     #Default case: return previous tag as base
+     return get_previous_tag(targetrepodir, release), basebranch
+ 
+-def generate_regression_report(querytool, targetrepodir, base, target, resultdir, outputdir):
+-    print(f"Comparing {target} to {base}")
++def generate_regression_report(querytool, targetrepodir, base, target, resultdir, outputdir, log):
++    log.info(f"Comparing {target} to {base}")
+ 
+     try:
+         regreport = subprocess.check_output([querytool, "regression-report", base, target, '-t', resultdir])
+@@ -73,9 +74,13 @@ def generate_regression_report(querytool, targetrepodir, base, target, resultdir
+            f.write(regreport)
+     except subprocess.CalledProcessError as e:
+         error = str(e)
+-        print(f"Error while generating report between {target} and {base} : {error}")
++        log.error(f"Error while generating report between {target} and {base} : {error}")
+ 
+ def send_qa_email():
++    # Setup logging
++    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
++    log = logging.getLogger('send-qa-email')
++
+     parser = utils.ArgParser(description='Process test results and optionally send an email about the build to prompt QA to begin testing.')
+ 
+     parser.add_argument('send',
+@@ -132,7 +137,7 @@ def send_qa_email():
+             try:
+                 subprocess.check_call(["git", "clone", "git@push.yoctoproject.org:yocto-testresults", tempdir, "--depth", "1"] + cloneopts)
+             except subprocess.CalledProcessError:
+-                print("No comparision branch found, falling back to master")
++                log.info("No comparision branch found, falling back to master")
+                 subprocess.check_call(["git", "clone", "git@push.yoctoproject.org:yocto-testresults", tempdir, "--depth", "1"])
+ 
+             # If the base comparision branch isn't present regression comparision won't work
+@@ -157,7 +162,7 @@ def send_qa_email():
+ 
+             regression_base, regression_target = get_regression_base_and_target(basebranch, comparebranch, args.release, targetrepodir)
+             if regression_base and regression_target:
+-                generate_regression_report(querytool, targetrepodir, regression_base, regression_target, tempdir, args.results_dir)
++                generate_regression_report(querytool, targetrepodir, regression_base, regression_target, tempdir, args.results_dir, log)
+ 
+         finally:
+             subprocess.check_call(["rm", "-rf",  tempdir])
+-- 
+2.41.0
+
+
+
+^ permalink raw reply related	[flat|nested] 14+ messages in thread
+* [yocto-autobuilder-helper][PATCH 2/3] scripts/send-qa-email: print warning when test results are not stored
+  2023-06-14  8:56 [yocto-autobuilder-helper][PATCH 0/3] fix test results storage for mickledore alexis.lothore
+  2023-06-14  8:56 ` [yocto-autobuilder-helper][PATCH 1/3] scripts/send-qa-email: use logger instead of raw prints alexis.lothore
+@ 2023-06-14  8:56 ` alexis.lothore
+  2023-06-14  8:56 ` [yocto-autobuilder-helper][PATCH 3/3] config.json: add mickledore as direct push branch for test results alexis.lothore
+                   ` (2 subsequent siblings)
+  4 siblings, 0 replies; 14+ messages in thread
+From: alexis.lothore @ 2023-06-14  8:56 UTC (permalink / raw)
+  To: yocto; +Cc: Thomas Petazzoni, Alexandre Belloni
+
+From: Alexis Lothoré <alexis.lothore@bootlin.com>
+
+Tests results push command depends on basebranch and comparebranch
+variables, which are computed based on config.json content. If this file is
+not in sync with current release branch, tests results will be properly
+stored in git directory but not pushed onto test results server. Since we
+are able to detect this scenario, print at least a warning, without
+breaking current build since it could be a release
+
+Signed-off-by: Alexis Lothoré <alexis.lothore@bootlin.com>
+---
+ scripts/send_qa_email.py | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/scripts/send_qa_email.py b/scripts/send_qa_email.py
+index 8a8454d09c2f..fc7fccc6f6f7 100755
+--- a/scripts/send_qa_email.py
++++ b/scripts/send_qa_email.py
+@@ -159,6 +159,8 @@ def send_qa_email():
+             elif basebranch:
+                 subprocess.check_call(["git", "push", "--all"], cwd=tempdir)
+                 subprocess.check_call(["git", "push", "--tags"], cwd=tempdir)
++            elif is_release_version(args.release) and not comparebranch and not basebranch:
++                log.warning("Test results not published on release version. Faulty AB configuration ?")
+ 
+             regression_base, regression_target = get_regression_base_and_target(basebranch, comparebranch, args.release, targetrepodir)
+             if regression_base and regression_target:
+-- 
+2.41.0
+
+
+
+^ permalink raw reply related	[flat|nested] 14+ messages in thread
+* [yocto-autobuilder-helper][PATCH 3/3] config.json: add mickledore as direct push branch for test results
+  2023-06-14  8:56 [yocto-autobuilder-helper][PATCH 0/3] fix test results storage for mickledore alexis.lothore
+  2023-06-14  8:56 ` [yocto-autobuilder-helper][PATCH 1/3] scripts/send-qa-email: use logger instead of raw prints alexis.lothore
+  2023-06-14  8:56 ` [yocto-autobuilder-helper][PATCH 2/3] scripts/send-qa-email: print warning when test results are not stored alexis.lothore
+@ 2023-06-14  8:56 ` alexis.lothore
+  2023-06-14 10:31 ` [yocto] [yocto-autobuilder-helper][PATCH 0/3] fix test results storage for mickledore Richard Purdie
+  2023-06-15 13:41 ` Richard Purdie
+  4 siblings, 0 replies; 14+ messages in thread
+From: alexis.lothore @ 2023-06-14  8:56 UTC (permalink / raw)
+  To: yocto; +Cc: Thomas Petazzoni, Alexandre Belloni
+
+From: Alexis Lothoré <alexis.lothore@bootlin.com>
+
+Now that mickledore is released, builds are executed on mickeldore release
+branch. If not properly described in config.json, it will be considered a
+"work" branch, and as a consequence test results will not be pushed onto
+test results git repository
+Add mickeldore entry in config.json to fix test results storage
+
+Signed-off-by: Alexis Lothoré <alexis.lothore@bootlin.com>
+---
+Example of such failure is AB build 5212
+(https://autobuilder.yoctoproject.org/typhoon/#/builders/83/builds/5212/steps/29/logs/stdio)
+for yocto-4.2 (mickledore release), which lead to empty regression report
+for 4.3_M1.rc1 since it was compared to 4.2
+---
+ config.json | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/config.json b/config.json
+index 7fe2baea3428..e7f308d0a3f6 100644
+--- a/config.json
++++ b/config.json
+@@ -5,7 +5,7 @@
+ 
+     "BUILD_HISTORY_DIR" : "buildhistory",
+     "BUILD_HISTORY_REPO" : "ssh://git@push.yoctoproject.org/poky-buildhistory",
+-    "BUILD_HISTORY_DIRECTPUSH" : ["poky:morty", "poky:pyro", "poky:rocko", "poky:sumo", "poky:thud", "poky:warrior", "poky:zeus", "poky:dunfell", "poky:gatesgarth", "poky:hardknott", "poky:honister", "poky:kirkstone", "poky:langdale", "poky:master"],
++    "BUILD_HISTORY_DIRECTPUSH" : ["poky:morty", "poky:pyro", "poky:rocko", "poky:sumo", "poky:thud", "poky:warrior", "poky:zeus", "poky:dunfell", "poky:gatesgarth", "poky:hardknott", "poky:honister", "poky:kirkstone", "poky:langdale", "poky:mickledore", "poky:master"],
+     "BUILD_HISTORY_FORKPUSH" : {"poky-contrib:ross/mut" : "poky:master", "poky-contrib:abelloni/master-next": "poky:master", "poky:master-next" : "poky:master"},
+ 
+     "BUILDTOOLS_URL_TEMPLOCAL" : "/srv/autobuilder/autobuilder.yocto.io/pub/non-release/20210214-8/buildtools/x86_64-buildtools-extended-nativesdk-standalone-3.2+snapshot-7d38cc8e749aedb8435ee71847e04b353cca541d.sh",
+-- 
+2.41.0
+
+
+
+^ permalink raw reply related	[flat|nested] 14+ messages in thread
+* Re: [yocto] [yocto-autobuilder-helper][PATCH 0/3] fix test results storage for mickledore
+  2023-06-14  8:56 [yocto-autobuilder-helper][PATCH 0/3] fix test results storage for mickledore alexis.lothore
+                   ` (2 preceding siblings ...)
+  2023-06-14  8:56 ` [yocto-autobuilder-helper][PATCH 3/3] config.json: add mickledore as direct push branch for test results alexis.lothore
+@ 2023-06-14 10:31 ` Richard Purdie
+  2023-06-14 12:15   ` Alexis Lothoré
+  2023-06-15 13:41 ` Richard Purdie
+  4 siblings, 1 reply; 14+ messages in thread
+From: Richard Purdie @ 2023-06-14 10:31 UTC (permalink / raw)
+  To: alexis.lothore, yocto; +Cc: Thomas Petazzoni, Alexandre Belloni
+
+On Wed, 2023-06-14 at 10:56 +0200, Alexis Lothoré via
+lists.yoctoproject.org wrote:
+> From: Alexis Lothoré <alexis.lothore@bootlin.com>
+> 
+> This series is a follow-up for the 4.3_M1.rc1 regression report issue.
+> 
+> It has been observed that the report is empty. This issue is linked to
+> configuration description in yocto-autobuilder-helper, and has been
+> identified through the following steps:
+> - empty report is supposed to be a comparison between yocto-4.2 (4.2.rc3)
+>   and 4.3_M1.rc1
+> - yocto-4.2 results are almost empty: we only find test results from Intel
+>   QA (pushed _after_ the AB build) and not the AB test results
+> - tests results are managed by send-qa-email.send-qa-email uses resulttool
+>   to systematically gather and store test results in local git directory
+> - however, it looks for basebranch/comparebranch to know if those results
+>   can be pushed onto git server, and those variables depend on config.json
+>   content
+> - yocto-4.2 (4.2.rc3) has been built on release branch mickledore
+>   (https://autobuilder.yoctoproject.org/typhoon/#/builders/83/builds/5212)
+> - since mickledore is not yet described in config.json, send-qa-email
+>   considers it as a "work" branch (contrary to a "release" branch) and does
+>   not push test results
+> 
+> As a consequence:
+> - first commit brings in python logger
+> - second commit adds a warning when such case happen, since we are able to
+>   detect it
+> - third fix actually adds mickledore as a release branch to properly store
+>   again test results
+> 
+> There must be a more robust rework to do (because the issue will likely
+> happen on each major delivery), but I aimed for the quick and small fix to
+> quickly bring back tests results storage without breaking other things in
+> the process
+> 
+> Alexis Lothoré (3):
+>   scripts/send-qa-email: use logger instead of raw prints
+>   scripts/send-qa-email: print warning when test results are not stored
+>   config.json: add mickledore as direct push branch for test results
+
+Thanks for the analysis. I agree we need to somehow fix this properly.
+One solution might be to always push for poky if the branch name
+doesn't end with -next?
+
+Since we have the release artefacts for the release, could we add the
+test results after the fact now?
+
+Id' be interested to see the 4.3 M1 to 4.2 comparison rerun with that
+added.
+
+Cheers,
+
+Richard
+
+
+^ permalink raw reply	[flat|nested] 14+ messages in thread
+* Re: [yocto] [yocto-autobuilder-helper][PATCH 0/3] fix test results storage for mickledore
+  2023-06-14 10:31 ` [yocto] [yocto-autobuilder-helper][PATCH 0/3] fix test results storage for mickledore Richard Purdie
+@ 2023-06-14 12:15   ` Alexis Lothoré
+  2023-06-14 14:29     ` Alexandre Belloni
+  0 siblings, 1 reply; 14+ messages in thread
+From: Alexis Lothoré @ 2023-06-14 12:15 UTC (permalink / raw)
+  To: Richard Purdie, yocto; +Cc: Thomas Petazzoni, Alexandre Belloni
+
+On 6/14/23 12:31, Richard Purdie wrote:
+> On Wed, 2023-06-14 at 10:56 +0200, Alexis Lothoré via
+> lists.yoctoproject.org wrote:
+>> From: Alexis Lothoré <alexis.lothore@bootlin.com>
+>>
+>> This series is a follow-up for the 4.3_M1.rc1 regression report issue.
+>>
+>> It has been observed that the report is empty. This issue is linked to
+>> configuration description in yocto-autobuilder-helper, and has been
+>> identified through the following steps:
+>> - empty report is supposed to be a comparison between yocto-4.2 (4.2.rc3)
+>>   and 4.3_M1.rc1
+>> - yocto-4.2 results are almost empty: we only find test results from Intel
+>>   QA (pushed _after_ the AB build) and not the AB test results
+>> - tests results are managed by send-qa-email.send-qa-email uses resulttool
+>>   to systematically gather and store test results in local git directory
+>> - however, it looks for basebranch/comparebranch to know if those results
+>>   can be pushed onto git server, and those variables depend on config.json
+>>   content
+>> - yocto-4.2 (4.2.rc3) has been built on release branch mickledore
+>>   (https://autobuilder.yoctoproject.org/typhoon/#/builders/83/builds/5212)
+>> - since mickledore is not yet described in config.json, send-qa-email
+>>   considers it as a "work" branch (contrary to a "release" branch) and does
+>>   not push test results
+>>
+>> As a consequence:
+>> - first commit brings in python logger
+>> - second commit adds a warning when such case happen, since we are able to
+>>   detect it
+>> - third fix actually adds mickledore as a release branch to properly store
+>>   again test results
+>>
+>> There must be a more robust rework to do (because the issue will likely
+>> happen on each major delivery), but I aimed for the quick and small fix to
+>> quickly bring back tests results storage without breaking other things in
+>> the process
+>>
+>> Alexis Lothoré (3):
+>>   scripts/send-qa-email: use logger instead of raw prints
+>>   scripts/send-qa-email: print warning when test results are not stored
+>>   config.json: add mickledore as direct push branch for test results
+> 
+> Thanks for the analysis. I agree we need to somehow fix this properly.
+> One solution might be to always push for poky if the branch name
+> doesn't end with -next?
+
+That might work indeed. If we are sure enough that no custom/feature branch will
+be used in poky with send-qa-email (ie, only in poky-contrib), I can do the fix
+this way
+> 
+> Since we have the release artefacts for the release, could we add the
+> test results after the fact now?>
+> Id' be interested to see the 4.3 M1 to 4.2 comparison rerun with that
+> added.
+
+I am not sure about where to find those artifacts for yocto-4.2 ? If you are
+referring to https://autobuilder.yocto.io/pub/, yocto-4.2 has already been
+removed from there. And if you are referring to the archived release on main
+site
+(https://downloads.yoctoproject.org/releases/yocto/yocto-4.2/poky-21790e71d55f417f27cd51fae9dd47549758d4a0.tar.bz2),
+it does contain a single, 40 line testresults.json, so that's definitely not the
+full AB tests results.
+
+> 
+> Cheers,
+> 
+> Richard
+> 
+> 
+> 
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#60297): https://lists.yoctoproject.org/g/yocto/message/60297
+> Mute This Topic: https://lists.yoctoproject.org/mt/99523809/7394887
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/leave/12378809/7394887/1227806781/xyzzy [alexis.lothore@bootlin.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+> 
+
+-- 
+Alexis Lothoré, Bootlin
+Embedded Linux and Kernel engineering
+https://bootlin.com
+
+
+
+^ permalink raw reply	[flat|nested] 14+ messages in thread
+* Re: [yocto] [yocto-autobuilder-helper][PATCH 0/3] fix test results storage for mickledore
+  2023-06-14 12:15   ` Alexis Lothoré
+@ 2023-06-14 14:29     ` Alexandre Belloni
+  2023-06-14 14:32       ` Richard Purdie
+  0 siblings, 1 reply; 14+ messages in thread
+From: Alexandre Belloni @ 2023-06-14 14:29 UTC (permalink / raw)
+  To: Alexis Lothoré; +Cc: Richard Purdie, yocto, Thomas Petazzoni
+
+On 14/06/2023 14:15:54+0200, Alexis Lothorï¿½ wrote:
+> On 6/14/23 12:31, Richard Purdie wrote:
+> > On Wed, 2023-06-14 at 10:56 +0200, Alexis Lothorï¿½ via
+> > lists.yoctoproject.org wrote:
+> >> From: Alexis Lothorï¿½ <alexis.lothore@bootlin.com>
+> >>
+> >> This series is a follow-up for the 4.3_M1.rc1 regression report issue.
+> >>
+> >> It has been observed that the report is empty. This issue is linked to
+> >> configuration description in yocto-autobuilder-helper, and has been
+> >> identified through the following steps:
+> >> - empty report is supposed to be a comparison between yocto-4.2 (4.2.rc3)
+> >>   and 4.3_M1.rc1
+> >> - yocto-4.2 results are almost empty: we only find test results from Intel
+> >>   QA (pushed _after_ the AB build) and not the AB test results
+> >> - tests results are managed by send-qa-email.send-qa-email uses resulttool
+> >>   to systematically gather and store test results in local git directory
+> >> - however, it looks for basebranch/comparebranch to know if those results
+> >>   can be pushed onto git server, and those variables depend on config.json
+> >>   content
+> >> - yocto-4.2 (4.2.rc3) has been built on release branch mickledore
+> >>   (https://autobuilder.yoctoproject.org/typhoon/#/builders/83/builds/5212)
+> >> - since mickledore is not yet described in config.json, send-qa-email
+> >>   considers it as a "work" branch (contrary to a "release" branch) and does
+> >>   not push test results
+> >>
+> >> As a consequence:
+> >> - first commit brings in python logger
+> >> - second commit adds a warning when such case happen, since we are able to
+> >>   detect it
+> >> - third fix actually adds mickledore as a release branch to properly store
+> >>   again test results
+> >>
+> >> There must be a more robust rework to do (because the issue will likely
+> >> happen on each major delivery), but I aimed for the quick and small fix to
+> >> quickly bring back tests results storage without breaking other things in
+> >> the process
+> >>
+> >> Alexis Lothorï¿½ (3):
+> >>   scripts/send-qa-email: use logger instead of raw prints
+> >>   scripts/send-qa-email: print warning when test results are not stored
+> >>   config.json: add mickledore as direct push branch for test results
+> > 
+> > Thanks for the analysis. I agree we need to somehow fix this properly.
+> > One solution might be to always push for poky if the branch name
+> > doesn't end with -next?
+> 
+> That might work indeed. If we are sure enough that no custom/feature branch will
+> be used in poky with send-qa-email (ie, only in poky-contrib), I can do the fix
+> this way
+
+I sometimes use a different branch name when testing things out (like 64
+bit time) but as long as we all know, we can probably ensure this ends in
+-next.
+
+> > 
+> > Since we have the release artefacts for the release, could we add the
+> > test results after the fact now?>
+> > Id' be interested to see the 4.3 M1 to 4.2 comparison rerun with that
+> > added.
+> 
+> I am not sure about where to find those artifacts for yocto-4.2 ? If you are
+> referring to https://autobuilder.yocto.io/pub/, yocto-4.2 has already been
+> removed from there. And if you are referring to the archived release on main
+> site
+> (https://downloads.yoctoproject.org/releases/yocto/yocto-4.2/poky-21790e71d55f417f27cd51fae9dd47549758d4a0.tar.bz2),
+> it does contain a single, 40 line testresults.json, so that's definitely not the
+> full AB tests results.
+> 
+> > 
+> > Cheers,
+> > 
+> > Richard
+> > 
+> > 
+> > 
+> > -=-=-=-=-=-=-=-=-=-=-=-
+> > Links: You receive all messages sent to this group.
+> > View/Reply Online (#60297): https://lists.yoctoproject.org/g/yocto/message/60297
+> > Mute This Topic: https://lists.yoctoproject.org/mt/99523809/7394887
+> > Group Owner: yocto+owner@lists.yoctoproject.org
+> > Unsubscribe: https://lists.yoctoproject.org/g/yocto/leave/12378809/7394887/1227806781/xyzzy [alexis.lothore@bootlin.com]
+> > -=-=-=-=-=-=-=-=-=-=-=-
+> > 
+> 
+> -- 
+> Alexis Lothorï¿½, Bootlin
+> Embedded Linux and Kernel engineering
+> https://bootlin.com
+> 
+
+-- 
+Alexandre Belloni, co-owner and COO, Bootlin
+Embedded Linux and Kernel engineering
+https://bootlin.com
+
+
+^ permalink raw reply	[flat|nested] 14+ messages in thread
+* Re: [yocto] [yocto-autobuilder-helper][PATCH 0/3] fix test results storage for mickledore
+  2023-06-14 14:29     ` Alexandre Belloni
+@ 2023-06-14 14:32       ` Richard Purdie
+  2023-06-14 14:40         ` Alexandre Belloni
+  0 siblings, 1 reply; 14+ messages in thread
+From: Richard Purdie @ 2023-06-14 14:32 UTC (permalink / raw)
+  To: Alexandre Belloni, Alexis Lothoré; +Cc: yocto, Thomas Petazzoni
+
+On Wed, 2023-06-14 at 16:29 +0200, Alexandre Belloni wrote:
+> On 14/06/2023 14:15:54+0200, Alexis Lothoré wrote:
+> > On 6/14/23 12:31, Richard Purdie wrote:
+> > > On Wed, 2023-06-14 at 10:56 +0200, Alexis Lothoré via
+> > > lists.yoctoproject.org wrote:
+> > > > From: Alexis Lothoré <alexis.lothore@bootlin.com>
+> > > > 
+> > > > This series is a follow-up for the 4.3_M1.rc1 regression report issue.
+> > > > 
+> > > > It has been observed that the report is empty. This issue is linked to
+> > > > configuration description in yocto-autobuilder-helper, and has been
+> > > > identified through the following steps:
+> > > > - empty report is supposed to be a comparison between yocto-4.2 (4.2.rc3)
+> > > >   and 4.3_M1.rc1
+> > > > - yocto-4.2 results are almost empty: we only find test results from Intel
+> > > >   QA (pushed _after_ the AB build) and not the AB test results
+> > > > - tests results are managed by send-qa-email.send-qa-email uses resulttool
+> > > >   to systematically gather and store test results in local git directory
+> > > > - however, it looks for basebranch/comparebranch to know if those results
+> > > >   can be pushed onto git server, and those variables depend on config.json
+> > > >   content
+> > > > - yocto-4.2 (4.2.rc3) has been built on release branch mickledore
+> > > >   (https://autobuilder.yoctoproject.org/typhoon/#/builders/83/builds/5212)
+> > > > - since mickledore is not yet described in config.json, send-qa-email
+> > > >   considers it as a "work" branch (contrary to a "release" branch) and does
+> > > >   not push test results
+> > > > 
+> > > > As a consequence:
+> > > > - first commit brings in python logger
+> > > > - second commit adds a warning when such case happen, since we are able to
+> > > >   detect it
+> > > > - third fix actually adds mickledore as a release branch to properly store
+> > > >   again test results
+> > > > 
+> > > > There must be a more robust rework to do (because the issue will likely
+> > > > happen on each major delivery), but I aimed for the quick and small fix to
+> > > > quickly bring back tests results storage without breaking other things in
+> > > > the process
+> > > > 
+> > > > Alexis Lothoré (3):
+> > > >   scripts/send-qa-email: use logger instead of raw prints
+> > > >   scripts/send-qa-email: print warning when test results are not stored
+> > > >   config.json: add mickledore as direct push branch for test results
+> > > 
+> > > Thanks for the analysis. I agree we need to somehow fix this properly.
+> > > One solution might be to always push for poky if the branch name
+> > > doesn't end with -next?
+> > 
+> > That might work indeed. If we are sure enough that no custom/feature branch will
+> > be used in poky with send-qa-email (ie, only in poky-contrib), I can do the fix
+> > this way
+> 
+> I sometimes use a different branch name when testing things out (like 64
+> bit time) but as long as we all know, we can probably ensure this ends in
+> -next.
+
+That would always be in poky-contrib though?
+
+Cheers,
+
+Richard
+
+
+^ permalink raw reply	[flat|nested] 14+ messages in thread
+* Re: [yocto] [yocto-autobuilder-helper][PATCH 0/3] fix test results storage for mickledore
+  2023-06-14 14:32       ` Richard Purdie
+@ 2023-06-14 14:40         ` Alexandre Belloni
+  0 siblings, 0 replies; 14+ messages in thread
+From: Alexandre Belloni @ 2023-06-14 14:40 UTC (permalink / raw)
+  To: Richard Purdie; +Cc: Alexis Lothoré, yocto, Thomas Petazzoni
+
+On 14/06/2023 15:32:25+0100, Richard Purdie wrote:
+> On Wed, 2023-06-14 at 16:29 +0200, Alexandre Belloni wrote:
+> > On 14/06/2023 14:15:54+0200, Alexis Lothorï¿½ wrote:
+> > > On 6/14/23 12:31, Richard Purdie wrote:
+> > > > On Wed, 2023-06-14 at 10:56 +0200, Alexis Lothorï¿½ via
+> > > > lists.yoctoproject.org wrote:
+> > > > > From: Alexis Lothorï¿½ <alexis.lothore@bootlin.com>
+> > > > > 
+> > > > > This series is a follow-up for the 4.3_M1.rc1 regression report issue.
+> > > > > 
+> > > > > It has been observed that the report is empty. This issue is linked to
+> > > > > configuration description in yocto-autobuilder-helper, and has been
+> > > > > identified through the following steps:
+> > > > > - empty report is supposed to be a comparison between yocto-4.2 (4.2.rc3)
+> > > > >   and 4.3_M1.rc1
+> > > > > - yocto-4.2 results are almost empty: we only find test results from Intel
+> > > > >   QA (pushed _after_ the AB build) and not the AB test results
+> > > > > - tests results are managed by send-qa-email.send-qa-email uses resulttool
+> > > > >   to systematically gather and store test results in local git directory
+> > > > > - however, it looks for basebranch/comparebranch to know if those results
+> > > > >   can be pushed onto git server, and those variables depend on config.json
+> > > > >   content
+> > > > > - yocto-4.2 (4.2.rc3) has been built on release branch mickledore
+> > > > >   (https://autobuilder.yoctoproject.org/typhoon/#/builders/83/builds/5212)
+> > > > > - since mickledore is not yet described in config.json, send-qa-email
+> > > > >   considers it as a "work" branch (contrary to a "release" branch) and does
+> > > > >   not push test results
+> > > > > 
+> > > > > As a consequence:
+> > > > > - first commit brings in python logger
+> > > > > - second commit adds a warning when such case happen, since we are able to
+> > > > >   detect it
+> > > > > - third fix actually adds mickledore as a release branch to properly store
+> > > > >   again test results
+> > > > > 
+> > > > > There must be a more robust rework to do (because the issue will likely
+> > > > > happen on each major delivery), but I aimed for the quick and small fix to
+> > > > > quickly bring back tests results storage without breaking other things in
+> > > > > the process
+> > > > > 
+> > > > > Alexis Lothorï¿½ (3):
+> > > > >   scripts/send-qa-email: use logger instead of raw prints
+> > > > >   scripts/send-qa-email: print warning when test results are not stored
+> > > > >   config.json: add mickledore as direct push branch for test results
+> > > > 
+> > > > Thanks for the analysis. I agree we need to somehow fix this properly.
+> > > > One solution might be to always push for poky if the branch name
+> > > > doesn't end with -next?
+> > > 
+> > > That might work indeed. If we are sure enough that no custom/feature branch will
+> > > be used in poky with send-qa-email (ie, only in poky-contrib), I can do the fix
+> > > this way
+> > 
+> > I sometimes use a different branch name when testing things out (like 64
+> > bit time) but as long as we all know, we can probably ensure this ends in
+> > -next.
+> 
+> That would always be in poky-contrib though?
+> 
+
+Indeed!
+
+> Cheers,
+> 
+> Richard
+
+-- 
+Alexandre Belloni, co-owner and COO, Bootlin
+Embedded Linux and Kernel engineering
+https://bootlin.com
+
+
+^ permalink raw reply	[flat|nested] 14+ messages in thread
+* Re: [yocto] [yocto-autobuilder-helper][PATCH 0/3] fix test results storage for mickledore
+  2023-06-14  8:56 [yocto-autobuilder-helper][PATCH 0/3] fix test results storage for mickledore alexis.lothore
+                   ` (3 preceding siblings ...)
+  2023-06-14 10:31 ` [yocto] [yocto-autobuilder-helper][PATCH 0/3] fix test results storage for mickledore Richard Purdie
+@ 2023-06-15 13:41 ` Richard Purdie
+  2023-06-15 20:34   ` Alexis Lothoré
+  4 siblings, 1 reply; 14+ messages in thread
+From: Richard Purdie @ 2023-06-15 13:41 UTC (permalink / raw)
+  To: alexis.lothore, yocto; +Cc: Thomas Petazzoni, Alexandre Belloni
+
+On Wed, 2023-06-14 at 10:56 +0200, Alexis Lothoré via lists.yoctoproject.org wrote:
+> From: Alexis Lothoré <alexis.lothore@bootlin.com>
+> 
+> This series is a follow-up for the 4.3_M1.rc1 regression report issue.
+> 
+> It has been observed that the report is empty. This issue is linked to
+> configuration description in yocto-autobuilder-helper, and has been
+> identified through the following steps:
+> - empty report is supposed to be a comparison between yocto-4.2 (4.2.rc3)
+>   and 4.3_M1.rc1
+> - yocto-4.2 results are almost empty: we only find test results from Intel
+>   QA (pushed _after_ the AB build) and not the AB test results
+> - tests results are managed by send-qa-email.send-qa-email uses resulttool
+>   to systematically gather and store test results in local git directory
+> - however, it looks for basebranch/comparebranch to know if those results
+>   can be pushed onto git server, and those variables depend on config.json
+>   content
+> - yocto-4.2 (4.2.rc3) has been built on release branch mickledore
+>   (https://autobuilder.yoctoproject.org/typhoon/#/builders/83/builds/5212)
+> - since mickledore is not yet described in config.json, send-qa-email
+>   considers it as a "work" branch (contrary to a "release" branch) and does
+>   not push test results
+> 
+> As a consequence:
+> - first commit brings in python logger
+> - second commit adds a warning when such case happen, since we are able to
+>   detect it
+> - third fix actually adds mickledore as a release branch to properly store
+>   again test results
+> 
+> There must be a more robust rework to do (because the issue will likely
+> happen on each major delivery), but I aimed for the quick and small fix to
+> quickly bring back tests results storage without breaking other things in
+> the process
+
+Thanks, I've merged this as it is a good first set of steps.
+
+As I mentioned, I think we should hardcode poky + "not ending with -
+next" as the test, then we shouldn't run into this issue again.
+
+I'd also like to retroactively push the test results for 4.2 since we
+have them and should be able to merge them onto the branch. I'd then
+like to see what the revised 4.3 M1 report looks like.
+
+Cheers,
+
+Richard
+
+
+^ permalink raw reply	[flat|nested] 14+ messages in thread
+* Re: [yocto] [yocto-autobuilder-helper][PATCH 0/3] fix test results storage for mickledore
+  2023-06-15 13:41 ` Richard Purdie
+@ 2023-06-15 20:34   ` Alexis Lothoré
+  2023-06-16 14:58     ` Alexis Lothoré
+  0 siblings, 1 reply; 14+ messages in thread
+From: Alexis Lothoré @ 2023-06-15 20:34 UTC (permalink / raw)
+  To: Richard Purdie, yocto, Michael Halstead
+  Cc: Thomas Petazzoni, Alexandre Belloni
+
+Hello Richard, Michael,
+On 6/15/23 15:41, Richard Purdie wrote:
+> On Wed, 2023-06-14 at 10:56 +0200, Alexis Lothoré via lists.yoctoproject.org wrote:
+>> From: Alexis Lothoré <alexis.lothore@bootlin.com>
+>>
+>> There must be a more robust rework to do (because the issue will likely
+>> happen on each major delivery), but I aimed for the quick and small fix to
+>> quickly bring back tests results storage without breaking other things in
+>> the process
+> 
+> Thanks, I've merged this as it is a good first set of steps.
+> 
+> As I mentioned, I think we should hardcode poky + "not ending with -
+> next" as the test, then we shouldn't run into this issue again.
+
+ACK, will do the fix
+> 
+> I'd also like to retroactively push the test results for 4.2 since we
+> have them and should be able to merge them onto the branch. I'd then
+> like to see what the revised 4.3 M1 report looks like.
+
+I have started importing the archive kindly prepared by Michael in poky-contrib
+test-results repository, but I am struggling a bit regarding regression report
+generation with freshly imported result. I still have to confirm if it is the
+generated tag that is faulty or if it is a kind of an edge case in resulttool
+
+Kind regards,
+
+> Cheers,
+> 
+> Richard
+
+
+-- 
+Alexis Lothoré, Bootlin
+Embedded Linux and Kernel engineering
+https://bootlin.com
+
+
+
+^ permalink raw reply	[flat|nested] 14+ messages in thread
+* Re: [yocto] [yocto-autobuilder-helper][PATCH 0/3] fix test results storage for mickledore
+  2023-06-15 20:34   ` Alexis Lothoré
+@ 2023-06-16 14:58     ` Alexis Lothoré
+  2023-06-16 16:30       ` Richard Purdie
+  0 siblings, 1 reply; 14+ messages in thread
+From: Alexis Lothoré @ 2023-06-16 14:58 UTC (permalink / raw)
+  To: Richard Purdie, yocto, Michael Halstead
+  Cc: Thomas Petazzoni, Alexandre Belloni
+
+On 6/15/23 22:34, Alexis Lothoré wrote:
+> Hello Richard, Michael,
+> On 6/15/23 15:41, Richard Purdie wrote:
+>> On Wed, 2023-06-14 at 10:56 +0200, Alexis Lothoré via lists.yoctoproject.org wrote:
+>>> From: Alexis Lothoré <alexis.lothore@bootlin.com>
+>>>
+>>> There must be a more robust rework to do (because the issue will likely
+>>> happen on each major delivery), but I aimed for the quick and small fix to
+>>> quickly bring back tests results storage without breaking other things in
+>>> the process
+>>
+>> Thanks, I've merged this as it is a good first set of steps.
+>>
+>> As I mentioned, I think we should hardcode poky + "not ending with -
+>> next" as the test, then we shouldn't run into this issue again.
+> 
+> ACK, will do the fix
+>>
+>> I'd also like to retroactively push the test results for 4.2 since we
+>> have them and should be able to merge them onto the branch. I'd then
+>> like to see what the revised 4.3 M1 report looks like.
+> 
+> I have started importing the archive kindly prepared by Michael in poky-contrib
+> test-results repository, but I am struggling a bit regarding regression report
+> generation with freshly imported result. I still have to confirm if it is the
+> generated tag that is faulty or if it is a kind of an edge case in resulttool
+
+So, I have managed to generate the regression report locally (there's likely a
+tag issue for older tests stored in test-results to be circumvented in
+resulttool), and it is a bit disappointing. The report is 13MB large, and is
+filled once again with false positive likely due to non static ptest names,
+likely due to leaky build logs. Here's a sample
+
+ptestresult.gcc-g++-user.c-c++-common/Wbidi-chars-ranges.c  -std=gnu++14
+expected multiline pattern lines 13-17 was found: "\s*/\*<U\+202E> \}
+<U\+2066>if \(isAdmin\)<U\+2069> <U\+2066> begin admins only \*/[^\n\r]*\n
+~~~~~~~~                                ~~~~~~~~                    \^\n
+\|                                       \|
+\|[^\n\r]*\n       \|                                       \|
+        end of bidirectional context[^\n\r]*\n       U\+202E \(RIGHT-TO-LEFT
+OVERRIDE\)         U\+2066 \(LEFT-TO-RIGHT ISOLATE\)[^\n\r]*\n": PASS -> None
+    ptestresult.gcc-g++-user.c-c++-common/Wbidi-chars-ranges.c  -std=gnu++14
+expected multiline pattern lines 26-31 was found: "     /\* end admins only
+<U\+202E> \{ <U\+2066>\*/[^\n\r]*\n                        ~~~~~~~~   ~~~~~~~~
+\^\n                        \|          \|        \|[^\n\r]*\n
+     \|          \|        end of bidirectional context[^\n\r]*\n
+        \|          U\+2066 \(LEFT-TO-RIGHT ISOLATE\)[^\n\r]*\n
+      U\+202E \(RIGHT-TO-LEFT OVERRIDE\)[^\n\r]*\n": PASS -> None
+
+Most of this noise is about gcc ptests, there is also a bit about python3 and
+ltp. I manually trimmed gcc false positive to reach a reasonable size, here it is:
+https://pastebin.com/rYZ3qYMK
+
+
+> 
+> Kind regards,
+> 
+>> Cheers,
+>>
+>> Richard
+> 
+> 
+
+-- 
+Alexis Lothoré, Bootlin
+Embedded Linux and Kernel engineering
+https://bootlin.com
+
+
+
+^ permalink raw reply	[flat|nested] 14+ messages in thread
+* Re: [yocto] [yocto-autobuilder-helper][PATCH 0/3] fix test results storage for mickledore
+  2023-06-16 14:58     ` Alexis Lothoré
+@ 2023-06-16 16:30       ` Richard Purdie
+  2023-06-16 22:30         ` Alexis Lothoré
+  0 siblings, 1 reply; 14+ messages in thread
+From: Richard Purdie @ 2023-06-16 16:30 UTC (permalink / raw)
+  To: Alexis Lothoré, yocto, Michael Halstead
+  Cc: Thomas Petazzoni, Alexandre Belloni
+
+On Fri, 2023-06-16 at 16:58 +0200, Alexis Lothoré wrote:
+> On 6/15/23 22:34, Alexis Lothoré wrote:
+> > Hello Richard, Michael,
+> > On 6/15/23 15:41, Richard Purdie wrote:
+> > > On Wed, 2023-06-14 at 10:56 +0200, Alexis Lothoré via lists.yoctoproject.org wrote:
+> > > > From: Alexis Lothoré <alexis.lothore@bootlin.com>
+> > > > 
+> > > > There must be a more robust rework to do (because the issue will likely
+> > > > happen on each major delivery), but I aimed for the quick and small fix to
+> > > > quickly bring back tests results storage without breaking other things in
+> > > > the process
+> > > 
+> > > Thanks, I've merged this as it is a good first set of steps.
+> > > 
+> > > As I mentioned, I think we should hardcode poky + "not ending with -
+> > > next" as the test, then we shouldn't run into this issue again.
+> > 
+> > ACK, will do the fix
+> > > 
+> > > I'd also like to retroactively push the test results for 4.2 since we
+> > > have them and should be able to merge them onto the branch. I'd then
+> > > like to see what the revised 4.3 M1 report looks like.
+> > 
+> > I have started importing the archive kindly prepared by Michael in poky-contrib
+> > test-results repository, but I am struggling a bit regarding regression report
+> > generation with freshly imported result. I still have to confirm if it is the
+> > generated tag that is faulty or if it is a kind of an edge case in resulttool
+> 
+> So, I have managed to generate the regression report locally (there's likely a
+> tag issue for older tests stored in test-results to be circumvented in
+> resulttool), and it is a bit disappointing. The report is 13MB large, and is
+> filled once again with false positive likely due to non static ptest names,
+> likely due to leaky build logs. Here's a sample
+> 
+> ptestresult.gcc-g++-user.c-c++-common/Wbidi-chars-ranges.c  -std=gnu++14
+> expected multiline pattern lines 13-17 was found: "\s*/\*<U\+202E> \}
+> <U\+2066>if \(isAdmin\)<U\+2069> <U\+2066> begin admins only \*/[^\n\r]*\n
+> ~~~~~~~~                                ~~~~~~~~                    \^\n
+> \|                                       \|
+> \|[^\n\r]*\n       \|                                       \|
+>         end of bidirectional context[^\n\r]*\n       U\+202E \(RIGHT-TO-LEFT
+> OVERRIDE\)         U\+2066 \(LEFT-TO-RIGHT ISOLATE\)[^\n\r]*\n": PASS -> None
+>     ptestresult.gcc-g++-user.c-c++-common/Wbidi-chars-ranges.c  -std=gnu++14
+> expected multiline pattern lines 26-31 was found: "     /\* end admins only
+> <U\+202E> \{ <U\+2066>\*/[^\n\r]*\n                        ~~~~~~~~   ~~~~~~~~
+> \^\n                        \|          \|        \|[^\n\r]*\n
+>      \|          \|        end of bidirectional context[^\n\r]*\n
+>         \|          U\+2066 \(LEFT-TO-RIGHT ISOLATE\)[^\n\r]*\n
+>       U\+202E \(RIGHT-TO-LEFT OVERRIDE\)[^\n\r]*\n": PASS -> None
+> 
+> Most of this noise is about gcc ptests, there is also a bit about python3 and
+> ltp. I manually trimmed gcc false positive to reach a reasonable size, here it is:
+> https://pastebin.com/rYZ3qYMK
+
+Thanks for getting us the diff!
+
+Going through the details there, most of it is "expected" due to
+changes in version of the components. I did wonder if we could somehow
+show that version change?
+
+I'm starting to wonder if we should:
+
+a) file two bugs for cleaning up the python3 and gcc test results
+b) summarise the python3 and gcc test results in the processing rather
+than printing in full if the differences exceed some threshold (40
+changes?)
+
+Basically we need to make this report useful somehow, even if we have
+to exclude some data for now until we can better process it.
+
+I'm open to other ideas...
+
+Cheers,
+
+Richard
+
+
+
+^ permalink raw reply	[flat|nested] 14+ messages in thread
+* Re: [yocto] [yocto-autobuilder-helper][PATCH 0/3] fix test results storage for mickledore
+  2023-06-16 16:30       ` Richard Purdie
+@ 2023-06-16 22:30         ` Alexis Lothoré
+  0 siblings, 0 replies; 14+ messages in thread
+From: Alexis Lothoré @ 2023-06-16 22:30 UTC (permalink / raw)
+  To: Richard Purdie, yocto, Michael Halstead
+  Cc: Thomas Petazzoni, Alexandre Belloni
+
+On 6/16/23 18:30, Richard Purdie wrote:
+> On Fri, 2023-06-16 at 16:58 +0200, Alexis Lothoré wrote:
+>> On 6/15/23 22:34, Alexis Lothoré wrote:
+>>> Hello Richard, Michael,
+>>> On 6/15/23 15:41, Richard Purdie wrote:
+>>>> On Wed, 2023-06-14 at 10:56 +0200, Alexis Lothoré via lists.yoctoproject.org wrote:
+>>>>> From: Alexis Lothoré <alexis.lothore@bootlin.com>
+>>>>>
+>>>>> There must be a more robust rework to do (because the issue will likely
+>>>>> happen on each major delivery), but I aimed for the quick and small fix to
+>>>>> quickly bring back tests results storage without breaking other things in
+>>>>> the process
+>>>>
+>>>> Thanks, I've merged this as it is a good first set of steps.
+>>>>
+>>>> As I mentioned, I think we should hardcode poky + "not ending with -
+>>>> next" as the test, then we shouldn't run into this issue again.
+>>>
+>>> ACK, will do the fix
+>>>>
+>>>> I'd also like to retroactively push the test results for 4.2 since we
+>>>> have them and should be able to merge them onto the branch. I'd then
+>>>> like to see what the revised 4.3 M1 report looks like.
+>>>
+>>> I have started importing the archive kindly prepared by Michael in poky-contrib
+>>> test-results repository, but I am struggling a bit regarding regression report
+>>> generation with freshly imported result. I still have to confirm if it is the
+>>> generated tag that is faulty or if it is a kind of an edge case in resulttool
+>>
+>> So, I have managed to generate the regression report locally (there's likely a
+>> tag issue for older tests stored in test-results to be circumvented in
+>> resulttool), and it is a bit disappointing. The report is 13MB large, and is
+>> filled once again with false positive likely due to non static ptest names,
+>> likely due to leaky build logs. Here's a sample
+>>
+>> ptestresult.gcc-g++-user.c-c++-common/Wbidi-chars-ranges.c  -std=gnu++14
+>> expected multiline pattern lines 13-17 was found: "\s*/\*<U\+202E> \}
+>> <U\+2066>if \(isAdmin\)<U\+2069> <U\+2066> begin admins only \*/[^\n\r]*\n
+>> ~~~~~~~~                                ~~~~~~~~                    \^\n
+>> \|                                       \|
+>> \|[^\n\r]*\n       \|                                       \|
+>>         end of bidirectional context[^\n\r]*\n       U\+202E \(RIGHT-TO-LEFT
+>> OVERRIDE\)         U\+2066 \(LEFT-TO-RIGHT ISOLATE\)[^\n\r]*\n": PASS -> None
+>>     ptestresult.gcc-g++-user.c-c++-common/Wbidi-chars-ranges.c  -std=gnu++14
+>> expected multiline pattern lines 26-31 was found: "     /\* end admins only
+>> <U\+202E> \{ <U\+2066>\*/[^\n\r]*\n                        ~~~~~~~~   ~~~~~~~~
+>> \^\n                        \|          \|        \|[^\n\r]*\n
+>>      \|          \|        end of bidirectional context[^\n\r]*\n
+>>         \|          U\+2066 \(LEFT-TO-RIGHT ISOLATE\)[^\n\r]*\n
+>>       U\+202E \(RIGHT-TO-LEFT OVERRIDE\)[^\n\r]*\n": PASS -> None
+>>
+>> Most of this noise is about gcc ptests, there is also a bit about python3 and
+>> ltp. I manually trimmed gcc false positive to reach a reasonable size, here it is:
+>> https://pastebin.com/rYZ3qYMK
+> 
+> Thanks for getting us the diff!
+> 
+> Going through the details there, most of it is "expected" due to
+> changes in version of the components. I did wonder if we could somehow
+> show that version change?
+> 
+> I'm starting to wonder if we should:
+> 
+> a) file two bugs for cleaning up the python3 and gcc test results
+> b) summarise the python3 and gcc test results in the processing rather
+> than printing in full if the differences exceed some threshold (40
+> changes?)
+
+I would say yes and yes, and I like the idea of setting a general threshold,
+either an absolute one or as a percentage of total number of test cases in
+current test.
+
+> 
+> Basically we need to make this report useful somehow, even if we have
+> to exclude some data for now until we can better process it.
+
+Absolutely. I will use this report as a base to bring a new batch of
+improvements. I will also add the stats I have been talking about earlier, to
+know for example if for a test case, the generated noise is really affecting the
+whole test or is a drop in the sea
+> 
+> I'm open to other ideas...
+> 
+> Cheers,
+> 
+> Richard
+> 
+> 
+> 
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#60328): https://lists.yoctoproject.org/g/yocto/message/60328
+> Mute This Topic: https://lists.yoctoproject.org/mt/99523809/7394887
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/leave/12378809/7394887/1227806781/xyzzy [alexis.lothore@bootlin.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+> 
+
+-- 
+Alexis Lothoré, Bootlin
+Embedded Linux and Kernel engineering
+https://bootlin.com
+
+
+
+^ permalink raw reply	[flat|nested] 14+ messages in thread
+end of thread, other threads:[~2023-06-16 22:30 UTC | newest]
+
+Thread overview: 14+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-06-14  8:56 [yocto-autobuilder-helper][PATCH 0/3] fix test results storage for mickledore alexis.lothore
+2023-06-14  8:56 ` [yocto-autobuilder-helper][PATCH 1/3] scripts/send-qa-email: use logger instead of raw prints alexis.lothore
+2023-06-14  8:56 ` [yocto-autobuilder-helper][PATCH 2/3] scripts/send-qa-email: print warning when test results are not stored alexis.lothore
+2023-06-14  8:56 ` [yocto-autobuilder-helper][PATCH 3/3] config.json: add mickledore as direct push branch for test results alexis.lothore
+2023-06-14 10:31 ` [yocto] [yocto-autobuilder-helper][PATCH 0/3] fix test results storage for mickledore Richard Purdie
+2023-06-14 12:15   ` Alexis Lothoré
+2023-06-14 14:29     ` Alexandre Belloni
+2023-06-14 14:32       ` Richard Purdie
+2023-06-14 14:40         ` Alexandre Belloni
+2023-06-15 13:41 ` Richard Purdie
+2023-06-15 20:34   ` Alexis Lothoré
+2023-06-16 14:58     ` Alexis Lothoré
+2023-06-16 16:30       ` Richard Purdie
+2023-06-16 22:30         ` Alexis Lothoré
+

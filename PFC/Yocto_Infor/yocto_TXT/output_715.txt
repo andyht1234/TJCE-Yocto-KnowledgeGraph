@@ -1,0 +1,566 @@
+* [meta-raspberrypi] - problem adding meta-qt6 SDK #qt #sdk
+@ 2023-04-19 14:10 Electronic Consult
+  2023-04-19 18:06 ` [yocto] " Khem Raj
+  0 siblings, 1 reply; 3+ messages in thread
+From: Electronic Consult @ 2023-04-19 14:10 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 19422 bytes --]
+
+Hello all,
+
+I'm using dunfell with meta-raspberrypi & meta-qt6 ( https://code.qt.io/yocto/meta-qt6.git ), v6.2.24 under the open-source license. I've successfully built a simple qt6 application with the setup but now trying to build the SDK to support Qt6 development on the RPi.
+
+As per Qt instructions I've ( https://doc.qt.io/Boot2Qt-6.2/b2qt-meta-qt6.html#toolchain ) added:
+
+populate_sdk_qt6_base
+
+To my build but I'm getting a build error during the build of gcc-cross-arm:
+
+make[1]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/gcc'
+| sed: -e expression #1, char 0: no previous regular expression
+| WARNING: exit code 1 from a shell command.
+
+Its a little cryptic so difficult to understand where to start looking.  I'm using KAS to configure my build & its modified from the meta-raspberrypi:
+
+header:
+version: 8
+
+machine: raspberrypi4
+distro: poky
+target:
+- core-image-base
+
+repos:
+meta-raspberry:
+
+poky:
+url: https://git.yoctoproject.org/git/poky
+refspec: dunfell
+layers:
+meta:
+meta-poky:
+meta-yocto-bsp:
+
+meta-openembedded:
+url: http://git.openembedded.org/meta-openembedded
+refspec: dunfell
+layers:
+meta-oe:
+meta-python:
+meta-networking:
+meta-perl:
+
+meta-qt6:
+url: https://code.qt.io/yocto/meta-qt6.git
+refspec: origin/6.2.4
+
+meta-test:
+url: https://github.com/OOHehir/meta-test.git
+refspec: origin/main
+
+bblayers_conf_header:
+standard: |
+POKY_BBLAYERS_CONF_VERSION = "2"
+BBPATH = "${TOPDIR}"
+BBFILES ?= ""
+local_conf_header:
+reduce_diskspace: |
+INHERIT += "rm_work_and_downloads"
+build_qt6_sdk: |
+INHERIT += "populate_sdk_qt6_base"
+standard: |
+# Added
+DL_DIR = "/media/owen/yocto/meritechYocto/localCache/sstate-cache"
+SSTATE_DIR = "/media/owen/yocto/meritechYocto/localCache/sstate-cache"
+BB_SIGNATURE_HANDLER = "OEEquivHash"
+BB_HASHSERVE = "auto"
+BB_HASHSERVE_UPSTREAM = "hashserv.yocto.io:8687"
+SSTATE_MIRRORS ?= "file://.* https://sstate.yoctoproject.org/all/PATH;downloadfilename=PATH"
+
+CONF_VERSION = "1"
+PACKAGE_CLASSES = "package_rpm"
+SDKMACHINE = "x86_64"
+USER_CLASSES = "buildstats image-mklibs image-prelink"
+PATCHRESOLVE = "noop"
+
+IMAGE_INSTALL += "qt-test qtbase"
+IMAGE_INSTALL += "helloworld"
+
+DISTRO_FEATURES_remove = "ptest"
+
+rpi-specific: |
+DISABLE_RPI_BOOT_LOGO = "1"
+
+debug-tweaks: |
+EXTRA_IMAGE_FEATURES = "debug-tweaks ssh-server-dropbear"
+diskmon: |
+BB_DISKMON_DIRS = "\
+STOPTASKS,${TMPDIR},1G,100K \
+STOPTASKS,${DL_DIR},1G,100K \
+STOPTASKS,${SSTATE_DIR},1G,100K \
+STOPTASKS,/tmp,100M,100K \
+ABORT,${TMPDIR},100M,1K \
+ABORT,${DL_DIR},100M,1K \
+ABORT,${SSTATE_DIR},100M,1K \
+ABORT,/tmp,10M,1K"
+
+Full build failure is below, any pointer appreciated,
+
+Regards,
+
+Owen
+
+ERROR: gcc-cross-arm-9.5.0-r0 do_compile: Execution of '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/temp/run.do_compile.3969185' failed with exit code 1
+ERROR: Logfile of failure stored in: /media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/temp/log.do_compile.3969185
+Log data follows:
+| DEBUG: Executing python function autotools_aclocals
+| DEBUG: SITE files ['endian-little', 'common-linux', 'common-glibc', 'bit-64', 'x86_64-linux', 'common']
+| DEBUG: Python function autotools_aclocals finished
+| DEBUG: Executing shell function do_compile
+| NOTE: make -j 4 configure-gcc
+| make[1]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/libiberty'
+| make[2]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/libiberty/testsuite'
+| make[2]: Nothing to be done for 'all'.
+| make[2]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/libiberty/testsuite'
+| make[1]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/libiberty'
+| make[1]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/lto-plugin'
+| make  all-am
+| make[2]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/lto-plugin'
+| make[2]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/lto-plugin'
+| make[1]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/lto-plugin'
+| NOTE: make -j 4 TARGET-gcc=checksum-options all-gcc
+| make[1]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/libiberty'
+| make[1]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/intl'
+| make[1]: Nothing to be done for 'all'.
+| make[1]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/intl'
+| make[1]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/build-x86_64-linux/libiberty'
+| make[2]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/libiberty/testsuite'
+| make[2]: Nothing to be done for 'all'.
+| make[2]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/libiberty/testsuite'
+| make[1]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/libiberty'
+| make[1]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/libbacktrace'
+| make  all-am
+| make[2]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/libbacktrace'
+| make[2]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/build-x86_64-linux/libiberty/testsuite'
+| make[2]: Nothing to be done for 'all'.
+| make[2]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/build-x86_64-linux/libiberty/testsuite'
+| true  DO=all multi-do # make
+| make[1]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/build-x86_64-linux/libiberty'
+| make[2]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/libbacktrace'
+| make[1]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/libbacktrace'
+| make[1]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/libdecnumber'
+| make[1]: Nothing to be done for 'all'.
+| make[1]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/libdecnumber'
+| make[1]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/lto-plugin'
+| make  all-am
+| make[2]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/lto-plugin'
+| make[2]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/lto-plugin'
+| make[1]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/lto-plugin'
+| make[1]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/fixincludes'
+| make[1]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/libcpp'
+| test -f config.h || (rm -f stamp-h1 && make stamp-h1)
+| make[1]: Nothing to be done for 'all'.
+| make[1]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/fixincludes'
+| make[1]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/libcpp'
+| make[1]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/build-x86_64-linux/fixincludes'
+| make[1]: Nothing to be done for 'all'.
+| make[1]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/build-x86_64-linux/fixincludes'
+| make[1]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/build-x86_64-linux/libcpp'
+| test -f config.h || (rm -f stamp-h1 && make stamp-h1)
+| make[1]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/build-x86_64-linux/libcpp'
+| make[1]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/gcc'
+| make[1]: 'checksum-options' is up to date.
+| make[1]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/gcc'
+| sed: -e expression #1, char 0: no previous regular expression
+| WARNING: exit code 1 from a shell command.
+| ERROR: Execution of '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/temp/run.do_compile.3969185' failed with exit code 1
+ERROR: Task (/media/owen/yocto/meritechYocto/meta-raspberrypi/build/../poky/meta/recipes-devtools/gcc/gcc-cross_9.5.bb:do_compile) failed with exit code '1'
+ERROR: gcc-crosssdk-x86_64-pokysdk-linux-9.5.0-r0 do_compile: Execution of '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/temp/run.do_compile.3969186' failed with exit code 1
+ERROR: Logfile of failure stored in: /media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/temp/log.do_compile.3969186
+Log data follows:
+| DEBUG: Executing python function autotools_aclocals
+| DEBUG: SITE files ['endian-little', 'common-linux', 'common-glibc', 'bit-64', 'x86_64-linux', 'common']
+| DEBUG: Python function autotools_aclocals finished
+| DEBUG: Executing shell function do_compile
+| NOTE: make -j 4 configure-gcc
+| make[1]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/libiberty'
+| make[2]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/libiberty/testsuite'
+| make[2]: Nothing to be done for 'all'.
+| make[2]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/libiberty/testsuite'
+| make[1]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/libiberty'
+| make[1]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/lto-plugin'
+| make  all-am
+| make[2]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/lto-plugin'
+| make[2]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/lto-plugin'
+| make[1]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/lto-plugin'
+| NOTE: make -j 4 TARGET-gcc=checksum-options all-gcc
+| make[1]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/libiberty'
+| make[2]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/libiberty/testsuite'
+| make[2]: Nothing to be done for 'all'.
+| make[2]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/libiberty/testsuite'
+| make[1]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/libiberty'
+| make[1]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/intl'
+| make[1]: Nothing to be done for 'all'.
+| make[1]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/intl'
+| make[1]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/libbacktrace'
+| make[1]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/build-x86_64-linux/libiberty'
+| make  all-am
+| make[2]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/libbacktrace'
+| true  DO=all multi-do # make
+| make[2]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/libbacktrace'
+| make[1]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/libbacktrace'
+| make[2]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/build-x86_64-linux/libiberty/testsuite'
+| make[2]: Nothing to be done for 'all'.
+| make[2]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/build-x86_64-linux/libiberty/testsuite'
+| make[1]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/libdecnumber'
+| make[1]: Nothing to be done for 'all'.
+| make[1]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/libdecnumber'
+| make[1]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/build-x86_64-linux/libiberty'
+| make[1]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/lto-plugin'
+| make  all-am
+| make[2]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/lto-plugin'
+| make[1]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/build-x86_64-linux/fixincludes'
+| make[1]: Nothing to be done for 'all'.
+| make[1]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/build-x86_64-linux/fixincludes'
+| make[2]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/lto-plugin'
+| make[1]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/lto-plugin'
+| make[1]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/build-x86_64-linux/libcpp'
+| test -f config.h || (rm -f stamp-h1 && make stamp-h1)
+| make[1]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/build-x86_64-linux/libcpp'
+| make[1]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/libcpp'
+| test -f config.h || (rm -f stamp-h1 && make stamp-h1)
+| make[1]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/libcpp'
+| make[1]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/fixincludes'
+| make[1]: Nothing to be done for 'all'.
+| make[1]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/fixincludes'
+| make[1]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/gcc'
+| make[1]: 'checksum-options' is up to date.
+| make[1]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/gcc'
+| sed: -e expression #1, char 0: no previous regular expression
+| WARNING: exit code 1 from a shell command.
+| ERROR: Execution of '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/temp/run.do_compile.3969186' failed with exit code 1
+ERROR: Task (/media/owen/yocto/meritechYocto/meta-raspberrypi/build/../poky/meta/recipes-devtools/gcc/gcc-crosssdk_9.5.bb:do_compile) failed with exit code '1'
+NOTE: Tasks Summary: Attempted 551 tasks of which 530 didn't need to be rerun and 2 failed.
+
+Summary: 2 tasks failed:
+/media/owen/yocto/meritechYocto/meta-raspberrypi/build/../poky/meta/recipes-devtools/gcc/gcc-cross_9.5.bb:do_compile
+/media/owen/yocto/meritechYocto/meta-raspberrypi/build/../poky/meta/recipes-devtools/gcc/gcc-crosssdk_9.5.bb:do_compile
+Summary: There were 2 WARNING messages shown.
+Summary: There were 2 ERROR messages shown, returning a non-zero exit code.
+2023-04-19 14:40:49 - ERROR    - Command returned non-zero exit status 1
+owen@owen-XPS:/media/owen/yocto/meritechYocto/meta-raspberrypi$
+
+[-- Attachment #2: Type: text/html, Size: 21907 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] [meta-raspberrypi] - problem adding meta-qt6 SDK #qt #sdk
+  2023-04-19 14:10 [meta-raspberrypi] - problem adding meta-qt6 SDK #qt #sdk Electronic Consult
+@ 2023-04-19 18:06 ` Khem Raj
+  2023-04-23 20:36   ` [meta-raspberrypi] - problem adding meta-qt6 SDK #sdk Electronic Consult
+  0 siblings, 1 reply; 3+ messages in thread
+From: Khem Raj @ 2023-04-19 18:06 UTC (permalink / raw)
+  To: Electronic Consult; +Cc: yocto
+
+what is your build distro/container ? It seems a build race in gcc, I
+have seen it in distant past, IIRC it was some issue with assembler on
+host
+but not sure if this is it.
+
+On Wed, Apr 19, 2023 at 7:11 AM Electronic Consult
+<electronicconsult1@gmail.com> wrote:
+>
+> Hello all,
+>
+> I'm using dunfell with meta-raspberrypi & meta-qt6 (https://code.qt.io/yocto/meta-qt6.git), v6.2.24 under the open-source license. I've successfully built a simple qt6 application with the setup but now trying to build the SDK to support Qt6 development on the RPi.
+>
+> As per Qt instructions I've added:
+>
+> populate_sdk_qt6_base
+>
+> To my build but I'm getting a build error during the build of gcc-cross-arm:
+>
+> make[1]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/gcc'
+> | sed: -e expression #1, char 0: no previous regular expression
+> | WARNING: exit code 1 from a shell command.
+>
+> Its a little cryptic so difficult to understand where to start looking.  I'm using KAS to configure my build & its modified from the meta-raspberrypi:
+>
+> header:
+>   version: 8
+>
+> machine: raspberrypi4
+> distro: poky
+> target:
+>   - core-image-base
+>
+> repos:
+>   meta-raspberry:
+>
+>   poky:
+>     url: https://git.yoctoproject.org/git/poky
+>     refspec: dunfell
+>     layers:
+>       meta:
+>       meta-poky:
+>       meta-yocto-bsp:
+>
+>   meta-openembedded:
+>     url: http://git.openembedded.org/meta-openembedded
+>     refspec: dunfell
+>     layers:
+>       meta-oe:
+>       meta-python:
+>       meta-networking:
+>       meta-perl:
+>
+>   meta-qt6:
+>     url: https://code.qt.io/yocto/meta-qt6.git
+>     refspec: origin/6.2.4
+>
+>   meta-test:
+>     url: https://github.com/OOHehir/meta-test.git
+>     refspec: origin/main
+>
+> bblayers_conf_header:
+>   standard: |
+>     POKY_BBLAYERS_CONF_VERSION = "2"
+>     BBPATH = "${TOPDIR}"
+>     BBFILES ?= ""
+> local_conf_header:
+>   reduce_diskspace: |
+>     INHERIT += "rm_work_and_downloads"
+>   build_qt6_sdk: |
+>     INHERIT += "populate_sdk_qt6_base"
+>   standard: |
+>     # Added
+>     DL_DIR = "/media/owen/yocto/meritechYocto/localCache/sstate-cache"
+>     SSTATE_DIR = "/media/owen/yocto/meritechYocto/localCache/sstate-cache"
+>     BB_SIGNATURE_HANDLER = "OEEquivHash"
+>     BB_HASHSERVE = "auto"
+>     BB_HASHSERVE_UPSTREAM = "hashserv.yocto.io:8687"
+>     SSTATE_MIRRORS ?= "file://.* https://sstate.yoctoproject.org/all/PATH;downloadfilename=PATH"
+>
+>     CONF_VERSION = "1"
+>     PACKAGE_CLASSES = "package_rpm"
+>     SDKMACHINE = "x86_64"
+>     USER_CLASSES = "buildstats image-mklibs image-prelink"
+>     PATCHRESOLVE = "noop"
+>
+>     IMAGE_INSTALL += "qt-test qtbase"
+>     IMAGE_INSTALL += "helloworld"
+>
+>     DISTRO_FEATURES_remove = "ptest"
+>
+>   rpi-specific: |
+>     DISABLE_RPI_BOOT_LOGO = "1"
+>
+>   debug-tweaks: |
+>     EXTRA_IMAGE_FEATURES = "debug-tweaks ssh-server-dropbear"
+>   diskmon: |
+>     BB_DISKMON_DIRS = "\
+>         STOPTASKS,${TMPDIR},1G,100K \
+>         STOPTASKS,${DL_DIR},1G,100K \
+>         STOPTASKS,${SSTATE_DIR},1G,100K \
+>         STOPTASKS,/tmp,100M,100K \
+>         ABORT,${TMPDIR},100M,1K \
+>         ABORT,${DL_DIR},100M,1K \
+>         ABORT,${SSTATE_DIR},100M,1K \
+>         ABORT,/tmp,10M,1K"
+>
+>
+> Full build failure is below, any pointer appreciated,
+>
+> Regards,
+>
+> Owen
+>
+> ERROR: gcc-cross-arm-9.5.0-r0 do_compile: Execution of '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/temp/run.do_compile.3969185' failed with exit code 1
+> ERROR: Logfile of failure stored in: /media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/temp/log.do_compile.3969185
+> Log data follows:
+> | DEBUG: Executing python function autotools_aclocals
+> | DEBUG: SITE files ['endian-little', 'common-linux', 'common-glibc', 'bit-64', 'x86_64-linux', 'common']
+> | DEBUG: Python function autotools_aclocals finished
+> | DEBUG: Executing shell function do_compile
+> | NOTE: make -j 4 configure-gcc
+> | make[1]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/libiberty'
+> | make[2]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/libiberty/testsuite'
+> | make[2]: Nothing to be done for 'all'.
+> | make[2]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/libiberty/testsuite'
+> | make[1]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/libiberty'
+> | make[1]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/lto-plugin'
+> | make  all-am
+> | make[2]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/lto-plugin'
+> | make[2]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/lto-plugin'
+> | make[1]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/lto-plugin'
+> | NOTE: make -j 4 TARGET-gcc=checksum-options all-gcc
+> | make[1]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/libiberty'
+> | make[1]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/intl'
+> | make[1]: Nothing to be done for 'all'.
+> | make[1]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/intl'
+> | make[1]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/build-x86_64-linux/libiberty'
+> | make[2]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/libiberty/testsuite'
+> | make[2]: Nothing to be done for 'all'.
+> | make[2]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/libiberty/testsuite'
+> | make[1]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/libiberty'
+> | make[1]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/libbacktrace'
+> | make  all-am
+> | make[2]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/libbacktrace'
+> | make[2]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/build-x86_64-linux/libiberty/testsuite'
+> | make[2]: Nothing to be done for 'all'.
+> | make[2]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/build-x86_64-linux/libiberty/testsuite'
+> | true  DO=all multi-do # make
+> | make[1]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/build-x86_64-linux/libiberty'
+> | make[2]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/libbacktrace'
+> | make[1]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/libbacktrace'
+> | make[1]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/libdecnumber'
+> | make[1]: Nothing to be done for 'all'.
+> | make[1]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/libdecnumber'
+> | make[1]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/lto-plugin'
+> | make  all-am
+> | make[2]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/lto-plugin'
+> | make[2]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/lto-plugin'
+> | make[1]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/lto-plugin'
+> | make[1]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/fixincludes'
+> | make[1]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/libcpp'
+> | test -f config.h || (rm -f stamp-h1 && make stamp-h1)
+> | make[1]: Nothing to be done for 'all'.
+> | make[1]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/fixincludes'
+> | make[1]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/libcpp'
+> | make[1]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/build-x86_64-linux/fixincludes'
+> | make[1]: Nothing to be done for 'all'.
+> | make[1]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/build-x86_64-linux/fixincludes'
+> | make[1]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/build-x86_64-linux/libcpp'
+> | test -f config.h || (rm -f stamp-h1 && make stamp-h1)
+> | make[1]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/build-x86_64-linux/libcpp'
+> | make[1]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/gcc'
+> | make[1]: 'checksum-options' is up to date.
+> | make[1]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/build/gcc'
+> | sed: -e expression #1, char 0: no previous regular expression
+> | WARNING: exit code 1 from a shell command.
+> | ERROR: Execution of '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-cross-arm/9.5.0-r0/temp/run.do_compile.3969185' failed with exit code 1
+> ERROR: Task (/media/owen/yocto/meritechYocto/meta-raspberrypi/build/../poky/meta/recipes-devtools/gcc/gcc-cross_9.5.bb:do_compile) failed with exit code '1'
+> ERROR: gcc-crosssdk-x86_64-pokysdk-linux-9.5.0-r0 do_compile: Execution of '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/temp/run.do_compile.3969186' failed with exit code 1
+> ERROR: Logfile of failure stored in: /media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/temp/log.do_compile.3969186
+> Log data follows:
+> | DEBUG: Executing python function autotools_aclocals
+> | DEBUG: SITE files ['endian-little', 'common-linux', 'common-glibc', 'bit-64', 'x86_64-linux', 'common']
+> | DEBUG: Python function autotools_aclocals finished
+> | DEBUG: Executing shell function do_compile
+> | NOTE: make -j 4 configure-gcc
+> | make[1]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/libiberty'
+> | make[2]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/libiberty/testsuite'
+> | make[2]: Nothing to be done for 'all'.
+> | make[2]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/libiberty/testsuite'
+> | make[1]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/libiberty'
+> | make[1]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/lto-plugin'
+> | make  all-am
+> | make[2]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/lto-plugin'
+> | make[2]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/lto-plugin'
+> | make[1]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/lto-plugin'
+> | NOTE: make -j 4 TARGET-gcc=checksum-options all-gcc
+> | make[1]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/libiberty'
+> | make[2]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/libiberty/testsuite'
+> | make[2]: Nothing to be done for 'all'.
+> | make[2]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/libiberty/testsuite'
+> | make[1]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/libiberty'
+> | make[1]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/intl'
+> | make[1]: Nothing to be done for 'all'.
+> | make[1]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/intl'
+> | make[1]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/libbacktrace'
+> | make[1]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/build-x86_64-linux/libiberty'
+> | make  all-am
+> | make[2]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/libbacktrace'
+> | true  DO=all multi-do # make
+> | make[2]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/libbacktrace'
+> | make[1]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/libbacktrace'
+> | make[2]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/build-x86_64-linux/libiberty/testsuite'
+> | make[2]: Nothing to be done for 'all'.
+> | make[2]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/build-x86_64-linux/libiberty/testsuite'
+> | make[1]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/libdecnumber'
+> | make[1]: Nothing to be done for 'all'.
+> | make[1]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/libdecnumber'
+> | make[1]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/build-x86_64-linux/libiberty'
+> | make[1]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/lto-plugin'
+> | make  all-am
+> | make[2]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/lto-plugin'
+> | make[1]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/build-x86_64-linux/fixincludes'
+> | make[1]: Nothing to be done for 'all'.
+> | make[1]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/build-x86_64-linux/fixincludes'
+> | make[2]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/lto-plugin'
+> | make[1]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/lto-plugin'
+> | make[1]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/build-x86_64-linux/libcpp'
+> | test -f config.h || (rm -f stamp-h1 && make stamp-h1)
+> | make[1]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/build-x86_64-linux/libcpp'
+> | make[1]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/libcpp'
+> | test -f config.h || (rm -f stamp-h1 && make stamp-h1)
+> | make[1]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/libcpp'
+> | make[1]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/fixincludes'
+> | make[1]: Nothing to be done for 'all'.
+> | make[1]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/fixincludes'
+> | make[1]: Entering directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/gcc'
+> | make[1]: 'checksum-options' is up to date.
+> | make[1]: Leaving directory '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/build/gcc'
+> | sed: -e expression #1, char 0: no previous regular expression
+> | WARNING: exit code 1 from a shell command.
+> | ERROR: Execution of '/media/owen/yocto/meritechYocto/meta-raspberrypi/build/tmp/work/x86_64-linux/gcc-crosssdk-x86_64-pokysdk-linux/9.5.0-r0/temp/run.do_compile.3969186' failed with exit code 1
+> ERROR: Task (/media/owen/yocto/meritechYocto/meta-raspberrypi/build/../poky/meta/recipes-devtools/gcc/gcc-crosssdk_9.5.bb:do_compile) failed with exit code '1'
+> NOTE: Tasks Summary: Attempted 551 tasks of which 530 didn't need to be rerun and 2 failed.
+>
+> Summary: 2 tasks failed:
+>   /media/owen/yocto/meritechYocto/meta-raspberrypi/build/../poky/meta/recipes-devtools/gcc/gcc-cross_9.5.bb:do_compile
+>   /media/owen/yocto/meritechYocto/meta-raspberrypi/build/../poky/meta/recipes-devtools/gcc/gcc-crosssdk_9.5.bb:do_compile
+> Summary: There were 2 WARNING messages shown.
+> Summary: There were 2 ERROR messages shown, returning a non-zero exit code.
+> 2023-04-19 14:40:49 - ERROR    - Command returned non-zero exit status 1
+> owen@owen-XPS:/media/owen/yocto/meritechYocto/meta-raspberrypi$
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> You automatically follow any topics you start or reply to.
+> View/Reply Online (#59731): https://lists.yoctoproject.org/g/yocto/message/59731
+> Mute This Topic: https://lists.yoctoproject.org/mt/98367231/1997914
+> Mute #qt:https://lists.yoctoproject.org/g/yocto/mutehashtag/qt
+> Mute #sdk:https://lists.yoctoproject.org/g/yocto/mutehashtag/sdk
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [raj.khem@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [meta-raspberrypi] - problem adding meta-qt6 SDK #sdk
+  2023-04-19 18:06 ` [yocto] " Khem Raj
+@ 2023-04-23 20:36   ` Electronic Consult
+  0 siblings, 0 replies; 3+ messages in thread
+From: Electronic Consult @ 2023-04-23 20:36 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 267 bytes --]
+
+Hello again,
+
+For anyone looking at this I managed to get the qt6 SDK added to an image based on poky using:
+
+inherit core-image
+
+TOOLCHAIN_HOST_TASK += "\
+nativesdk-packagegroup-qt6-toolchain-host \
+"
+
+Seems obvious now!
+
+Hope this helps other!
+
+Owen
+
+[-- Attachment #2: Type: text/html, Size: 348 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2023-04-23 20:36 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-04-19 14:10 [meta-raspberrypi] - problem adding meta-qt6 SDK #qt #sdk Electronic Consult
+2023-04-19 18:06 ` [yocto] " Khem Raj
+2023-04-23 20:36   ` [meta-raspberrypi] - problem adding meta-qt6 SDK #sdk Electronic Consult
+

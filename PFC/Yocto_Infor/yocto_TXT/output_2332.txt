@@ -1,0 +1,245 @@
+* Invalid checksums for SRC_URI ignored?
+@ 2022-01-19 12:16 Michael Opdenacker
+  2022-01-19 12:52 ` [yocto] " Ross Burton
+  2022-01-19 12:56 ` Peter Bergin
+  0 siblings, 2 replies; 5+ messages in thread
+From: Michael Opdenacker @ 2022-01-19 12:16 UTC (permalink / raw)
+  To: yocto
+
+Greetings,
+
+I reused a simple "hello" recipe and added a non-matching checksum to it:
+
+...
+SRC_URI = "file://helloworld.c"
+SRC_URI[md5sum] = "34f0efd76b4f18888888888833cdd129"
+...
+
+The rest of the recipe comes from
+https://git.openembedded.org/openembedded-core/tree/meta-skeleton/recipes-skeleton/hello-single.
+
+Why doesn't Bitbake stop, reporting that the checksum doesn't match the
+source file?
+Anyway, why does the recipe build without a checksum? Shouldn't
+checksums be mandatory?
+
+I'm using the "master" version of Poky.
+
+Thanks in advance
+Michael.
+
+-- 
+Michael Opdenacker, Bootlin
+Embedded Linux and Kernel engineering
+https://bootlin.com
+
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] Invalid checksums for SRC_URI ignored?
+  2022-01-19 12:16 Invalid checksums for SRC_URI ignored? Michael Opdenacker
+@ 2022-01-19 12:52 ` Ross Burton
+  2022-01-19 12:56 ` Peter Bergin
+  1 sibling, 0 replies; 5+ messages in thread
+From: Ross Burton @ 2022-01-19 12:52 UTC (permalink / raw)
+  To: Michael Opdenacker; +Cc: yocto
+
+On Wed, 19 Jan 2022 at 12:16, Michael Opdenacker
+<michael.opdenacker@bootlin.com> wrote:
+>
+> Greetings,
+>
+> I reused a simple "hello" recipe and added a non-matching checksum to it:
+>
+> ...
+> SRC_URI = "file://helloworld.c"
+> SRC_URI[md5sum] = "34f0efd76b4f18888888888833cdd129"
+> ...
+>
+> The rest of the recipe comes from
+> https://git.openembedded.org/openembedded-core/tree/meta-skeleton/recipes-skeleton/hello-single.
+>
+> Why doesn't Bitbake stop, reporting that the checksum doesn't match the
+> source file?
+> Anyway, why does the recipe build without a checksum? Shouldn't
+> checksums be mandatory?
+
+Checksums are for files that are fetched via http:// and friends, not
+local files.
+
+Ross
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] Invalid checksums for SRC_URI ignored?
+  2022-01-19 12:16 Invalid checksums for SRC_URI ignored? Michael Opdenacker
+  2022-01-19 12:52 ` [yocto] " Ross Burton
+@ 2022-01-19 12:56 ` Peter Bergin
+  2022-01-19 13:59   ` Michael Opdenacker
+  1 sibling, 1 reply; 5+ messages in thread
+From: Peter Bergin @ 2022-01-19 12:56 UTC (permalink / raw)
+  To: yocto
+
+Hi,
+
+On 2022-01-19 13:16, Michael Opdenacker wrote:
+> Greetings,
+>
+> I reused a simple "hello" recipe and added a non-matching checksum to it:
+>
+> ...
+> SRC_URI = "file://helloworld.c"
+> SRC_URI[md5sum] = "34f0efd76b4f18888888888833cdd129"
+> ...
+>
+> The rest of the recipe comes from
+> https://git.openembedded.org/openembedded-core/tree/meta-skeleton/recipes-skeleton/hello-single.
+>
+> Why doesn't Bitbake stop, reporting that the checksum doesn't match the
+> source file?
+> Anyway, why does the recipe build without a checksum? Shouldn't
+> checksums be mandatory?
+
+No they are not mandatory for all fetchers. They are only used for 
+content downloaded from non-local archives. 
+https://docs.yoctoproject.org/bitbake/bitbake-user-manual/bitbake-user-manual-fetching.html#the-download-fetch 
+
+
+https://github.com/openembedded/bitbake/blob/32180d5057c818a69987aada482e82acf3c72ef2/lib/bb/fetch2/__init__.py#L1268
+
+^^ here you can see the selection of URI's that automatically needs a 
+checksum.
+
+Best regards,
+/Peter
+
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] Invalid checksums for SRC_URI ignored?
+  2022-01-19 12:56 ` Peter Bergin
+@ 2022-01-19 13:59   ` Michael Opdenacker
+  2022-01-19 17:55     ` Richard Purdie
+  0 siblings, 1 reply; 5+ messages in thread
+From: Michael Opdenacker @ 2022-01-19 13:59 UTC (permalink / raw)
+  To: Peter Bergin, yocto, Ross Burton
+
+Peter, Ross
+
+On 1/19/22 1:56 PM, Peter Bergin wrote:
+> Hi,
+>
+> On 2022-01-19 13:16, Michael Opdenacker wrote:
+>> Greetings,
+>>
+>> I reused a simple "hello" recipe and added a non-matching checksum to
+>> it:
+>>
+>> ...
+>> SRC_URI = "file://helloworld.c"
+>> SRC_URI[md5sum] = "34f0efd76b4f18888888888833cdd129"
+>> ...
+>>
+>> The rest of the recipe comes from
+>> https://git.openembedded.org/openembedded-core/tree/meta-skeleton/recipes-skeleton/hello-single.
+>>
+>>
+>> Why doesn't Bitbake stop, reporting that the checksum doesn't match the
+>> source file?
+>> Anyway, why does the recipe build without a checksum? Shouldn't
+>> checksums be mandatory?
+>
+> No they are not mandatory for all fetchers. They are only used for
+> content downloaded from non-local archives.
+> https://docs.yoctoproject.org/bitbake/bitbake-user-manual/bitbake-user-manual-fetching.html#the-download-fetch
+>
+>
+> https://github.com/openembedded/bitbake/blob/32180d5057c818a69987aada482e82acf3c72ef2/lib/bb/fetch2/__init__.py#L1268
+>
+>
+> ^^ here you can see the selection of URI's that automatically needs a
+> checksum.
+
+
+Thanks for your replies. This all makes perfect sense then.
+Thanks again
+Michael.
+
+-- 
+Michael Opdenacker, Bootlin
+Embedded Linux and Kernel engineering
+https://bootlin.com
+
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] Invalid checksums for SRC_URI ignored?
+  2022-01-19 13:59   ` Michael Opdenacker
+@ 2022-01-19 17:55     ` Richard Purdie
+  0 siblings, 0 replies; 5+ messages in thread
+From: Richard Purdie @ 2022-01-19 17:55 UTC (permalink / raw)
+  To: Michael Opdenacker, Peter Bergin, yocto, Ross Burton
+
+On Wed, 2022-01-19 at 14:59 +0100, Michael Opdenacker wrote:
+> Peter, Ross
+> 
+> On 1/19/22 1:56 PM, Peter Bergin wrote:
+> > Hi,
+> > 
+> > On 2022-01-19 13:16, Michael Opdenacker wrote:
+> > > Greetings,
+> > > 
+> > > I reused a simple "hello" recipe and added a non-matching checksum to
+> > > it:
+> > > 
+> > > ...
+> > > SRC_URI = "file://helloworld.c"
+> > > SRC_URI[md5sum] = "34f0efd76b4f18888888888833cdd129"
+> > > ...
+> > > 
+> > > The rest of the recipe comes from
+> > > https://git.openembedded.org/openembedded-core/tree/meta-skeleton/recipes-skeleton/hello-single.
+> > > 
+> > > 
+> > > Why doesn't Bitbake stop, reporting that the checksum doesn't match the
+> > > source file?
+> > > Anyway, why does the recipe build without a checksum? Shouldn't
+> > > checksums be mandatory?
+> > 
+> > No they are not mandatory for all fetchers. They are only used for
+> > content downloaded from non-local archives.
+> > https://docs.yoctoproject.org/bitbake/bitbake-user-manual/bitbake-user-manual-fetching.html#the-download-fetch
+> > 
+> > 
+> > https://github.com/openembedded/bitbake/blob/32180d5057c818a69987aada482e82acf3c72ef2/lib/bb/fetch2/__init__.py#L1268
+> > 
+> > 
+> > ^^ here you can see the selection of URI's that automatically needs a
+> > checksum.
+> 
+> 
+> Thanks for your replies. This all makes perfect sense then.
+
+Personally, I think where the checksums are present, we should check them
+regardless of url type though. I think I have an open bug related to this and
+the uninative fetching.
+
+Cheers,
+
+Richard
+
+
+
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+end of thread, other threads:[~2022-01-19 17:55 UTC | newest]
+
+Thread overview: 5+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-01-19 12:16 Invalid checksums for SRC_URI ignored? Michael Opdenacker
+2022-01-19 12:52 ` [yocto] " Ross Burton
+2022-01-19 12:56 ` Peter Bergin
+2022-01-19 13:59   ` Michael Opdenacker
+2022-01-19 17:55     ` Richard Purdie
+

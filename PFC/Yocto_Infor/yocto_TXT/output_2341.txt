@@ -1,0 +1,160 @@
+* [psplash][PATCH] psplash: Fix double buffering initialization
+@ 2022-01-17 10:39 Horn, Michal
+  0 siblings, 0 replies; 2+ messages in thread
+From: Horn, Michal @ 2022-01-17 10:39 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2877 bytes --]
+
+Some fb drivers do not implement double buffering completely or correctly.
+For example mxsfb driver does not set yres_virtual to double on
+initialization, nor it allows its doubling by FBIOPUT_VSCREENINFO ioctl
+call. In such case, the double buffering gets enabled, but psplash fails
+to display every second frame with error 'psplash_fb_flip: FBIOPAN_DISPLAY failed: Invalid argument'.
+
+Panning the display by FBIOPAN_DISPLAY ioctl is always checking carefully
+that the resolution, virtual buffer resolutin and offsets are in
+bounds at fb_pan_display - https://elixir.bootlin.com/linux/v4.9.275/source/drivers/video/fbdev/core/fbmem.c#L891.
+
+Swapping the front and back buffers is done by switching the
+yoffset between 0 and yres values. For double buffering, the whole buffer
+must have yres_virtual buffer size double of yres.
+
+But in case of the mxsfb driver, the yres_virtual is always equal to yres,
+so drawing with the offset set to yres would overrun the buffer. So the
+panning is stopped and error 'Invalid argument' is returned.
+
+Psplash tries to double the yres_virtual on initialization by FBIOPUT_VSCREENINFO ioctl call,
+that at some point calls the mxsfb_check_var - https://elixir.bootlin.com/linux/v4.9.275/source/drivers/video/fbdev/mxsfb.c#L269
+function, which for some reason always sets the yres_virtual back to yres,
+effectively canceling the doubling. But no error is returned in this case,
+so it gets silently ignored.
+
+So in general, checking for the ioctl call success is not enough as some
+drivers may pass this test, but fail double buffering anyway.
+So now we double check the yres_virtual on fb_new and disable double
+buffering in case of doubling yres_virtual fails.
+
+Signed-off-by: Michal Horn <michalhorn@eaton.com>
+---
+psplash-fb.c | 14 ++++++++++++--
+1 file changed, 12 insertions(+), 2 deletions(-)
+
+diff --git a/psplash-fb.c b/psplash-fb.c
+index 2babb5f..1b73807 100644
+--- a/psplash-fb.c
++++ b/psplash-fb.c
+@@ -213,8 +213,18 @@ psplash_fb_new (int angle, int fbdev_id)
+perror(" Error getting the fixed framebuffer info");
+goto fail;
+} else {
+-          DBG("Virtual resolution set to double");
+-          fb->double_buffering = 1;
++          if (ioctl(fb->fd, FBIOPAN_DISPLAY, &fb_var) == -1) {
++            fprintf(stderr, "warning: FBIOPAN_DISPLAY failed, "
++                    "double buffering disabled\n");
++          } else {
++            if (fb_var.yres_virtual == fb_var.yres * 2) {
++              DBG("Virtual resolution set to double");
++              fb->double_buffering = 1;
++            } else {
++              fprintf(stderr, "warning: Doubling virtual "
++                      "resolution failed, double buffering disabled\n");
++            }
++          }
+}
+}
+}
+--
+2.25.1
+
+[-- Attachment #2: Type: text/html, Size: 4177 bytes --]
+
+^ permalink raw reply related	[flat|nested] 2+ messages in thread
+* [psplash][PATCH] psplash: Fix double buffering initialization
+@ 2022-01-17 10:26 Horn, Michal
+  0 siblings, 0 replies; 2+ messages in thread
+From: Horn, Michal @ 2022-01-17 10:26 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2893 bytes --]
+
+Some fb drivers do not implement double buffering completely or correctly.
+For example mxsfb driver does not set yres_virtual to double on
+initialization, nor it allows its doubling by FBIOPUT_VSCREENINFO ioctl
+call. In such case, the double buffering gets enabled, but psplash fails
+to display every second frame with error
+*psplash_fb_flip: FBIOPAN_DISPLAY failed: Invalid argument*.
+
+# Technical details:
+
+## Why every second frame gets thrown?
+
+Panning the display by FBIOPAN_DISPLAY ioctl is always checking carefully
+that the resolution, virtual buffer resolution and offsets in it are in
+bounds at (fb_pan_display)[https://elixir.bootlin.com/linux/v4.9.275/source/drivers/video/fbdev/core/fbmem.c#L891].
+
+Switching between the front and back buffers is done by switching the
+yoffset between 0 and yres values. For double buffering, the complete buffer
+has yres_virtual size and it must be double of yres.
+
+But in case of the mxsfb driver, the yres_virtual is always equal to yres,
+so drawing with the offset set to yres would overrun the buffer. So the
+panning is stopped and error *Invalid argument* is returned.
+
+## Why doubling the yres_virtual fails?
+
+yres_virtual is supposed to be doubled by FBIOPUT_VSCREENINFO ioctl call,
+that at some point calls the (mxsfb_check_var)[https://elixir.bootlin.com/linux/v4.9.275/source/drivers/video/fbdev/mxsfb.c#L269]
+function, which for some reason always sets the yres_virtual back to yres,
+effectively canceling the doubling. But no error is returned in this case,
+so it gets silently ignored.
+
+# Solution
+These two problems can be solved by double checking the yres_virtual on
+fb_new and disable double buffering in case of doubling yres_virtual fails.
+
+Signed-off-by: Michal Horn <michalhorn@eaton.com>
+---
+psplash-fb.c | 14 ++++++++++++--
+1 file changed, 12 insertions(+), 2 deletions(-)
+
+diff --git a/psplash-fb.c b/psplash-fb.c
+index 2babb5f..1b73807 100644
+--- a/psplash-fb.c
++++ b/psplash-fb.c
+@@ -213,8 +213,18 @@ psplash_fb_new (int angle, int fbdev_id)
+perror(" Error getting the fixed framebuffer info");
+goto fail;
+} else {
+-          DBG("Virtual resolution set to double");
+-          fb->double_buffering = 1;
++          if (ioctl(fb->fd, FBIOPAN_DISPLAY, &fb_var) == -1) {
++            fprintf(stderr, "warning: FBIOPAN_DISPLAY failed, "
++                    "double buffering disabled\n");
++          } else {
++            if (fb_var.yres_virtual == fb_var.yres * 2) {
++              DBG("Virtual resolution set to double");
++              fb->double_buffering = 1;
++            } else {
++              fprintf(stderr, "warning: Doubling virtual "
++                      "resolution failed, double buffering disabled\n");
++            }
++          }
+}
+}
+}
+--
+2.25.1
+
+[-- Attachment #2: Type: text/html, Size: 4307 bytes --]
+
+^ permalink raw reply related	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2022-01-17 10:39 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-01-17 10:39 [psplash][PATCH] psplash: Fix double buffering initialization Horn, Michal
+  -- strict thread matches above, loose matches on Subject: below --
+2022-01-17 10:26 Horn, Michal
+

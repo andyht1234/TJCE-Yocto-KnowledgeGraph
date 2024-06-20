@@ -1,0 +1,389 @@
+* Builing Gcc fails Poky
+@ 2022-09-27 16:11 PHIL
+  2022-09-27 18:40 ` [yocto] " Richard Purdie
+  0 siblings, 1 reply; 7+ messages in thread
+From: PHIL @ 2022-09-27 16:11 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 361 bytes --]
+
+Greetings,
+Trying to build core-image-weston from current master fails for gcc 12.2.0-r0 with lots of linker errors.
+
+Names of missing functions are strange ala gen_cmulvnx16qi3.
+In insn-output.o
+
+System is an ubuntu 22.04.1 LTS Build Target is qemuarm64
+
+Any idea?
+
+Regards
+-- 
+Diese Nachricht wurde von meinem Android-Gerät mit K-9 Mail gesendet.
+
+[-- Attachment #2: Type: text/html, Size: 585 bytes --]
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] Builing Gcc fails Poky
+  2022-09-27 16:11 Builing Gcc fails Poky PHIL
+@ 2022-09-27 18:40 ` Richard Purdie
+  2022-09-27 18:51   ` PHIL
+  0 siblings, 1 reply; 7+ messages in thread
+From: Richard Purdie @ 2022-09-27 18:40 UTC (permalink / raw)
+  To: Edgar Mobile, yocto
+
+On Tue, 2022-09-27 at 18:11 +0200, Edgar Mobile wrote:
+> Greetings,
+> Trying to build core-image-weston from current master fails for gcc
+> 12.2.0-r0 with lots of linker errors.
+> 
+> Names of missing functions are strange ala gen_cmulvnx16qi3.
+> In insn-output.o
+> 
+> System is an ubuntu 22.04.1 LTS Build Target is qemuarm64
+
+We build that regularly on the autobuilder so something seems odd here.
+Could your machine have memory issues? Do you get the same issue each
+time you build?
+
+Cheers,
+
+Richard
+
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] Builing Gcc fails Poky
+  2022-09-27 18:40 ` [yocto] " Richard Purdie
+@ 2022-09-27 18:51   ` PHIL
+  2022-09-27 19:02     ` Richard Purdie
+  0 siblings, 1 reply; 7+ messages in thread
+From: PHIL @ 2022-09-27 18:51 UTC (permalink / raw)
+  To: Richard Purdie, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 938 bytes --]
+
+What do you mean with memory issues? Memory broken? Not enough memory? The errors are the same on every run of course I don't build from scratch I just retype bitbake core-image-weston. Gdb also failed so I took that out. 
+
+Am 27. September 2022 20:40:31 MESZ schrieb Richard Purdie <richard.purdie@linuxfoundation.org>:
+>On Tue, 2022-09-27 at 18:11 +0200, Edgar Mobile wrote:
+>> Greetings,
+>> Trying to build core-image-weston from current master fails for gcc
+>> 12.2.0-r0 with lots of linker errors.
+>> 
+>> Names of missing functions are strange ala gen_cmulvnx16qi3.
+>> In insn-output.o
+>> 
+>> System is an ubuntu 22.04.1 LTS Build Target is qemuarm64
+>
+>We build that regularly on the autobuilder so something seems odd here.
+>Could your machine have memory issues? Do you get the same issue each
+>time you build?
+>
+>Cheers,
+>
+>Richard
+
+-- 
+Diese Nachricht wurde von meinem Android-Gerät mit K-9 Mail gesendet.
+
+[-- Attachment #2: Type: text/html, Size: 1475 bytes --]
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] Builing Gcc fails Poky
+  2022-09-27 18:51   ` PHIL
+@ 2022-09-27 19:02     ` Richard Purdie
+  2022-09-27 22:40       ` PHIL
+  0 siblings, 1 reply; 7+ messages in thread
+From: Richard Purdie @ 2022-09-27 19:02 UTC (permalink / raw)
+  To: PHIL, yocto
+
+On Tue, 2022-09-27 at 20:51 +0200, PHIL wrote:
+> Am 27. September 2022 20:40:31 MESZ schrieb Richard Purdie
+> <richard.purdie@linuxfoundation.org>:
+> > On Tue, 2022-09-27 at 18:11 +0200, Edgar Mobile wrote:
+> > > Greetings,
+> > > Trying to build core-image-weston from current master fails for
+> > > gcc
+> > > 12.2.0-r0 with lots of linker errors.
+> > > 
+> > > Names of missing functions are strange ala gen_cmulvnx16qi3.
+> > > In insn-output.o
+> > > 
+> > > System is an ubuntu 22.04.1 LTS Build Target is qemuarm64
+> > > 
+> > 
+> > We build that regularly on the autobuilder so something seems odd
+> > here.
+> > Could your machine have memory issues? Do you get the same issue
+> > each
+> > time you build?
+>
+> What do you mean with memory issues? Memory broken? Not enough
+> memory? The errors are the same on every run of course I don't build
+> from scratch I just retype bitbake core-image-weston. Gdb also failed
+> so I took that out. 
+
+I mean that the build system places more stress on the system than many
+other workloads and we've sometimes see gcc failures like this as a
+sign of failing system memory. Running memtest86 might show that up.
+
+If recipe X is failing and you "bitbake X -c clean" and then "bitbake
+X" and it doesn't fail the same way, that would be a sure sign of
+memory failure or another hardware issue.
+
+You can see here:
+
+https://autobuilder.yoctoproject.org/typhoon/#/workers
+
+we have Ubuntu 22.04 workers in the autobuilder and we build qemuarm64
+here:
+
+https://autobuilder.yoctoproject.org/typhoon/#/builders/42
+https://autobuilder.yoctoproject.org/typhoon/#/builders/131
+https://autobuilder.yoctoproject.org/typhoon/#/builders/127
+
+so this combination is well tested which is why I suspect something
+else is wrong.
+
+Cheers,
+
+Richard
+
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] Builing Gcc fails Poky
+  2022-09-27 19:02     ` Richard Purdie
+@ 2022-09-27 22:40       ` PHIL
+  2022-09-28  2:02         ` Khem Raj
+  0 siblings, 1 reply; 7+ messages in thread
+From: PHIL @ 2022-09-27 22:40 UTC (permalink / raw)
+  To: Richard Purdie, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2138 bytes --]
+
+Yeah building gcc alone worked.
+Now I'm concerned about the health of my machine.
+Thank you!
+
+Am 27. September 2022 21:02:40 MESZ schrieb Richard Purdie <richard.purdie@linuxfoundation.org>:
+>On Tue, 2022-09-27 at 20:51 +0200, PHIL wrote:
+>> Am 27. September 2022 20:40:31 MESZ schrieb Richard Purdie
+>> <richard.purdie@linuxfoundation.org>:
+>> > On Tue, 2022-09-27 at 18:11 +0200, Edgar Mobile wrote:
+>> > > Greetings,
+>> > > Trying to build core-image-weston from current master fails for
+>> > > gcc
+>> > > 12.2.0-r0 with lots of linker errors.
+>> > > 
+>> > > Names of missing functions are strange ala gen_cmulvnx16qi3.
+>> > > In insn-output.o
+>> > > 
+>> > > System is an ubuntu 22.04.1 LTS Build Target is qemuarm64
+>> > > 
+>> > 
+>> > We build that regularly on the autobuilder so something seems odd
+>> > here.
+>> > Could your machine have memory issues? Do you get the same issue
+>> > each
+>> > time you build?
+>>
+>> What do you mean with memory issues? Memory broken? Not enough
+>> memory? The errors are the same on every run of course I don't build
+>> from scratch I just retype bitbake core-image-weston. Gdb also failed
+>> so I took that out. 
+>
+>I mean that the build system places more stress on the system than many
+>other workloads and we've sometimes see gcc failures like this as a
+>sign of failing system memory. Running memtest86 might show that up.
+>
+>If recipe X is failing and you "bitbake X -c clean" and then "bitbake
+>X" and it doesn't fail the same way, that would be a sure sign of
+>memory failure or another hardware issue.
+>
+>You can see here:
+>
+>https://autobuilder.yoctoproject.org/typhoon/#/workers
+>
+>we have Ubuntu 22.04 workers in the autobuilder and we build qemuarm64
+>here:
+>
+>https://autobuilder.yoctoproject.org/typhoon/#/builders/42
+>https://autobuilder.yoctoproject.org/typhoon/#/builders/131
+>https://autobuilder.yoctoproject.org/typhoon/#/builders/127
+>
+>so this combination is well tested which is why I suspect something
+>else is wrong.
+>
+>Cheers,
+>
+>Richard
+
+-- 
+Diese Nachricht wurde von meinem Android-Gerät mit K-9 Mail gesendet.
+
+[-- Attachment #2: Type: text/html, Size: 3210 bytes --]
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] Builing Gcc fails Poky
+  2022-09-27 22:40       ` PHIL
+@ 2022-09-28  2:02         ` Khem Raj
+  2022-09-28  8:26           ` Richard Purdie
+  0 siblings, 1 reply; 7+ messages in thread
+From: Khem Raj @ 2022-09-28  2:02 UTC (permalink / raw)
+  To: Edgar Mobile; +Cc: Richard Purdie, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 3169 bytes --]
+
+On Tue, Sep 27, 2022 at 3:41 PM Edgar Mobile <heideggm@hotmail.com> wrote:
+
+> Yeah building gcc alone worked.
+> Now I'm concerned about the health of my machine.
+> Thank you!
+>
+
+
+Your machine is fine I think bitbake is extremely parallel and that might
+be issue that it’s eating up all the memory. How many cores does this
+machine have? And ram ? Usually it’s good to keep 3-4gb ram per core for
+default operations you can also pin how much parallels tasks and -j
+settings bitbake should use during build look for PARALLEL_MAKE
+documentation
+
+>
+>
+> Am 27. September 2022 21:02:40 MESZ schrieb Richard Purdie <
+> richard.purdie@linuxfoundation.org>:
+>>
+>> On Tue, 2022-09-27 at 20:51 +0200, PHIL wrote:
+>>
+>>> Am 27. September 2022 20:40:31 MESZ schrieb Richard Purdie
+>>> <richard.purdie@linuxfoundation.org>:
+>>>
+>>>> On Tue, 2022-09-27 at 18:11 +0200, Edgar Mobile wrote:
+>>>>
+>>>>> Greetings,
+>>>>> Trying to build core-image-weston from current master fails for
+>>>>> gcc
+>>>>> 12.2.0-r0 with lots of linker errors.
+>>>>>
+>>>>> Names of missing functions are strange ala gen_cmulvnx16qi3.
+>>>>> In insn-output.o
+>>>>>
+>>>>> System is an ubuntu 22.04.1 LTS Build Target is qemuarm64
+>>>>>
+>>>>>
+>>>> We build that regularly on the autobuilder so something seems odd
+>>>> here.
+>>>> Could your machine have memory issues? Do you get the same issue
+>>>> each
+>>>> time you build?
+>>>>
+>>>
+>>>  What do you mean with memory issues? Memory broken? Not enough
+>>>  memory? The errors are the same on every run of course I don't build
+>>>  from scratch I just retype bitbake core-image-weston. Gdb also failed
+>>>  so I took that out.
+>>>
+>>
+>> I mean that the build system places more stress on the system than many
+>> other workloads and we've sometimes see gcc failures like this as a
+>> sign of failing system memory. Running memtest86 might show that up.
+>>
+>> If recipe X is failing and you "bitbake X -c clean" and then "bitbake
+>> X" and it doesn't fail the same way, that would be a sure sign of
+>> memory failure or another hardware issue.
+>>
+>> You can see here:
+>>
+>> https://autobuilder.yoctoproject.org/typhoon/#/workers
+>>
+>> we have Ubuntu 22.04 workers in the autobuilder and we build qemuarm64
+>> here:
+>>
+>> https://autobuilder.yoctoproject.org/typhoon/#/builders/42
+>> https://autobuilder.yoctoproject.org/typhoon/#/builders/131
+>> https://autobuilder.yoctoproject.org/typhoon/#/builders/127
+>>
+>> so this combination is well tested which is why I suspect something
+>> else is wrong.
+>>
+>> Cheers,
+>>
+>> Richard
+>>
+>> --
+> Diese Nachricht wurde von meinem Android-Gerät mit K-9 Mail gesendet.
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> You automatically follow any topics you start or reply to.
+> View/Reply Online (#58191):
+> https://lists.yoctoproject.org/g/yocto/message/58191
+> Mute This Topic: https://lists.yoctoproject.org/mt/93953325/1997914
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> raj.khem@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 5124 bytes --]
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] Builing Gcc fails Poky
+  2022-09-28  2:02         ` Khem Raj
+@ 2022-09-28  8:26           ` Richard Purdie
+  0 siblings, 0 replies; 7+ messages in thread
+From: Richard Purdie @ 2022-09-28  8:26 UTC (permalink / raw)
+  To: Khem Raj, Edgar Mobile; +Cc: yocto
+
+On Tue, 2022-09-27 at 19:02 -0700, Khem Raj wrote:
+> 
+> 
+> On Tue, Sep 27, 2022 at 3:41 PM Edgar Mobile <heideggm@hotmail.com>
+> wrote:
+> > Yeah building gcc alone worked.
+> > Now I'm concerned about the health of my machine.
+> > Thank you!
+> > 
+> 
+> 
+> 
+> Your machine is fine I think bitbake is extremely parallel and that
+> might be issue that it’s eating up all the memory. How many cores
+> does this machine have? And ram ? Usually it’s good to keep 3-4gb ram
+> per core for default operations you can also pin how much parallels
+> tasks and -j settings bitbake should use during build look for
+> PARALLEL_MAKE documentation 
+> 
+
+Khem may be right and it may simply be running out of memory. You could
+have a look in dmesg and see if the kernel did report OOM conditions.
+
+What worries me a little bit is that things corrupted. It is possible
+that OOM could do that but that would mean exit code checking isn't
+happening properly somewhere along the line in the gcc build system
+itself (which is possible) or there is some other issue with the error
+code paths. The underlying software build systems are really outside
+YP's scope though.
+
+Cheers,
+
+Richard
+
+
+
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+end of thread, other threads:[~2022-09-28  8:27 UTC | newest]
+
+Thread overview: 7+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-09-27 16:11 Builing Gcc fails Poky PHIL
+2022-09-27 18:40 ` [yocto] " Richard Purdie
+2022-09-27 18:51   ` PHIL
+2022-09-27 19:02     ` Richard Purdie
+2022-09-27 22:40       ` PHIL
+2022-09-28  2:02         ` Khem Raj
+2022-09-28  8:26           ` Richard Purdie
+

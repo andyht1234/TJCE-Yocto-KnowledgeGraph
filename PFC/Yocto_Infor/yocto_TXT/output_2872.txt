@@ -1,0 +1,168 @@
+* multilib SDK
+@ 2021-09-08  4:48 Arun
+  2021-09-14 22:41 ` Arun
+  0 siblings, 1 reply; 6+ messages in thread
+From: Arun @ 2021-09-08  4:48 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 972 bytes --]
+
+I have a custom project where I am building for 64-bit kernel and 32-bit
+userspace using multilib config
+
+*# for 32bit userspace build*
+
+
+*require conf/multilib.confMULTILIBS =
+"multilib:lib32"DEFAULTTUNE_virtclass-multilib-lib32 = "armv7athf-neon"*
+
+I am successfully able to build the target image as
+*MACHINE=<custom_machine> bitbake lib32-<custom_target>*
+
+However, when I try to build the SDK, I am noticing that the userspace
+recipes are being built for  both 64-bit and 32-bit. I am running into
+errors for 64-bit. I have no need for 64-bit, *is there any way I can
+disable 64-bit build for SDK?*
+
+note: I am building SDK via this command without lib32- prefix for target,
+following details from this commit message
+<http://git.openembedded.org/openembedded-core/commit/?id=77144bc808be02deb3351c9c1bf5b4f2b8c3a6ec>
+stating that lib32- prefix is not required
+*MACHINE=<custom_machine> bitbake -c populate_sdk <custom_target>*
+
+thanks
+-Arun
+
+[-- Attachment #2: Type: text/html, Size: 1252 bytes --]
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: multilib SDK
+  2021-09-08  4:48 multilib SDK Arun
+@ 2021-09-14 22:41 ` Arun
+  2021-09-14 22:52   ` [yocto] " Khem Raj
+  0 siblings, 1 reply; 6+ messages in thread
+From: Arun @ 2021-09-14 22:41 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 186 bytes --]
+
+Bumping this question...
+
+Is there a way for me to disable building of 64-bit packages when building SDK with a multilib config? I have no use for 64-bit userspace package artifacts.
+
+[-- Attachment #2: Type: text/html, Size: 194 bytes --]
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] multilib SDK
+  2021-09-14 22:41 ` Arun
+@ 2021-09-14 22:52   ` Khem Raj
+  2021-09-15  1:13     ` Arun
+  0 siblings, 1 reply; 6+ messages in thread
+From: Khem Raj @ 2021-09-14 22:52 UTC (permalink / raw)
+  To: Arun; +Cc: Yocto-mailing-list
+
+On Tue, Sep 14, 2021 at 3:41 PM Arun <arun.sivakumaran@gmail.com> wrote:
+>
+> Bumping this question...
+>
+> Is there a way for me to disable building of 64-bit packages when building SDK with a multilib config? I have no use for 64-bit userspace package artifacts.
+
+I think since kernel is 64bit it might be building some tools and
+packages to support kernel builds. Is there a specific need to not
+build 64bit userspace completely ?
+
+
+> 
+>
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: multilib SDK
+  2021-09-14 22:52   ` [yocto] " Khem Raj
+@ 2021-09-15  1:13     ` Arun
+  2021-09-15  2:21       ` [yocto] " Khem Raj
+  0 siblings, 1 reply; 6+ messages in thread
+From: Arun @ 2021-09-15  1:13 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 332 bytes --]
+
+The packages that SDK is trying to build are userspace packages and they haven't been ported for 64-bit. There are quite a few of them and short of fixing 64-bit compile issues for all of them, I am trying to see if I can build SDK without these packages built for. 64-bit. The SDK users will only be developing for 32-bit anyway.
+
+[-- Attachment #2: Type: text/html, Size: 332 bytes --]
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] multilib SDK
+  2021-09-15  1:13     ` Arun
+@ 2021-09-15  2:21       ` Khem Raj
+  2021-09-15  3:42         ` Arun
+  0 siblings, 1 reply; 6+ messages in thread
+From: Khem Raj @ 2021-09-15  2:21 UTC (permalink / raw)
+  To: Arun, yocto
+
+
+
+On 9/14/21 6:13 PM, Arun wrote:
+> The packages that SDK is trying to build are userspace packages and they 
+> haven't been ported for 64-bit. There are quite a few of them and short 
+> of fixing 64-bit compile issues for all of them, I am trying to see if I 
+> can build SDK without these packages built for. 64-bit. The SDK users 
+> will only be developing for 32-bit anyway.
+> 
+> 
+
+you should check the dependencies and ensure they are multilib safe 
+sometimes dependencies could be hardcodes and cross the multilib 
+boundaries accidentally
+
+> 
+> 
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] multilib SDK
+  2021-09-15  2:21       ` [yocto] " Khem Raj
+@ 2021-09-15  3:42         ` Arun
+  0 siblings, 0 replies; 6+ messages in thread
+From: Arun @ 2021-09-15  3:42 UTC (permalink / raw)
+  To: Khem Raj; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 824 bytes --]
+
+I see, are you talking about ${MLPREFIX} variable? The target itself
+compiles fine, all are 32-bit binaries in userspace. I have this issue only
+for SDK.
+
+On Tue, Sep 14, 2021 at 7:21 PM Khem Raj <raj.khem@gmail.com> wrote:
+
+>
+>
+> On 9/14/21 6:13 PM, Arun wrote:
+> > The packages that SDK is trying to build are userspace packages and they
+> > haven't been ported for 64-bit. There are quite a few of them and short
+> > of fixing 64-bit compile issues for all of them, I am trying to see if I
+> > can build SDK without these packages built for. 64-bit. The SDK users
+> > will only be developing for 32-bit anyway.
+> >
+> >
+>
+> you should check the dependencies and ensure they are multilib safe
+> sometimes dependencies could be hardcodes and cross the multilib
+> boundaries accidentally
+>
+> > 
+> >
+>
+
+[-- Attachment #2: Type: text/html, Size: 1171 bytes --]
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+end of thread, other threads:[~2021-09-15  3:42 UTC | newest]
+
+Thread overview: 6+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-09-08  4:48 multilib SDK Arun
+2021-09-14 22:41 ` Arun
+2021-09-14 22:52   ` [yocto] " Khem Raj
+2021-09-15  1:13     ` Arun
+2021-09-15  2:21       ` [yocto] " Khem Raj
+2021-09-15  3:42         ` Arun
+

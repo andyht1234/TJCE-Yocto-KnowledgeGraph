@@ -1,0 +1,70 @@
+* [meta-security][PATCH] dm-verity: update beaglebone wic to match meta-yocto
+@ 2023-03-07 12:39 Paul Gortmaker
+  0 siblings, 0 replies; only message in thread
+From: Paul Gortmaker @ 2023-03-07 12:39 UTC (permalink / raw)
+  To: Armin Kuster; +Cc: yocto, Paul Gortmaker, Kevin Hao, Niko Mauno
+
+This file was forked from the generic (non verity) version in
+meta-yocto, but it would seem that due to limited use, an update
+in the parent never made it here, even after two years:
+
+[commit 0c679ac53b52e631a7c961872ce58f5cf74b8629 in meta-yocto]
+
+  From: Kevin Hao <kexin.hao@windriver.com>
+  Date: Tue, 23 Mar 2021 17:35:29 +0800
+  Subject: [PATCH] meta-yocto-bsp: beaglebone: Set a fixed size for boot
+   partition in WIC image
+
+  After the dosfstools has been updated to v4.2 by commit b522f24723e1
+  ("dosfstools: update 4.1 -> 4.2"), the commit b29eb5be67e9 ("mkfs.fat:
+  Align total number of sectors to be multiple of sectors per track") in
+  v4.2 has caused a regression in beagebone black board. The reason is
+  that the real total sectors of the fat filesystem created by the mkdosfs
+  may not be the same size as what we requested due to align with the
+  sectors per track, this change seem no side effect to linux kernel,
+  but it breaks the beaglebone black boot ROM and make it can't load the
+  MLO. In order to fix this issue, we choose to set a fixed size for the
+  boot partition to make sure that the total sectors always are aligned
+  with the sectors per track.
+
+  [Yocto #14306]
+
+Bring the same change across, so dm-verity doesn't face the same
+frustrating silent boot failure with zero console output.
+
+With this change in place, and allowing for read-only rootfs, we see:
+
+device-mapper: verity: sha256 using implementation "sha256-generic"
+EXT4-fs (dm-0): mounted filesystem with ordered data mode. Opts: (null). Quota mode: disabled.
+INIT: version 3.01 booting
+
+Note that the above is from booting on real hardware on Kirkstone.
+
+Cc: Kevin Hao <kexin.hao@windriver.com>
+Cc: Niko Mauno <niko.mauno@vaisala.com>
+Signed-off-by: Paul Gortmaker <paul.gortmaker@windriver.com>
+
+diff --git a/wic/beaglebone-yocto-verity.wks.in b/wic/beaglebone-yocto-verity.wks.in
+index 658018b..a1d7738 100644
+--- a/wic/beaglebone-yocto-verity.wks.in
++++ b/wic/beaglebone-yocto-verity.wks.in
+@@ -10,6 +10,6 @@
+ #
+ # This .wks only works with the dm-verity-img class.
+ 
+-part /boot --source bootimg-partition --ondisk mmcblk0 --fstype=vfat --label boot --active --align 4 --size 16 --sourceparams="loader=u-boot" --use-uuid
++part /boot --source bootimg-partition --ondisk mmcblk0 --fstype=vfat --label boot --active --align 4 --fixed-size 32 --sourceparams="loader=u-boot" --use-uuid
+ part / --source rawcopy --ondisk mmcblk0 --sourceparams="file=${IMGDEPLOYDIR}/${DM_VERITY_IMAGE}-${MACHINE}.${DM_VERITY_IMAGE_TYPE}.verity"
+ bootloader --append="console=ttyS0,115200"
+-- 
+2.39.0
+
+
+
+^ permalink raw reply related	[flat|nested] only message in thread
+only message in thread, other threads:[~2023-03-07 12:40 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-03-07 12:39 [meta-security][PATCH] dm-verity: update beaglebone wic to match meta-yocto Paul Gortmaker
+

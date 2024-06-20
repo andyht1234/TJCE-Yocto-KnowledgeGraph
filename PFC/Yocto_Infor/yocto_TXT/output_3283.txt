@@ -1,0 +1,593 @@
+* Re: [poky] [PATCH] local.conf.sample: disable prelink
+       [not found]   ` <CANNYZj84MXS57sG5CWLmS-Y_0-w8h1_9NLmtjFEo4pJ5snXvcA@mail.gmail.com>
+@ 2021-06-15 15:21     ` Alexander Kanavin
+  2021-06-15 17:38       ` [yocto] " Khem Raj
+  2021-06-16  9:11       ` Richard Purdie
+  0 siblings, 2 replies; 7+ messages in thread
+From: Alexander Kanavin @ 2021-06-15 15:21 UTC (permalink / raw)
+  To: Richard Purdie, Mark Hatle; +Cc: poky, Yocto-mailing-list
+
+[-- Attachment #1: Type: text/plain, Size: 2646 bytes --]
+
+On Tue, 15 Jun 2021 at 10:55, Alexander Kanavin <alex.kanavin@gmail.com>
+wrote:
+
+> On Tue, 15 Jun 2021 at 10:48, Richard Purdie <
+> richard.purdie@linuxfoundation.org> wrote:
+>
+>> I appreciate the desire simply to delete/disable anything that causes
+>> issues
+>> but in this case I draw the line and my answer is no. It works fine in the
+>> vast majority of usage.
+>>
+>
+> But where are the benchmarks that show it's actually beneficial? And
+> commitment from someone to maintain it and address open issues (there are
+> more than just this one)?
+>
+
+I went ahead and ran some quick benchmarks myself. Specifically:
+
+1. Running 'free' after things have settled down at boot:
+
+a) without prelink
+core-image-sato-sdk
+               total        used        free      shared  buff/cache
+available
+Mem:          489352      152104      236284         472      100964
+ 323824
+core-image-ptest-fast
+              total        used        free      shared  buff/cache
+available
+Mem:        1004680       43456      927688         256       33536
+ 941156
+
+b) with prelink
+core-image-sato-sdk
+               total        used        free      shared  buff/cache
+available
+Mem:          489352      153048      235544         468      100760
+ 322900
+core-image-ptest-fast
+              total        used        free      shared  buff/cache
+available
+Mem:        1004680       44444      928128         256       32108
+ 940168
+
+2. Running -c testimage
+
+a) without prelink
+core-image-sato-sdk () - Ran 66 tests in 96.693s
+core-image-sato-sdk () - Ran 66 tests in 96.469s
+core-image-sato-sdk () - Ran 66 tests in 94.994s
+core-image-ptest-fast () - Ran 66 tests in 583.767s
+core-image-ptest-fast () - Ran 66 tests in 576.564s
+core-image-ptest-fast () - Ran 66 tests in 576.797s
+
+b) with prelink
+core-image-sato-sdk () - Ran 66 tests in 96.390s
+core-image-sato-sdk () - Ran 66 tests in 96.615s
+core-image-sato-sdk () - Ran 66 tests in 95.596s
+core-image-ptest-fast () - Ran 66 tests in 576.248s
+core-image-ptest-fast () - Ran 66 tests in 574.618s
+core-image-ptest-fast () - Ran 66 tests in 576.760s
+
+So the memory usage is actually *better* without prelink. And any timing
+benefits are lost in statistical noise, in these tests at least.
+
+So I do not think it is wrong to question the usefulness of this feature.
+I'd like to hear Mark's take on this, as prelink-cross is primarily his
+work, he's put a lot of effort into it, and I would want to know where the
+benefits are. Note that Red Hat abandoned prelink in 2013, and
+prelink-cross likewise hasn't seen any commits for two years.
+
+Alex
+
+[-- Attachment #2: Type: text/html, Size: 4307 bytes --]
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] [poky] [PATCH] local.conf.sample: disable prelink
+  2021-06-15 15:21     ` [poky] [PATCH] local.conf.sample: disable prelink Alexander Kanavin
+@ 2021-06-15 17:38       ` Khem Raj
+  2021-06-16  9:11       ` Richard Purdie
+  1 sibling, 0 replies; 7+ messages in thread
+From: Khem Raj @ 2021-06-15 17:38 UTC (permalink / raw)
+  To: Alexander Kanavin, Richard Purdie, Mark Hatle; +Cc: poky, Yocto-mailing-list
+
+
+
+On 6/15/21 8:21 AM, Alexander Kanavin wrote:
+> 
+> 
+> On Tue, 15 Jun 2021 at 10:55, Alexander Kanavin <alex.kanavin@gmail.com 
+> <mailto:alex.kanavin@gmail.com>> wrote:
+> 
+>     On Tue, 15 Jun 2021 at 10:48, Richard Purdie
+>     <richard.purdie@linuxfoundation.org
+>     <mailto:richard.purdie@linuxfoundation.org>> wrote:
+> 
+>         I appreciate the desire simply to delete/disable anything that
+>         causes issues
+>         but in this case I draw the line and my answer is no. It works
+>         fine in the
+>         vast majority of usage.
+> 
+> 
+>     But where are the benchmarks that show it's actually beneficial? And
+>     commitment from someone to maintain it and address open issues
+>     (there are more than just this one)?
+> 
+> 
+> I went ahead and ran some quick benchmarks myself. Specifically:
+> 
+> 1. Running 'free' after things have settled down at boot:
+> 
+> a) without prelink
+> core-image-sato-sdk
+>                 total        used        free      shared  buff/cache   
+> available
+> Mem:          489352      152104      236284         472      100964     
+>   323824
+> core-image-ptest-fast
+>                total        used        free      shared  buff/cache   
+> available
+> Mem:        1004680       43456      927688         256       33536     
+>   941156
+> 
+> b) with prelink
+> core-image-sato-sdk
+>                 total        used        free      shared  buff/cache   
+> available
+> Mem:          489352      153048      235544         468      100760     
+>   322900
+> core-image-ptest-fast
+>                total        used        free      shared  buff/cache   
+> available
+> Mem:        1004680       44444      928128         256       32108     
+>   940168
+> 
+> 2. Running -c testimage
+> 
+> a) without prelink
+> core-image-sato-sdk () - Ran 66 tests in 96.693s
+> core-image-sato-sdk () - Ran 66 tests in 96.469s
+> core-image-sato-sdk () - Ran 66 tests in 94.994s
+> core-image-ptest-fast () - Ran 66 tests in 583.767s
+> core-image-ptest-fast () - Ran 66 tests in 576.564s
+> core-image-ptest-fast () - Ran 66 tests in 576.797s
+> 
+> b) with prelink
+> core-image-sato-sdk () - Ran 66 tests in 96.390s
+> core-image-sato-sdk () - Ran 66 tests in 96.615s
+> core-image-sato-sdk () - Ran 66 tests in 95.596s
+> core-image-ptest-fast () - Ran 66 tests in 576.248s
+> core-image-ptest-fast () - Ran 66 tests in 574.618s
+> core-image-ptest-fast () - Ran 66 tests in 576.760s
+>
+
+I think the advantage is not on high end CPUs but more on less powerful 
+ones, so perhaps trying it on something like rpi0 or lower would be good
+
+
+> So the memory usage is actually *better* without prelink. And any timing 
+> benefits are lost in statistical noise, in these tests at least.
+> 
+> So I do not think it is wrong to question the usefulness of this 
+> feature. I'd like to hear Mark's take on this, as prelink-cross is 
+> primarily his work, he's put a lot of effort into it, and I would want 
+> to know where the benefits are. Note that Red Hat abandoned prelink in 
+> 2013, and prelink-cross likewise hasn't seen any commits for two years.
+> 
+
+
+
+> Alex
+> 
+> 
+> 
+> 
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [poky] [PATCH] local.conf.sample: disable prelink
+  2021-06-15 15:21     ` [poky] [PATCH] local.conf.sample: disable prelink Alexander Kanavin
+  2021-06-15 17:38       ` [yocto] " Khem Raj
+@ 2021-06-16  9:11       ` Richard Purdie
+  2021-06-16  9:45         ` Alexander Kanavin
+  1 sibling, 1 reply; 7+ messages in thread
+From: Richard Purdie @ 2021-06-16  9:11 UTC (permalink / raw)
+  To: Alexander Kanavin, Mark Hatle; +Cc: poky, Yocto-mailing-list
+
+On Tue, 2021-06-15 at 17:21 +0200, Alexander Kanavin wrote:
+> So the memory usage is actually *better* without prelink. And any timing 
+> benefits are lost in statistical noise, in these tests at least. 
+
+The numbers certainly don't look convincing, thanks for running the tests.
+
+> So I do not think it is wrong to question the usefulness of this feature. 
+> I'd like to hear Mark's take on this, as prelink-cross is primarily his 
+> work, he's put a lot of effort into it, and I would want to know where 
+> the benefits are. Note that Red Hat abandoned prelink in 2013, and 
+> prelink-cross likewise hasn't seen any commits for two years.
+
+Mark and I did briefly talk yesterday and whilst Mark can/will speak
+up, the summary was "drop it".
+
+What makes me sad is that this is an embedded focused feature which 
+the project should be caring about, i.e. memory footprint and speed.
+I don't know why the numbers don't show it, Mark and I have theories
+but it would take work to explore them and neither of us have that time,
+nor are we experts on prelink able to maintain it with the time we have
+available.
+
+In my view the project should be caring about things like this, instead 
+it looks more like a race to look like 'any other desktop distro' and 
+drop anything which looks different.
+
+I've tried to say no. Nobody else would appear to care, I'm hearing 
+silence. I can't fight this.
+
+Cheers,
+
+Richard
+
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [poky] [PATCH] local.conf.sample: disable prelink
+  2021-06-16  9:11       ` Richard Purdie
+@ 2021-06-16  9:45         ` Alexander Kanavin
+  2021-07-19 20:58           ` [yocto] " Robert Berger
+  0 siblings, 1 reply; 7+ messages in thread
+From: Alexander Kanavin @ 2021-06-16  9:45 UTC (permalink / raw)
+  To: Richard Purdie; +Cc: Mark Hatle, poky, Yocto-mailing-list
+
+[-- Attachment #1: Type: text/plain, Size: 1070 bytes --]
+
+On Wed, 16 Jun 2021 at 11:11, Richard Purdie <
+richard.purdie@linuxfoundation.org> wrote:
+
+> What makes me sad is that this is an embedded focused feature which
+> the project should be caring about, i.e. memory footprint and speed.
+> I don't know why the numbers don't show it, Mark and I have theories
+> but it would take work to explore them and neither of us have that time,
+> nor are we experts on prelink able to maintain it with the time we have
+> available.
+>
+
+What I think happened is that glibc simply got better at linking, optimised
+the runtime bits to the fullest, and any benefits prelink may once have had
+aren't there anymore. Which is IMO fine - I am terrified of custom address
+arithmetic that's not really understood by anyone, and very easy to get
+wrong, with devastating consequences. I spent more or less the whole day
+stepping assembly in gdb to figure out what exactly is going wrong in that
+ppc bug.
+
+The value proposition of Yocto is still very strong, and is not at all
+affected by dropping prelink, in my opinion.
+
+Alex
+
+[-- Attachment #2: Type: text/html, Size: 1452 bytes --]
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] [poky] [PATCH] local.conf.sample: disable prelink
+  2021-06-16  9:45         ` Alexander Kanavin
+@ 2021-07-19 20:58           ` Robert Berger
+  2021-07-22 19:05             ` Alexander Kanavin
+  0 siblings, 1 reply; 7+ messages in thread
+From: Robert Berger @ 2021-07-19 20:58 UTC (permalink / raw)
+  To: Alexander Kanavin, Richard Purdie; +Cc: Mark Hatle, poky, Yocto-mailing-list
+
+Hi Alex, RP, Mark,
+
+I did some research on the subject in order to try to figure out what is 
+going on.
+
+1) I come to a similar conclusion with what found, but tried to look a 
+bit deeper for the reason.
+
+1.1) The reason that cross-prelink is not prelinking is, that for a 
+quite some time by default everything is built with PIE mode by default 
+and cross-prelink does not seem to be able to work on exe/libs compiled 
+with PIE mode. So seeing the same behavior with and without prelinking 
+is what I would expect as long as everything is compiled with PIE mode.
+
+A more detailed analysis of my tests can be found on my not yet 
+officially published site:
+
+https://rlbl.me/prelink-1
+
+https://rlbl.me/prelink-2
+
+Alex:
+
+Can you please rebuild your test images without PIE mode and re-run the 
+tests?
+
+Then we should have the 4 test cases:
+
+prelinked-with-pie
+no-prelink-with-pie
+prelink-no-pie
+no-prelink-no-pie
+
+I guess then we can discuss what are the next steps.
+
+In my opinion the current default settings, which compile close to 
+everything in PIE mode, but invoke also cross-prelink do not make much 
+sense.
+
+The question is: "Do we want to drop cross-prelink, or do we want to 
+drag it along and come up more fine-grained configuration options?"
+
+We could e.g. exclude certain files from pre-linking.
+
+IMHO cross-prelink still works, but not on exe/libs which were compiled 
+in PIE mode.
+
+Regards,
+
+Robert
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] [poky] [PATCH] local.conf.sample: disable prelink
+  2021-07-19 20:58           ` [yocto] " Robert Berger
+@ 2021-07-22 19:05             ` Alexander Kanavin
+  2021-07-23 12:51               ` Robert Berger
+  0 siblings, 1 reply; 7+ messages in thread
+From: Alexander Kanavin @ 2021-07-22 19:05 UTC (permalink / raw)
+  To: robert.berger.yocto.user
+  Cc: Richard Purdie, Mark Hatle, poky, Yocto-mailing-list
+
+[-- Attachment #1: Type: text/plain, Size: 2153 bytes --]
+
+PIE is nowadays more or less the only available option and is expected for
+improved security; Yocto does not even test non-PIE builds or provide an
+off the shelf way to turn it off.
+
+I also have to note that prelink does show higher RAM consumption in your
+tests as well (MemFree column). On the constrained systems which would
+benefit most from improved prelink timings that might be a bigger loss than
+not prelinking.
+
+But yes, there is a timing benefit visible in the tests: 0.01s vs 0.1s.
+
+Alex
+
+On Mon, 19 Jul 2021 at 22:58, Robert Berger@yocto.user <
+robert.berger.yocto.user@gmail.com> wrote:
+
+> Hi Alex, RP, Mark,
+>
+> I did some research on the subject in order to try to figure out what is
+> going on.
+>
+> 1) I come to a similar conclusion with what found, but tried to look a
+> bit deeper for the reason.
+>
+> 1.1) The reason that cross-prelink is not prelinking is, that for a
+> quite some time by default everything is built with PIE mode by default
+> and cross-prelink does not seem to be able to work on exe/libs compiled
+> with PIE mode. So seeing the same behavior with and without prelinking
+> is what I would expect as long as everything is compiled with PIE mode.
+>
+> A more detailed analysis of my tests can be found on my not yet
+> officially published site:
+>
+> https://rlbl.me/prelink-1
+>
+> https://rlbl.me/prelink-2
+>
+> Alex:
+>
+> Can you please rebuild your test images without PIE mode and re-run the
+> tests?
+>
+> Then we should have the 4 test cases:
+>
+> prelinked-with-pie
+> no-prelink-with-pie
+> prelink-no-pie
+> no-prelink-no-pie
+>
+> I guess then we can discuss what are the next steps.
+>
+> In my opinion the current default settings, which compile close to
+> everything in PIE mode, but invoke also cross-prelink do not make much
+> sense.
+>
+> The question is: "Do we want to drop cross-prelink, or do we want to
+> drag it along and come up more fine-grained configuration options?"
+>
+> We could e.g. exclude certain files from pre-linking.
+>
+> IMHO cross-prelink still works, but not on exe/libs which were compiled
+> in PIE mode.
+>
+> Regards,
+>
+> Robert
+>
+
+[-- Attachment #2: Type: text/html, Size: 2803 bytes --]
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] [poky] [PATCH] local.conf.sample: disable prelink
+  2021-07-22 19:05             ` Alexander Kanavin
+@ 2021-07-23 12:51               ` Robert Berger
+  0 siblings, 0 replies; 7+ messages in thread
+From: Robert Berger @ 2021-07-23 12:51 UTC (permalink / raw)
+  To: Alexander Kanavin
+  Cc: Richard Purdie, Mark Hatle, poky, Yocto-mailing-list, Khem Raj
+
+On 22/07/2021 22:05, Alexander Kanavin wrote:
+> PIE is nowadays more or less the only available option and is expected 
+> for improved security; Yocto does not even test non-PIE builds or 
+> provide an off the shelf way to turn it off.
+
+I am worried about those libraries, which are non-PIE libraries by 
+default. My theory is, that they are non-PIE since prelink is able to 
+operate on them. So prelink can "at least" be used a PIE detector.
+
+They are:
+
+lib/libdl-2.33.so is prelinked
+lib/ld-2.33.so is prelinked
+lib/libpthread-2.33.so is prelinked
+lib/libc-2.33.so is prelinked
+
+Is there are rational explanation why they are not compiled in PIE mode 
+and/or if they are compiled in PIE mode how cross-prelink can operate on 
+them? If cross-prelink can operate on them why not on the others?
+
+> 
+> I also have to note that prelink does show higher RAM consumption in 
+> your tests as well (MemFree column). On the constrained systems which 
+> would benefit most from improved prelink timings that might be a bigger 
+> loss than not prelinking.
+
+I guess we agree that MemFree shows free physical memory (user and 
+kernel space).
+
+My experiments show, that non-PIE and no prelink leaves the biggest 
+amount of free physical memory.
+
+They also show that non-PIE and prelink leave the smallest amount of 
+free physical memory ;)
+
+The difference is significant
+prelinked-no-pie/no-prelink-no-pie:		4552 (kB)
+
+If we leave things are they are:
+prelinked-no-pie/prelinked-with-pie:		3972 (kB)
+
+If we disable prelink (as you suggest - and I tend to agree since it 
+does not make sense as it is right now)
+prelinked-no-pie/no-prelink-with-pie:		4120 (kB)
+
+...
+
+but
+
+if you look at the next line MemAvailable kB things looks a bit differently.
+
+My interpretation of MemAvailable is, that it is an estimate of virtual 
+memory available after reclaimable parts of memory (caches, buffer, 
+slab,...) have been reclaimed without getting swap involved.
+
+I see this:
+
+MemAvailable kB
+
+prelinked-with-pie 	939412
+no-prelink-with-pie	939696
+prelinked-no-pie	940344
+no-prelink-no-pie	941216
+
+Which means, that our current default setting is the worst possible 
+solution ;)
+
+no-prelink-no-pie would (theoretically) be the best.
+
+I will try to update my second article and try to explain a bit more my 
+interpretation of the results and maybe also try to see what bootchart 
+says to all this.
+
+Don't get me wrong. I am neither pro nor con prelink. I just would like 
+to understand what it does, if it does something ;)
+
+I spent quite some time on this - also discussing with most of you offline.
+If you ask me, we should use your patch, since people didn't even notice 
+that prelink can not prelink on PIE binaries for a couple of years.
+
+So there does not seem to be much demand for it ;)
+
+We can keep a "placebo" in for the homeopaths who think they use prelink 
+in their images since PIE was enabled ;)
+
+> 
+> But yes, there is a timing benefit visible in the tests: 0.01s vs 0.1s.
+
+Also less CPU usage can be seen. I hope I'll find time to run some test 
+with bootchart. Maybe then we can also see boot time, memory, CPU,...
+
+Regards,
+
+Robert
+
+> 
+> Alex
+> 
+> On Mon, 19 Jul 2021 at 22:58, Robert Berger@yocto.user 
+> <robert.berger.yocto.user@gmail.com 
+> <mailto:robert.berger.yocto.user@gmail.com>> wrote:
+> 
+>     Hi Alex, RP, Mark,
+> 
+>     I did some research on the subject in order to try to figure out
+>     what is
+>     going on.
+> 
+>     1) I come to a similar conclusion with what found, but tried to look a
+>     bit deeper for the reason.
+> 
+>     1.1) The reason that cross-prelink is not prelinking is, that for a
+>     quite some time by default everything is built with PIE mode by default
+>     and cross-prelink does not seem to be able to work on exe/libs compiled
+>     with PIE mode. So seeing the same behavior with and without prelinking
+>     is what I would expect as long as everything is compiled with PIE mode.
+> 
+>     A more detailed analysis of my tests can be found on my not yet
+>     officially published site:
+> 
+>     https://rlbl.me/prelink-1 <https://rlbl.me/prelink-1>
+> 
+>     https://rlbl.me/prelink-2 <https://rlbl.me/prelink-2>
+> 
+>     Alex:
+> 
+>     Can you please rebuild your test images without PIE mode and re-run the
+>     tests?
+> 
+>     Then we should have the 4 test cases:
+> 
+>     prelinked-with-pie
+>     no-prelink-with-pie
+>     prelink-no-pie
+>     no-prelink-no-pie
+> 
+>     I guess then we can discuss what are the next steps.
+> 
+>     In my opinion the current default settings, which compile close to
+>     everything in PIE mode, but invoke also cross-prelink do not make much
+>     sense.
+> 
+>     The question is: "Do we want to drop cross-prelink, or do we want to
+>     drag it along and come up more fine-grained configuration options?"
+> 
+>     We could e.g. exclude certain files from pre-linking.
+> 
+>     IMHO cross-prelink still works, but not on exe/libs which were compiled
+>     in PIE mode.
+> 
+>     Regards,
+> 
+>     Robert
+> 
+
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+end of thread, other threads:[~2021-07-23 12:51 UTC | newest]
+
+Thread overview: 7+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+     [not found] <20210615081225.1734033-1-alex.kanavin@gmail.com>
+     [not found] ` <5ed9e1d2676d4d31289ebaf2ec3b492c1daa88a7.camel@linuxfoundation.org>
+     [not found]   ` <CANNYZj84MXS57sG5CWLmS-Y_0-w8h1_9NLmtjFEo4pJ5snXvcA@mail.gmail.com>
+2021-06-15 15:21     ` [poky] [PATCH] local.conf.sample: disable prelink Alexander Kanavin
+2021-06-15 17:38       ` [yocto] " Khem Raj
+2021-06-16  9:11       ` Richard Purdie
+2021-06-16  9:45         ` Alexander Kanavin
+2021-07-19 20:58           ` [yocto] " Robert Berger
+2021-07-22 19:05             ` Alexander Kanavin
+2021-07-23 12:51               ` Robert Berger
+

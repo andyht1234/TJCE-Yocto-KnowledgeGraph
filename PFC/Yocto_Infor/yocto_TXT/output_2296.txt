@@ -1,0 +1,223 @@
+* Preferred provide base-utils issue
+@ 2022-01-26 16:17 Paul van Berlo
+  2022-01-28 17:43 ` [yocto] " Randy MacLeod
+  0 siblings, 1 reply; 3+ messages in thread
+From: Paul van Berlo @ 2022-01-26 16:17 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 745 bytes --]
+
+Hello,
+
+so I'm a bit at a loss. I admit, I've not yet been using Yocto for a long
+time. I'm trying to use base-utils as provided by
+packagegroup-core-base-utils to have a more full featured set of base utils
+instead of busybox. It all builds just fine, however, whatever I do (using
+dunfell), it ends up with a kernel panic during boot.
+
+I added the following to local.conf on a clean clone of poky:
+
+INIT_MANAGER="systemd"
+
+IMAGE_FSTYPES="live"
+
+PREFERRED_PROVIDER_base-utils = "packagegroup-core-base-utils"
+VIRTUAL-RUNTIME_base-utils = "packagegroup-core-base-utils"
+VIRTUAL-RUNTIME_base-utils-hwclock = "util-linux-hwclock"
+VIRTUAL-RUNTIME_base-utils-syslog = ""
+
+Does anyone have any idea how to get this to work?
+
+Regards,
+
+Paul van Berlo
+
+[-- Attachment #2: Type: text/html, Size: 1008 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] Preferred provide base-utils issue
+  2022-01-26 16:17 Preferred provide base-utils issue Paul van Berlo
+@ 2022-01-28 17:43 ` Randy MacLeod
+  2022-01-28 19:33   ` Paul van Berlo
+  0 siblings, 1 reply; 3+ messages in thread
+From: Randy MacLeod @ 2022-01-28 17:43 UTC (permalink / raw)
+  To: Paul van Berlo, yocto
+
+On 2022-01-26 11:17, Paul van Berlo wrote:
+> Hello,
+>
+> so I'm a bit at a loss. I admit, I've not yet been using Yocto for a 
+> long time. I'm trying to use base-utils as provided by 
+> packagegroup-core-base-utils to have a more full featured set of base 
+> utils instead of busybox. It all builds just fine, however, whatever I 
+> do (using dunfell), it ends up with a kernel panic during boot.
+>
+> I added the following to local.conf on a clean clone of poky:
+>
+> INIT_MANAGER="systemd"
+>
+> IMAGE_FSTYPES="live"
+>
+> PREFERRED_PROVIDER_base-utils = "packagegroup-core-base-utils"
+> VIRTUAL-RUNTIME_base-utils = "packagegroup-core-base-utils"
+> VIRTUAL-RUNTIME_base-utils-hwclock = "util-linux-hwclock"
+> VIRTUAL-RUNTIME_base-utils-syslog = ""
+
+Hi Paul,
+
+Try adding:
+
+VIRTUAL-RUNTIME_base-utils-syslog = "syslog"
+
+as shown on:
+
+https://git.yoctoproject.org/poky/tree/meta-poky/conf/local.conf.sample.extended#n371
+
+I would expect that since you have systemd, you'd have the systemd 
+journal as well so
+you wouldn't need syslog but it would be good to do a sanity check.
+
+
+If that doesn't help, show us what the kernel panic is saying.
+Is this with a custom BSP and if so can you reproduce with qemux86-64?
+
+Try the same things using poky on the master branch if you can.
+
+../Randy
+
+
+>
+> Does anyone have any idea how to get this to work?
+>
+> Regards,
+>
+> Paul van Berlo
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#55979): https://lists.yoctoproject.org/g/yocto/message/55979
+> Mute This Topic: https://lists.yoctoproject.org/mt/88700100/3616765
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [randy.macleod@windriver.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+-- 
+# Randy MacLeod
+# Wind River Linux
+
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] Preferred provide base-utils issue
+  2022-01-28 17:43 ` [yocto] " Randy MacLeod
+@ 2022-01-28 19:33   ` Paul van Berlo
+  0 siblings, 0 replies; 3+ messages in thread
+From: Paul van Berlo @ 2022-01-28 19:33 UTC (permalink / raw)
+  To: Randy MacLeod; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2545 bytes --]
+
+Hi,
+
+Adding that line results in an error:
+
+ERROR: Nothing RPROVIDES 'syslog' (but
+/yocto/poky-dunfell/meta/recipes-core/packagegroups/
+packagegroup-core-boot.bb,
+/yocto/poky-dunfell/meta/recipes-core/initrdscripts/
+initramfs-module-install_1.0.bb,
+/yocto/poky-dunfell/meta/recipes-core/initrdscripts/
+initramfs-module-install-efi_1.0.bb RDEPENDS on or otherwise requires it)
+
+The kernel panic ends with "not syncing: Attempted to kill init!
+exitcode=0x00000100". This is using the genericx86-64 machine.
+
+Regards,
+
+Paul van Berlo
+
+
+
+On Fri, 28 Jan 2022 at 18:43 Randy MacLeod <randy.macleod@windriver.com>
+wrote:
+
+> On 2022-01-26 11:17, Paul van Berlo wrote:
+> > Hello,
+> >
+> > so I'm a bit at a loss. I admit, I've not yet been using Yocto for a
+> > long time. I'm trying to use base-utils as provided by
+> > packagegroup-core-base-utils to have a more full featured set of base
+> > utils instead of busybox. It all builds just fine, however, whatever I
+> > do (using dunfell), it ends up with a kernel panic during boot.
+> >
+> > I added the following to local.conf on a clean clone of poky:
+> >
+> > INIT_MANAGER="systemd"
+> >
+> > IMAGE_FSTYPES="live"
+> >
+> > PREFERRED_PROVIDER_base-utils = "packagegroup-core-base-utils"
+> > VIRTUAL-RUNTIME_base-utils = "packagegroup-core-base-utils"
+> > VIRTUAL-RUNTIME_base-utils-hwclock = "util-linux-hwclock"
+> > VIRTUAL-RUNTIME_base-utils-syslog = ""
+>
+> Hi Paul,
+>
+> Try adding:
+>
+> VIRTUAL-RUNTIME_base-utils-syslog = "syslog"
+>
+> as shown on:
+>
+>
+> https://git.yoctoproject.org/poky/tree/meta-poky/conf/local.conf.sample.extended#n371
+>
+> I would expect that since you have systemd, you'd have the systemd
+> journal as well so
+> you wouldn't need syslog but it would be good to do a sanity check.
+>
+>
+> If that doesn't help, show us what the kernel panic is saying.
+> Is this with a custom BSP and if so can you reproduce with qemux86-64?
+>
+> Try the same things using poky on the master branch if you can.
+>
+> ../Randy
+>
+>
+> >
+> > Does anyone have any idea how to get this to work?
+> >
+> > Regards,
+> >
+> > Paul van Berlo
+> >
+> > -=-=-=-=-=-=-=-=-=-=-=-
+> > Links: You receive all messages sent to this group.
+> > View/Reply Online (#55979):
+> https://lists.yoctoproject.org/g/yocto/message/55979
+> > Mute This Topic: https://lists.yoctoproject.org/mt/88700100/3616765
+> > Group Owner: yocto+owner@lists.yoctoproject.org
+> > Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> randy.macleod@windriver.com]
+> > -=-=-=-=-=-=-=-=-=-=-=-
+> >
+>
+> --
+> # Randy MacLeod
+> # Wind River Linux
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 4237 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2022-01-28 19:34 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-01-26 16:17 Preferred provide base-utils issue Paul van Berlo
+2022-01-28 17:43 ` [yocto] " Randy MacLeod
+2022-01-28 19:33   ` Paul van Berlo
+

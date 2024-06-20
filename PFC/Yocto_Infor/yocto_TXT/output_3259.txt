@@ -1,0 +1,217 @@
+* the downside of parallelism
+@ 2021-06-20  9:55 Robert P. J. Day
+  2021-06-20 10:03 ` [yocto] " Alexander Kanavin
+  2021-06-20 17:59 ` Robert Berger
+  0 siblings, 2 replies; 5+ messages in thread
+From: Robert P. J. Day @ 2021-06-20  9:55 UTC (permalink / raw)
+  To: Yocto discussion list
+
+
+  refactoring existing (legacy) code base into more bite-sized
+bitbake recipes to speed up build by taking advantage of 6-core
+(12-thread) dell laptop ... end result is that i get so much
+parallelism that laptop shuts down from overheating.
+
+  le *sigh* ...
+
+rday
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] the downside of parallelism
+  2021-06-20  9:55 the downside of parallelism Robert P. J. Day
+@ 2021-06-20 10:03 ` Alexander Kanavin
+  2021-06-20 10:06   ` Robert P. J. Day
+  2021-06-20 17:59 ` Robert Berger
+  1 sibling, 1 reply; 5+ messages in thread
+From: Alexander Kanavin @ 2021-06-20 10:03 UTC (permalink / raw)
+  To: Robert P. J. Day; +Cc: Yocto discussion list
+
+[-- Attachment #1: Type: text/plain, Size: 632 bytes --]
+
+This is hardly Yocto's fault: putting a 6 core CPU into a laptop should be
+validated by saturating all cores for several hours and ensuring the
+cooling and frequency throttling can handle it. Laptop OEM is trying to be
+cheap I'd say.
+
+Alex
+
+On Sun, 20 Jun 2021 at 11:55, Robert P. J. Day <rpjday@crashcourse.ca>
+wrote:
+
+>
+>   refactoring existing (legacy) code base into more bite-sized
+> bitbake recipes to speed up build by taking advantage of 6-core
+> (12-thread) dell laptop ... end result is that i get so much
+> parallelism that laptop shuts down from overheating.
+>
+>   le *sigh* ...
+>
+> rday
+>
+> 
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 982 bytes --]
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] the downside of parallelism
+  2021-06-20 10:03 ` [yocto] " Alexander Kanavin
+@ 2021-06-20 10:06   ` Robert P. J. Day
+  0 siblings, 0 replies; 5+ messages in thread
+From: Robert P. J. Day @ 2021-06-20 10:06 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: Yocto discussion list
+
+On Sun, 20 Jun 2021, Alexander Kanavin wrote:
+
+> This is hardly Yocto's fault: putting a 6 core CPU into a laptop
+> should be validated by saturating all cores for several hours and
+> ensuring the cooling and frequency throttling can handle it. Laptop
+> OEM is trying to be cheap I'd say.
+>
+> Alex
+
+  i wasn't blaming yocto ... that was an attempt at wry humour. or
+possibly irony.
+
+rday
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] the downside of parallelism
+  2021-06-20  9:55 the downside of parallelism Robert P. J. Day
+  2021-06-20 10:03 ` [yocto] " Alexander Kanavin
+@ 2021-06-20 17:59 ` Robert Berger
+  2021-06-21  9:55   ` Robert P. J. Day
+  1 sibling, 1 reply; 5+ messages in thread
+From: Robert Berger @ 2021-06-20 17:59 UTC (permalink / raw)
+  To: Robert P. J. Day, Yocto discussion list
+
+Hi,
+
+On 20/06/2021 12:55, Robert P. J. Day wrote:
+> 
+>    refactoring existing (legacy) code base into more bite-sized
+> bitbake recipes to speed up build by taking advantage of 6-core
+> (12-thread) dell laptop ... end result is that i get so much
+> parallelism that laptop shuts down from overheating.
+
+Sorry for my stupid question;)
+
+If you have 12 threads, it's 12 threads and not more.
+
+I guess there needs to be some kind of dependency between your new recipes.
+
+make -j can use as many cores as you like even with a single recipe.
+
+How would it speed up builds if you break up a recipe into multiple recipes?
+
+What is your refactoring approach?
+
+> 
+>    le *sigh* ...
+> 
+> rday
+
+Regards,
+
+Robert
+
+> 
+> 
+> 
+> 
+> 
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] the downside of parallelism
+  2021-06-20 17:59 ` Robert Berger
+@ 2021-06-21  9:55   ` Robert P. J. Day
+  0 siblings, 0 replies; 5+ messages in thread
+From: Robert P. J. Day @ 2021-06-21  9:55 UTC (permalink / raw)
+  To: Robert Berger@yocto.user; +Cc: Yocto discussion list
+
+On Sun, 20 Jun 2021, Robert Berger@yocto.user wrote:
+
+> Hi,
+>
+> On 20/06/2021 12:55, Robert P. J. Day wrote:
+> >
+> >    refactoring existing (legacy) code base into more bite-sized
+> > bitbake recipes to speed up build by taking advantage of 6-core
+> > (12-thread) dell laptop ... end result is that i get so much
+> > parallelism that laptop shuts down from overheating.
+>
+> Sorry for my stupid question;)
+>
+> If you have 12 threads, it's 12 threads and not more.
+>
+> I guess there needs to be some kind of dependency between your new recipes.
+>
+> make -j can use as many cores as you like even with a single recipe.
+>
+> How would it speed up builds if you break up a recipe into multiple recipes?
+>
+> What is your refactoring approach?
+
+  the (legacy) code base i was handed involves several sizable
+makefiles that were not designed to take advantage of parallelism --
+apparently, they come from an environment (QNX?) where "make" does not
+do parallelism. so rather than design makefiles with parallelism in
+mind, many of the makefiles correspond to some large subsystem where
+the top-level target has a rule that simply descends into the numerous
+sub-component directories one at a time:
+
+  fubar:
+	$(MAKE) -C fubar1
+	$(MAKE) -C fubar2
+	...
+	$(MAKE) -C fubar42
+
+and last i heard, the commands in any rule are definitely processed
+serially. so when the local folks started transmogrifying the code
+base to use YP, they just used SRC_URI to point at the existing
+makefiles (which *must* stay where they are for the purpose of legacy
+compatibility). so as a start, there is a recipe "fubar.bb" which just
+runs that top-level Makefile, but given its structure, once it starts,
+all you see is "fubar compiling" as it serially processes all of its
+subcomponents.
+
+  now, most of the major components have sub-directories with, say,
+the shared libs, the test suite, and so on, and a lot of other
+components that allegedly DEPENDS on "fubar" obviously don't need
+*all* of fubar to finish compiling, just normally the library
+sub-component, but as it is, they have to wait for all of it, so you
+normally see "fubar compiling", and nothing else, for several minutes,
+and as soon as that finishes, a bunch of deps that have been patiently
+waiting finally kick off.
+
+  as i refactor the above into smaller recipes, then the dependencies
+build much faster and as soon as the shared lib recipe finishes, all
+those other recipes can start, so i'm definitely getting way more
+parallelism but, as i mentioned, that comes with a price.
+
+  now, given my unlimited cleverness into refactoring recipes, most of
+my 6 cores (12 threads) are busy, which is driving up the load average
+over the course of the build (easily over an hour for the whole
+thing), and sometimes the load average peaks at over 130, and the air
+vent on this laptop is blowing air so hot, it can actually burn you if
+you leave your hand there too long, and every so often, it just locks
+up and shuts down.
+
+  what irony -- i redesign the recipes to boost parallelism, only to
+fall victim to hardware limitations.
+
+rday
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+end of thread, other threads:[~2021-06-21  9:55 UTC | newest]
+
+Thread overview: 5+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-06-20  9:55 the downside of parallelism Robert P. J. Day
+2021-06-20 10:03 ` [yocto] " Alexander Kanavin
+2021-06-20 10:06   ` Robert P. J. Day
+2021-06-20 17:59 ` Robert Berger
+2021-06-21  9:55   ` Robert P. J. Day
+

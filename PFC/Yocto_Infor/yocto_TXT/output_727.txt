@@ -1,0 +1,191 @@
+* Postinstall scriptet failure
+       [not found] <f20700bd-ca0c-2908-7d44-f47ff5686d3d@skf.com>
+@ 2023-04-19  8:02 ` Pelle Windestam
+  2023-04-19 11:05   ` [yocto] " Uwe Geuder
+  0 siblings, 1 reply; 4+ messages in thread
+From: Pelle Windestam @ 2023-04-19  8:02 UTC (permalink / raw)
+  To: yocto
+
+Hello everyone,
+
+I'm having an issue with a postinstall scriptlet failing for a package
+that I am trying to add to my Yocto image. Initially I had a simple
+CMake C++ application that installs itself (a single binary file), a
+systemd service and a d-bus interface file. This was causing no issues.
+Lets call this application A. Then I wanted to create a second
+application based on this, so I copied everything from application A to
+application B, replacing the name A with B everywhere. When I try to add
+this second application B to my image I get this error:
+
+ERROR: do_rootfs: Postinstall scriptlets of ['B'] have failed. If the
+intention is to defer them to first boot,
+then please place them into pkg_postinst_ontarget_${PN} ().
+Deferring to first boot via 'exit 1' is no longer supported.
+
+By looking at the postinstall scriptlet (which I suppose comes from
+inheriting the systemd class) I assume that the command:
+systemctl ${OPTS} enable "$service"
+for some reason fails.
+
+I thought I had missed replacing the name A with B somewhere, but the in
+the postinst script the correct name (B) is used.
+
+Any ideas? I do not know where to continue troubleshooting from here. Is
+it possible to "debug" the postinstall scriptlet in the environment that
+it is running in?
+
+//Pelle
+The information contained in this email is intended solely for the use of the individual or entity to whom it is addressed and may contain information that is confidential. Please delete and notify the sender if received in error. SKF does not accept liability for any damage arising from this email.
+
+For information on SKF’s processing of your personal data, please visit SKF’s Privacy Policy available via www.skf.com<https://www.skf.com/us/footer/privacy-policy>.
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] Postinstall scriptet failure
+  2023-04-19  8:02 ` Postinstall scriptet failure Pelle Windestam
+@ 2023-04-19 11:05   ` Uwe Geuder
+  2023-04-19 14:00     ` Pelle Windestam
+       [not found]     ` <17575ACE951E231C.26280@lists.yoctoproject.org>
+  0 siblings, 2 replies; 4+ messages in thread
+From: Uwe Geuder @ 2023-04-19 11:05 UTC (permalink / raw)
+  To: yocto
+
+
+On 19/04/2023 11:02, Pelle Windestam wrote:
+> Any ideas? I do not know where to continue troubleshooting from here. Is
+> it possible to "debug" the postinstall scriptlet in the environment that
+> it is running in?
+>
+It's a shell script. You can add pwd, ls, echo commands, and
+whatever else you would do during debugging. set -x comes to my
+my mind although I don't remember having done that. I see no
+reason why it would not work. Whether there is a way to do it
+more interactively I don't know.
+
+The output will be in the log file, I'd assume (although I have
+not had to debug any scriptlet recently). You could also use
+output redirection.
+
+Regards,
+
+Uwe Geuder
+Neuro Event Labs Oy
+Tampere, Finland
+
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] Postinstall scriptet failure
+  2023-04-19 11:05   ` [yocto] " Uwe Geuder
+@ 2023-04-19 14:00     ` Pelle Windestam
+       [not found]     ` <17575ACE951E231C.26280@lists.yoctoproject.org>
+  1 sibling, 0 replies; 4+ messages in thread
+From: Pelle Windestam @ 2023-04-19 14:00 UTC (permalink / raw)
+  To: yocto
+
+> On 19/04/2023 11:02, Pelle Windestam wrote:
+>> Any ideas? I do not know where to continue troubleshooting from here. Is
+>> it possible to "debug" the postinstall scriptlet in the environment that
+>> it is running in?
+>>
+> It's a shell script. You can add pwd, ls, echo commands, and
+> whatever else you would do during debugging. set -x comes to my
+> my mind although I don't remember having done that. I see no
+> reason why it would not work. Whether there is a way to do it
+> more interactively I don't know.
+>
+> The output will be in the log file, I'd assume (although I have
+> not had to debug any scriptlet recently). You could also use
+> output redirection.
+
+I tried adding some echo commands to the postinst template in
+systemd.bbclass, but all that produced was some really weird build
+errors. As far as I could figure out bitbake calls okpg which in turn
+calls the post-install scriptlet, and bitbake then parses the output
+(looking at the bitbake code it doesn't look like outputting some
+arbitrary text would make it fail, but I'm no expert).
+
+One interesting discovery from the build log when comparing to the
+working application shows that the working application creates a link to
+the systemd service, while the non-working application does not:
+
+Installing B on root
+Downloading file:[...]/B.ipk.
+Configuring B.
+B.postinst returned 1, marking as unpacked only, configuration required
+on target.
+WARNING: B.postinst returned 1, marking as unpacked only, configuration
+required on target.
+
+Installing A on root
+Downloading file:[..]/A.ipk.
+ln -s /lib/systemd/system/A.service
+[..]/rootfs/etc/systemd/system/gateway.target.requires/A.service
+Configuring A.
+
+I guess that the missing link is what causes
+
+systemctl ${OPTS} enable "$service"
+
+in the postinstall scriptlet to fail. Given that these applications have
+identical bitbake recipes except for the names, I do not understand why
+this is happening.
+
+//Pelle
+The information contained in this email is intended solely for the use of the individual or entity to whom it is addressed and may contain information that is confidential. Please delete and notify the sender if received in error. SKF does not accept liability for any damage arising from this email.
+
+For information on SKF’s processing of your personal data, please visit SKF’s Privacy Policy available via www.skf.com<https://www.skf.com/us/footer/privacy-policy>.
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] Postinstall scriptet failure
+       [not found]     ` <17575ACE951E231C.26280@lists.yoctoproject.org>
+@ 2023-04-20  4:29       ` Pelle Windestam
+  0 siblings, 0 replies; 4+ messages in thread
+From: Pelle Windestam @ 2023-04-20  4:29 UTC (permalink / raw)
+  To: yocto
+
+> One interesting discovery from the build log when comparing to the
+> working application shows that the working application creates a link to
+> the systemd service, while the non-working application does not:
+>
+> Installing B on root
+> Downloading file:[...]/B.ipk.
+> Configuring B.
+> B.postinst returned 1, marking as unpacked only, configuration required
+> on target.
+> WARNING: B.postinst returned 1, marking as unpacked only, configuration
+> required on target.
+>
+> Installing A on root
+> Downloading file:[..]/A.ipk.
+> ln -s /lib/systemd/system/A.service
+> [..]/rootfs/etc/systemd/system/gateway.target.requires/A.service
+> Configuring A.
+>
+> I guess that the missing link is what causes
+>
+> systemctl ${OPTS} enable "$service"
+>
+> in the postinstall scriptlet to fail. Given that these applications have
+> identical bitbake recipes except for the names, I do not understand why
+> this is happening.
+
+Well, this error proved not to be so mysterious after all. When copying
+stuff from A to B I somehow managed to drop the initial '['-character in
+the [Unit] section of application B:s .service-file so its syntax became
+invalid, thus failing to be installed.
+The information contained in this email is intended solely for the use of the individual or entity to whom it is addressed and may contain information that is confidential. Please delete and notify the sender if received in error. SKF does not accept liability for any damage arising from this email.
+
+For information on SKF’s processing of your personal data, please visit SKF’s Privacy Policy available via www.skf.com<https://www.skf.com/us/footer/privacy-policy>.
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+end of thread, other threads:[~2023-04-20  4:29 UTC | newest]
+
+Thread overview: 4+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+     [not found] <f20700bd-ca0c-2908-7d44-f47ff5686d3d@skf.com>
+2023-04-19  8:02 ` Postinstall scriptet failure Pelle Windestam
+2023-04-19 11:05   ` [yocto] " Uwe Geuder
+2023-04-19 14:00     ` Pelle Windestam
+     [not found]     ` <17575ACE951E231C.26280@lists.yoctoproject.org>
+2023-04-20  4:29       ` Pelle Windestam
+

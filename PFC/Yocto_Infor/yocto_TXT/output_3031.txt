@@ -1,0 +1,185 @@
+* #yocto debbuging option under zeus
+@ 2021-08-10 17:48 Monsees, Steven C (US)
+  2021-08-11 10:53 ` Monsees, Steven C (US)
+  0 siblings, 1 reply; 3+ messages in thread
+From: Monsees, Steven C (US) @ 2021-08-10 17:48 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 888 bytes --]
+
+
+I ran across the following under the Yocto Project Profiling and Tracing Manual, and after checking my ipk data files/layout, I was wondering if someone could tell me, if ipk is capable of performing a similar set of operations to install my debug data ?, and if so, what would be the correct command sequence ?
+
+" The debug packages once built can be found in build/tmp/deploy/rpm/* on the host system. Find the busybox-dbg-...rpm file and copy it to the target. For example:
+
+[trz@empanada core2]$ scp /home/trz/yocto/crownbay-tracing-dbg/build/tmp/deploy/rpm/core2_32/busybox-dbg-1.20.2r2.core2_32.rpm root@192.168.1.31:
+     root@192.168.1.31's password:
+     busybox-dbg-1.20.2-r2.core2_32.rpm                     100% 1826KB   1.8MB/s   00:01
+
+Now install the debug rpm on the target:
+     root@crownbay:~# rpm -i busybox-dbg-1.20.2-r2.core2_32.rpm
+"
+
+Thanks,
+Steve
+
+[-- Attachment #2: Type: text/html, Size: 4400 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: #yocto debbuging option under zeus
+  2021-08-10 17:48 #yocto debbuging option under zeus Monsees, Steven C (US)
+@ 2021-08-11 10:53 ` Monsees, Steven C (US)
+  2021-08-12 17:20   ` [yocto] " Khem Raj
+  0 siblings, 1 reply; 3+ messages in thread
+From: Monsees, Steven C (US) @ 2021-08-11 10:53 UTC (permalink / raw)
+  To: Monsees, Steven C (US), yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1758 bytes --]
+
+
+Is it documented anywhere on how one might manually load debug info an for image with the binaries stripped ?
+
+Thanks,
+Steve
+From: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org> On Behalf Of Monsees, Steven C (US) via lists.yoctoproject.org
+Sent: Tuesday, August 10, 2021 1:48 PM
+To: yocto@lists.yoctoproject.org
+Subject: [yocto] #yocto debbuging option under zeus
+
+External Email Alert
+
+This email has been sent from an account outside of the BAE Systems network.
+Please treat the email with caution, especially if you are requested to click on a link, decrypt/open an attachment, or enable macros.  For further information on how to spot phishing, access “Cybersecurity OneSpace Page” and report phishing by clicking the button “Report Phishing” on the Outlook toolbar.
+
+
+
+I ran across the following under the Yocto Project Profiling and Tracing Manual, and after checking my ipk data files/layout, I was wondering if someone could tell me, if ipk is capable of performing a similar set of operations to install my debug data ?, and if so, what would be the correct command sequence ?
+
+“ The debug packages once built can be found in build/tmp/deploy/rpm/* on the host system. Find the busybox-dbg-...rpm file and copy it to the target. For example:
+
+[trz@empanada core2]$ scp /home/trz/yocto/crownbay-tracing-dbg/build/tmp/deploy/rpm/core2_32/busybox-dbg-1.20.2r2.core2_32.rpm root@192.168.1.31<mailto:root@192.168.1.31>:
+     root@192.168.1.31's<mailto:root@192.168.1.31's> password:
+     busybox-dbg-1.20.2-r2.core2_32.rpm                     100% 1826KB   1.8MB/s   00:01
+
+Now install the debug rpm on the target:
+     root@crownbay:~# rpm -i busybox-dbg-1.20.2-r2.core2_32.rpm
+“
+
+Thanks,
+Steve
+
+[-- Attachment #2: Type: text/html, Size: 7494 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] #yocto debbuging option under zeus
+  2021-08-11 10:53 ` Monsees, Steven C (US)
+@ 2021-08-12 17:20   ` Khem Raj
+  0 siblings, 0 replies; 3+ messages in thread
+From: Khem Raj @ 2021-08-12 17:20 UTC (permalink / raw)
+  To: steven.monsees, yocto
+
+
+
+On 8/11/21 3:53 AM, Monsees, Steven C (US) via lists.yoctoproject.org wrote:
+> Is it documented anywhere on how one might manually load debug info an 
+> for image with the binaries stripped ?
+> 
+
+what you are looking for is perhaps achieved better by setting a 
+feedserver on your buildmachine and then let your target download/update 
+packages much like other distributions
+
+in local.conf set
+
+PACKAGE_FEED_URIS = "http://10.0.0.10:8000"
+
+this would encode the feedserver address into you online package manager 
+config in image
+
+then run
+
+bitbake package-index
+
+which would update the feed metadata index
+
+Run a http-server on the feed directory on buildserver
+
+a poor man's way is
+
+cd build/tmp/deploy/ipk/
+python -m http.server
+
+then you can go to your target and do normal opkg operations
+
+
+opkg update && opkg install busybox-dbg
+
+another advantage of this approach is that it will automatically 
+download/install the dependecies.
+
+
+
+> Thanks,
+> 
+> Steve
+> 
+> *From:* yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org> *On 
+> Behalf Of *Monsees, Steven C (US) via lists.yoctoproject.org
+> *Sent:* Tuesday, August 10, 2021 1:48 PM
+> *To:* yocto@lists.yoctoproject.org
+> *Subject:* [yocto] #yocto debbuging option under zeus
+> 
+> *_External Email Alert_*
+> 
+> *This email has been sent from an account outside of the BAE Systems 
+> network.*
+> 
+> Please treat the email with caution, especially if you are requested to 
+> click on a link, decrypt/open an attachment, or enable macros.  For 
+> further information on how to spot phishing, access “Cybersecurity 
+> OneSpace Page” and report phishing by clicking the button “Report 
+> Phishing” on the Outlook toolbar.
+> 
+> I ran across the following under the Yocto Project Profiling and Tracing 
+> Manual, and after checking my ipk data files/layout, I was wondering if 
+> someone could tell me, if ipk is capable of performing a similar set of 
+> operations to install my debug data ?, and if so, what would be the 
+> correct command sequence ?
+> 
+> “ The debug packages once built can be found in build/tmp/deploy/rpm/* 
+> on the host system. Find the busybox-dbg-...rpm file and copy it to the 
+> target. For example:
+> 
+> [trz@empanada core2]$ scp 
+> /home/trz/yocto/crownbay-tracing-dbg/build/tmp/deploy/rpm/core2_32/busybox-dbg-1.20.2r2.core2_32.rpm 
+> root@192.168.1.31 <mailto:root@192.168.1.31>:
+> 
+> root@192.168.1.31's <mailto:root@192.168.1.31's> password:
+> 
+>       busybox-dbg-1.20.2-r2.core2_32.rpm                     100% 
+> 1826KB   1.8MB/s   00:01
+> 
+> Now install the debug rpm on the target:
+> 
+>       root@crownbay:~# *rpm -i busybox-dbg-1.20.2-r2.core2_32.rpm*
+> 
+> “
+> 
+> Thanks,
+> 
+> Steve
+> 
+> 
+> 
+> 
+> 
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2021-08-12 17:20 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-08-10 17:48 #yocto debbuging option under zeus Monsees, Steven C (US)
+2021-08-11 10:53 ` Monsees, Steven C (US)
+2021-08-12 17:20   ` [yocto] " Khem Raj
+

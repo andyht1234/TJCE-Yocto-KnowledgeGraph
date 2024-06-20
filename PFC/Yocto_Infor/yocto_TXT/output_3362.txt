@@ -1,0 +1,260 @@
+* [meta-security][PATCH 1/5] busybox: drop as libsecomp is in core
+@ 2021-05-30 17:18 Armin Kuster
+  2021-05-30 17:18 ` [meta-security][PATCH 2/5] linux-%_5.%.bbappend: drop recipe Armin Kuster
+                   ` (3 more replies)
+  0 siblings, 4 replies; 5+ messages in thread
+From: Armin Kuster @ 2021-05-30 17:18 UTC (permalink / raw)
+  To: yocto
+
+Signed-off-by: Armin Kuster <akuster808@gmail.com>
+---
+ recipes-core/busybox/busybox/head.cfg      | 1 -
+ recipes-core/busybox/busybox_%.bbappend    | 1 -
+ recipes-core/busybox/busybox_libsecomp.inc | 3 ---
+ 3 files changed, 5 deletions(-)
+ delete mode 100644 recipes-core/busybox/busybox/head.cfg
+ delete mode 100644 recipes-core/busybox/busybox_%.bbappend
+ delete mode 100644 recipes-core/busybox/busybox_libsecomp.inc
+
+diff --git a/recipes-core/busybox/busybox/head.cfg b/recipes-core/busybox/busybox/head.cfg
+deleted file mode 100644
+index 16017ea..0000000
+--- a/recipes-core/busybox/busybox/head.cfg
++++ /dev/null
+@@ -1 +0,0 @@
+-CONFIG_FEATURE_FANCY_HEAD=y
+diff --git a/recipes-core/busybox/busybox_%.bbappend b/recipes-core/busybox/busybox_%.bbappend
+deleted file mode 100644
+index 27a2482..0000000
+--- a/recipes-core/busybox/busybox_%.bbappend
++++ /dev/null
+@@ -1 +0,0 @@
+-require ${@bb.utils.contains('DISTRO_FEATURES', 'ptest', 'busybox_libsecomp.inc', '', d)}
+diff --git a/recipes-core/busybox/busybox_libsecomp.inc b/recipes-core/busybox/busybox_libsecomp.inc
+deleted file mode 100644
+index 4af22ce..0000000
+--- a/recipes-core/busybox/busybox_libsecomp.inc
++++ /dev/null
+@@ -1,3 +0,0 @@
+-FILESEXTRAPATHS_prepend := "${THISDIR}/busybox:"
+-
+-SRC_URI_append  = " file://head.cfg"
+-- 
+2.24.3
+
+
+^ permalink raw reply related	[flat|nested] 5+ messages in thread
+* [meta-security][PATCH 2/5] linux-%_5.%.bbappend: drop recipe
+  2021-05-30 17:18 [meta-security][PATCH 1/5] busybox: drop as libsecomp is in core Armin Kuster
+@ 2021-05-30 17:18 ` Armin Kuster
+  2021-05-30 17:18 ` [meta-security][PATCH 3/5] initramfs-framework: fix YCL issue Armin Kuster
+                   ` (2 subsequent siblings)
+  3 siblings, 0 replies; 5+ messages in thread
+From: Armin Kuster @ 2021-05-30 17:18 UTC (permalink / raw)
+  To: yocto
+
+Signed-off-by: Armin Kuster <akuster808@gmail.com>
+---
+ recipes-kernel/linux/linux-%_5.%.bbappend | 4 ----
+ 1 file changed, 4 deletions(-)
+ delete mode 100644 recipes-kernel/linux/linux-%_5.%.bbappend
+
+diff --git a/recipes-kernel/linux/linux-%_5.%.bbappend b/recipes-kernel/linux/linux-%_5.%.bbappend
+deleted file mode 100644
+index 6bc40cd..0000000
+--- a/recipes-kernel/linux/linux-%_5.%.bbappend
++++ /dev/null
+@@ -1,4 +0,0 @@
+-KERNEL_FEATURES_append = " ${@bb.utils.contains("DISTRO_FEATURES", "apparmor", " features/apparmor/apparmor.scc", "" ,d)}"
+-KERNEL_FEATURES_append = " ${@bb.utils.contains("DISTRO_FEATURES", "smack", " features/smack/smack.scc", "" ,d)}"
+-KERNEL_FEATURES_append = " ${@bb.utils.contains("DISTRO_FEATURES", "yama", " features/yama/yama.scc", "" ,d)}"
+-KERNEL_FEATURES_append = " ${@bb.utils.contains("IMAGE_CLASSES", "dm-verity-img", " features/device-mapper/dm-verity.scc", "" ,d)}"
+-- 
+2.24.3
+
+
+^ permalink raw reply related	[flat|nested] 5+ messages in thread
+* [meta-security][PATCH 3/5] initramfs-framework: fix YCL issue.
+  2021-05-30 17:18 [meta-security][PATCH 1/5] busybox: drop as libsecomp is in core Armin Kuster
+  2021-05-30 17:18 ` [meta-security][PATCH 2/5] linux-%_5.%.bbappend: drop recipe Armin Kuster
+@ 2021-05-30 17:18 ` Armin Kuster
+  2021-05-30 17:18 ` [meta-security][PATCH 4/5] python3-scapy: drop , now in meta-python Armin Kuster
+  2021-05-30 17:18 ` [meta-security][PATCH 5/5] packagegroup-core-security: drop python3-scapy Armin Kuster
+  3 siblings, 0 replies; 5+ messages in thread
+From: Armin Kuster @ 2021-05-30 17:18 UTC (permalink / raw)
+  To: yocto
+
+Signed-off-by: Armin Kuster <akuster808@gmail.com>
+---
+ .../initrdscripts/initramfs-framework.inc       | 16 ++++++++++++++++
+ .../initramfs-framework_1.0.bbappend            | 17 +----------------
+ 2 files changed, 17 insertions(+), 16 deletions(-)
+ create mode 100644 recipes-core/initrdscripts/initramfs-framework.inc
+
+diff --git a/recipes-core/initrdscripts/initramfs-framework.inc b/recipes-core/initrdscripts/initramfs-framework.inc
+new file mode 100644
+index 0000000..dad9c96
+--- /dev/null
++++ b/recipes-core/initrdscripts/initramfs-framework.inc
+@@ -0,0 +1,16 @@
++FILESEXTRAPATHS_prepend := "${THISDIR}/${PN}:"
++
++SRC_URI_append = "\
++    file://dmverity \
++"
++
++do_install_append() {
++    # dm-verity
++    install ${WORKDIR}/dmverity ${D}/init.d/80-dmverity
++}
++
++PACKAGES_append = " initramfs-module-dmverity"
++
++SUMMARY_initramfs-module-dmverity = "initramfs dm-verity rootfs support"
++RDEPENDS_initramfs-module-dmverity = "${PN}-base"
++FILES_initramfs-module-dmverity = "/init.d/80-dmverity"
+diff --git a/recipes-core/initrdscripts/initramfs-framework_1.0.bbappend b/recipes-core/initrdscripts/initramfs-framework_1.0.bbappend
+index dad9c96..dc74e01 100644
+--- a/recipes-core/initrdscripts/initramfs-framework_1.0.bbappend
++++ b/recipes-core/initrdscripts/initramfs-framework_1.0.bbappend
+@@ -1,16 +1 @@
+-FILESEXTRAPATHS_prepend := "${THISDIR}/${PN}:"
+-
+-SRC_URI_append = "\
+-    file://dmverity \
+-"
+-
+-do_install_append() {
+-    # dm-verity
+-    install ${WORKDIR}/dmverity ${D}/init.d/80-dmverity
+-}
+-
+-PACKAGES_append = " initramfs-module-dmverity"
+-
+-SUMMARY_initramfs-module-dmverity = "initramfs dm-verity rootfs support"
+-RDEPENDS_initramfs-module-dmverity = "${PN}-base"
+-FILES_initramfs-module-dmverity = "/init.d/80-dmverity"
++require ${@bb.utils.contains('IMAGE_CLASSES', 'dm-verity', 'initramfs-framework.inc', '', d)}
+-- 
+2.24.3
+
+
+^ permalink raw reply related	[flat|nested] 5+ messages in thread
+* [meta-security][PATCH 4/5] python3-scapy: drop , now in meta-python
+  2021-05-30 17:18 [meta-security][PATCH 1/5] busybox: drop as libsecomp is in core Armin Kuster
+  2021-05-30 17:18 ` [meta-security][PATCH 2/5] linux-%_5.%.bbappend: drop recipe Armin Kuster
+  2021-05-30 17:18 ` [meta-security][PATCH 3/5] initramfs-framework: fix YCL issue Armin Kuster
+@ 2021-05-30 17:18 ` Armin Kuster
+  2021-05-30 17:18 ` [meta-security][PATCH 5/5] packagegroup-core-security: drop python3-scapy Armin Kuster
+  3 siblings, 0 replies; 5+ messages in thread
+From: Armin Kuster @ 2021-05-30 17:18 UTC (permalink / raw)
+  To: yocto
+
+Signed-off-by: Armin Kuster <akuster808@gmail.com>
+---
+ recipes-security/scapy/files/run-ptest        |  4 ---
+ recipes-security/scapy/python3-scapy_2.4.5.bb | 30 -------------------
+ 2 files changed, 34 deletions(-)
+ delete mode 100644 recipes-security/scapy/files/run-ptest
+ delete mode 100644 recipes-security/scapy/python3-scapy_2.4.5.bb
+
+diff --git a/recipes-security/scapy/files/run-ptest b/recipes-security/scapy/files/run-ptest
+deleted file mode 100644
+index 797d8ec..0000000
+--- a/recipes-security/scapy/files/run-ptest
++++ /dev/null
+@@ -1,4 +0,0 @@
+-#!/bin/sh
+-UTscapy3 -t regression.uts -f text -l -C \
+-    -o @PTEST_PATH@/scapy_ptest_$(date +%Y%m%d-%H%M%S).log \
+-    2>&1 | sed -e 's/^passed None/PASS:/' -e 's/^failed None/FAIL:/'
+diff --git a/recipes-security/scapy/python3-scapy_2.4.5.bb b/recipes-security/scapy/python3-scapy_2.4.5.bb
+deleted file mode 100644
+index 8f36520..0000000
+--- a/recipes-security/scapy/python3-scapy_2.4.5.bb
++++ /dev/null
+@@ -1,30 +0,0 @@
+-SUMMARY = "Network scanning and manipulation tool"
+-DESCRIPTION = "Scapy is a powerful interactive packet manipulation program. It is able to forge or decode packets of a wide number of protocols, send them on the wire, capture them, match requests and replies, and much more. It can easily handle most classical tasks like scanning, tracerouting, probing, unit tests, attacks or network discovery (it can replace hping, 85% of nmap, arpspoof, arp-sk, arping, tcpdump, tethereal, p0f, etc.). It also performs very well at a lot of other specific tasks that most other tools can't handle, like sending invalid frames, injecting your own 802.11 frames, combining technics (VLAN hopping+ARP cache poisoning, VOIP decoding on WEP encrypted channel, ...), etc."
+-SECTION = "security"
+-LICENSE = "GPLv2"
+-
+-LIC_FILES_CHKSUM = "file://LICENSE;md5=b234ee4d69f5fce4486a80fdaf4a4263"
+-
+-SRCREV = "32cd7eb0f620d9adf171c48d55514e8326a538d7"
+-SRC_URI = "git://github.com/secdev/scapy.git \
+-           file://run-ptest"
+-
+-S = "${WORKDIR}/git"
+-
+-UPSTREAM_CHECK_COMMITS = "1"
+-
+-inherit setuptools3 ptest
+-
+-do_install_append() {
+-        mv ${D}${bindir}/scapy ${D}${bindir}/scapy3
+-        mv ${D}${bindir}/UTscapy ${D}${bindir}/UTscapy3
+-}
+-
+-do_install_ptest() {
+-    install -m 0644 ${S}/test/regression.uts ${D}${PTEST_PATH}
+-    sed -i 's,@PTEST_PATH@,${PTEST_PATH},' ${D}${PTEST_PATH}/run-ptest
+-}
+-
+-RDEPENDS_${PN} = "tcpdump ${PYTHON_PN}-compression ${PYTHON_PN}-cryptography ${PYTHON_PN}-netclient  \
+-                  ${PYTHON_PN}-netserver ${PYTHON_PN}-pydoc ${PYTHON_PN}-pkgutil ${PYTHON_PN}-shell \
+-                  ${PYTHON_PN}-threading ${PYTHON_PN}-numbers ${PYTHON_PN}-pycrypto"
+-- 
+2.24.3
+
+
+^ permalink raw reply related	[flat|nested] 5+ messages in thread
+* [meta-security][PATCH 5/5] packagegroup-core-security: drop python3-scapy
+  2021-05-30 17:18 [meta-security][PATCH 1/5] busybox: drop as libsecomp is in core Armin Kuster
+                   ` (2 preceding siblings ...)
+  2021-05-30 17:18 ` [meta-security][PATCH 4/5] python3-scapy: drop , now in meta-python Armin Kuster
+@ 2021-05-30 17:18 ` Armin Kuster
+  3 siblings, 0 replies; 5+ messages in thread
+From: Armin Kuster @ 2021-05-30 17:18 UTC (permalink / raw)
+  To: yocto
+
+Signed-off-by: Armin Kuster <akuster808@gmail.com>
+---
+ recipes-core/packagegroup/packagegroup-core-security.bb | 2 --
+ 1 file changed, 2 deletions(-)
+
+diff --git a/recipes-core/packagegroup/packagegroup-core-security.bb b/recipes-core/packagegroup/packagegroup-core-security.bb
+index cf9620f..e7b6d9b 100644
+--- a/recipes-core/packagegroup/packagegroup-core-security.bb
++++ b/recipes-core/packagegroup/packagegroup-core-security.bb
+@@ -37,7 +37,6 @@ RDEPENDS_packagegroup-security-utils = "\
+     pinentry \
+     python3-privacyidea \
+     python3-fail2ban \
+-    python3-scapy \
+     softhsm \
+     libest \
+     opendnssec \
+@@ -89,7 +88,6 @@ RDEPENDS_packagegroup-meta-security-ptest-packages = "\
+     ptest-runner \
+     samhain-standalone-ptest \
+     libseccomp-ptest \
+-    python3-scapy-ptest \
+     suricata-ptest \
+     python3-fail2ban-ptest \
+     ${@bb.utils.contains("DISTRO_FEATURES", "smack", "smack-ptest", "",d)} \
+-- 
+2.24.3
+
+
+^ permalink raw reply related	[flat|nested] 5+ messages in thread
+end of thread, other threads:[~2021-05-30 17:18 UTC | newest]
+
+Thread overview: 5+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-05-30 17:18 [meta-security][PATCH 1/5] busybox: drop as libsecomp is in core Armin Kuster
+2021-05-30 17:18 ` [meta-security][PATCH 2/5] linux-%_5.%.bbappend: drop recipe Armin Kuster
+2021-05-30 17:18 ` [meta-security][PATCH 3/5] initramfs-framework: fix YCL issue Armin Kuster
+2021-05-30 17:18 ` [meta-security][PATCH 4/5] python3-scapy: drop , now in meta-python Armin Kuster
+2021-05-30 17:18 ` [meta-security][PATCH 5/5] packagegroup-core-security: drop python3-scapy Armin Kuster
+

@@ -1,0 +1,638 @@
+* [meta-rockchip][PATCH v3 0/7] OP-TEE support for ARM and rk3399
+@ 2021-04-23 16:58 Yann Dirson
+  2021-04-23 16:58 ` [meta-rockchip][PATCH v3 1/7] trusted-firmware-a: include optee support when requested by DISTRO_FEATURE Yann Dirson
+                   ` (7 more replies)
+  0 siblings, 8 replies; 10+ messages in thread
+From: Yann Dirson @ 2021-04-23 16:58 UTC (permalink / raw)
+  To: yocto; +Cc: twoerner, Yann Dirson
+
+From: Yann Dirson <yann@blade-group.com>
+
+Changes from v2:
+ - turn the DISTRO_FEATURE idea into separate RFC patches so as to allow
+   merging of basic support
+ - remove optee-os patch that proved unnecessary
+
+Changes from v1:
+ - fix last-minute typo in TFA_SPD setting, which led to optee not being started
+ - use PACKAGECONFIG[optee] to simplify recipes as suggested on meta-arm ml
+
+Yann Dirson (7):
+  trusted-firmware-a: include optee support when requested by
+    DISTRO_FEATURE
+  u-boot: include optee-os as BL32 when requested by DISTRO_FEATURE
+  optee-os: enable rk3399 support, including serial console support
+  RFC optee: new "optee" DISTRO_FEATURE to enable optee-os integration
+  RFC: optee: only enable the recipes when "optee" is included in
+    DISTRO_FEATURES
+  WIP nanopi-m4: declare OP-TEE presence in devicetree
+  WIP kernel config feature for OP-TEE activation
+
+ conf/machine/include/rk3399.inc               |  2 +
+ .../trusted-firmware-a_%.bbappend             | 14 +++++
+ recipes-bsp/u-boot/u-boot%.bbappend           |  9 ++++
+ .../0001-nanopi-declare-optee-presence.patch  | 30 +++++++++++
+ recipes-kernel/linux/files/bsp/tee.cfg        |  2 +
+ recipes-kernel/linux/linux-yocto%.bbappend    |  1 +
+ ...399-enable-serial-console-by-default.patch | 52 +++++++++++++++++++
+ recipes-security/optee/optee%.bbappend        |  4 ++
+ recipes-security/optee/optee-os_%.bbappend    |  8 +++
+ 9 files changed, 122 insertions(+)
+ create mode 100644 recipes-kernel/linux/files/0001-nanopi-declare-optee-presence.patch
+ create mode 100644 recipes-kernel/linux/files/bsp/tee.cfg
+ create mode 100644 recipes-security/optee/files/0001-rk3399-enable-serial-console-by-default.patch
+ create mode 100644 recipes-security/optee/optee%.bbappend
+ create mode 100644 recipes-security/optee/optee-os_%.bbappend
+
+-- 
+2.30.2
+
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+* [meta-rockchip][PATCH v3 1/7] trusted-firmware-a: include optee support when requested by DISTRO_FEATURE
+  2021-04-23 16:58 [meta-rockchip][PATCH v3 0/7] OP-TEE support for ARM and rk3399 Yann Dirson
+@ 2021-04-23 16:58 ` Yann Dirson
+  2021-04-23 16:58 ` [meta-rockchip][PATCH v3 2/7] u-boot: include optee-os as BL32 " Yann Dirson
+                   ` (6 subsequent siblings)
+  7 siblings, 0 replies; 10+ messages in thread
+From: Yann Dirson @ 2021-04-23 16:58 UTC (permalink / raw)
+  To: yocto; +Cc: twoerner, Yann Dirson
+
+From: Yann Dirson <yann@blade-group.com>
+
+This instructs TF-A to:
+
+ - load OP-TEE OS as BL32, but still relies on the actual image to be
+   provided through other means, eg. in u-boot.itb
+ - run opteed as Secure Payload Dispatcher
+
+This has to be enabled through PACKAGECONFIG += "optee".
+
+Signed-off-by: Yann Dirson <yann@blade-group.com>
+---
+ .../trusted-firmware-a_%.bbappend                   | 13 +++++++++++++
+ 1 file changed, 13 insertions(+)
+
+diff --git a/recipes-bsp/trusted-firmware-a/trusted-firmware-a_%.bbappend b/recipes-bsp/trusted-firmware-a/trusted-firmware-a_%.bbappend
+index 1942c17..638d53f 100644
+--- a/recipes-bsp/trusted-firmware-a/trusted-firmware-a_%.bbappend
++++ b/recipes-bsp/trusted-firmware-a/trusted-firmware-a_%.bbappend
+@@ -9,3 +9,16 @@ FILESEXTRAPATHS_prepend := "${THISDIR}/files:"
+ SRC_URI += "\
+     file://serial-console-baudrate.patch \
+ "
++
++# OP-TEE, dependent on "optee" DISTRO_FEATURES
++
++OPTEE_OEMAKE ?= " \
++    BL32=${STAGING_DIR_TARGET}${nonarch_base_libdir}/firmware/tee-header_v2.bin \
++    BL32_EXTRA1=${STAGING_DIR_TARGET}${nonarch_base_libdir}/firmware/tee-pager_v2.bin \
++    BL32_EXTRA2=${STAGING_DIR_TARGET}${nonarch_base_libdir}/firmware/tee-pageable_v2.bin \
++    "
++
++EXTRA_OEMAKE_append = " ${PACKAGECONFIG_CONFARGS}"
++PACKAGECONFIG[optee] = "${OPTEE_OEMAKE},,optee-os"
++
++TFA_SPD = "${@bb.utils.contains('PACKAGECONFIG', 'optee', 'opteed', '', d)}"
+-- 
+2.30.2
+
+
+^ permalink raw reply related	[flat|nested] 10+ messages in thread
+* [meta-rockchip][PATCH v3 2/7] u-boot: include optee-os as BL32 when requested by DISTRO_FEATURE
+  2021-04-23 16:58 [meta-rockchip][PATCH v3 0/7] OP-TEE support for ARM and rk3399 Yann Dirson
+  2021-04-23 16:58 ` [meta-rockchip][PATCH v3 1/7] trusted-firmware-a: include optee support when requested by DISTRO_FEATURE Yann Dirson
+@ 2021-04-23 16:58 ` Yann Dirson
+  2021-04-23 16:58 ` [meta-rockchip][PATCH v3 3/7] optee-os: enable rk3399 support, including serial console support Yann Dirson
+                   ` (5 subsequent siblings)
+  7 siblings, 0 replies; 10+ messages in thread
+From: Yann Dirson @ 2021-04-23 16:58 UTC (permalink / raw)
+  To: yocto; +Cc: twoerner, Yann Dirson
+
+From: Yann Dirson <yann@blade-group.com>
+
+This causes OP-TEE to get included into the u-boot.itb fitImage so u-boot
+can load it for the trusted-firmware-a BL31 to run it.
+
+This has to be enabled through PACKAGECONFIG += "optee".
+
+Signed-off-by: Yann Dirson <yann@blade-group.com>
+---
+ recipes-bsp/u-boot/u-boot%.bbappend | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/recipes-bsp/u-boot/u-boot%.bbappend b/recipes-bsp/u-boot/u-boot%.bbappend
+index 95c019d..767df5f 100644
+--- a/recipes-bsp/u-boot/u-boot%.bbappend
++++ b/recipes-bsp/u-boot/u-boot%.bbappend
+@@ -5,6 +5,8 @@ do_compile_append_rock2-square () {
+ 	fi
+ }
+ 
++# TF-A, when supported
++
+ ATF_DEPENDS ??= ""
+ 
+ EXTRA_OEMAKE_append_rk3399 = " BL31=${DEPLOY_DIR_IMAGE}/bl31-rk3399.elf"
+@@ -14,3 +16,9 @@ ATF_DEPENDS_rk3328 = " virtual/trusted-firmware-a:do_deploy"
+ 
+ do_compile[depends] .= "${ATF_DEPENDS}"
+ 
++# OP-TEE, dependent on "optee" DISTRO_FEATURES
++
++OPTEE_OEMAKE ?= " TEE=${DEPLOY_DIR_IMAGE}/optee/tee.elf"
++
++EXTRA_OEMAKE_append = " ${PACKAGECONFIG_CONFARGS}"
++PACKAGECONFIG[optee] = "${OPTEE_OEMAKE},,optee-os"
+-- 
+2.30.2
+
+
+^ permalink raw reply related	[flat|nested] 10+ messages in thread
+* [meta-rockchip][PATCH v3 3/7] optee-os: enable rk3399 support, including serial console support
+  2021-04-23 16:58 [meta-rockchip][PATCH v3 0/7] OP-TEE support for ARM and rk3399 Yann Dirson
+  2021-04-23 16:58 ` [meta-rockchip][PATCH v3 1/7] trusted-firmware-a: include optee support when requested by DISTRO_FEATURE Yann Dirson
+  2021-04-23 16:58 ` [meta-rockchip][PATCH v3 2/7] u-boot: include optee-os as BL32 " Yann Dirson
+@ 2021-04-23 16:58 ` Yann Dirson
+  2021-04-23 16:58 ` [meta-rockchip][PATCH v3 4/7] RFC optee: new "optee" DISTRO_FEATURE to enable optee-os integration Yann Dirson
+                   ` (4 subsequent siblings)
+  7 siblings, 0 replies; 10+ messages in thread
+From: Yann Dirson @ 2021-04-23 16:58 UTC (permalink / raw)
+  To: yocto; +Cc: twoerner, Yann Dirson
+
+From: Yann Dirson <yann@blade-group.com>
+
+As discussed in https://github.com/OP-TEE/optee_os/issues/4542, ASLR
+support currently has to be disabled for OP-TEE to boot.
+
+Signed-off-by: Yann Dirson <yann@blade-group.com>
+---
+ conf/machine/include/rk3399.inc               |  2 +
+ ...399-enable-serial-console-by-default.patch | 52 +++++++++++++++++++
+ recipes-security/optee/optee%.bbappend        |  1 +
+ recipes-security/optee/optee-os_%.bbappend    |  8 +++
+ 4 files changed, 63 insertions(+)
+ create mode 100644 recipes-security/optee/files/0001-rk3399-enable-serial-console-by-default.patch
+ create mode 100644 recipes-security/optee/optee%.bbappend
+ create mode 100644 recipes-security/optee/optee-os_%.bbappend
+
+diff --git a/conf/machine/include/rk3399.inc b/conf/machine/include/rk3399.inc
+index f6b7826..9ac434e 100644
+--- a/conf/machine/include/rk3399.inc
++++ b/conf/machine/include/rk3399.inc
+@@ -13,6 +13,8 @@ KBUILD_DEFCONFIG ?= "defconfig"
+ KERNEL_CLASSES = "kernel-fitimage"
+ KERNEL_IMAGETYPE = "fitImage"
+ 
++OPTEEMACHINE = "rockchip-rk3399"
++
+ TFA_PLATFORM = "rk3399"
+ TFA_BUILD_TARGET = "bl31"
+ 
+diff --git a/recipes-security/optee/files/0001-rk3399-enable-serial-console-by-default.patch b/recipes-security/optee/files/0001-rk3399-enable-serial-console-by-default.patch
+new file mode 100644
+index 0000000..c09cfae
+--- /dev/null
++++ b/recipes-security/optee/files/0001-rk3399-enable-serial-console-by-default.patch
+@@ -0,0 +1,52 @@
++From 96a614759ff5572b16929379d72376fa6c805a37 Mon Sep 17 00:00:00 2001
++From: Yann Dirson <yann@blade-group.com>
++Date: Mon, 12 Apr 2021 10:49:18 +0200
++Subject: [PATCH] rk3399: enable serial console by default
++Upstream-Status: Backport
++
++The definition is the same as for rk322x.
++
++Signed-off-by: Yann Dirson <yann@blade-group.com>
++Acked-by: Jerome Forissier <jerome@forissier.org>
++---
++ core/arch/arm/plat-rockchip/conf.mk | 10 ++++++++--
++ 1 file changed, 8 insertions(+), 2 deletions(-)
++
++diff --git a/core/arch/arm/plat-rockchip/conf.mk b/core/arch/arm/plat-rockchip/conf.mk
++index f6eef865..f180d63a 100644
++--- a/core/arch/arm/plat-rockchip/conf.mk
+++++ b/core/arch/arm/plat-rockchip/conf.mk
++@@ -26,8 +26,6 @@ CFG_EARLY_CONSOLE_BAUDRATE ?= 1500000
++ CFG_EARLY_CONSOLE_CLK_IN_HZ ?= 24000000
++ endif
++ 
++-CFG_EARLY_CONSOLE ?= n
++-
++ ifeq ($(PLATFORM_FLAVOR),rk3399)
++ include core/arch/arm/cpu/cortex-armv8-0.mk
++ $(call force,CFG_TEE_CORE_NB_CORE,6)
++@@ -37,6 +35,12 @@ CFG_TZDRAM_START ?= 0x30000000
++ CFG_TZDRAM_SIZE  ?= 0x02000000
++ CFG_SHMEM_START  ?= 0x32000000
++ CFG_SHMEM_SIZE   ?= 0x00400000
+++
+++CFG_EARLY_CONSOLE ?= y
+++CFG_EARLY_CONSOLE_BASE ?= UART2_BASE
+++CFG_EARLY_CONSOLE_SIZE ?= UART2_SIZE
+++CFG_EARLY_CONSOLE_BAUDRATE ?= 1500000
+++CFG_EARLY_CONSOLE_CLK_IN_HZ ?= 24000000
++ endif
++ 
++ ifeq ($(PLATFORM_FLAVOR),px30)
++@@ -47,6 +51,8 @@ CFG_TZDRAM_START ?= 0x30000000
++ CFG_TZDRAM_SIZE  ?= 0x02000000
++ CFG_SHMEM_START  ?= 0x32000000
++ CFG_SHMEM_SIZE   ?= 0x00400000
+++
+++CFG_EARLY_CONSOLE ?= n
++ endif
++ 
++ ifeq ($(platform-flavor-armv8),1)
++-- 
++2.30.2
++
+diff --git a/recipes-security/optee/optee%.bbappend b/recipes-security/optee/optee%.bbappend
+new file mode 100644
+index 0000000..9a156bb
+--- /dev/null
++++ b/recipes-security/optee/optee%.bbappend
+@@ -0,0 +1 @@
++COMPATIBLE_MACHINE_rk3399 ?= "rk3399"
+diff --git a/recipes-security/optee/optee-os_%.bbappend b/recipes-security/optee/optee-os_%.bbappend
+new file mode 100644
+index 0000000..a1b0c4f
+--- /dev/null
++++ b/recipes-security/optee/optee-os_%.bbappend
+@@ -0,0 +1,8 @@
++EXTRA_OEMAKE_append_rk3399 = " \
++    CFG_CORE_ASLR=n \
++"
++
++FILESEXTRAPATHS_prepend := "${THISDIR}/files:"
++SRC_URI += "\
++    file://0001-rk3399-enable-serial-console-by-default.patch \
++"
+-- 
+2.30.2
+
+
+^ permalink raw reply related	[flat|nested] 10+ messages in thread
+* [meta-rockchip][PATCH v3 4/7] RFC optee: new "optee" DISTRO_FEATURE to enable optee-os integration
+  2021-04-23 16:58 [meta-rockchip][PATCH v3 0/7] OP-TEE support for ARM and rk3399 Yann Dirson
+                   ` (2 preceding siblings ...)
+  2021-04-23 16:58 ` [meta-rockchip][PATCH v3 3/7] optee-os: enable rk3399 support, including serial console support Yann Dirson
+@ 2021-04-23 16:58 ` Yann Dirson
+  2021-04-23 16:58 ` [meta-rockchip][PATCH v3 5/7] RFC: optee: only enable the recipes when "optee" is included in DISTRO_FEATURES Yann Dirson
+                   ` (3 subsequent siblings)
+  7 siblings, 0 replies; 10+ messages in thread
+From: Yann Dirson @ 2021-04-23 16:58 UTC (permalink / raw)
+  To: yocto; +Cc: twoerner, Yann Dirson
+
+From: Yann Dirson <yann@blade-group.com>
+
+This sets up a central switch for OP-TEE operation, activating support
+in all dependent recipes at the same time:
+
+- u-boot
+- trusted-firmware-a
+- kernel (not part of this patch, has to be implemented separately)
+
+Signed-off-by: Yann Dirson <yann@blade-group.com>
+---
+ recipes-bsp/trusted-firmware-a/trusted-firmware-a_%.bbappend | 1 +
+ recipes-bsp/u-boot/u-boot%.bbappend                          | 1 +
+ 2 files changed, 2 insertions(+)
+
+diff --git a/recipes-bsp/trusted-firmware-a/trusted-firmware-a_%.bbappend b/recipes-bsp/trusted-firmware-a/trusted-firmware-a_%.bbappend
+index 638d53f..9887b6e 100644
+--- a/recipes-bsp/trusted-firmware-a/trusted-firmware-a_%.bbappend
++++ b/recipes-bsp/trusted-firmware-a/trusted-firmware-a_%.bbappend
+@@ -20,5 +20,6 @@ OPTEE_OEMAKE ?= " \
+ 
+ EXTRA_OEMAKE_append = " ${PACKAGECONFIG_CONFARGS}"
+ PACKAGECONFIG[optee] = "${OPTEE_OEMAKE},,optee-os"
++PACKAGECONFIG_append = " ${@bb.utils.filter('DISTRO_FEATURES', 'optee', d)}"
+ 
+ TFA_SPD = "${@bb.utils.contains('PACKAGECONFIG', 'optee', 'opteed', '', d)}"
+diff --git a/recipes-bsp/u-boot/u-boot%.bbappend b/recipes-bsp/u-boot/u-boot%.bbappend
+index 767df5f..d947815 100644
+--- a/recipes-bsp/u-boot/u-boot%.bbappend
++++ b/recipes-bsp/u-boot/u-boot%.bbappend
+@@ -22,3 +22,4 @@ OPTEE_OEMAKE ?= " TEE=${DEPLOY_DIR_IMAGE}/optee/tee.elf"
+ 
+ EXTRA_OEMAKE_append = " ${PACKAGECONFIG_CONFARGS}"
+ PACKAGECONFIG[optee] = "${OPTEE_OEMAKE},,optee-os"
++PACKAGECONFIG_append = " ${@bb.utils.filter('DISTRO_FEATURES', 'optee', d)}"
+-- 
+2.30.2
+
+
+^ permalink raw reply related	[flat|nested] 10+ messages in thread
+* [meta-rockchip][PATCH v3 5/7] RFC: optee: only enable the recipes when "optee" is included in DISTRO_FEATURES
+  2021-04-23 16:58 [meta-rockchip][PATCH v3 0/7] OP-TEE support for ARM and rk3399 Yann Dirson
+                   ` (3 preceding siblings ...)
+  2021-04-23 16:58 ` [meta-rockchip][PATCH v3 4/7] RFC optee: new "optee" DISTRO_FEATURE to enable optee-os integration Yann Dirson
+@ 2021-04-23 16:58 ` Yann Dirson
+  2021-04-23 16:58 ` [meta-rockchip][PATCH v3 6/7] WIP nanopi-m4: declare OP-TEE presence in devicetree Yann Dirson
+                   ` (2 subsequent siblings)
+  7 siblings, 0 replies; 10+ messages in thread
+From: Yann Dirson @ 2021-04-23 16:58 UTC (permalink / raw)
+  To: yocto; +Cc: twoerner, Yann Dirson
+
+From: Yann Dirson <yann@blade-group.com>
+
+This is meant as a safeguard against having optee-os included without the
+required support in u-boot and trusted-firmware-a.
+
+Signed-off-by: Yann Dirson <yann@blade-group.com>
+---
+ recipes-security/optee/optee%.bbappend | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/recipes-security/optee/optee%.bbappend b/recipes-security/optee/optee%.bbappend
+index 9a156bb..ec11863 100644
+--- a/recipes-security/optee/optee%.bbappend
++++ b/recipes-security/optee/optee%.bbappend
+@@ -1 +1,4 @@
+ COMPATIBLE_MACHINE_rk3399 ?= "rk3399"
++
++inherit features_check
++REQUIRED_DISTRO_FEATURES = "optee"
+-- 
+2.30.2
+
+
+^ permalink raw reply related	[flat|nested] 10+ messages in thread
+* [meta-rockchip][PATCH v3 6/7] WIP nanopi-m4: declare OP-TEE presence in devicetree
+  2021-04-23 16:58 [meta-rockchip][PATCH v3 0/7] OP-TEE support for ARM and rk3399 Yann Dirson
+                   ` (4 preceding siblings ...)
+  2021-04-23 16:58 ` [meta-rockchip][PATCH v3 5/7] RFC: optee: only enable the recipes when "optee" is included in DISTRO_FEATURES Yann Dirson
+@ 2021-04-23 16:58 ` Yann Dirson
+  2021-04-23 16:58 ` [meta-rockchip][PATCH v3 7/7] WIP kernel config feature for OP-TEE activation Yann Dirson
+  2021-04-23 17:19 ` [yocto] [meta-rockchip][PATCH v3 0/7] OP-TEE support for ARM and rk3399 Joshua Watt
+  7 siblings, 0 replies; 10+ messages in thread
+From: Yann Dirson @ 2021-04-23 16:58 UTC (permalink / raw)
+  To: yocto; +Cc: twoerner, Yann Dirson
+
+From: Yann Dirson <yann@blade-group.com>
+
+FIXME:
+
+ - this is not specific to the board, and would indeed apply to any SoC
+   supported by OP-TEE.
+ - should rather be selected by "optee" in DISTRO_FEATURES, maybe using
+   a dts overlay
+---
+ .../0001-nanopi-declare-optee-presence.patch  | 30 +++++++++++++++++++
+ recipes-kernel/linux/linux-yocto%.bbappend    |  1 +
+ 2 files changed, 31 insertions(+)
+ create mode 100644 recipes-kernel/linux/files/0001-nanopi-declare-optee-presence.patch
+
+diff --git a/recipes-kernel/linux/files/0001-nanopi-declare-optee-presence.patch b/recipes-kernel/linux/files/0001-nanopi-declare-optee-presence.patch
+new file mode 100644
+index 0000000..aede781
+--- /dev/null
++++ b/recipes-kernel/linux/files/0001-nanopi-declare-optee-presence.patch
+@@ -0,0 +1,30 @@
++From 30cb714e717990276a5fabc50dc616c83b223ee7 Mon Sep 17 00:00:00 2001
++From: Yann Dirson <yann@blade-group.com>
++Date: Mon, 12 Apr 2021 15:50:26 +0200
++Subject: [PATCH] nanopi: declare optee presence
++
++---
++ arch/arm64/boot/dts/rockchip/rk3399-nanopi-m4.dts | 7 +++++++
++ 1 file changed, 7 insertions(+)
++
++diff --git a/arch/arm64/boot/dts/rockchip/rk3399-nanopi-m4.dts b/arch/arm64/boot/dts/rockchip/rk3399-nanopi-m4.dts
++index 60358ab8c7df..ef11639b03f6 100644
++--- a/arch/arm64/boot/dts/rockchip/rk3399-nanopi-m4.dts
+++++ b/arch/arm64/boot/dts/rockchip/rk3399-nanopi-m4.dts
++@@ -16,6 +16,13 @@ / {
++ 	model = "FriendlyElec NanoPi M4";
++ 	compatible = "friendlyarm,nanopi-m4", "rockchip,rk3399";
++ 
+++	firmware {
+++		optee {
+++			compatible = "linaro,optee-tz";
+++			method = "smc";
+++		};
+++	};
+++
++ 	vdd_5v: vdd-5v {
++ 		compatible = "regulator-fixed";
++ 		regulator-name = "vdd_5v";
++-- 
++2.30.2
++
+diff --git a/recipes-kernel/linux/linux-yocto%.bbappend b/recipes-kernel/linux/linux-yocto%.bbappend
+index 9658681..97b3238 100644
+--- a/recipes-kernel/linux/linux-yocto%.bbappend
++++ b/recipes-kernel/linux/linux-yocto%.bbappend
+@@ -2,6 +2,7 @@ FILESEXTRAPATHS_prepend := "${THISDIR}/files:"
+ 
+ SRC_URI_append = "\
+  file://bsp;type=kmeta;subdir=kernel-meta \
++ file://0001-nanopi-declare-optee-presence.patch \
+ "
+ 
+ COMPATIBLE_MACHINE_marsboard-rk3066 = "marsboard-rk3066"
+-- 
+2.30.2
+
+
+^ permalink raw reply related	[flat|nested] 10+ messages in thread
+* [meta-rockchip][PATCH v3 7/7] WIP kernel config feature for OP-TEE activation
+  2021-04-23 16:58 [meta-rockchip][PATCH v3 0/7] OP-TEE support for ARM and rk3399 Yann Dirson
+                   ` (5 preceding siblings ...)
+  2021-04-23 16:58 ` [meta-rockchip][PATCH v3 6/7] WIP nanopi-m4: declare OP-TEE presence in devicetree Yann Dirson
+@ 2021-04-23 16:58 ` Yann Dirson
+  2021-04-23 17:19 ` [yocto] [meta-rockchip][PATCH v3 0/7] OP-TEE support for ARM and rk3399 Joshua Watt
+  7 siblings, 0 replies; 10+ messages in thread
+From: Yann Dirson @ 2021-04-23 16:58 UTC (permalink / raw)
+  To: yocto; +Cc: twoerner, Yann Dirson
+
+From: Yann Dirson <yann@blade-group.com>
+
+FIXME:
+- provide an .scc with proper information
+- maybe bundle with dts overlay
+- select a more suitable path in config namespace
+---
+ recipes-kernel/linux/files/bsp/tee.cfg | 2 ++
+ 1 file changed, 2 insertions(+)
+ create mode 100644 recipes-kernel/linux/files/bsp/tee.cfg
+
+diff --git a/recipes-kernel/linux/files/bsp/tee.cfg b/recipes-kernel/linux/files/bsp/tee.cfg
+new file mode 100644
+index 0000000..82213a5
+--- /dev/null
++++ b/recipes-kernel/linux/files/bsp/tee.cfg
+@@ -0,0 +1,2 @@
++CONFIG_TEE=m
++CONFIG_OPTEE=m
+-- 
+2.30.2
+
+
+^ permalink raw reply related	[flat|nested] 10+ messages in thread
+* Re: [yocto] [meta-rockchip][PATCH v3 0/7] OP-TEE support for ARM and rk3399
+  2021-04-23 16:58 [meta-rockchip][PATCH v3 0/7] OP-TEE support for ARM and rk3399 Yann Dirson
+                   ` (6 preceding siblings ...)
+  2021-04-23 16:58 ` [meta-rockchip][PATCH v3 7/7] WIP kernel config feature for OP-TEE activation Yann Dirson
+@ 2021-04-23 17:19 ` Joshua Watt
+  2021-04-26  7:43   ` Yann Dirson
+  7 siblings, 1 reply; 10+ messages in thread
+From: Joshua Watt @ 2021-04-23 17:19 UTC (permalink / raw)
+  To: Yann Dirson, yocto; +Cc: twoerner, Yann Dirson
+
+[-- Attachment #1: Type: text/plain, Size: 2261 bytes --]
+
+
+On 4/23/21 11:58 AM, Yann Dirson wrote:
+> From: Yann Dirson <yann@blade-group.com>
+>
+> Changes from v2:
+>   - turn the DISTRO_FEATURE idea into separate RFC patches so as to allow
+>     merging of basic support
+>   - remove optee-os patch that proved unnecessary
+>
+> Changes from v1:
+>   - fix last-minute typo in TFA_SPD setting, which led to optee not being started
+>   - use PACKAGECONFIG[optee] to simplify recipes as suggested on meta-arm ml
+>
+> Yann Dirson (7):
+>    trusted-firmware-a: include optee support when requested by
+>      DISTRO_FEATURE
+>    u-boot: include optee-os as BL32 when requested by DISTRO_FEATURE
+>    optee-os: enable rk3399 support, including serial console support
+>    RFC optee: new "optee" DISTRO_FEATURE to enable optee-os integration
+>    RFC: optee: only enable the recipes when "optee" is included in
+>      DISTRO_FEATURES
+>    WIP nanopi-m4: declare OP-TEE presence in devicetree
+>    WIP kernel config feature for OP-TEE activation
+
+In general, it seems like a lot of these changes should be in the 
+upstream recipes, not the meta-rockchip bbappends.
+
+Also, the things that do belong in this layer need proper variable 
+overrides to keep the layer (mostly) Yocto project compliant.
+
+>
+>   conf/machine/include/rk3399.inc               |  2 +
+>   .../trusted-firmware-a_%.bbappend             | 14 +++++
+>   recipes-bsp/u-boot/u-boot%.bbappend           |  9 ++++
+>   .../0001-nanopi-declare-optee-presence.patch  | 30 +++++++++++
+>   recipes-kernel/linux/files/bsp/tee.cfg        |  2 +
+>   recipes-kernel/linux/linux-yocto%.bbappend    |  1 +
+>   ...399-enable-serial-console-by-default.patch | 52 +++++++++++++++++++
+>   recipes-security/optee/optee%.bbappend        |  4 ++
+>   recipes-security/optee/optee-os_%.bbappend    |  8 +++
+>   9 files changed, 122 insertions(+)
+>   create mode 100644 recipes-kernel/linux/files/0001-nanopi-declare-optee-presence.patch
+>   create mode 100644 recipes-kernel/linux/files/bsp/tee.cfg
+>   create mode 100644 recipes-security/optee/files/0001-rk3399-enable-serial-console-by-default.patch
+>   create mode 100644 recipes-security/optee/optee%.bbappend
+>   create mode 100644 recipes-security/optee/optee-os_%.bbappend
+>
+>
+> 
+>
+
+[-- Attachment #2: Type: text/html, Size: 2933 bytes --]
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+* Re: [yocto] [meta-rockchip][PATCH v3 0/7] OP-TEE support for ARM and rk3399
+  2021-04-23 17:19 ` [yocto] [meta-rockchip][PATCH v3 0/7] OP-TEE support for ARM and rk3399 Joshua Watt
+@ 2021-04-26  7:43   ` Yann Dirson
+  0 siblings, 0 replies; 10+ messages in thread
+From: Yann Dirson @ 2021-04-26  7:43 UTC (permalink / raw)
+  To: Joshua Watt; +Cc: Yocto discussion list, Trevor Woerner, Yann Dirson
+
+Le ven. 23 avr. 2021 à 19:19, Joshua Watt <jpewhacker@gmail.com> a écrit :
+>
+>
+> On 4/23/21 11:58 AM, Yann Dirson wrote:
+>
+> From: Yann Dirson <yann@blade-group.com>
+>
+> Changes from v2:
+>  - turn the DISTRO_FEATURE idea into separate RFC patches so as to allow
+>    merging of basic support
+>  - remove optee-os patch that proved unnecessary
+>
+> Changes from v1:
+>  - fix last-minute typo in TFA_SPD setting, which led to optee not being started
+>  - use PACKAGECONFIG[optee] to simplify recipes as suggested on meta-arm ml
+>
+> Yann Dirson (7):
+>   trusted-firmware-a: include optee support when requested by
+>     DISTRO_FEATURE
+>   u-boot: include optee-os as BL32 when requested by DISTRO_FEATURE
+>   optee-os: enable rk3399 support, including serial console support
+>   RFC optee: new "optee" DISTRO_FEATURE to enable optee-os integration
+>   RFC: optee: only enable the recipes when "optee" is included in
+>     DISTRO_FEATURES
+>   WIP nanopi-m4: declare OP-TEE presence in devicetree
+>   WIP kernel config feature for OP-TEE activation
+>
+> In general, it seems like a lot of these changes should be in the upstream recipes, not the meta-rockchip bbappends.
+
+Generally speaking, I'd say yes, and it would be great if we are able
+to do that.  But from what I've seen of op-tee integration,
+it looks like vendor platforms usually have different ways of integrating it.
+
+Eg. for tf-a, meta-ti does something completely custom, see
+https://git.yoctoproject.org/cgit/cgit.cgi/meta-ti/tree/recipes-bsp/trusted-firmware-a/trusted-firmware-a_%25.bbappend
+
+I'd think it would make sense to integrate something in meta-arm, if
+more than one platform uses it,
+or possibly if this is the "right way do do things that everyone
+should use going forward".
+
+
+> Also, the things that do belong in this layer need proper variable overrides to keep the layer (mostly) Yocto project compliant.
+
+After a quick review I can only see the optee patch in 3/7, do I miss
+anything else ?
+For this particular case, it did not seem crucial to restrict it,
+especially as the patch has been applied upstream.  But
+sure it wouldn't hurt to make it rk3399-conditional.
+
+>
+>  conf/machine/include/rk3399.inc               |  2 +
+>  .../trusted-firmware-a_%.bbappend             | 14 +++++
+>  recipes-bsp/u-boot/u-boot%.bbappend           |  9 ++++
+>  .../0001-nanopi-declare-optee-presence.patch  | 30 +++++++++++
+>  recipes-kernel/linux/files/bsp/tee.cfg        |  2 +
+>  recipes-kernel/linux/linux-yocto%.bbappend    |  1 +
+>  ...399-enable-serial-console-by-default.patch | 52 +++++++++++++++++++
+>  recipes-security/optee/optee%.bbappend        |  4 ++
+>  recipes-security/optee/optee-os_%.bbappend    |  8 +++
+>  9 files changed, 122 insertions(+)
+>  create mode 100644 recipes-kernel/linux/files/0001-nanopi-declare-optee-presence.patch
+>  create mode 100644 recipes-kernel/linux/files/bsp/tee.cfg
+>  create mode 100644 recipes-security/optee/files/0001-rk3399-enable-serial-console-by-default.patch
+>  create mode 100644 recipes-security/optee/optee%.bbappend
+>  create mode 100644 recipes-security/optee/optee-os_%.bbappend
+>
+>
+> 
+>
+
+
+-- 
+Yann Dirson <yann@blade-group.com>
+Blade / Shadow -- http://shadow.tech
+
+^ permalink raw reply	[flat|nested] 10+ messages in thread
+end of thread, other threads:[~2021-04-26  7:43 UTC | newest]
+
+Thread overview: 10+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-04-23 16:58 [meta-rockchip][PATCH v3 0/7] OP-TEE support for ARM and rk3399 Yann Dirson
+2021-04-23 16:58 ` [meta-rockchip][PATCH v3 1/7] trusted-firmware-a: include optee support when requested by DISTRO_FEATURE Yann Dirson
+2021-04-23 16:58 ` [meta-rockchip][PATCH v3 2/7] u-boot: include optee-os as BL32 " Yann Dirson
+2021-04-23 16:58 ` [meta-rockchip][PATCH v3 3/7] optee-os: enable rk3399 support, including serial console support Yann Dirson
+2021-04-23 16:58 ` [meta-rockchip][PATCH v3 4/7] RFC optee: new "optee" DISTRO_FEATURE to enable optee-os integration Yann Dirson
+2021-04-23 16:58 ` [meta-rockchip][PATCH v3 5/7] RFC: optee: only enable the recipes when "optee" is included in DISTRO_FEATURES Yann Dirson
+2021-04-23 16:58 ` [meta-rockchip][PATCH v3 6/7] WIP nanopi-m4: declare OP-TEE presence in devicetree Yann Dirson
+2021-04-23 16:58 ` [meta-rockchip][PATCH v3 7/7] WIP kernel config feature for OP-TEE activation Yann Dirson
+2021-04-23 17:19 ` [yocto] [meta-rockchip][PATCH v3 0/7] OP-TEE support for ARM and rk3399 Joshua Watt
+2021-04-26  7:43   ` Yann Dirson
+

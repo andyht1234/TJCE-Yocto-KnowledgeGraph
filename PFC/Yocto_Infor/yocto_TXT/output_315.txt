@@ -1,0 +1,185 @@
+* systemd service not enabled #kirkstone #systemd
+@ 2023-07-30 11:00 daniel_herrmann22
+  2023-07-30 12:05 ` [yocto] " adrian.freihofer
+  0 siblings, 1 reply; 3+ messages in thread
+From: daniel_herrmann22 @ 2023-07-30 11:00 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1298 bytes --]
+
+Hello,
+
+I have a problem enabling a simple systemd service.
+
+I need a manual "systemctl enable" once after boot to enable my service.
+
+If anybody has an idea, it would be very cool.
+
+Here are my files.
+
+*distro conf:*
+
+DISTRO_FEATURES:append = " systemd"
+DISTRO_FEATURES_BACKFILL_CONSIDERED += "sysvinit"
+VIRTUAL-RUNTIME_init_manager = "systemd"
+VIRTUAL-RUNTIME_initscripts = "systemd-compat-units"
+
+*schedulingrealtime.bb:*
+
+DESCRIPTION = "Setup a realtime sheduling"
+LICENSE = "CLOSED"
+
+inherit systemd
+NATIVE_SYSTEMD_SUPPORT = "1"
+SYSTEMD_PACKAGES = "${PN}"
+SYSTEMD_AUTO_ENABLE = "enable"
+SYSTEMD_SERVICE_${PN} = "schedulingrealtime.service"
+
+FILESEXTRAPATHS:prepend := "${THISDIR}:"
+SRC_URI = " \
+file://schedulingrealtime.service \
+"
+
+do_install () {
+install -d ${D}${systemd_system_unitdir}
+
+install -m 0755 ${WORKDIR}/schedulingrealtime.service ${D}${systemd_system_unitdir}
+}
+
+FILES:${PN} += "\
+${systemd_system_unitdir}/schedulingrealtime.service \
+
+*schedulingrealtime.service*
+
+[Unit]
+Description=modify scheduling parameter for realtime threads
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash -c "echo -1 > /proc/sys/kernel/sched_rt_runtime_us && echo -1 > /proc/sys/kernel/sched_rt_period_us"
+
+[Install]
+WantedBy=multi-user.target *
+*
+
+[-- Attachment #2: Type: text/html, Size: 1734 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] systemd service not enabled #kirkstone #systemd
+  2023-07-30 11:00 systemd service not enabled #kirkstone #systemd daniel_herrmann22
+@ 2023-07-30 12:05 ` adrian.freihofer
+  2023-07-31  6:19   ` systemd service not enabled #kirkstone daniel_herrmann22
+  0 siblings, 1 reply; 3+ messages in thread
+From: adrian.freihofer @ 2023-07-30 12:05 UTC (permalink / raw)
+  To: daniel_herrmann22, yocto
+
+On Sun, 2023-07-30 at 04:00 -0700, daniel_herrmann22@web.de wrote:
+> Hello,
+> I have a problem enabling a simple systemd service. 
+> I need a manual "systemctl enable" once after boot to enable my
+> service.
+> If anybody has an idea, it would be very cool.
+> Here are my files.
+> distro conf:
+> DISTRO_FEATURES:append = " systemd"
+> DISTRO_FEATURES_BACKFILL_CONSIDERED += "sysvinit"
+> VIRTUAL-RUNTIME_init_manager = "systemd"
+> VIRTUAL-RUNTIME_initscripts = "systemd-compat-units"
+> schedulingrealtime.bb:
+> DESCRIPTION = "Setup a realtime sheduling"
+> LICENSE = "CLOSED"
+> 
+> inherit systemd
+> NATIVE_SYSTEMD_SUPPORT = "1"
+> SYSTEMD_PACKAGES = "${PN}"
+> SYSTEMD_AUTO_ENABLE = "enable"
+> SYSTEMD_SERVICE_${PN} = "schedulingrealtime.service"
+
+This will probably fix it:
+SYSTEMD_SERVICE:${PN} = "schedulingrealtime.service"
+
+These lines are probably not needed:
+  NATIVE_SYSTEMD_SUPPORT = "1"
+  SYSTEMD_PACKAGES = "${PN}"
+  SYSTEMD_AUTO_ENABLE = "enable"
+
+Did you also consider using the sysctl service instead of an extra
+service?
+https://www.freedesktop.org/software/systemd/man/systemd-sysctl.service.html
+
+Regards,
+Adiran
+
+> 
+> 
+> FILESEXTRAPATHS:prepend := "${THISDIR}:"
+> SRC_URI = " \
+>         file://schedulingrealtime.service \
+>         "
+> 
+> do_install () {
+>     install -d ${D}${systemd_system_unitdir}
+> 
+>     install -m 0755 ${WORKDIR}/schedulingrealtime.service
+> ${D}${systemd_system_unitdir}
+> }
+> 
+> FILES:${PN} += "\
+>         ${systemd_system_unitdir}/schedulingrealtime.service \
+> schedulingrealtime.service
+> [Unit]
+> Description=modify scheduling parameter for realtime threads
+> 
+> [Service]
+> Type=oneshot
+> ExecStart=/bin/bash -c "echo -1 >
+> /proc/sys/kernel/sched_rt_runtime_us && echo -1 >
+> /proc/sys/kernel/sched_rt_period_us"
+> 
+> [Install]
+> WantedBy=multi-user.target
+> 
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#60681):
+> https://lists.yoctoproject.org/g/yocto/message/60681
+> Mute This Topic: https://lists.yoctoproject.org/mt/100441626/4454582
+> Mute
+> #kirkstone:https://lists.yoctoproject.org/g/yocto/mutehashtag/kirksto
+> ne
+> Mute
+> #systemd:https://lists.yoctoproject.org/g/yocto/mutehashtag/systemd
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe:
+> https://lists.yoctoproject.org/g/yocto/unsub [adrian.freihofer@gmail.com
+> ]
+> -=-=-=-=-=-=-=-=-=-=-=-
+> 
+
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: systemd service not enabled #kirkstone
+  2023-07-30 12:05 ` [yocto] " adrian.freihofer
+@ 2023-07-31  6:19   ` daniel_herrmann22
+  0 siblings, 0 replies; 3+ messages in thread
+From: daniel_herrmann22 @ 2023-07-31  6:19 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 111 bytes --]
+
+SYSTEMD_SERVICE *:${PN}* fixed my issue.
+
+And thanks for your hint regarding systctl service, I will try it
+
+[-- Attachment #2: Type: text/html, Size: 226 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2023-07-31  6:19 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-07-30 11:00 systemd service not enabled #kirkstone #systemd daniel_herrmann22
+2023-07-30 12:05 ` [yocto] " adrian.freihofer
+2023-07-31  6:19   ` systemd service not enabled #kirkstone daniel_herrmann22
+

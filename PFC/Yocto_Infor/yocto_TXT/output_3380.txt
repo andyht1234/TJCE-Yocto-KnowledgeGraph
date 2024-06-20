@@ -1,0 +1,153 @@
+* using grpc fails with linker error: file in wrong format
+@ 2021-05-24  7:37 Juergen Landwehr
+  2021-05-24 15:41 ` [yocto] " Khem Raj
+  0 siblings, 1 reply; 3+ messages in thread
+From: Juergen Landwehr @ 2021-05-24  7:37 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 872 bytes --]
+
+Hi all,
+
+I am developing a C++ library that is using gRPC.
+
+To be able to use protoc for generating the stubs I added the following dependencies:
+
+DEPENDS += "\
+ grpc-native \ 
+ protobuf-native \
+ ...
+ " 
+and to link my library with cross-compiled libraries:
+
+RDEPENDS += "\
+grpc \
+protobuf \
+...
+"
+
+However, linking the library fails with the following error:
+
+ld: /data/jenkins/workspace/e0_mbient_yocto_mbient_manifests_master_downstream/build/tmp/work/cortexa72-mbient-linux/tokenmaster-client/git-r0/recipe-sysroot-native/usr/lib/libgrpc++.so.1.24.3: error adding symbols: file in wrong format
+
+I guess the problem is, that native grpc++ library is used from the "recipe-sysroot-native" directory and thus not the cross-compiled version.
+
+What am I doing wrong? How can I tell Yocto to use the cross-compiled versions?
+
+Thanks,
+
+Jürgen
+
+[-- Attachment #2: Type: text/html, Size: 1179 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] using grpc fails with linker error: file in wrong format
+  2021-05-24  7:37 using grpc fails with linker error: file in wrong format Juergen Landwehr
+@ 2021-05-24 15:41 ` Khem Raj
+  2021-05-26 13:02   ` Juergen Landwehr
+  0 siblings, 1 reply; 3+ messages in thread
+From: Khem Raj @ 2021-05-24 15:41 UTC (permalink / raw)
+  To: Juergen Landwehr, yocto
+
+
+
+On 5/24/21 12:37 AM, Juergen Landwehr wrote:
+> Hi all,
+> 
+> I am developing a C++ library that is using gRPC.
+> 
+> To be able to use protoc for generating the stubs I added the following 
+> dependencies:
+> 
+> DEPENDS += "\
+>    grpc-native \
+>    protobuf-native \
+>    ...
+>    "
+> 
+> 
+> and to link my library with cross-compiled libraries:
+> 
+> RDEPENDS += "\
+>     grpc \
+>     protobuf \
+>     ...
+>     "
+> 
+> However, linking the library fails with the following error:
+> 
+> ld: 
+> /data/jenkins/workspace/e0_mbient_yocto_mbient_manifests_master_downstream/build/tmp/work/cortexa72-mbient-linux/tokenmaster-client/git-r0/recipe-sysroot-native/usr/lib/libgrpc++.so.1.24.3: 
+> error adding symbols: file in wrong format
+> 
+> I guess the problem is, that native grpc++ library is used from the 
+> "recipe-sysroot-native" directory and thus not the cross-compiled version.
+> 
+> What am I doing wrong? How can I tell Yocto to use the cross-compiled 
+> versions?
+
+this is upto your component's build system, so perhaps you should look 
+into that and ensure that its using right options. Second place to look 
+is recipe for your package and ensure right vars and options are passed 
+to build. you might want to look at sysdig package build system and see 
+how they are doing it and perhaps mimic that for your package too.
+
+> 
+> Thanks,
+> 
+> Jürgen
+> 
+> 
+> 
+> 
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: using grpc fails with linker error: file in wrong format
+  2021-05-24 15:41 ` [yocto] " Khem Raj
+@ 2021-05-26 13:02   ` Juergen Landwehr
+  0 siblings, 0 replies; 3+ messages in thread
+From: Juergen Landwehr @ 2021-05-26 13:02 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2274 bytes --]
+
+Hello Khem,
+
+we use CMake as build system.
+
+I checked the "sysdig" recipe and they defined both the "grpc" and "grpc-native" (same with protbuf) in the DEPENDS variable like so:
+
+DEPENDS += "... grpc grpc-native protobuf protobuf-native ..."
+If I do this in my recipe I get the following error:
+*18:55:09*  -- Found Protobuf: /data/jenkins/workspace/e0_mbient_yocto_mbient_manifests_master_downstream/build/tmp/work/corei7-64-mbient-linux/tokenmaster-client/git-r0/recipe-sysroot/usr/lib/libprotobuf.so;-lpthread (found version "3.12.3") 
+*18:55:09*  CMake Error at /data/jenkins/workspace/e0_mbient_yocto_mbient_manifests_master_downstream/build/tmp/work/corei7-64-mbient-linux/tokenmaster-client/git-r0/recipe-sysroot/usr/lib/cmake/grpc/gRPCTargets.cmake:197 (message):
+*18:55:09*    The imported target "gRPC::grpc_cpp_plugin" references the file
+*18:55:09*
+*18:55:09*       "/data/jenkins/workspace/e0_mbient_yocto_mbient_manifests_master_downstream/build/tmp/work/corei7-64-mbient-linux/tokenmaster-client/git-r0/recipe-sysroot/usr/bin/grpc_cpp_plugin"
+*18:55:09*
+*18:55:09*    but this file does not exist.  Possible reasons include:
+which is correct as the directory ".../ *recipe-sysroot* /usr/bin" does not contain any grpc plugins. However the directory ".../ *recipe-sysroot-native* /usr/bin" does (due to the dependency to grpc-native).
+
+It seems to work for sysdig, as they do not use "find_package(Protobuf)" or "find_package("gRPC") to detect gRPC related libraries/programs but use some custom code.
+
+So it looks like:
+
+1) If I use "DEPENDS += "... grpc-native protobuf-native ..." I am able to generate grpc stubs and I am also able to successfully build my component, but only, if the build-host and target-host are compatible => NO CROSS COMPING
+2) If I use "DEPENDS += "... grpc grpc-native protobuf protobuf-native ..." CMake immediately complains, that some the grpc plugins are missing
+3) Using RDEPENDS seems to have no effect
+
+So it seems the only way to make this work is to use "DEPENDS += grpc grpc-native ...." and write some custom CMake code to detect grpc related libraries (e.g. libgrpc++.so) and programs (e.g. protoc, grpc_cpp_plugin).
+
+But again, I am new to Yocto and still hope, that there is an easier way?
+
+[-- Attachment #2: Type: text/html, Size: 2912 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2021-05-26 13:02 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-05-24  7:37 using grpc fails with linker error: file in wrong format Juergen Landwehr
+2021-05-24 15:41 ` [yocto] " Khem Raj
+2021-05-26 13:02   ` Juergen Landwehr
+

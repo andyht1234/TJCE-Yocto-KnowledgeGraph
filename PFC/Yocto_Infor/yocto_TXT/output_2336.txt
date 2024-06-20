@@ -1,0 +1,117 @@
+* Building uImage with appended DTB
+@ 2022-01-17  5:41 rgovostes
+  2022-01-17 21:22 ` Ryan Govostes
+  2022-01-18 17:04 ` [yocto] " Nicolas Jeker
+  0 siblings, 2 replies; 3+ messages in thread
+From: rgovostes @ 2022-01-17  5:41 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2083 bytes --]
+
+I'm a complete newcomer to Yocto, trying to translate a manual process of building software for an embedded device based on the PHYTEC phyCORE-LPC3250 SOM. I did not find an existing BSP layer for this board so I am trying to create my own.
+
+When I build a kernel for this device manually, I use the CONFIG_APPENDED_DTB=y option, which instructs the kernel to find the device tree right after the kernel image itself. I build the zImage, then append my DTB and finally create the uImage file:
+
+cat arch/arm/boot/zImage ./arch/arm/boot/dts/lpc3250-phy3250.dtb > arch/arm/boot/zImage-dtb
+mkimage -A arm -O linux -C none -T kernel -a 0x80008000 -e 0x80008000 -n Linux -d arch/arm/boot/zImage-dtb arch/arm/boot/uImage-dtb
+
+I'm trying to figure out how to properly replicate this process in Yocto.
+
+I see that Poky's meta/classes/kernel-devicetree.bbclass uses the KERNEL_DEVICETREE_BUNDLE variable to do something similar. If I have KERNEL_IMAGETYPE set to "zImage", then it will create a zImage+DTB file.
+
+However, it expects the zImage file to be called "zImage", and the one that gets built is called "zImage-5.14.6-yocto-standard". Since it cannot find "zImage", the build fails.
+
+cat: .../tmp/work/lpc3250-poky-linux-gnueabi/linux-yocto/5.14.6+gitAUTOINC+4f4ad2c808_7ae156be3b-r0/image/boot/zImage: No such file or directory
+
+I also see that meta-ti has a bundle-devicetree.inc file that has a similar aim, but it deals with uImages instead.
+
+https://git.yoctoproject.org/meta-ti/tree/recipes-kernel/linux/bundle-devicetree.inc
+
+My concern with using this is that it appends the DTB directly to the uImage. However the uImage header structure includes a field for data size and another one for checksum. These fields are only computed correctly if the DTB is already appended before the uImage file is built.
+
+I think if I can figure out how to make KERNEL_DEVICETREE_BUNDLE create the zImage+DTB file, then I can write a do_deploy:append() function that invokes mkimage to produce the uImage. But I'm not sure how to diagnose the problem.
+
+Thanks,
+Ryan
+
+[-- Attachment #2: Type: text/html, Size: 2398 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: Building uImage with appended DTB
+  2022-01-17  5:41 Building uImage with appended DTB rgovostes
+@ 2022-01-17 21:22 ` Ryan Govostes
+  2022-01-18 17:04 ` [yocto] " Nicolas Jeker
+  1 sibling, 0 replies; 3+ messages in thread
+From: Ryan Govostes @ 2022-01-17 21:22 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 646 bytes --]
+
+A solution that seems to work is to create a new .bbclass inherited from my layer's linux .bbappend file that implements uboot_prep_kimage:append() to append the DTB to linux.bin. This code would run at the beginning of do_uboot_mkimage() before the uImage is created.
+
+There are a couple of prerequisites such as setting KEEPUIMAGE = "yes" and KERNEL_DEVICETREE_BUNDLE = "0".
+
+https://gist.github.com/rgov/0628785685ab858a99c5bfca626c1d8f
+
+I would still be curious to know why KERNEL_DEVICETREE_BUNDLE doesn't work as expected if that is supposed to be the supported method of achieving this, but my solution at least lets me move on.
+
+[-- Attachment #2: Type: text/html, Size: 789 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] Building uImage with appended DTB
+  2022-01-17  5:41 Building uImage with appended DTB rgovostes
+  2022-01-17 21:22 ` Ryan Govostes
+@ 2022-01-18 17:04 ` Nicolas Jeker
+  1 sibling, 0 replies; 3+ messages in thread
+From: Nicolas Jeker @ 2022-01-18 17:04 UTC (permalink / raw)
+  To: rgovostes; +Cc: yocto
+
+
+> On 17 Jan 2022, at 06:41, rgovostes@gmail.com wrote:
+> 
+> I'm a complete newcomer to Yocto, trying to translate a manual process of building software for an embedded device based on the PHYTEC phyCORE-LPC3250 SOM. I did not find an existing BSP layer for this board so I am trying to create my own.
+
+Just a short hint if you didn’t discover it yourself, there is a (very) old BSP available from PHYTEC [1]. The downloads don’t seem to work, but they’re available on a probably forgotten FTP server [2].
+
+[1]: https://web.archive.org/web/20120501212117/http://www.phytec.com/products/linux/bsp-LPC3180.html
+[2]: ftp://ftp.phytec.com/temp/PCM-031_phyCORE-LPC3180
+
+> 
+> When I build a kernel for this device manually, I use the CONFIG_APPENDED_DTB=y option, which instructs the kernel to find the device tree right after the kernel image itself. I build the zImage, then append my DTB and finally create the uImage file:
+> 
+>     cat arch/arm/boot/zImage ./arch/arm/boot/dts/lpc3250-phy3250.dtb > arch/arm/boot/zImage-dtb
+>     mkimage -A arm -O linux -C none -T kernel -a 0x80008000 -e 0x80008000 -n Linux -d arch/arm/boot/zImage-dtb arch/arm/boot/uImage-dtb
+> 
+> I'm trying to figure out how to properly replicate this process in Yocto.
+> 
+> I see that Poky's meta/classes/kernel-devicetree.bbclass uses the KERNEL_DEVICETREE_BUNDLE variable to do something similar. If I have KERNEL_IMAGETYPE set to "zImage", then it will create a zImage+DTB file.
+> 
+> However, it expects the zImage file to be called "zImage", and the one that gets built is called "zImage-5.14.6-yocto-standard". Since it cannot find "zImage", the build fails.
+> 
+>     cat: .../tmp/work/lpc3250-poky-linux-gnueabi/linux-yocto/5.14.6+gitAUTOINC+4f4ad2c808_7ae156be3b-r0/image/boot/zImage: No such file or directory
+> 
+> 
+> I also see that meta-ti has a bundle-devicetree.inc file that has a similar aim, but it deals with uImages instead.
+> 
+> https://git.yoctoproject.org/meta-ti/tree/recipes-kernel/linux/bundle-devicetree.inc
+> 
+> My concern with using this is that it appends the DTB directly to the uImage. However the uImage header structure includes a field for data size and another one for checksum. These fields are only computed correctly if the DTB is already appended before the uImage file is built.
+> 
+> 
+> I think if I can figure out how to make KERNEL_DEVICETREE_BUNDLE create the zImage+DTB file, then I can write a do_deploy:append() function that invokes mkimage to produce the uImage. But I'm not sure how to diagnose the problem.
+> 
+> Thanks,
+> Ryan
+> 
+
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2022-01-18 17:04 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-01-17  5:41 Building uImage with appended DTB rgovostes
+2022-01-17 21:22 ` Ryan Govostes
+2022-01-18 17:04 ` [yocto] " Nicolas Jeker
+

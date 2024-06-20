@@ -1,0 +1,40 @@
+* Docker exec/attach not working on overlayed root
+@ 2021-12-22 19:22 Beek, Léon van de
+  0 siblings, 0 replies; only message in thread
+From: Beek, Léon van de @ 2021-12-22 19:22 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2026 bytes --]
+
+Hi Bruce,
+
+To be honest, I am not quite sure where to ask this, as it is a very specific scenario, so feel free to forward me and my question to someone/somewhere else.
+
+Situation:
+
+  *   Yocto Hardknott running meta-virtualization, meta-raspberrypi with Docker installed: Dockers works fine and is tested. Docker exec and attach works too
+  *   Now changed the rootfs to be squashfs, and an overlay of root + a RW ext4 partition is changed to be / at boot. This script is based on: https://github.com/cmhe/meta-readonly-rootfs-overlay
+  *   Docker's overlay2 file driver does not work on top of an overlay: https://docs.docker.com/storage/storagedriver/select-storage-driver/
+  *   Solution: create /etc/docker/daemon.json with the line in it: "data-root"="/docker-data". Note: /docker-data is a separate EXT4 partition on the SD card.
+  *   Restart machine/dockerd. The result is that we see the /docker-data is now full of docker files and the containers and overlay2 folders are there. Docker info shows: Storage driver: overlay2
+Containers run fine. Hello-world example runs. Alpine runs, and when starting Alpine with -it arguments I can mess around in shell all I want, everything works.
+  *   Problem: Whenever I create a container, for example: docker run -d -t -name=test alpine, and later try to exec into it using "docker exec test echo hello" I get this result:
+Error running exec: OCI-runtime exec failed: exec failed: container_linux.go:367"starting container process caused: read init-p: connection reset by peer: unknown
+  *   I restarted dockerd with -log-level=debug and noticed that it says: attach: stderr: begin, stream copy error: reading from a closed fifo. (Same for stdout)
+
+I removed the overlaying again and can confirm that exec and attach also worked before adding this, but on Google I can not find a single thing that closely relates to the issue I am facing.
+
+Hope any of you might be able to help me out here, I feel truly stuck on this.
+
+Kind regards,
+Léon van de Beek
+
+[-- Attachment #2: Type: text/html, Size: 7579 bytes --]
+
+^ permalink raw reply	[flat|nested] only message in thread
+only message in thread, other threads:[~2021-12-22 19:22 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-12-22 19:22 Docker exec/attach not working on overlayed root Beek, Léon van de
+

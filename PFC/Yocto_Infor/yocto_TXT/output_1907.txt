@@ -1,0 +1,152 @@
+* [PATCH yocto-autobuilder-helper v11] Add a banner on the old documentation docs.
+@ 2022-04-26 17:22 Abongwa Bonalais Amahnui
+  0 siblings, 0 replies; only message in thread
+From: Abongwa Bonalais Amahnui @ 2022-04-26 17:22 UTC (permalink / raw)
+  To: yocto; +Cc: Abongwa Bonalais Amahnui
+
+Signed-off-by: Abongwa Bonalais Amahnui <abongwabonalais@gmail.com>
+---
+ scripts/docs_fix_all_html_css.py | 107 +++++++++++++++++++++++++++++++
+ scripts/run-docs-build           |   2 +
+ 2 files changed, 109 insertions(+)
+ create mode 100644 scripts/docs_fix_all_html_css.py
+
+diff --git a/scripts/docs_fix_all_html_css.py b/scripts/docs_fix_all_html_css.py
+new file mode 100644
+index 0000000..d2eca9f
+--- /dev/null
++++ b/scripts/docs_fix_all_html_css.py
+@@ -0,0 +1,107 @@
++#!/usr/bin/env python3
++#
++# SPDX-License-Identifier: GPL-2.0-only
++#
++#Signed-off-by: Abongwa Bonalais Amahnui <abongwabonalais@gmail.com>
++#
++#
++# function to append to the content of a html file below the body tag
++#
++#
++
++from cgi import print_arguments
++import os
++
++
++
++html_content_dumfell = '''
++<div id="outdated-warning">This document is outdated, you should select the <a href="https://docs.yoctoproject.org/">latest release version</a> in this series.</div>
++<div xml:lang="en" class="body" lang="en">
++'''
++html_content = '''
++<div id="outdated-warning">This version of the project is now considered obsolete, please select and use a <a href="https://docs.yoctoproject.org">more recent version</a>.</div>
++<div xml:lang="en" class="body" lang="en">
++'''
++
++# <div xml:lang="en" class="body" lang="en"> and </div> are added to the html files to wrap all the content below the body tag in a div tag whose class is known so it can be controlled in the css file
++last_div = '''
++</div>
++
++'''
++
++css_replacement_content = '''
++ 
++  font-family: Verdana, Sans, sans-serif;
++
++  /*min-width: 640px;*/
++  width: 100%;
++  margin:  0;
++  padding: 0;
++  color: #333;
++  overflow-x: hidden;
++  }
++ 
++ /*added books too*/
++.body{
++margin:  0 auto;
++min-width: 640px;
++padding: 0 5em 5em 5em;
++}
++/* added the id below to make the banner show and be fixed*/
++#outdated-warning{
++text-align: center;
++background-color: rgb(255, 186, 186); 
++color: rgb(106, 14, 14); 
++padding: 0.5em 0; 
++width: 100%;
++position: fixed;
++top: 0;
++
++
++'''
++    # pattern = '^3.1*'
++    # exclude = re.search(pattern, dir)
++def loop_through_html_directories(dir):
++    exclude = []
++    for root, dirs, filenames in os.walk(dir):
++         # exclude banner for 3.1.x upward as it is an LTS release and is still supported
++        exclude[:] = [ name for name in os.listdir(dir) if name.startswith('3.1') ]
++        dirs[:] = list(filter(lambda x: not x in exclude, dirs))
++        for filename in filenames:
++            if filename.endswith('.html'):
++                with open(os.path.join(root, filename), 'r', encoding="ISO-8859-1") as f:
++                    current_content = f.read()
++                with open(os.path.join(root, filename), 'w') as f:
++                    f.write(current_content.replace('<body>', '<body>' + html_content))
++                    f.write(current_content.replace('</body>', last_div + '</body>'))
++            if filename.endswith('.css'):
++                with open(os.path.join(root, filename), 'r', encoding="ISO-8859-1") as f:
++                    css_content = f.read()
++                with open(os.path.join(root, filename), 'w') as f:
++                    f.write(css_content.replace(css_content[css_content.find('body {'):css_content.find('}'[0])], 'body {' + css_replacement_content ))
++    print(exclude)
++loop_through_html_directories('.')
++
++
++
++
++def dumfell_tags(dir):
++    dumfell_banners = []
++    for root, dirs, filenames in os.walk(dir):
++        dumfell_banners[:] = [ name for name in os.listdir(dir) if not name.startswith('3.1') ]
++        dirs[:] = list(filter(lambda x: not x in dumfell_banners, dirs))
++
++        for filename in filenames:
++            if filename.endswith('.html'):
++                with open(os.path.join(root, filename), 'r', encoding="ISO-8859-1") as f:
++                    current_content = f.read()
++                with open(os.path.join(root, filename), 'w') as f:
++                    f.write(current_content.replace('<body>', '<body>' + html_content_dumfell))
++                    f.write(current_content.replace('</body>', last_div + '</body>'))
++            if filename.endswith('.css'):
++                with open(os.path.join(root, filename), 'r', encoding="ISO-8859-1") as f:
++                    css_content = f.read()
++                with open(os.path.join(root, filename), 'w') as f:
++                    f.write(css_content.replace(css_content[css_content.find('body {'):css_content.find('}'[0])], 'body {' + css_replacement_content ))
++    print(dumfell_banners)
++dumfell_tags('.')
+\ No newline at end of file
+diff --git a/scripts/run-docs-build b/scripts/run-docs-build
+index ecc5332..307ac19 100755
+--- a/scripts/run-docs-build
++++ b/scripts/run-docs-build
+@@ -37,6 +37,8 @@ cd $outputdir
+ echo Extracing old content from archive
+ tar -xJf $docbookarchive
+ 
++$scriptdir/docs_fix_all_html_css.py
++
+ cd $bbdocs
+ mkdir $outputdir/bitbake
+ 
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] only message in thread
+only message in thread, other threads:[~2022-04-26 17:22 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-04-26 17:22 [PATCH yocto-autobuilder-helper v11] Add a banner on the old documentation docs Abongwa Bonalais Amahnui
+

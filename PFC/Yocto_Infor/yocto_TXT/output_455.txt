@@ -1,0 +1,738 @@
+* [meta-security][PATCH 0/7] dm-verity: separate device for hash storage
+@ 2023-06-21 17:13 Paul Gortmaker
+  2023-06-21 17:13 ` [meta-security][PATCH 1/7] dm-verity: add descriptive strings for "wic list images" Paul Gortmaker
+                   ` (6 more replies)
+  0 siblings, 7 replies; 8+ messages in thread
+From: Paul Gortmaker @ 2023-06-21 17:13 UTC (permalink / raw)
+  To: Armin Kuster; +Cc: yocto, Paul Gortmaker
+
+The primary goal here is to enable storage of dm-verity hash on a separate
+device/partition.
+
+There are essentially two ways for dealing with where to put the hash data
+for dm-verity block integrity checks.
+
+You can store both in a single partition, by using ~95% of the storage space
+for the filesystem and the remaining 5% tail for the hash, or you can use a
+completely separate partition (or even device) for storing the hash data
+elsewhere.
+
+Method A relies on using a hash offset argument during creation, which is
+generally OK from a scripted use case but is error prone when run from the
+command line and the offset calculated manually.
+
+Method B has the advantage of using the basic partition/device
+compartmentalization of the kernel to ensure the fs data doesn't overwrite
+the hash or vice versa.  It takes any possible errors due to math
+miscalculations completely off the table.
+
+I originally also was looking at the systemd "autoconfiguration" that only
+needs the root hash on the boot line in order to autodetect the partitions
+with the filesystem data and with the hash data.  However, that became a
+bridge too far once I realized that using systemd instead of a simple /init
+script in the initramfs was an unavoidable hard dependency.  While that is
+apparently a thing, I couldn't find anyone doing it by default, even in the
+desktop distro space.
+
+That said, there are good ideas in how the autodetection is supported. Like
+using partition UUIDs based on the root hash.  Setting proper GPT types that
+reflect it is verity-root or verity-hash; setting sensible GPT names, etc.
+
+So in addition to supporting a separate hash using our current script based
+initramfs /init -- everything done here is done in a systemd autodetect
+compatible way.  Meaning that if someone eventually tackles supporting a
+systemd based /init in the initramfs, we'll have the separate hash and a
+worked example that sets everything up in a compatible fashion for that.
+
+A side benefit of doing that, is that if you run cfdisk (or similar) on
+your output device after writing the wic image to it, you get useful info
+on the decoding of the GPT types, see the GPT names, etc.
+
+Testing: I boot tested the new separate hash support on both an older i7
+desktop, and a slightly newer atom based netbook - using wic and a USB drive
+with the included documented steps.  Since I'm touching files for our
+existing appended hash, I also went back and tested that on the same two
+machines.
+
+Final note - astute reviewers may note a hard coded path to "bc" -- this is
+done because even though we have "tr" at that phase of the build, we don't
+have "bc" because it is a separate stand-alone package.  I've got general
+agreement on IRC that adding our sysroot "bc" to that phase of the build
+makes sense.  So once I've done that in oe, I'll circle back here and strip
+off the paths - avoiding timing dependencies between oe and meta-security.
+
+Paul Gortmaker (7):
+  dm-verity: add descriptive strings for "wic list images"
+  dm-verity: restructure the veritysetup arg parsing
+  dm-verity: save veritysetup args beside runtime environment
+  dm-verity: add support for hash storage on separate partition
+  dm-verity: add wks.in fragment with dynamic build hash data
+  dm-verity: hook separate hash into initramfs framework
+  dm-verity: add sample systemd separate hash example and doc
+
+ classes/dm-verity-img.bbclass                 | 94 ++++++++++++++++++-
+ docs/dm-verity-systemd-hash-x86-64.txt        | 43 +++++++++
+ .../initramfs-framework-dm/dmverity           | 29 ++++++
+ wic/beaglebone-yocto-verity.wks.in            |  1 +
+ wic/systemd-bootdisk-dmverity-hash.wks.in     | 18 ++++
+ wic/systemd-bootdisk-dmverity.wks.in          |  1 +
+ 6 files changed, 184 insertions(+), 2 deletions(-)
+ create mode 100644 docs/dm-verity-systemd-hash-x86-64.txt
+ create mode 100644 wic/systemd-bootdisk-dmverity-hash.wks.in
+
+-- 
+2.39.0
+
+
+
+^ permalink raw reply	[flat|nested] 8+ messages in thread
+* [meta-security][PATCH 1/7] dm-verity: add descriptive strings for "wic list images"
+  2023-06-21 17:13 [meta-security][PATCH 0/7] dm-verity: separate device for hash storage Paul Gortmaker
+@ 2023-06-21 17:13 ` Paul Gortmaker
+  2023-06-21 17:13 ` [meta-security][PATCH 2/7] dm-verity: restructure the veritysetup arg parsing Paul Gortmaker
+                   ` (5 subsequent siblings)
+  6 siblings, 0 replies; 8+ messages in thread
+From: Paul Gortmaker @ 2023-06-21 17:13 UTC (permalink / raw)
+  To: Armin Kuster; +Cc: yocto, Paul Gortmaker
+
+Without these one line descriptors and their associated marker prefix,
+the output from "wic list images" only shows they are available as a
+choice but w/o any description
+
+Signed-off-by: Paul Gortmaker <paul.gortmaker@windriver.com>
+---
+ wic/beaglebone-yocto-verity.wks.in   | 1 +
+ wic/systemd-bootdisk-dmverity.wks.in | 1 +
+ 2 files changed, 2 insertions(+)
+
+diff --git a/wic/beaglebone-yocto-verity.wks.in b/wic/beaglebone-yocto-verity.wks.in
+index a1d7738..d2923de 100644
+--- a/wic/beaglebone-yocto-verity.wks.in
++++ b/wic/beaglebone-yocto-verity.wks.in
+@@ -3,6 +3,7 @@
+ # Copyright (C) 2020 BayLibre SAS
+ # Author: Bartosz Golaszewski <bgolaszewski@baylibre.com>
+ #
++# short-description: Create a u-SD image for beaglebone-black with dm-verity
+ # A dm-verity variant of the regular wks for beaglebone black. We need to fetch
+ # the partition images from the DEPLOY_DIR_IMAGE as the rootfs source plugin will
+ # not recreate the exact block device corresponding with the hash tree. We must
+diff --git a/wic/systemd-bootdisk-dmverity.wks.in b/wic/systemd-bootdisk-dmverity.wks.in
+index a275a48..8466368 100644
+--- a/wic/systemd-bootdisk-dmverity.wks.in
++++ b/wic/systemd-bootdisk-dmverity.wks.in
+@@ -1,3 +1,4 @@
++# short-description:  Create an EFI disk image with systemd-boot and dm-verity
+ # A dm-verity variant of the regular wks for IA machines. We need to fetch
+ # the partition images from the IMGDEPLOYDIR as the rootfs source plugin will
+ # not recreate the exact block device corresponding with the hash tree. We must
+-- 
+2.39.0
+
+
+
+^ permalink raw reply related	[flat|nested] 8+ messages in thread
+* [meta-security][PATCH 2/7] dm-verity: restructure the veritysetup arg parsing
+  2023-06-21 17:13 [meta-security][PATCH 0/7] dm-verity: separate device for hash storage Paul Gortmaker
+  2023-06-21 17:13 ` [meta-security][PATCH 1/7] dm-verity: add descriptive strings for "wic list images" Paul Gortmaker
+@ 2023-06-21 17:13 ` Paul Gortmaker
+  2023-06-21 17:13 ` [meta-security][PATCH 3/7] dm-verity: save veritysetup args beside runtime environment Paul Gortmaker
+                   ` (4 subsequent siblings)
+  6 siblings, 0 replies; 8+ messages in thread
+From: Paul Gortmaker @ 2023-06-21 17:13 UTC (permalink / raw)
+  To: Armin Kuster; +Cc: yocto, Paul Gortmaker
+
+In making changes to the existing veritysetup arg list, it is harder to
+see what the proposed change is since they are are glued together on one
+long line.  Break them up so reviewing future unified diffs will be more
+easy to visually parse.
+
+This also makes it easier to temp. dump the args to a file for debugging.
+
+In theory this should have no functional change.
+
+Signed-off-by: Paul Gortmaker <paul.gortmaker@windriver.com>
+---
+ classes/dm-verity-img.bbclass | 9 ++++++++-
+ 1 file changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/classes/dm-verity-img.bbclass b/classes/dm-verity-img.bbclass
+index d809985..b279fa8 100644
+--- a/classes/dm-verity-img.bbclass
++++ b/classes/dm-verity-img.bbclass
+@@ -58,6 +58,7 @@ verity_setup() {
+     local INPUT=${IMAGE_NAME}${IMAGE_NAME_SUFFIX}.$TYPE
+     local SIZE=$(stat --printf="%s" $INPUT)
+     local OUTPUT=$INPUT.verity
++    local SETUP_ARGS=""
+ 
+     if [ ${DM_VERITY_IMAGE_DATA_BLOCK_SIZE} -ge ${DM_VERITY_IMAGE_HASH_BLOCK_SIZE} ]; then
+         align=${DM_VERITY_IMAGE_DATA_BLOCK_SIZE}
+@@ -68,9 +69,15 @@ verity_setup() {
+ 
+     cp -a $INPUT $OUTPUT
+ 
++    SETUP_ARGS=" \
++        --data-block-size=${DM_VERITY_IMAGE_DATA_BLOCK_SIZE} \
++        --hash-block-size=${DM_VERITY_IMAGE_HASH_BLOCK_SIZE} \
++        --hash-offset=$SIZE format $OUTPUT $OUTPUT \
++    "
++
+     # Let's drop the first line of output (doesn't contain any useful info)
+     # and feed the rest to another function.
+-    veritysetup --data-block-size=${DM_VERITY_IMAGE_DATA_BLOCK_SIZE} --hash-block-size=${DM_VERITY_IMAGE_HASH_BLOCK_SIZE} --hash-offset=$SIZE format $OUTPUT $OUTPUT | tail -n +2 | process_verity
++    veritysetup $SETUP_ARGS | tail -n +2 | process_verity
+ }
+ 
+ VERITY_TYPES = " \
+-- 
+2.39.0
+
+
+
+^ permalink raw reply related	[flat|nested] 8+ messages in thread
+* [meta-security][PATCH 3/7] dm-verity: save veritysetup args beside runtime environment
+  2023-06-21 17:13 [meta-security][PATCH 0/7] dm-verity: separate device for hash storage Paul Gortmaker
+  2023-06-21 17:13 ` [meta-security][PATCH 1/7] dm-verity: add descriptive strings for "wic list images" Paul Gortmaker
+  2023-06-21 17:13 ` [meta-security][PATCH 2/7] dm-verity: restructure the veritysetup arg parsing Paul Gortmaker
+@ 2023-06-21 17:13 ` Paul Gortmaker
+  2023-06-21 17:13 ` [meta-security][PATCH 4/7] dm-verity: add support for hash storage on separate partition Paul Gortmaker
+                   ` (3 subsequent siblings)
+  6 siblings, 0 replies; 8+ messages in thread
+From: Paul Gortmaker @ 2023-06-21 17:13 UTC (permalink / raw)
+  To: Armin Kuster; +Cc: yocto, Paul Gortmaker
+
+We already have this directory to save the environment variable settings
+so they can be copied into the initramfs for runtime setup.
+
+There are quite a few veritysetup args, and the nature of storing the
+hash data after the filesystem data in an "oversized" partition can be
+error prone due to rounding, fencepost errors, etc.
+
+Save a copy of what we used for ease of debug inspection, and for basic
+cut and paste use in experimentation and tweaking.
+
+Signed-off-by: Paul Gortmaker <paul.gortmaker@windriver.com>
+---
+ classes/dm-verity-img.bbclass | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/classes/dm-verity-img.bbclass b/classes/dm-verity-img.bbclass
+index b279fa8..e190c87 100644
+--- a/classes/dm-verity-img.bbclass
++++ b/classes/dm-verity-img.bbclass
+@@ -34,7 +34,6 @@ DM_VERITY_IMAGE_HASH_BLOCK_SIZE ?= "4096"
+ # any useful info) and feed the rest to a script.
+ process_verity() {
+     local ENV="${STAGING_VERITY_DIR}/${IMAGE_BASENAME}.$TYPE.verity.env"
+-    install -d ${STAGING_VERITY_DIR}
+     rm -f $ENV
+ 
+     # Each line contains a key and a value string delimited by ':'. Read the
+@@ -59,6 +58,9 @@ verity_setup() {
+     local SIZE=$(stat --printf="%s" $INPUT)
+     local OUTPUT=$INPUT.verity
+     local SETUP_ARGS=""
++    local SAVED_ARGS="${STAGING_VERITY_DIR}/${IMAGE_BASENAME}.$TYPE.verity.args"
++
++    install -d ${STAGING_VERITY_DIR}
+ 
+     if [ ${DM_VERITY_IMAGE_DATA_BLOCK_SIZE} -ge ${DM_VERITY_IMAGE_HASH_BLOCK_SIZE} ]; then
+         align=${DM_VERITY_IMAGE_DATA_BLOCK_SIZE}
+@@ -75,6 +77,8 @@ verity_setup() {
+         --hash-offset=$SIZE format $OUTPUT $OUTPUT \
+     "
+ 
++    echo "veritysetup $SETUP_ARGS" > $SAVED_ARGS
++
+     # Let's drop the first line of output (doesn't contain any useful info)
+     # and feed the rest to another function.
+     veritysetup $SETUP_ARGS | tail -n +2 | process_verity
+-- 
+2.39.0
+
+
+
+^ permalink raw reply related	[flat|nested] 8+ messages in thread
+* [meta-security][PATCH 4/7] dm-verity: add support for hash storage on separate partition
+  2023-06-21 17:13 [meta-security][PATCH 0/7] dm-verity: separate device for hash storage Paul Gortmaker
+                   ` (2 preceding siblings ...)
+  2023-06-21 17:13 ` [meta-security][PATCH 3/7] dm-verity: save veritysetup args beside runtime environment Paul Gortmaker
+@ 2023-06-21 17:13 ` Paul Gortmaker
+  2023-06-21 17:13 ` [meta-security][PATCH 5/7] dm-verity: add wks.in fragment with dynamic build hash data Paul Gortmaker
+                   ` (2 subsequent siblings)
+  6 siblings, 0 replies; 8+ messages in thread
+From: Paul Gortmaker @ 2023-06-21 17:13 UTC (permalink / raw)
+  To: Armin Kuster; +Cc: yocto, Paul Gortmaker
+
+There are essentially two ways for dealing with where to put the hash
+data for dm-verity block integrity checks.
+
+You can store both in a single partition, by using ~95% of the storage
+space for the filesystem and the remaining 5% tail for the hash, or you
+can use a completely separate partition (or even device) for storing the
+hash data elsewhere.
+
+Method A relies on using a hash offset argument during creation, which
+is generally OK from a scripted use case but is error prone when run
+from the command line and the offset calculated manually.
+
+Method B has the advantage of using the basic partition/device
+compartmentalization of the kernel to ensure the fs data doesn't
+overwrite the hash or vice versa.  It takes any possible errors due to
+math miscalculations completely off the table.
+
+At the moment, our current support is hard coded to only support the
+offset method A.  Here we add support for separate hash as per B.
+
+As multiple partitions are now in play, we use the UUID creation
+standard adopted by the systemd/verity community which implicitly links
+the root and hash partitions by splitting the top roothash in two for
+the UUIDs of the components.
+
+This change optionally creates the separate hash file but no examples
+use it yet.  Further commits will implement an example.
+
+Signed-off-by: Paul Gortmaker <paul.gortmaker@windriver.com>
+---
+ classes/dm-verity-img.bbclass | 60 +++++++++++++++++++++++++++++++++--
+ 1 file changed, 58 insertions(+), 2 deletions(-)
+
+diff --git a/classes/dm-verity-img.bbclass b/classes/dm-verity-img.bbclass
+index e190c87..8351ab2 100644
+--- a/classes/dm-verity-img.bbclass
++++ b/classes/dm-verity-img.bbclass
+@@ -10,11 +10,15 @@
+ # assure data integrity, the root hash must be stored in a trusted location
+ # or cryptographically signed and verified.
+ #
++# Optionally, we can store the hash data on a separate device or partition
++# for improved compartmentalization and ease of use/deployment.
++#
+ # Usage:
+ #     DM_VERITY_IMAGE = "core-image-full-cmdline" # or other image
+ #     DM_VERITY_IMAGE_TYPE = "ext4" # or ext2, ext3 & btrfs
++#     DM_VERITY_SEPARATE_HASH = "1" # optional; store hash on separate dev
+ #     IMAGE_CLASSES += "dm-verity-img"
+-#
++
+ # The resulting image can then be used to implement the device mapper block
+ # integrity checking on the target device.
+ 
+@@ -28,6 +32,9 @@ DM_VERITY_IMAGE_DATA_BLOCK_SIZE ?= "1024"
+ # Define the hash block size to use in veritysetup.
+ DM_VERITY_IMAGE_HASH_BLOCK_SIZE ?= "4096"
+ 
++# Should we store the hash data on a separate device/partition?
++DM_VERITY_SEPARATE_HASH ?= "0"
++
+ # Process the output from veritysetup and generate the corresponding .env
+ # file. The output from veritysetup is not very machine-friendly so we need to
+ # convert it to some better format. Let's drop the first line (doesn't contain
+@@ -50,6 +57,35 @@ process_verity() {
+ 
+     # Add partition size
+     echo "DATA_SIZE=$SIZE" >> $ENV
++
++    # Add whether we are storing the hash data separately
++    echo "SEPARATE_HASH=${DM_VERITY_SEPARATE_HASH}" >> $ENV
++
++    # Configured for single partition use of veritysetup?  OK, we are done.
++    if [ ${DM_VERITY_SEPARATE_HASH} -eq 0 ]; then
++        return
++    fi
++
++    # Craft up the UUIDs that are part of the verity standard for root & hash
++    # while we are here and in shell.  Re-read our output to get ROOT_HASH
++    # and then cut it in 1/2 ; HI for data UUID and LO for hash-data UUID.
++    # https://uapi-group.org/specifications/specs/discoverable_partitions_specification/
++
++    ROOT_HASH=$(cat $ENV | grep ^ROOT_HASH | sed 's/ROOT_HASH=//' | tr a-f A-F)
++    ROOT_HI=$(echo "obase=16;ibase=16;$ROOT_HASH/2^80" | /usr/bin/bc)
++    ROOT_LO=$(echo "obase=16;ibase=16;$ROOT_HASH%2^80" | /usr/bin/bc)
++
++    # Hyphenate as per UUID spec and as expected by wic+sgdisk parameters.
++    # Prefix with leading zeros, in case hash chunks weren't using highest bits
++    # "bc" needs upper case, /dev/disk/by-partuuid/ is lower case. <sigh>
++    ROOT_UUID=$(echo 00000000$ROOT_HI | sed 's/.*\(.\{32\}\)$/\1/' | \
++        sed 's/./-&/9;s/./-&/14;s/./-&/19;s/./-&/24' | tr A-F a-f )
++    RHASH_UUID=$(echo 00000000$ROOT_LO | sed 's/.*\(.\{32\}\)$/\1/' | \
++        sed 's/./-&/9;s/./-&/14;s/./-&/19;s/./-&/24' | tr A-F a-f )
++
++    # Emit the values needed for a veritysetup run in the initramfs
++    echo "ROOT_UUID=$ROOT_UUID" >> $ENV
++    echo "RHASH_UUID=$RHASH_UUID" >> $ENV
+ }
+ 
+ verity_setup() {
+@@ -57,6 +93,8 @@ verity_setup() {
+     local INPUT=${IMAGE_NAME}${IMAGE_NAME_SUFFIX}.$TYPE
+     local SIZE=$(stat --printf="%s" $INPUT)
+     local OUTPUT=$INPUT.verity
++    local OUTPUT_HASH=$INPUT.verity
++    local HASH_OFFSET=""
+     local SETUP_ARGS=""
+     local SAVED_ARGS="${STAGING_VERITY_DIR}/${IMAGE_BASENAME}.$TYPE.verity.args"
+ 
+@@ -69,12 +107,19 @@ verity_setup() {
+     fi
+     SIZE=$(expr \( $SIZE + $align - 1 \) / $align \* $align)
+ 
++    # Assume some users may want separate hash vs. appended hash
++    if [ ${DM_VERITY_SEPARATE_HASH} -eq 1 ]; then
++        OUTPUT_HASH=$INPUT.vhash
++    else
++        HASH_OFFSET="--hash-offset="$SIZE
++    fi
++
+     cp -a $INPUT $OUTPUT
+ 
+     SETUP_ARGS=" \
+         --data-block-size=${DM_VERITY_IMAGE_DATA_BLOCK_SIZE} \
+         --hash-block-size=${DM_VERITY_IMAGE_HASH_BLOCK_SIZE} \
+-        --hash-offset=$SIZE format $OUTPUT $OUTPUT \
++        $HASH_OFFSET format $OUTPUT $OUTPUT_HASH \
+     "
+ 
+     echo "veritysetup $SETUP_ARGS" > $SAVED_ARGS
+@@ -84,6 +129,13 @@ verity_setup() {
+     veritysetup $SETUP_ARGS | tail -n +2 | process_verity
+ }
+ 
++# make "dateless" symlink for the hash so the wks can find it.
++verity_hash() {
++    cd ${IMGDEPLOYDIR}
++    ln -sf ${IMAGE_NAME}${IMAGE_NAME_SUFFIX}.${DM_VERITY_IMAGE_TYPE}.vhash \
++        ${IMAGE_BASENAME}-${MACHINE}.${DM_VERITY_IMAGE_TYPE}.vhash
++}
++
+ VERITY_TYPES = " \
+     ext2.verity ext3.verity ext4.verity \
+     btrfs.verity \
+@@ -94,10 +146,12 @@ IMAGE_TYPES += "${VERITY_TYPES}"
+ CONVERSIONTYPES += "verity"
+ CONVERSION_CMD:verity = "verity_setup ${type}"
+ CONVERSION_DEPENDS_verity = "cryptsetup-native"
++IMAGE_CMD:vhash = "verity_hash"
+ 
+ python __anonymous() {
+     verity_image = d.getVar('DM_VERITY_IMAGE')
+     verity_type = d.getVar('DM_VERITY_IMAGE_TYPE')
++    verity_hash = d.getVar('DM_VERITY_SEPARATE_HASH')
+     image_fstypes = d.getVar('IMAGE_FSTYPES')
+     pn = d.getVar('PN')
+ 
+@@ -112,6 +166,8 @@ python __anonymous() {
+         bb.fatal('DM_VERITY_IMAGE_TYPE must contain exactly one type')
+ 
+     d.appendVar('IMAGE_FSTYPES', ' %s.verity' % verity_type)
++    if verity_hash == "1":
++        d.appendVar('IMAGE_FSTYPES', ' vhash')
+ 
+     # If we're using wic: we'll have to use partition images and not the rootfs
+     # source plugin so add the appropriate dependency.
+-- 
+2.39.0
+
+
+
+^ permalink raw reply related	[flat|nested] 8+ messages in thread
+* [meta-security][PATCH 5/7] dm-verity: add wks.in fragment with dynamic build hash data
+  2023-06-21 17:13 [meta-security][PATCH 0/7] dm-verity: separate device for hash storage Paul Gortmaker
+                   ` (3 preceding siblings ...)
+  2023-06-21 17:13 ` [meta-security][PATCH 4/7] dm-verity: add support for hash storage on separate partition Paul Gortmaker
+@ 2023-06-21 17:13 ` Paul Gortmaker
+  2023-06-21 17:13 ` [meta-security][PATCH 6/7] dm-verity: hook separate hash into initramfs framework Paul Gortmaker
+  2023-06-21 17:13 ` [meta-security][PATCH 7/7] dm-verity: add sample systemd separate hash example and doc Paul Gortmaker
+  6 siblings, 0 replies; 8+ messages in thread
+From: Paul Gortmaker @ 2023-06-21 17:13 UTC (permalink / raw)
+  To: Armin Kuster; +Cc: yocto, Paul Gortmaker
+
+Export the dynamic build data for consumption in wic image generation.
+
+It can either be included directly or manually parsed for useful chunks
+in custom configurations people end up making.
+
+For convenience, it is placed alongside the work-shared/dm-verity dir
+where we already store the plain environment file and the veritysetup
+formatting argument that was used.
+
+There is a subtle thing going on here with respect to using an include,
+which warrants a mention.  The wic (wks.in) stuff only has access to
+normal Yocto/OE/bitbake variables.
+
+So, instead of a fragment, say if you had:
+   DM_VERITY_ROOT_HASH = "__not_set__"
+and then later, did a:
+   d.setVar("DM_VERITY_ROOT_HASH", value)
+after the image was built, and the hash was known - that seems sane.
+
+But the problem is that once you do that, your variables are tracked
+by default, and bitbake/lib/bb/siggen.py will be angry with you for
+changing metadata during a build.  In theory one should be able to avoid
+this with BB_BASEHASH_IGNORE_VARS and "vardepsexclude" but it means more
+exposed variables, and as much as I tried, I couldn't get this to work.
+
+Creating a fragment with the dynamic data for inclusion avoids all that.
+The wks template itself remains static, and hence doesn't trigger warns.
+
+Signed-off-by: Paul Gortmaker <paul.gortmaker@windriver.com>
+---
+ classes/dm-verity-img.bbclass | 23 +++++++++++++++++++++++
+ 1 file changed, 23 insertions(+)
+
+diff --git a/classes/dm-verity-img.bbclass b/classes/dm-verity-img.bbclass
+index 8351ab2..045c860 100644
+--- a/classes/dm-verity-img.bbclass
++++ b/classes/dm-verity-img.bbclass
+@@ -18,6 +18,13 @@
+ #     DM_VERITY_IMAGE_TYPE = "ext4" # or ext2, ext3 & btrfs
+ #     DM_VERITY_SEPARATE_HASH = "1" # optional; store hash on separate dev
+ #     IMAGE_CLASSES += "dm-verity-img"
++#
++# Using the GPT UUIDs specified in the standard can also be useful in that
++# they are displayed and translated in cfdisk output.
++#
++#     DM_VERITY_ROOT_GUID = <UUID for your architecture and root-fs>
++#     DM_VERITY_RHASH_GUID = <UUID for your architecture and verity-hash>
++# https://uapi-group.org/specifications/specs/discoverable_partitions_specification/
+ 
+ # The resulting image can then be used to implement the device mapper block
+ # integrity checking on the target device.
+@@ -35,12 +42,20 @@ DM_VERITY_IMAGE_HASH_BLOCK_SIZE ?= "4096"
+ # Should we store the hash data on a separate device/partition?
+ DM_VERITY_SEPARATE_HASH ?= "0"
+ 
++# These are arch specific.  We could probably intelligently auto-assign these?
++# Take x86-64 values as defaults. No impact on functionality currently.
++# See SD_GPT_ROOT_X86_64 and SD_GPT_ROOT_X86_64_VERITY in the spec.
++# Note - these are passed directly to sgdisk so hyphens needed.
++DM_VERITY_ROOT_GUID ?= "4f68bce3-e8cd-4db1-96e7-fbcaf984b709"
++DM_VERITY_RHASH_GUID ?= "2c7357ed-ebd2-46d9-aec1-23d437ec2bf5"
++
+ # Process the output from veritysetup and generate the corresponding .env
+ # file. The output from veritysetup is not very machine-friendly so we need to
+ # convert it to some better format. Let's drop the first line (doesn't contain
+ # any useful info) and feed the rest to a script.
+ process_verity() {
+     local ENV="${STAGING_VERITY_DIR}/${IMAGE_BASENAME}.$TYPE.verity.env"
++    local WKS_INC="${STAGING_VERITY_DIR}/${IMAGE_BASENAME}.$TYPE.wks.in"
+     rm -f $ENV
+ 
+     # Each line contains a key and a value string delimited by ':'. Read the
+@@ -86,6 +101,14 @@ process_verity() {
+     # Emit the values needed for a veritysetup run in the initramfs
+     echo "ROOT_UUID=$ROOT_UUID" >> $ENV
+     echo "RHASH_UUID=$RHASH_UUID" >> $ENV
++
++    # Create wks.in fragment with build specific UUIDs for partitions.
++    # Unfortunately the wks.in does not support line continuations...
++    # First, the unappended filesystem data partition.
++    echo 'part / --source rawcopy --ondisk sda --sourceparams="file=${IMGDEPLOYDIR}/${DM_VERITY_IMAGE}-${MACHINE}.${DM_VERITY_IMAGE_TYPE}.verity" --part-name verityroot --part-type="${DM_VERITY_ROOT_GUID}"'" --uuid=\"$ROOT_UUID\"" > $WKS_INC
++
++    # note: no default mount point for hash data partition
++    echo 'part --source rawcopy --ondisk sda --sourceparams="file=${IMGDEPLOYDIR}/${DM_VERITY_IMAGE}-${MACHINE}.${DM_VERITY_IMAGE_TYPE}.vhash" --part-name verityhash --part-type="${DM_VERITY_RHASH_GUID}"'" --uuid=\"$RHASH_UUID\"" >> $WKS_INC
+ }
+ 
+ verity_setup() {
+-- 
+2.39.0
+
+
+
+^ permalink raw reply related	[flat|nested] 8+ messages in thread
+* [meta-security][PATCH 6/7] dm-verity: hook separate hash into initramfs framework
+  2023-06-21 17:13 [meta-security][PATCH 0/7] dm-verity: separate device for hash storage Paul Gortmaker
+                   ` (4 preceding siblings ...)
+  2023-06-21 17:13 ` [meta-security][PATCH 5/7] dm-verity: add wks.in fragment with dynamic build hash data Paul Gortmaker
+@ 2023-06-21 17:13 ` Paul Gortmaker
+  2023-06-21 17:13 ` [meta-security][PATCH 7/7] dm-verity: add sample systemd separate hash example and doc Paul Gortmaker
+  6 siblings, 0 replies; 8+ messages in thread
+From: Paul Gortmaker @ 2023-06-21 17:13 UTC (permalink / raw)
+  To: Armin Kuster; +Cc: yocto, Paul Gortmaker
+
+The prior commits create the separate hash so now it is time to update
+the initramfs framework so that veritysetup, which is responsible for
+binding the data and hash, is aware of when separate hash is in use,
+and can react accordingly.
+
+The added code follows the existing appended hash code style, but is
+considerably smaller because it doesn't have the large case statement
+that supports all possible identification schemes (label, UUID, ...).
+
+With the root hash split in two to create the respective partition
+UUIDs, we know exactly how to identify it, and the UUIDs used.
+
+Signed-off-by: Paul Gortmaker <paul.gortmaker@windriver.com>
+---
+ .../initramfs-framework-dm/dmverity           | 29 +++++++++++++++++++
+ 1 file changed, 29 insertions(+)
+
+diff --git a/recipes-core/initrdscripts/initramfs-framework-dm/dmverity b/recipes-core/initrdscripts/initramfs-framework-dm/dmverity
+index 71afc91..1923490 100644
+--- a/recipes-core/initrdscripts/initramfs-framework-dm/dmverity
++++ b/recipes-core/initrdscripts/initramfs-framework-dm/dmverity
+@@ -8,12 +8,41 @@ dmverity_run() {
+     DATA_SIZE="__not_set__"
+     DATA_BLOCK_SIZE="__not_set__"
+     ROOT_HASH="__not_set__"
++    SEPARATE_HASH="__not_set__"
+ 
+     . /usr/share/misc/dm-verity.env
+ 
+     C=0
+     delay=${bootparam_rootdelay:-1}
+     timeout=${bootparam_roottimeout:-5}
++
++    # we know exactly what we are looking for; don't need the wide hunt below
++    if [ "${SEPARATE_HASH}" -eq "1" ]; then
++        while [ ! -b "/dev/disk/by-partuuid/${ROOT_UUID}" ]; do
++            if [ $(( $C * $delay )) -gt $timeout ]; then
++                fatal "Root device (data) resolution failed"
++                exit 1
++            fi
++            debug "Sleeping for $delay second(s) to wait for root data to settle..."
++            sleep $delay
++            C=$(( $C + 1 ))
++        done
++
++        veritysetup \
++            --data-block-size=${DATA_BLOCK_SIZE} \
++            create rootfs \
++            /dev/disk/by-partuuid/${ROOT_UUID} \
++            /dev/disk/by-partuuid/${RHASH_UUID} \
++            ${ROOT_HASH}
++
++            mount \
++                 -o ro \
++                /dev/mapper/rootfs \
++                ${ROOTFS_DIR} || exit 2
++
++	    return
++    fi
++
+     RDEV="$(realpath /dev/disk/by-partuuid/${bootparam_root#PARTUUID=} 2>/dev/null)"
+     while [ ! -b "${RDEV}" ]; do
+         if [ $(( $C * $delay )) -gt $timeout ]; then
+-- 
+2.39.0
+
+
+
+^ permalink raw reply related	[flat|nested] 8+ messages in thread
+* [meta-security][PATCH 7/7] dm-verity: add sample systemd separate hash example and doc
+  2023-06-21 17:13 [meta-security][PATCH 0/7] dm-verity: separate device for hash storage Paul Gortmaker
+                   ` (5 preceding siblings ...)
+  2023-06-21 17:13 ` [meta-security][PATCH 6/7] dm-verity: hook separate hash into initramfs framework Paul Gortmaker
+@ 2023-06-21 17:13 ` Paul Gortmaker
+  6 siblings, 0 replies; 8+ messages in thread
+From: Paul Gortmaker @ 2023-06-21 17:13 UTC (permalink / raw)
+  To: Armin Kuster; +Cc: yocto, Paul Gortmaker
+
+Create a wks.in that allows an out-of-the-box build of a bootable
+USB image using systemd and the hash data as a separate device or
+partition.
+
+A focus here was to ensure we used proper GPT names and GPT types,
+and the GPT UUIDs that are based on splitting the root hash.
+
+Signed-off-by: Paul Gortmaker <paul.gortmaker@windriver.com>
+---
+ docs/dm-verity-systemd-hash-x86-64.txt    | 43 +++++++++++++++++++++++
+ wic/systemd-bootdisk-dmverity-hash.wks.in | 18 ++++++++++
+ 2 files changed, 61 insertions(+)
+ create mode 100644 docs/dm-verity-systemd-hash-x86-64.txt
+ create mode 100644 wic/systemd-bootdisk-dmverity-hash.wks.in
+
+diff --git a/docs/dm-verity-systemd-hash-x86-64.txt b/docs/dm-verity-systemd-hash-x86-64.txt
+new file mode 100644
+index 0000000..673b810
+--- /dev/null
++++ b/docs/dm-verity-systemd-hash-x86-64.txt
+@@ -0,0 +1,43 @@
++dm-verity and x86-64 and systemd - separate hash device
++-------------------------------------------------------
++
++Everything said in "dm-verity-systemd-x86-64.txt" applies here.
++However booting under QEMU is not tested - only on real hardware.
++So for your MACHINE you need to choose "genericx86-64".
++
++Also, you'll need to point at the hash specific WKS file:
++
++WKS_FILES += " systemd-bootdisk-dmverity-hash.wks.in"
++
++The fundamental difference is to use a separate device/partition for
++storage of the hash data -- instead of "hiding" it beyond the filesystem
++in what is essentially a 5-10% oversized partition.  This takes any manual
++math calculations of size/offset out of the picture, and uses the kernel's
++natural behaviour of compartmentalizing devices to ensure they are separate.
++
++The example hash.wks file added here essentially adds a hash-only partition
++directly after the filesystem partition.  So the filesystem partition is
++no longer "oversized" and no offsets are needed/used.
++
++Since we are now using multiple partitions, we make a better effort to use
++accepted GPT partition types and UUIDs based on the roothash.  This means
++easier sysadmin level use/debugging based on cfdisk output etc.
++
++Generating the separate root hash image is driven off enabling this:
++   DM_VERITY_SEPARATE_HASH = "1"
++
++Two other variables control the GPT UUIDs - set to x86-64 defaults:
++
++   DM_VERITY_ROOT_GUID ?= "4f68bce3-e8cd-4db1-96e7-fbcaf984b709"
++   DM_VERITY_RHASH_GUID ?= "2c7357ed-ebd2-46d9-aec1-23d437ec2bf5"
++
++See: https://uapi-group.org/specifications/specs/discoverable_partitions_specification/
++
++Finally, the UUIDs (not the "partition types" above) are based off of
++the root node hash value as per the systemd "autodetect" proposed standard.
++These will obviously change with every update/rebuild of the root image.
++
++While not strictly coupled to any functionality at this point in time, it
++does aid in easier debugging, and puts us in alignment with using systemd
++inside the initramfs to replace manual veritysetup like configuration we
++currently do in the initramfs today, should we decide to do so later on.
+diff --git a/wic/systemd-bootdisk-dmverity-hash.wks.in b/wic/systemd-bootdisk-dmverity-hash.wks.in
+new file mode 100644
+index 0000000..e400593
+--- /dev/null
++++ b/wic/systemd-bootdisk-dmverity-hash.wks.in
+@@ -0,0 +1,18 @@
++# short-description:  Create an EFI disk image with systemd-boot and separate hash dm-verity
++# A dm-verity variant of the regular wks for IA machines. We need to fetch
++# the partition images from the IMGDEPLOYDIR as the rootfs source plugin will
++# not recreate the exact block device corresponding with the hash tree. We must
++# not alter the label or any other setting on the image.
++# Based on OE-core's systemd-bootdisk.wks and meta-security's beaglebone-yocto-verity.wks.in file
++#
++# This .wks only works with the dm-verity-img class and separate hash data. (DM_VERITY_SEPARATE_HASH)
++
++part /boot --source bootimg-efi --sourceparams="loader=systemd-boot,initrd=microcode.cpio" --ondisk sda --label msdos --active --align 1024 --use-uuid
++
++# include the root+hash part with the dynamic hash/UUIDs from the build.
++include ${STAGING_VERITY_DIR}/${IMAGE_BASENAME}.${DM_VERITY_IMAGE_TYPE}.wks.in
++
++# add "console=ttyS0,115200" or whatever you need to the --append="..."
++bootloader --ptable gpt --timeout=5 --append="root=/dev/mapper/rootfs"
++
++part swap --ondisk sda --size 44 --label swap1 --fstype=swap --use-uuid
+-- 
+2.39.0
+
+
+
+^ permalink raw reply related	[flat|nested] 8+ messages in thread
+end of thread, other threads:[~2023-06-21 17:35 UTC | newest]
+
+Thread overview: 8+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-06-21 17:13 [meta-security][PATCH 0/7] dm-verity: separate device for hash storage Paul Gortmaker
+2023-06-21 17:13 ` [meta-security][PATCH 1/7] dm-verity: add descriptive strings for "wic list images" Paul Gortmaker
+2023-06-21 17:13 ` [meta-security][PATCH 2/7] dm-verity: restructure the veritysetup arg parsing Paul Gortmaker
+2023-06-21 17:13 ` [meta-security][PATCH 3/7] dm-verity: save veritysetup args beside runtime environment Paul Gortmaker
+2023-06-21 17:13 ` [meta-security][PATCH 4/7] dm-verity: add support for hash storage on separate partition Paul Gortmaker
+2023-06-21 17:13 ` [meta-security][PATCH 5/7] dm-verity: add wks.in fragment with dynamic build hash data Paul Gortmaker
+2023-06-21 17:13 ` [meta-security][PATCH 6/7] dm-verity: hook separate hash into initramfs framework Paul Gortmaker
+2023-06-21 17:13 ` [meta-security][PATCH 7/7] dm-verity: add sample systemd separate hash example and doc Paul Gortmaker
+

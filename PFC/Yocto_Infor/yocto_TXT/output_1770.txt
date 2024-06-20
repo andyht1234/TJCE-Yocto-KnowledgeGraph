@@ -1,0 +1,296 @@
+* [meta-security][PATCH 1/3] tpm2-pkcs11: we really need the symlinks
+@ 2022-05-30 22:02 Armin Kuster
+  2022-05-30 22:02 ` [meta-security][PATCH 2/3] smack-test: switch to python3 Armin Kuster
+  2022-05-30 22:02 ` [meta-security][PATCH 3/3] oeqa/smack: consolidate classes Armin Kuster
+  0 siblings, 2 replies; 3+ messages in thread
+From: Armin Kuster @ 2022-05-30 22:02 UTC (permalink / raw)
+  To: yocto
+
+MASK dev-so
+Drop un-needed install append steps.
+
+Signed-off-by: Armin Kuster <akuster808@gmail.com>
+---
+ .../recipes-tpm2/tpm2-pkcs11/tpm2-pkcs11_1.8.0.bb     | 11 ++---------
+ 1 file changed, 2 insertions(+), 9 deletions(-)
+
+diff --git a/meta-tpm/recipes-tpm2/tpm2-pkcs11/tpm2-pkcs11_1.8.0.bb b/meta-tpm/recipes-tpm2/tpm2-pkcs11/tpm2-pkcs11_1.8.0.bb
+index e8812d0..dd0a0b5 100644
+--- a/meta-tpm/recipes-tpm2/tpm2-pkcs11/tpm2-pkcs11_1.8.0.bb
++++ b/meta-tpm/recipes-tpm2/tpm2-pkcs11/tpm2-pkcs11_1.8.0.bb
+@@ -25,15 +25,6 @@ do_compile:append() {
+ }
+ 
+ do_install:append() {
+-    install -d ${D}${libdir}/pkcs11
+-    install -d ${D}${datadir}/p11-kit
+-
+-    # remove symlinks
+-    rm -f ${D}${libdir}/pkcs11/libtpm2_pkcs11.so
+-
+-    #install lib
+-    install -m 755 ${B}/src/.libs/libtpm2_pkcs11.so ${D}${libdir}/pkcs11/libtpm2_pkcs11.so
+-
+     cd ${S}/tools
+     export PYTHONPATH="${D}${PYTHON_SITEPACKAGES_DIR}"
+     ${PYTHON_PN} setup.py install --root="${D}" --prefix="${prefix}" --install-lib="${PYTHON_SITEPACKAGES_DIR}" --optimize=1 --skip-build
+@@ -53,5 +44,7 @@ FILES:${PN} += "\
+     ${datadir}/p11-kit/* \
+     "
+ 
++INSANE_SKIP:${PN}   += "dev-so"
++
+ RDEPENDS:${PN} = "p11-kit tpm2-tools "
+ RDEPENDS:${PN}-tools = "${PYTHON_PN}-pyyaml ${PYTHON_PN}-cryptography ${PYTHON_PN}-pyasn1-modules"
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 3+ messages in thread
+* [meta-security][PATCH 2/3] smack-test: switch to python3
+  2022-05-30 22:02 [meta-security][PATCH 1/3] tpm2-pkcs11: we really need the symlinks Armin Kuster
+@ 2022-05-30 22:02 ` Armin Kuster
+  2022-05-30 22:02 ` [meta-security][PATCH 3/3] oeqa/smack: consolidate classes Armin Kuster
+  1 sibling, 0 replies; 3+ messages in thread
+From: Armin Kuster @ 2022-05-30 22:02 UTC (permalink / raw)
+  To: yocto
+
+Signed-off-by: Armin Kuster <akuster808@gmail.com>
+---
+ recipes-mac/smack/smack-test_1.0.bb | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/recipes-mac/smack/smack-test_1.0.bb b/recipes-mac/smack/smack-test_1.0.bb
+index d7824ae..3ab57c6 100644
+--- a/recipes-mac/smack/smack-test_1.0.bb
++++ b/recipes-mac/smack/smack-test_1.0.bb
+@@ -22,4 +22,4 @@ do_install() {
+     install -m 0755 *.sh ${D}${sbindir}
+ }
+ 
+-RDEPENDS:${PN} = "smack python mmap-smack-test tcp-smack-test udp-smack-test"
++RDEPENDS:${PN} = "smack python3-core mmap-smack-test tcp-smack-test udp-smack-test"
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 3+ messages in thread
+* [meta-security][PATCH 3/3] oeqa/smack: consolidate classes
+  2022-05-30 22:02 [meta-security][PATCH 1/3] tpm2-pkcs11: we really need the symlinks Armin Kuster
+  2022-05-30 22:02 ` [meta-security][PATCH 2/3] smack-test: switch to python3 Armin Kuster
+@ 2022-05-30 22:02 ` Armin Kuster
+  1 sibling, 0 replies; 3+ messages in thread
+From: Armin Kuster @ 2022-05-30 22:02 UTC (permalink / raw)
+  To: yocto
+
+Signed-off-by: Armin Kuster <akuster808@gmail.com>
+---
+ lib/oeqa/runtime/cases/smack.py | 39 ---------------------------------
+ 1 file changed, 39 deletions(-)
+
+diff --git a/lib/oeqa/runtime/cases/smack.py b/lib/oeqa/runtime/cases/smack.py
+index 35e87ef..b8255c7 100644
+--- a/lib/oeqa/runtime/cases/smack.py
++++ b/lib/oeqa/runtime/cases/smack.py
+@@ -29,8 +29,6 @@ class SmackBasicTest(OERuntimeTestCase):
+         status,output = self.target.run("cat /proc/self/attr/current")
+         self.current_label = output.strip()
+ 
+-class SmackAccessLabel(SmackBasicTest):
+-
+     @OETestDepends(['smack.SmackBasicTest.test_smack_basic'])
+     def test_add_access_label(self):
+         ''' Test if chsmack can correctly set a SMACK label '''
+@@ -54,8 +52,6 @@ class SmackAccessLabel(SmackBasicTest):
+                 "%s %s" %(LABEL,label_retrieved))
+ 
+ 
+-class SmackExecLabel(SmackBasicTest):
+-
+     @OETestDepends(['smack.SmackBasicTest.test_smack_basic'])
+     def test_add_exec_label(self):
+         '''Test if chsmack can correctly set a SMACK Exec label'''
+@@ -79,8 +75,6 @@ class SmackExecLabel(SmackBasicTest):
+                 "%s %s" %(LABEL,label_retrieved))
+ 
+ 
+-class SmackMmapLabel(SmackBasicTest):
+-
+     @OETestDepends(['smack.SmackBasicTest.test_smack_basic'])
+     def test_add_mmap_label(self):
+         '''Test if chsmack can correctly set a SMACK mmap label'''
+@@ -104,8 +98,6 @@ class SmackMmapLabel(SmackBasicTest):
+                 "%s %s" %(LABEL,label_retrieved))
+ 
+ 
+-class SmackTransmutable(SmackBasicTest):
+-
+     @OETestDepends(['smack.SmackBasicTest.test_smack_basic'])
+     def test_add_transmutable(self):
+         '''Test if chsmack can correctly set a SMACK transmutable mode'''
+@@ -128,8 +120,6 @@ class SmackTransmutable(SmackBasicTest):
+                 "%s %s" %(LABEL,label_retrieved))
+ 
+ 
+-class SmackChangeSelfLabelPrivilege(SmackBasicTest):
+-
+     @OETestDepends(['smack.SmackBasicTest.test_smack_basic'])
+     def test_privileged_change_self_label(self):
+         '''Test if privileged process (with CAP_MAC_ADMIN privilege)
+@@ -145,8 +135,6 @@ class SmackChangeSelfLabelPrivilege(SmackBasicTest):
+         self.assertIn("PRIVILEGED", output,
+                     "Privilege process did not change label.Output: %s" %output)
+ 
+-class SmackChangeSelfLabelUnprivilege(SmackBasicTest):
+-
+     @OETestDepends(['smack.SmackBasicTest.test_smack_basic'])
+     def test_unprivileged_change_self_label(self):
+         '''Test if unprivileged process (without CAP_MAC_ADMIN privilege)
+@@ -163,8 +151,6 @@ class SmackChangeSelfLabelUnprivilege(SmackBasicTest):
+             "Unprivileged process should not be able to change its label")
+ 
+ 
+-class SmackChangeFileLabelPrivilege(SmackBasicTest):
+-
+     @OETestDepends(['smack.SmackBasicTest.test_smack_basic'])
+     def test_unprivileged_change_file_label(self):
+         '''Test if unprivileged process cannot change file labels'''
+@@ -183,8 +169,6 @@ class SmackChangeFileLabelPrivilege(SmackBasicTest):
+         self.target.run("rm %s" % filename)
+         self.assertEqual( status, 0, "Unprivileged process changed label for %s" %filename)
+ 
+-class SmackLoadRule(SmackBasicTest):
+-
+     @OETestDepends(['smack.SmackBasicTest.test_smack_basic'])
+     def test_load_smack_rule(self):
+         '''Test if new smack access rules can be loaded'''
+@@ -211,8 +195,6 @@ class SmackLoadRule(SmackBasicTest):
+         self.target.run('echo -n "%s" > %s/load' %(clean, self.smack_path))
+ 
+ 
+-class SmackOnlycap(SmackBasicTest):
+-
+     @OETestDepends(['smack.SmackBasicTest.test_smack_basic'])
+     def test_smack_onlycap(self):
+         '''Test if smack onlycap label can be set
+@@ -223,7 +205,6 @@ class SmackOnlycap(SmackBasicTest):
+         status, output = self.target.run("sh /usr/sbin/test_smack_onlycap.sh")
+         self.assertEqual(status, 0, output)
+ 
+-class SmackNetlabel(SmackBasicTest):
+ 
+     @OETestDepends(['smack.SmackBasicTest.test_smack_basic'])
+     def test_smack_netlabel(self):
+@@ -246,7 +227,6 @@ class SmackNetlabel(SmackBasicTest):
+             test_label, output,
+             "Did not find expected label in output: %s" %output)
+ 
+-class SmackCipso(SmackBasicTest):
+ 
+     @OETestDepends(['smack.SmackBasicTest.test_smack_basic'])
+     def test_smack_cipso(self):
+@@ -287,7 +267,6 @@ class SmackCipso(SmackBasicTest):
+         self.assertEqual(status, 0, "Cipso rule C was not set")
+         self.assertIn("/17,33", output, "Rule C was not set correctly")
+ 
+-class SmackDirect(SmackBasicTest):
+ 
+     @OETestDepends(['smack.SmackBasicTest.test_smack_basic'])
+     def test_smack_direct(self):
+@@ -308,8 +287,6 @@ class SmackDirect(SmackBasicTest):
+             "Smack direct label does not match.")
+ 
+ 
+-class SmackAmbient(SmackBasicTest):
+-
+     @OETestDepends(['smack.SmackBasicTest.test_smack_basic'])
+     def test_smack_ambient(self):
+         test_ambient = "test_ambient"
+@@ -330,8 +307,6 @@ class SmackAmbient(SmackBasicTest):
+             "Ambient label does not match")
+ 
+ 
+-class SmackloadBinary(SmackBasicTest):
+-
+     @OETestDepends(['smack.SmackBasicTest.test_smack_basic'])
+     def test_smackload(self):
+         '''Test if smackload command works'''
+@@ -345,8 +320,6 @@ class SmackloadBinary(SmackBasicTest):
+         self.assertEqual(status, 0, "Smackload rule was loaded correctly")
+ 
+ 
+-class SmackcipsoBinary(SmackBasicTest):
+-
+     @OETestDepends(['smack.SmackBasicTest.test_smack_basic'])
+     def test_smackcipso(self):
+         '''Test if smackcipso command works'''
+@@ -362,8 +335,6 @@ class SmackcipsoBinary(SmackBasicTest):
+         self.assertIn( "2/2", output, "Rule was not set correctly. Got: %s" %output)
+ 
+ 
+-class SmackEnforceFileAccess(SmackBasicTest):
+-
+     @OETestDepends(['smack.SmackBasicTest.test_smack_basic'])
+     def test_smack_enforce_file_access(self):
+         '''Test if smack file access is enforced (rwx)
+@@ -375,8 +346,6 @@ class SmackEnforceFileAccess(SmackBasicTest):
+         self.assertEqual(status, 0, output)
+ 
+ 
+-class SmackEnforceMmap(SmackBasicTest):
+-
+     @OETestDepends(['smack.SmackBasicTest.test_smack_basic'])
+     def test_smack_mmap_enforced(self):
+         '''Test if smack mmap access is enforced'''
+@@ -449,8 +418,6 @@ class SmackEnforceMmap(SmackBasicTest):
+             "Output: %s" %output)
+ 
+ 
+-class SmackEnforceTransmutable(SmackBasicTest):
+-
+     @OETestDepends(['smack.SmackBasicTest.test_smack_basic'])
+     def test_smack_transmute_dir(self):
+         '''Test if smack transmute attribute works
+@@ -473,8 +440,6 @@ class SmackEnforceTransmutable(SmackBasicTest):
+             "Did not get expected label. Output: %s" % output)
+ 
+ 
+-class SmackTcpSockets(SmackBasicTest):
+-
+     @OETestDepends(['smack.SmackBasicTest.test_smack_basic'])
+     def test_smack_tcp_sockets(self):
+         '''Test if smack is enforced on tcp sockets
+@@ -485,8 +450,6 @@ class SmackTcpSockets(SmackBasicTest):
+         self.assertEqual(status, 0, output)
+ 
+ 
+-class SmackUdpSockets(SmackBasicTest):
+-
+     @OETestDepends(['smack.SmackBasicTest.test_smack_basic'])
+     def test_smack_udp_sockets(self):
+         '''Test if smack is enforced on udp sockets
+@@ -497,8 +460,6 @@ class SmackUdpSockets(SmackBasicTest):
+         self.assertEqual(status, 0, output)
+ 
+ 
+-class SmackFileLabels(SmackBasicTest):
+-
+     @OETestDepends(['smack.SmackBasicTest.test_smack_basic'])
+     def test_smack_labels(self):
+         '''Check for correct Smack labels.'''
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2022-05-30 22:04 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-05-30 22:02 [meta-security][PATCH 1/3] tpm2-pkcs11: we really need the symlinks Armin Kuster
+2022-05-30 22:02 ` [meta-security][PATCH 2/3] smack-test: switch to python3 Armin Kuster
+2022-05-30 22:02 ` [meta-security][PATCH 3/3] oeqa/smack: consolidate classes Armin Kuster
+

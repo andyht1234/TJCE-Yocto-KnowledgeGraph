@@ -1,0 +1,61 @@
+* [yocto-autobuilder-helper][hardknott][PATCH] config.json: track system load with PARALLEL_MAKE
+@ 2021-07-22 13:38 Trevor Gamblin
+  0 siblings, 0 replies; only message in thread
+From: Trevor Gamblin @ 2021-07-22 13:38 UTC (permalink / raw)
+  To: yocto; +Cc: anuj.mittal
+
+Backport for hardknott since we have been running for ~1 week with this
+patch in master and the same load limiting may help reduce build
+failures for hardknott itself as well as when its builds are running
+alongside other branches.
+
+This adds the "-l" option to PARALLEL_MAKE in config.json with an
+initial testing value of 50 (the previous iteration of this patch both
+had it set to 100 and mistakenly stated that this was a percentage,
+rather than an absolute representation of system load ala top/htop).
+This option is supported by both Make and Ninja. However, we also
+require the "--debug=j" option to be passed to Make in order for the
+latter to report perceived system load in the do_compile logs, (which we
+need in order to track test values), and since this option is not
+supported by Ninja, also add EXTRA_OEMAKE to the EXTRAVARS so that we
+can determine if the target load percentage needs to be adjusted.
+
+Signed-off-by: Trevor Gamblin <trevor.gamblin@windriver.com>
+---
+ config.json | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/config.json b/config.json
+index 110b0d9..5689cb9 100644
+--- a/config.json
++++ b/config.json
+@@ -43,7 +43,7 @@
+             "PREMIRRORS = ''",
+             "BB_GENERATE_MIRROR_TARBALLS = '1'",
+             "BB_NUMBER_THREADS = '16'",
+-            "PARALLEL_MAKE = '-j 16'",
++            "PARALLEL_MAKE = '-j 16 -l 50'",
+             "XZ_MEMLIMIT = '5%'",
+             "XZ_THREADS = '8'",
+             "BB_TASK_NICE_LEVEL = '5'",
+@@ -57,7 +57,8 @@
+             "SDK_INCLUDE_TOOLCHAIN = '1'",
+             "BB_DISKMON_DIRS = 'STOPTASKS,${TMPDIR},1G,100K STOPTASKS,${DL_DIR},1G STOPTASKS,${SSTATE_DIR},1G STOPTASKS,/tmp,100M,100K ABORT,${TMPDIR},100M,1K ABORT,${DL_DIR},100M ABORT,${SSTATE_DIR},100M ABORT,/tmp,10M,1K'",
+             "BB_HASHSERVE = 'typhoon.yocto.io:8686'",
+-            "RUNQEMU_TMPFS_DIR = '/home/pokybuild/tmp'"
++            "RUNQEMU_TMPFS_DIR = '/home/pokybuild/tmp'",
++            "EXTRA_OEMAKE = ' --debug=j'"
+         ]
+     },
+     "templates" : {
+-- 
+2.31.1
+
+
+^ permalink raw reply related	[flat|nested] only message in thread
+only message in thread, other threads:[~2021-07-22 13:39 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-07-22 13:38 [yocto-autobuilder-helper][hardknott][PATCH] config.json: track system load with PARALLEL_MAKE Trevor Gamblin
+

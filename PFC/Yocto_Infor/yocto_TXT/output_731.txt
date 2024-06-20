@@ -1,0 +1,91 @@
+* nativesdk-packagegroup-sdk-host - allarch vs arch-specific
+@ 2023-04-19 12:26 paulo.sogari
+  0 siblings, 0 replies; only message in thread
+From: paulo.sogari @ 2023-04-19 12:26 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 3288 bytes --]
+
+Hi all,
+
+I’m currently facing an issue when trying to build an SDK for an aarch64 host also with an aarch64 target board on Kirkstone. I’ve appended both nativesdk-protobuf and nativesdk-protobuf-compiler to nativesdk-packagegroup-sdk-host. When building the SDK for an x86 host, everything works as expected, but for the aarch64 host, the following error occurs:
+
+> 
+> 
+> 
+> ERROR: nativesdk-packagegroup-sdk-host-1.0-r12 do_package_write_rpm: An
+> allarch packagegroup shouldn’t depend on packages which are dynamically
+> renamed (nativesdk-protobuf to nativesdk-libprotobuf30)
+> ERROR: nativesdk-packagegroup-sdk-host-1.0-r12 do_package_write_rpm: An
+> allarch packagegroup shouldn’t depend on packages which are dynamically
+> renamed (nativesdk-protobuf-compiler to nativesdk-libprotobuf-compiler)
+> 
+> 
+
+When searching for this issue, I found the patch that defines this error: https://lists.openembedded.org/g/openembedded-core/message/158230
+As stated in the error message, it is caused by the dynamic renaming of the package when it is part of an allarch packagegroup. I’m not familiar with the dynamic renaming process itself, but I found it weird that the packagegroup would be allarch instead of aarch64.
+The patch description states:
+
+> 
+> 
+> 
+> If you run into this issue you either need to remove the dependency from
+> the
+> packagegroup or mark the packagegroup as tune specific, i.e. set:
+> 
+> 
+> 
+> PACKAGE_ARCH = “${TUNE_PKGARCH}”
+> 
+> 
+> 
+> before the packagegroup inherit.
+> 
+> 
+
+Indeed, packagegroup.bbclass makes a weak assignment of PACKAGE_ARCH? = “all”. This value is immediately assigned to PACKAGE_ARCH_EXPANDED (before any overrides), which in turn causes allarch.bbclass to be inherited. This is also confirmed when analyzing the build environment:
+
+> 
+> 
+> 
+> # $PACKAGE_ARCH [4 operations]
+> #   set /home/sog/build/sdk/sources/poky/meta/conf/bitbake.conf:182
+> #    [_defaultval] “${TUNE_PKGARCH}”
+> #   set /home/sog/build/sdk/sources/poky/meta/conf/documentation.conf:309
+> #    [doc] “The architecture of the resulting package or packages.”
+> #   set?
+> /home/sog/build/sdk/sources/poky/meta/classes/packagegroup.bbclass:12
+> #    “all”
+> #   set /home/sog/build/sdk/sources/poky/meta/classes/nativesdk.bbclass:24
+> 
+> #    “${SDK_ARCH}-${SDKPKGSUFFIX}”
+> # pre-expansion value:
+> #   “${SDK_ARCH}-${SDKPKGSUFFIX}”
+> PACKAGE_ARCH=“aarch64-nativesdk”
+> 
+> 
+> 
+> # $PACKAGE_ARCH_EXPANDED
+> #   immediate
+> /home/sog/build/sdk/sources/poky/meta/classes/packagegroup.bbclass:15
+> #    “${PACKAGE_ARCH}”
+> PACKAGE_ARCH_EXPANDED=“all”
+> 
+> 
+
+The problem does not occur at all if I change nativesdk-packagegroup-sdk-host.bb to first inherit “nativesdk”, and lastly “packagegroup”. In this case, PACKAGE_ARCH_EXPANDED is also set to “aarch64-nativesdk”, which prevents allarch.bbclass from being inherited.
+Also, I can avoid the issue completely by defining a separate packagegroup and adding protobuf there, but I wanted to clarify: should nativesdk-packagegroup-sdk-host really be defined as allarch? Or should it assume the architecture defined in nativesdk.bbclass?
+
+Kind regards,
+
+Paulo Sogari
+
+[-- Attachment #2: Type: text/html, Size: 3691 bytes --]
+
+^ permalink raw reply	[flat|nested] only message in thread
+only message in thread, other threads:[~2023-04-19 12:26 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-04-19 12:26 nativesdk-packagegroup-sdk-host - allarch vs arch-specific paulo.sogari
+

@@ -1,0 +1,62 @@
+* oeqa problems with >= Python3.8
+@ 2022-09-14 15:54 Hulme, Richard
+  0 siblings, 0 replies; only message in thread
+From: Hulme, Richard @ 2022-09-14 15:54 UTC (permalink / raw)
+  To: yocto
+
+Hello,
+
+I found an issue when upgrading a box running unit tests that bumped Python from 3.7 to 3.9. 
+
+The unit tests themselves are run OK but processing them causes KeyErrors to be raised:
+
+======================================================================
+ERROR: test_ping (oeqa.runtime.ping.PingTest)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File \"/tmp/moduletest/oeqa/oetest.py\", line 114, in tearDown
+    res = getResults()
+  File \"/tmp/moduletest/oeqa/utils/decorators.py\", line 43, in __init__
+    self.faillist = handleList(upperf.f_locals['result'].failures)
+KeyError: 'result'
+
+It seems that the problem is in https://git.yoctoproject.org/poky/tree/meta/lib/oeqa/utils/decorators.py?h=master#n25 where it looks for the last frame in the call stack from 'unittest.case' and then assumes that frame must have a local variable called 'result'
+
+        upperf = sys._current_frames()[ident]
+        while (upperf.f_globals['__name__'] != 'unittest.case'):
+            upperf = upperf.f_back
+ # deleted a few lines for clarity
+        self.faillist = handleList(upperf.f_locals['result'].failures)
+        self.errorlist = handleList(upperf.f_locals['result'].errors)
+        self.skiplist = handleList(upperf.f_locals['result'].skipped)
+
+That frame will be the one belonging to unittest.case.run but since Python3.8 'run' no longer calls 'tearDown' directly so there is now an additional frame belonging to unittest.case (see https://github.com/python/cpython/commit/4dd3e3f9bbd320f0dd556688e04db0a6b55a7b52)
+
+This change was introduced here https://github.com/python/cpython/commit/4dd3e3f9bbd320f0dd556688e04db0a6b55a7b52 and is tagged with everything from 3.8 beta1 onwards.
+
+Changing the 'while' loop to look for a frame from "unittest.case" *and* that has a local variable called "result" seems to fix the problem:
+
+while (upperf.f_globals['__name__'] != 'unittest.case') or ('result' not in upperf_flocals):
+
+or
+
+while not ((upperf.f_globals['__name__'] == 'unittest.case') and ('result' in upperf.f_locals)):
+
+(depending on your preference for combining negative conditions).
+
+Accessing a local variable in a base class method seems rather ugly and fragile to me but that is perhaps a different issue.
+
+I haven't been able to find any references to anyone else coming across this problem before but Python3.8 hasn't only just been released so surely someone's been hit by this already?
+
+Am I missing something?
+
+Richard
+
+
+^ permalink raw reply	[flat|nested] only message in thread
+only message in thread, other threads:[~2022-09-14 15:54 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-09-14 15:54 oeqa problems with >= Python3.8 Hulme, Richard
+

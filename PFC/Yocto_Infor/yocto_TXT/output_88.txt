@@ -1,0 +1,306 @@
+* [meta-rockchip][PATCH v2 0/4] u-boot cleanup
+@ 2023-10-03  0:47 Trevor Woerner
+  2023-10-03  0:47 ` [meta-rockchip][PATCH v2 1/4] u-boot cleanup: move task Trevor Woerner
+                   ` (5 more replies)
+  0 siblings, 6 replies; 7+ messages in thread
+From: Trevor Woerner @ 2023-10-03  0:47 UTC (permalink / raw)
+  To: yocto
+
+The U-Boot bbappend recipe was in need of some cleanups.
+
+v2:
+- breakup the original 1 patch into 4 to make the steps easier to
+  audit/verify.
+
+Trevor Woerner (4):
+  u-boot cleanup: move task
+  u-boot cleanup: group dependencies
+  u-boot cleanup: group EXTRA_OEMAKE
+  u-boot cleanup: organize DEPENDS
+
+ recipes-bsp/u-boot/u-boot%.bbappend | 32 ++++++++++++++---------------
+ 1 file changed, 15 insertions(+), 17 deletions(-)
+
+-- 
+2.41.0.327.gaa9166bcc0ba
+
+
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* [meta-rockchip][PATCH v2 1/4] u-boot cleanup: move task
+  2023-10-03  0:47 [meta-rockchip][PATCH v2 0/4] u-boot cleanup Trevor Woerner
+@ 2023-10-03  0:47 ` Trevor Woerner
+  2023-10-03  0:47 ` [meta-rockchip][PATCH v2 2/4] u-boot cleanup: group dependencies Trevor Woerner
+                   ` (4 subsequent siblings)
+  5 siblings, 0 replies; 7+ messages in thread
+From: Trevor Woerner @ 2023-10-03  0:47 UTC (permalink / raw)
+  To: yocto
+
+According to the Yocto Recipe Style Guide[1] the tasks should be at the end.
+
+[1] https://docs.yoctoproject.org/dev/contributor-guide/recipe-style-guide.html
+
+Signed-off-by: Trevor Woerner <twoerner@gmail.com>
+---
+ recipes-bsp/u-boot/u-boot%.bbappend | 14 +++++++-------
+ 1 file changed, 7 insertions(+), 7 deletions(-)
+
+diff --git a/recipes-bsp/u-boot/u-boot%.bbappend b/recipes-bsp/u-boot/u-boot%.bbappend
+index f7800625aaf1..c8444aacad89 100644
+--- a/recipes-bsp/u-boot/u-boot%.bbappend
++++ b/recipes-bsp/u-boot/u-boot%.bbappend
+@@ -1,10 +1,3 @@
+-do_compile:append:rock2-square () {
+-	# copy to default search path
+-	if [ "${SPL_BINARY}" = "u-boot-spl-dtb.bin" ]; then
+-		cp ${B}/spl/${SPL_BINARY} ${B}
+-	fi
+-}
+-
+ DEPENDS:append:rock-pi-4 = " gnutls-native"
+ # various machines require the pyelftools library for parsing dtb files
+ DEPENDS:append = " python3-pyelftools-native"
+@@ -25,3 +18,10 @@ EXTRA_OEMAKE:append:px30 = " BL31=${DEPLOY_DIR_IMAGE}/bl31-px30.elf"
+ INIT_FIRMWARE_DEPENDS:px30 = " trusted-firmware-a:do_deploy"
+ 
+ do_compile[depends] .= "${INIT_FIRMWARE_DEPENDS}"
++
++do_compile:append:rock2-square () {
++	# copy to default search path
++	if [ "${SPL_BINARY}" = "u-boot-spl-dtb.bin" ]; then
++		cp ${B}/spl/${SPL_BINARY} ${B}
++	fi
++}
+-- 
+2.41.0.327.gaa9166bcc0ba
+
+
+
+^ permalink raw reply related	[flat|nested] 7+ messages in thread
+* [meta-rockchip][PATCH v2 2/4] u-boot cleanup: group dependencies
+  2023-10-03  0:47 [meta-rockchip][PATCH v2 0/4] u-boot cleanup Trevor Woerner
+  2023-10-03  0:47 ` [meta-rockchip][PATCH v2 1/4] u-boot cleanup: move task Trevor Woerner
+@ 2023-10-03  0:47 ` Trevor Woerner
+  2023-10-03  0:47 ` [meta-rockchip][PATCH v2 3/4] u-boot cleanup: group EXTRA_OEMAKE Trevor Woerner
+                   ` (3 subsequent siblings)
+  5 siblings, 0 replies; 7+ messages in thread
+From: Trevor Woerner @ 2023-10-03  0:47 UTC (permalink / raw)
+  To: yocto
+
+Group the INIT_FIRMWARE_DEPENDS together and sort.
+
+Signed-off-by: Trevor Woerner <twoerner@gmail.com>
+---
+ recipes-bsp/u-boot/u-boot%.bbappend | 11 +++++------
+ 1 file changed, 5 insertions(+), 6 deletions(-)
+
+diff --git a/recipes-bsp/u-boot/u-boot%.bbappend b/recipes-bsp/u-boot/u-boot%.bbappend
+index c8444aacad89..8c6ac8627efa 100644
+--- a/recipes-bsp/u-boot/u-boot%.bbappend
++++ b/recipes-bsp/u-boot/u-boot%.bbappend
+@@ -2,21 +2,20 @@ DEPENDS:append:rock-pi-4 = " gnutls-native"
+ # various machines require the pyelftools library for parsing dtb files
+ DEPENDS:append = " python3-pyelftools-native"
+ 
+-INIT_FIRMWARE_DEPENDS ??= ""
+-
+ EXTRA_OEMAKE:append:rk3588s = " \
+ 	BL31=${DEPLOY_DIR_IMAGE}/bl31-rk3588.elf \
+ 	ROCKCHIP_TPL=${DEPLOY_DIR_IMAGE}/ddr-rk3588.bin \
+ 	"
+-INIT_FIRMWARE_DEPENDS:rk3588s = " rockchip-rkbin:do_deploy"
+ 
+ EXTRA_OEMAKE:append:rk3399 = " BL31=${DEPLOY_DIR_IMAGE}/bl31-rk3399.elf"
+-INIT_FIRMWARE_DEPENDS:rk3399 = " trusted-firmware-a:do_deploy"
+ EXTRA_OEMAKE:append:rk3328 = " BL31=${DEPLOY_DIR_IMAGE}/bl31-rk3328.elf"
+-INIT_FIRMWARE_DEPENDS:rk3328 = " trusted-firmware-a:do_deploy"
+ EXTRA_OEMAKE:append:px30 = " BL31=${DEPLOY_DIR_IMAGE}/bl31-px30.elf"
+-INIT_FIRMWARE_DEPENDS:px30 = " trusted-firmware-a:do_deploy"
+ 
++INIT_FIRMWARE_DEPENDS ??= ""
++INIT_FIRMWARE_DEPENDS:px30 = " trusted-firmware-a:do_deploy"
++INIT_FIRMWARE_DEPENDS:rk3328 = " trusted-firmware-a:do_deploy"
++INIT_FIRMWARE_DEPENDS:rk3399 = " trusted-firmware-a:do_deploy"
++INIT_FIRMWARE_DEPENDS:rk3588s = " rockchip-rkbin:do_deploy"
+ do_compile[depends] .= "${INIT_FIRMWARE_DEPENDS}"
+ 
+ do_compile:append:rock2-square () {
+-- 
+2.41.0.327.gaa9166bcc0ba
+
+
+
+^ permalink raw reply related	[flat|nested] 7+ messages in thread
+* [meta-rockchip][PATCH v2 3/4] u-boot cleanup: group EXTRA_OEMAKE
+  2023-10-03  0:47 [meta-rockchip][PATCH v2 0/4] u-boot cleanup Trevor Woerner
+  2023-10-03  0:47 ` [meta-rockchip][PATCH v2 1/4] u-boot cleanup: move task Trevor Woerner
+  2023-10-03  0:47 ` [meta-rockchip][PATCH v2 2/4] u-boot cleanup: group dependencies Trevor Woerner
+@ 2023-10-03  0:47 ` Trevor Woerner
+  2023-10-03  0:47 ` [meta-rockchip][PATCH v2 4/4] u-boot cleanup: organize DEPENDS Trevor Woerner
+                   ` (2 subsequent siblings)
+  5 siblings, 0 replies; 7+ messages in thread
+From: Trevor Woerner @ 2023-10-03  0:47 UTC (permalink / raw)
+  To: yocto
+
+Group the EXTRA_OEMAKE items together and sort.
+
+Signed-off-by: Trevor Woerner <twoerner@gmail.com>
+---
+ recipes-bsp/u-boot/u-boot%.bbappend | 7 +++----
+ 1 file changed, 3 insertions(+), 4 deletions(-)
+
+diff --git a/recipes-bsp/u-boot/u-boot%.bbappend b/recipes-bsp/u-boot/u-boot%.bbappend
+index 8c6ac8627efa..951e82af7743 100644
+--- a/recipes-bsp/u-boot/u-boot%.bbappend
++++ b/recipes-bsp/u-boot/u-boot%.bbappend
+@@ -2,15 +2,14 @@ DEPENDS:append:rock-pi-4 = " gnutls-native"
+ # various machines require the pyelftools library for parsing dtb files
+ DEPENDS:append = " python3-pyelftools-native"
+ 
++EXTRA_OEMAKE:append:px30 = " BL31=${DEPLOY_DIR_IMAGE}/bl31-px30.elf"
++EXTRA_OEMAKE:append:rk3328 = " BL31=${DEPLOY_DIR_IMAGE}/bl31-rk3328.elf"
++EXTRA_OEMAKE:append:rk3399 = " BL31=${DEPLOY_DIR_IMAGE}/bl31-rk3399.elf"
+ EXTRA_OEMAKE:append:rk3588s = " \
+ 	BL31=${DEPLOY_DIR_IMAGE}/bl31-rk3588.elf \
+ 	ROCKCHIP_TPL=${DEPLOY_DIR_IMAGE}/ddr-rk3588.bin \
+ 	"
+ 
+-EXTRA_OEMAKE:append:rk3399 = " BL31=${DEPLOY_DIR_IMAGE}/bl31-rk3399.elf"
+-EXTRA_OEMAKE:append:rk3328 = " BL31=${DEPLOY_DIR_IMAGE}/bl31-rk3328.elf"
+-EXTRA_OEMAKE:append:px30 = " BL31=${DEPLOY_DIR_IMAGE}/bl31-px30.elf"
+-
+ INIT_FIRMWARE_DEPENDS ??= ""
+ INIT_FIRMWARE_DEPENDS:px30 = " trusted-firmware-a:do_deploy"
+ INIT_FIRMWARE_DEPENDS:rk3328 = " trusted-firmware-a:do_deploy"
+-- 
+2.41.0.327.gaa9166bcc0ba
+
+
+
+^ permalink raw reply related	[flat|nested] 7+ messages in thread
+* [meta-rockchip][PATCH v2 4/4] u-boot cleanup: organize DEPENDS
+  2023-10-03  0:47 [meta-rockchip][PATCH v2 0/4] u-boot cleanup Trevor Woerner
+                   ` (2 preceding siblings ...)
+  2023-10-03  0:47 ` [meta-rockchip][PATCH v2 3/4] u-boot cleanup: group EXTRA_OEMAKE Trevor Woerner
+@ 2023-10-03  0:47 ` Trevor Woerner
+  2023-10-03 10:18 ` [yocto] [meta-rockchip][PATCH v2 0/4] u-boot cleanup Quentin Schulz
+  2023-10-03 15:22 ` Trevor Woerner
+  5 siblings, 0 replies; 7+ messages in thread
+From: Trevor Woerner @ 2023-10-03  0:47 UTC (permalink / raw)
+  To: yocto
+
+Group and sort the DEPENDS.
+
+Signed-off-by: Trevor Woerner <twoerner@gmail.com>
+---
+ recipes-bsp/u-boot/u-boot%.bbappend | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/recipes-bsp/u-boot/u-boot%.bbappend b/recipes-bsp/u-boot/u-boot%.bbappend
+index 951e82af7743..e79c471cf5ce 100644
+--- a/recipes-bsp/u-boot/u-boot%.bbappend
++++ b/recipes-bsp/u-boot/u-boot%.bbappend
+@@ -1,6 +1,6 @@
+-DEPENDS:append:rock-pi-4 = " gnutls-native"
+ # various machines require the pyelftools library for parsing dtb files
+ DEPENDS:append = " python3-pyelftools-native"
++DEPENDS:append:rock-pi-4 = " gnutls-native"
+ 
+ EXTRA_OEMAKE:append:px30 = " BL31=${DEPLOY_DIR_IMAGE}/bl31-px30.elf"
+ EXTRA_OEMAKE:append:rk3328 = " BL31=${DEPLOY_DIR_IMAGE}/bl31-rk3328.elf"
+-- 
+2.41.0.327.gaa9166bcc0ba
+
+
+
+^ permalink raw reply related	[flat|nested] 7+ messages in thread
+* Re: [yocto] [meta-rockchip][PATCH v2 0/4] u-boot cleanup
+  2023-10-03  0:47 [meta-rockchip][PATCH v2 0/4] u-boot cleanup Trevor Woerner
+                   ` (3 preceding siblings ...)
+  2023-10-03  0:47 ` [meta-rockchip][PATCH v2 4/4] u-boot cleanup: organize DEPENDS Trevor Woerner
+@ 2023-10-03 10:18 ` Quentin Schulz
+  2023-10-03 15:22 ` Trevor Woerner
+  5 siblings, 0 replies; 7+ messages in thread
+From: Quentin Schulz @ 2023-10-03 10:18 UTC (permalink / raw)
+  To: twoerner, yocto
+
+Hi Trevor,
+
+On 10/3/23 02:47, Trevor Woerner via lists.yoctoproject.org wrote:
+> The U-Boot bbappend recipe was in need of some cleanups.
+> 
+> v2:
+> - breakup the original 1 patch into 4 to make the steps easier to
+>    audit/verify.
+> 
+> Trevor Woerner (4):
+>    u-boot cleanup: move task
+>    u-boot cleanup: group dependencies
+>    u-boot cleanup: group EXTRA_OEMAKE
+>    u-boot cleanup: organize DEPENDS
+> 
+
+Perfect :)
+
+Reviewed-by: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+
+Cheers,
+Quentin
+
+>   recipes-bsp/u-boot/u-boot%.bbappend | 32 ++++++++++++++---------------
+>   1 file changed, 15 insertions(+), 17 deletions(-)
+> 
+> 
+> 
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#61203): https://lists.yoctoproject.org/g/yocto/message/61203
+> Mute This Topic: https://lists.yoctoproject.org/mt/101725918/6293953
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [quentin.schulz@theobroma-systems.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+> 
+
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [meta-rockchip][PATCH v2 0/4] u-boot cleanup
+  2023-10-03  0:47 [meta-rockchip][PATCH v2 0/4] u-boot cleanup Trevor Woerner
+                   ` (4 preceding siblings ...)
+  2023-10-03 10:18 ` [yocto] [meta-rockchip][PATCH v2 0/4] u-boot cleanup Quentin Schulz
+@ 2023-10-03 15:22 ` Trevor Woerner
+  5 siblings, 0 replies; 7+ messages in thread
+From: Trevor Woerner @ 2023-10-03 15:22 UTC (permalink / raw)
+  To: yocto
+
+On Mon 2023-10-02 @ 08:47:37 PM, Trevor Woerner wrote:
+> The U-Boot bbappend recipe was in need of some cleanups.
+> 
+> v2:
+> - breakup the original 1 patch into 4 to make the steps easier to
+>   audit/verify.
+> 
+> Trevor Woerner (4):
+>   u-boot cleanup: move task
+>   u-boot cleanup: group dependencies
+>   u-boot cleanup: group EXTRA_OEMAKE
+>   u-boot cleanup: organize DEPENDS
+> 
+>  recipes-bsp/u-boot/u-boot%.bbappend | 32 ++++++++++++++---------------
+>  1 file changed, 15 insertions(+), 17 deletions(-)
+
+Applied to meta-rockchip, master branch.
+
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+end of thread, other threads:[~2023-10-03 15:22 UTC | newest]
+
+Thread overview: 7+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-10-03  0:47 [meta-rockchip][PATCH v2 0/4] u-boot cleanup Trevor Woerner
+2023-10-03  0:47 ` [meta-rockchip][PATCH v2 1/4] u-boot cleanup: move task Trevor Woerner
+2023-10-03  0:47 ` [meta-rockchip][PATCH v2 2/4] u-boot cleanup: group dependencies Trevor Woerner
+2023-10-03  0:47 ` [meta-rockchip][PATCH v2 3/4] u-boot cleanup: group EXTRA_OEMAKE Trevor Woerner
+2023-10-03  0:47 ` [meta-rockchip][PATCH v2 4/4] u-boot cleanup: organize DEPENDS Trevor Woerner
+2023-10-03 10:18 ` [yocto] [meta-rockchip][PATCH v2 0/4] u-boot cleanup Quentin Schulz
+2023-10-03 15:22 ` Trevor Woerner
+

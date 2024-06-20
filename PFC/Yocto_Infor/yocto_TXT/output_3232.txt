@@ -1,0 +1,209 @@
+* The do_populate_sdk is finishing OK even when there are errors present in the build
+@ 2021-06-24 20:40 fbberton
+  2021-06-25 11:48 ` [yocto] " Richard Purdie
+  0 siblings, 1 reply; 3+ messages in thread
+From: fbberton @ 2021-06-24 20:40 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1870 bytes --]
+
+Hi all!
+
+I'm running some test with do_populate_sdk task and I'm seeing this on the
+log:
+
+check_data_file_clashes: Package kmsxx-dbg wants to install file
+/home/builder/build/tmp/work/foo-poky-linux/core-image-minimal/1.0-r0/sdk/image/opt/bar/sysroots/aarch64-poky-linux/usr/bin/.debug/kmstest
+But that file is already provided by package  * libdrm-dbg
+
+I also see this kind of message with other packages.
+
+Looking in the source code I found that the install_complementary function
+runs this [1] with attempt_only=True, and if attempt_only is true log above
+it's just a warning, as shown here [2].
+
+This [3] comment says that "will only attempt to install these packages, if
+they don't exist then no error will occur."
+
+My question is how can I force an error and not just a warning when running
+do_populate_sdk?
+
+I understand that I can change [1] to run:
+
+  self.install(install_pkgs)
+
+so, it'll use set attempt_only to False, that is the default, but I think
+this will break some use cases.
+
+What is the correct behaviour here, see the warning messages and fix the
+packages to avoid "file is already provided by package" messages, every
+time I create a SDK or change in some way to see an error message and stop
+SDK generation?
+
+What is the correct behavior here, inspect the warning messages, and fix
+the packages to avoid "file is already provided by package" messages, every
+time I create an SDK or change it in some way to see an error message and
+stop the SDK generation?
+
+Thanks!
+
+Fabio Berton
+
+[1] -
+https://git.openembedded.org/openembedded-core/tree/meta/lib/oe/package_manager/__init__.py#n401
+
+[2] -
+https://git.openembedded.org/openembedded-core/tree/meta/lib/oe/package_manager/ipk/__init__.py#n371
+
+[3] -
+https://git.openembedded.org/openembedded-core/tree/meta/lib/oe/package_manager/__init__.py#n346
+
+[-- Attachment #2: Type: text/html, Size: 4694 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] The do_populate_sdk is finishing OK even when there are errors present in the build
+  2021-06-24 20:40 The do_populate_sdk is finishing OK even when there are errors present in the build fbberton
+@ 2021-06-25 11:48 ` Richard Purdie
+  2021-06-25 12:19   ` Fabio Berton
+  0 siblings, 1 reply; 3+ messages in thread
+From: Richard Purdie @ 2021-06-25 11:48 UTC (permalink / raw)
+  To: Fabio Berton, yocto
+
+On Thu, 2021-06-24 at 17:40 -0300, Fabio Berton wrote:
+> Hi all!
+> 
+> I'm running some test with do_populate_sdk task and I'm seeing this 
+> on the log:
+> 
+> check_data_file_clashes: Package kmsxx-dbg wants to install file /home/builder/build/tmp/work/foo-poky-
+> linux/core-image-minimal/1.0-r0/sdk/image/opt/bar/sysroots/aarch64-poky-linux/usr/bin/.debug/kmstest
+> But that file is already provided by package  * libdrm-dbg
+> 
+> I also see this kind of message with other packages.
+> 
+> Looking in the source code I found that the install_complementary 
+> function runs this [1] with attempt_only=True, and if attempt_only is 
+> true log above it's just a warning, as shown here [2].
+> 
+> This [3] comment says that "will only attempt to install these packages, 
+> if they don't exist then no error will occur."
+> 
+> My question is how can I force an error and not just a warning when 
+> running do_populate_sdk? 
+> 
+> I understand that I can change [1] to run:
+> 
+>   self.install(install_pkgs)
+> 
+> so, it'll use set attempt_only to False, that is the default, but I 
+> think this will break some use cases. 
+> 
+> What is the correct behaviour here, see the warning messages and fix 
+> the packages to avoid "file is already provided by package" messages, 
+> every time I create a SDK or change in some way to see an error message
+>  and stop SDK generation?
+> 
+> What is the correct behavior here, inspect the warning messages, and
+> fix the packages to avoid "file is already provided by package" messages,
+> every time I create an SDK or change it in some way to see an error 
+> message and stop the SDK generation?
+
+It would probably be worth an experiment to see if we really do need the
+attempt_only option set there any more. I'd hope it isn't needed now...
+
+It is probably worth testing a patch on the autobuilder, assuming your
+local tests with that pass. We'd need to check the different package
+backends are ok with that.
+
+Cheers,
+
+Richard
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] The do_populate_sdk is finishing OK even when there are errors present in the build
+  2021-06-25 11:48 ` [yocto] " Richard Purdie
+@ 2021-06-25 12:19   ` Fabio Berton
+  0 siblings, 0 replies; 3+ messages in thread
+From: Fabio Berton @ 2021-06-25 12:19 UTC (permalink / raw)
+  To: Richard Purdie; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2404 bytes --]
+
+Hi Richard!
+
+Ok, I'll prepare a patch, do more tests on my side and if everything works
+I'll send the patch to the OE-core list.
+
+Is there any specific test, or just populate_sdk with core-image-base?
+
+Thanks!
+
+On Fri, Jun 25, 2021 at 8:48 AM Richard Purdie <
+richard.purdie@linuxfoundation.org> wrote:
+
+> On Thu, 2021-06-24 at 17:40 -0300, Fabio Berton wrote:
+> > Hi all!
+> >
+> > I'm running some test with do_populate_sdk task and I'm seeing this
+> > on the log:
+> >
+> > check_data_file_clashes: Package kmsxx-dbg wants to install file
+> /home/builder/build/tmp/work/foo-poky-
+> >
+> linux/core-image-minimal/1.0-r0/sdk/image/opt/bar/sysroots/aarch64-poky-linux/usr/bin/.debug/kmstest
+> > But that file is already provided by package  * libdrm-dbg
+> >
+> > I also see this kind of message with other packages.
+> >
+> > Looking in the source code I found that the install_complementary
+> > function runs this [1] with attempt_only=True, and if attempt_only is
+> > true log above it's just a warning, as shown here [2].
+> >
+> > This [3] comment says that "will only attempt to install these packages,
+> > if they don't exist then no error will occur."
+> >
+> > My question is how can I force an error and not just a warning when
+> > running do_populate_sdk?
+> >
+> > I understand that I can change [1] to run:
+> >
+> >   self.install(install_pkgs)
+> >
+> > so, it'll use set attempt_only to False, that is the default, but I
+> > think this will break some use cases.
+> >
+> > What is the correct behaviour here, see the warning messages and fix
+> > the packages to avoid "file is already provided by package" messages,
+> > every time I create a SDK or change in some way to see an error message
+> >  and stop SDK generation?
+> >
+> > What is the correct behavior here, inspect the warning messages, and
+> > fix the packages to avoid "file is already provided by package" messages,
+> > every time I create an SDK or change it in some way to see an error
+> > message and stop the SDK generation?
+>
+> It would probably be worth an experiment to see if we really do need the
+> attempt_only option set there any more. I'd hope it isn't needed now...
+>
+> It is probably worth testing a patch on the autobuilder, assuming your
+> local tests with that pass. We'd need to check the different package
+> backends are ok with that.
+>
+> Cheers,
+>
+> Richard
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 3516 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2021-06-25 12:19 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-06-24 20:40 The do_populate_sdk is finishing OK even when there are errors present in the build fbberton
+2021-06-25 11:48 ` [yocto] " Richard Purdie
+2021-06-25 12:19   ` Fabio Berton
+

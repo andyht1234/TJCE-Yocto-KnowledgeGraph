@@ -1,0 +1,199 @@
+* [ptest-runner][PATCH 1/2] utils.c: rework pty setup
+@ 2023-03-21 19:21 Ovidiu Panait
+  2023-03-21 19:21 ` [ptest-runner][PATCH 2/2] utils.c: make the pty file readable by all users Ovidiu Panait
+  0 siblings, 1 reply; 2+ messages in thread
+From: Ovidiu Panait @ 2023-03-21 19:21 UTC (permalink / raw)
+  To: yocto; +Cc: anibal.limon
+
+The run-read bash ptest fails when it's being run by ptest-runner, but
+it is successful when run manually:
+ 0 0 0
+ 0
+ 0
+-0
++1
+ timeout 1: ok
+ unset or null 1
+-1
++timeout 2: ok
+ unset or null 2
+ timeout 3: ok
+ unset or null 3
+FAIL: run-read
+
+The actual testcase that is failing is:
+tests/read6.sub:
+read -t 0
+echo $?
+
+This failure seems to be related to how the pty setup is handled:
+openpty() is called in the child process and the master/slave file
+descriptors are left dangling.
+
+To fix this:
+- move the openpty() call in the parent process, before fork()-ing
+- assign the slave end of the pty as the stdin for the child process
+- adjust the TIOCSCTTY ioctl call to use the file descriptor of the pty file
+
+Fixes: 59381a643e1f ("utils: ensure child can be session leader")
+Signed-off-by: Ovidiu Panait <ovidiu.panait@windriver.com>
+---
+ utils.c | 45 +++++++++++++++++++++++++--------------------
+ 1 file changed, 25 insertions(+), 20 deletions(-)
+
+diff --git a/utils.c b/utils.c
+index a67ac11..87ac20e 100644
+--- a/utils.c
++++ b/utils.c
+@@ -385,18 +385,9 @@ wait_child(pid_t pid)
+  * fp should be writable, likely stdout/err.
+  */
+ static int
+-setup_slave_pty(FILE *fp) { 
+-	int pty_master = -1;
+-	int pty_slave = -1;
+-	char pty_name[256];
++setup_slave_pty(FILE *fp, char *pty_name) {
+ 	struct group *gptr;
+ 	gid_t gid;
+-	int slave = -1;
+-
+-	if (openpty(&pty_master, &pty_slave, pty_name, NULL, NULL) < 0) {
+-		fprintf(fp, "ERROR: openpty() failed with: %s.\n", strerror(errno));
+-		return -1;
+-	}
+ 
+ 	if ((gptr = getgrnam(pty_name)) != 0) {
+ 		gid = gptr->gr_gid;
+@@ -419,10 +410,7 @@ setup_slave_pty(FILE *fp) {
+ 		fprintf(fp, "ERROR: chmod() failed with: %s.\n", strerror(errno));
+ 	}
+ 
+-	if ((slave = open(pty_name, O_RDWR)) == -1) {
+-		fprintf(fp, "ERROR: open() failed with: %s.\n", strerror(errno));
+-	}
+-	return (slave);
++	return 0;
+ }
+ 
+ 
+@@ -441,10 +429,14 @@ run_ptests(struct ptest_list *head, const struct ptest_options opts,
+ 	int pipefd_stderr[2];
+ 	time_t sttime, entime;
+ 	time_t duration;
+-	int slave;
+ 	int pgid = -1;
+ 	pthread_t tid;
+ 
++	int pty_master = -1;
++	int pty_slave = -1;
++	char pty_name[256];
++	int fd = -1;
++
+ 	if (opts.xml_filename) {
+ 		xh = xml_create(ptest_list_length(head), opts.xml_filename);
+ 		if (!xh)
+@@ -493,15 +485,22 @@ run_ptests(struct ptest_list *head, const struct ptest_options opts,
+ 				fprintf(fp, "ERROR: getpgid() failed, %s\n", strerror(errno));
+ 			}
+ 
++			if (openpty(&pty_master, &pty_slave, pty_name, NULL, NULL) < 0) {
++				fprintf(fp, "ERROR: openpty() failed with: %s.\n", strerror(errno));
++				return -1;
++			}
++
+ 			child = fork();
+ 			if (child == -1) {
+ 				fprintf(fp, "ERROR: Fork %s\n", strerror(errno));
+ 				rc = -1;
+ 				break;
+ 			} else if (child == 0) {
+-				close(0);
+-				if ((slave = setup_slave_pty(fp)) < 0) {
+-					fprintf(fp, "ERROR: could not setup pty (%d).", slave);
++				close(pty_master);
++				dup2(pty_slave, STDIN_FILENO);
++
++				if ((rc = setup_slave_pty(fp, pty_name)) < 0) {
++					fprintf(fp, "ERROR: could not setup pty (%d).", rc);
+ 				}
+ 				if (setpgid(0,pgid) == -1) {
+ 					fprintf(fp, "ERROR: setpgid() failed, %s\n", strerror(errno));
+@@ -511,8 +510,12 @@ run_ptests(struct ptest_list *head, const struct ptest_options opts,
+ 					fprintf(fp, "ERROR: setsid() failed, %s\n", strerror(errno));
+ 				}
+ 
+-				if (ioctl(0, TIOCSCTTY, NULL) == -1) {
+-					fprintf(fp, "ERROR: Unable to attach to controlling tty, %s\n", strerror(errno));
++				if ((fd = open(pty_name, O_RDWR)) >= 0) {
++					if (ioctl(fd, TIOCSCTTY, NULL) == -1) {
++						fprintf(fp, "ERROR: Unable to attach to controlling tty, %s\n", strerror(errno));
++					}
++
++					close(fd);
+ 				}
+ 
+ 				run_child(p->run_ptest, pipefd_stdout[1], pipefd_stderr[1]);
+@@ -549,6 +552,8 @@ run_ptests(struct ptest_list *head, const struct ptest_options opts,
+ 				fprintf(fp, "END: %s\n", ptest_dir);
+ 				fprintf(fp, "%s\n", get_stime(stime, GET_STIME_BUF_SIZE, entime));
+ 			}
++			close(pty_master);
++			close(pty_slave);
+ 			free(ptest_dir);
+ 		PTEST_LIST_ITERATE_END
+ 		fprintf(fp, "STOP: %s\n", progname);
+-- 
+2.39.1
+
+
+
+^ permalink raw reply related	[flat|nested] 2+ messages in thread
+* [ptest-runner][PATCH 2/2] utils.c: make the pty file readable by all users
+  2023-03-21 19:21 [ptest-runner][PATCH 1/2] utils.c: rework pty setup Ovidiu Panait
+@ 2023-03-21 19:21 ` Ovidiu Panait
+  0 siblings, 0 replies; 2+ messages in thread
+From: Ovidiu Panait @ 2023-03-21 19:21 UTC (permalink / raw)
+  To: yocto; +Cc: anibal.limon
+
+The "run-test" bash ptest expects read permissions for /dev/stdin:
+test -r /dev/fd/0
+test -r /dev/stdin
+
+The test currently fails because:
+- bash-ptest is run as a regular user
+- the underlying device for /dev/stdin is a pty, which is owned by root
+
+Make the pty file readable by all users to fix this ptest.
+
+Signed-off-by: Ovidiu Panait <ovidiu.panait@windriver.com>
+---
+ utils.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/utils.c b/utils.c
+index 87ac20e..643693a 100644
+--- a/utils.c
++++ b/utils.c
+@@ -406,7 +406,7 @@ setup_slave_pty(FILE *fp, char *pty_name) {
+ 	}
+ 
+ 	/* Makes the slave read/writeable for the user. */
+-	if (chmod(pty_name, S_IRUSR|S_IWUSR) != 0) {
++	if (chmod(pty_name, S_IRUSR|S_IWUSR|S_IROTH) != 0) {
+ 		fprintf(fp, "ERROR: chmod() failed with: %s.\n", strerror(errno));
+ 	}
+ 
+-- 
+2.39.1
+
+
+
+^ permalink raw reply related	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2023-03-21 19:21 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-03-21 19:21 [ptest-runner][PATCH 1/2] utils.c: rework pty setup Ovidiu Panait
+2023-03-21 19:21 ` [ptest-runner][PATCH 2/2] utils.c: make the pty file readable by all users Ovidiu Panait
+

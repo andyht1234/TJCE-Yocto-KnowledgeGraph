@@ -1,0 +1,101 @@
+* [meta-selinux][PATCH] libsepol: Security fix for CVE-2021-36086
+@ 2021-09-24  9:08 Yi Zhao
+  0 siblings, 0 replies; only message in thread
+From: Yi Zhao @ 2021-09-24  9:08 UTC (permalink / raw)
+  To: yocto, joe_macdonald, joe
+
+CVE-2021-36086:
+The CIL compiler in SELinux 3.2 has a use-after-free in cil_reset_classpermission
+(called from cil_reset_classperms_set and cil_reset_classperms_list).
+
+Reference:
+https://nvd.nist.gov/vuln/detail/CVE-2021-36086
+
+Patch from:
+https://github.com/SELinuxProject/selinux/commit/c49a8ea09501ad66e799ea41b8154b6770fec2c8
+
+Signed-off-by: Yi Zhao <yi.zhao@windriver.com>
+---
+ .../selinux/libsepol/CVE-2021-36086.patch     | 46 +++++++++++++++++++
+ recipes-security/selinux/libsepol_3.2.bb      |  3 +-
+ 2 files changed, 48 insertions(+), 1 deletion(-)
+ create mode 100644 recipes-security/selinux/libsepol/CVE-2021-36086.patch
+
+diff --git a/recipes-security/selinux/libsepol/CVE-2021-36086.patch b/recipes-security/selinux/libsepol/CVE-2021-36086.patch
+new file mode 100644
+index 0000000..7a2d616
+--- /dev/null
++++ b/recipes-security/selinux/libsepol/CVE-2021-36086.patch
+@@ -0,0 +1,46 @@
++From 49f9aa2a460fc95f04c99b44f4dd0d22e2f0e5ee Mon Sep 17 00:00:00 2001
++From: James Carter <jwcart2@gmail.com>
++Date: Thu, 8 Apr 2021 13:32:06 -0400
++Subject: [PATCH] libsepol/cil: cil_reset_classperms_set() should not reset
++ classpermission
++
++In struct cil_classperms_set, the set field is a pointer to a
++struct cil_classpermission which is looked up in the symbol table.
++Since the cil_classperms_set does not create the cil_classpermission,
++it should not reset it.
++
++Set the set field to NULL instead of resetting the classpermission
++that it points to.
++
++Signed-off-by: James Carter <jwcart2@gmail.com>
++
++Upstream-Status: Backport
++[https://github.com/SELinuxProject/selinux/commit/c49a8ea09501ad66e799ea41b8154b6770fec2c8]
++
++CVE: CVE-2021-36086
++
++Signed-off-by: Yi Zhao <yi.zhao@windriver.com>
++---
++ cil/src/cil_reset_ast.c | 6 +++++-
++ 1 file changed, 5 insertions(+), 1 deletion(-)
++
++diff --git a/cil/src/cil_reset_ast.c b/cil/src/cil_reset_ast.c
++index 89f91e5..1d9ca70 100644
++--- a/cil/src/cil_reset_ast.c
+++++ b/cil/src/cil_reset_ast.c
++@@ -59,7 +59,11 @@ static void cil_reset_classpermission(struct cil_classpermission *cp)
++ 
++ static void cil_reset_classperms_set(struct cil_classperms_set *cp_set)
++ {
++-	cil_reset_classpermission(cp_set->set);
+++	if (cp_set == NULL) {
+++		return;
+++	}
+++
+++	cp_set->set = NULL;
++ }
++ 
++ static inline void cil_reset_classperms_list(struct cil_list *cp_list)
++-- 
++2.17.1
++
+diff --git a/recipes-security/selinux/libsepol_3.2.bb b/recipes-security/selinux/libsepol_3.2.bb
+index ef5de1e..192f1b3 100644
+--- a/recipes-security/selinux/libsepol_3.2.bb
++++ b/recipes-security/selinux/libsepol_3.2.bb
+@@ -10,7 +10,8 @@ LIC_FILES_CHKSUM = "file://${S}/COPYING;md5=a6f89e2100d9b6cdffcea4f398e37343"
+ require selinux_common.inc
+ 
+ SRC_URI += "file://CVE-2021-36084.patch \
+-            file://CVE-2021-36085.patch "
++            file://CVE-2021-36085.patch \
++            file://CVE-2021-36086.patch "
+ 
+ inherit lib_package
+ 
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] only message in thread
+only message in thread, other threads:[~2021-09-24  9:08 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-09-24  9:08 [meta-selinux][PATCH] libsepol: Security fix for CVE-2021-36086 Yi Zhao
+

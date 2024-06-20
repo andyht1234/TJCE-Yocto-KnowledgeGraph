@@ -1,0 +1,222 @@
+* [meta-raspberrypi] [meta-qt6] Building qt6 on rpi4
+@ 2023-05-23 10:06 Electronic Consult
+  2023-05-23 10:36 ` Electronic Consult
+  0 siblings, 1 reply; 2+ messages in thread
+From: Electronic Consult @ 2023-05-23 10:06 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 4157 bytes --]
+
+Hello all,
+
+I'm using:
+Kirkstone
+meta-raspberry
+meta-qt6 (v6.5)
+
+From this <https://doc.qt.io/qt-6/configure-linux-device.html>post from Qt
+they suggest the correct graphics setup for a RPi4 should be:
+
+*With the Raspberry Pi 4 example, we expect that EGL, OpenGL ES and EGLFS
+GBM are all reported as yes, otherwise the EGLFS platform plugin and its
+eglfs_kms backend will not be functional on the device. For getting
+function mouse, keyboard, and touch input, either evdev or libinput must be
+enabled.*
+
+I'm trying to achieve this but with somedifficulty. So far I have a
+qtbase_git.bbappend with:
+
+PACKAGECONFIG:remove:rpi = "tests"
+PACKAGECONFIG:append:rpi = " eglfs fontconfig gles2 linuxfb tslib gbm"
+DEPENDS:append:rpi = "userland"
+
+But I'm getting an error when running bitbake -v -c configure qtbase of:
+
+ OpenGL:
+    Desktop OpenGL ....................... yes
+    OpenGL ES 2.0 ........................ yes
+    OpenGL ES 3.0 ........................ yes
+    OpenGL ES 3.1 ........................ yes
+    OpenGL ES 3.2 ........................ yes
+  Vulkan ................................. yes
+  Session Management ..................... yes
+Features used by QPA backends:
+  evdev .................................. yes
+  libinput ............................... yes
+  HiRes wheel support in libinput ........ yes
+  INTEGRITY HID .......................... no
+  mtdev .................................. no
+  tslib .................................. yes
+  xkbcommon .............................. yes
+  X11 specific:
+    XLib ................................. yes
+    XCB Xlib ............................. yes
+    EGL on X11 ........................... yes
+    xkbcommon-x11 ........................ yes
+    xcb-sm ............................... yes
+QPA backends:
+  DirectFB ............................... no
+  EGLFS .................................. yes
+  EGLFS details:
+    EGLFS OpenWFD ........................ no
+    EGLFS i.Mx6 .......................... no
+    EGLFS i.Mx6 Wayland .................. no
+    EGLFS RCAR ........................... no
+    EGLFS EGLDevice ...................... no
+    EGLFS GBM ............................ no
+    EGLFS VSP2 ........................... no
+    EGLFS Mali ........................... no
+    EGLFS Raspberry Pi ................... no
+    EGLFS X11 ............................ yes
+  LinuxFB ................................ yes
+  VNC .................................... yes
+  VK_KHR_display ......................... yes
+  QNX:
+    lgmon ................................ no
+    IMF .................................. no
+  XCB:
+    Using system-provided xcb-xinput ..... no
+    GL integrations:
+      GLX Plugin ......................... no
+        XCB GLX .......................... no
+      EGL-X11 Plugin ..................... yes
+  Windows:
+    Direct 2D ............................ no
+    Direct 2D 1.1 ........................ no
+    DirectWrite .......................... no
+    DirectWrite 3 ........................ no
+Qt Widgets:
+  GTK+ ................................... no
+  Styles ................................. Fusion Windows
+Qt Testlib:
+  Tester for item models ................. yes
+  Batch tests ............................ no
+Qt PrintSupport:
+  CUPS ................................... no
+Qt Sql Drivers:
+  DB2 (IBM) .............................. no
+  InterBase .............................. no
+  MySql .................................. no
+  OCI (Oracle) ........................... no
+  ODBC ................................... no
+  PostgreSQL ............................. no
+  SQLite ................................. no
+    Using system provided SQLite ......... no
+
+Note: Disabling X11 Accessibility Bridge: D-Bus or AT-SPI is missing.
+
+ERROR: Feature "opengles2": Forcing to "ON" breaks its condition:
+    NOT WIN32 AND NOT WATCHOS AND NOT QT_FEATURE_opengl_desktop AND
+GLESv2_FOUND
+Condition values dump:
+    WIN32 = ""
+    WATCHOS = "0"
+    QT_FEATURE_opengl_desktop = "ON"
+    GLESv2_FOUND = "TRUE"
+
+So it seems QT_FEATURE_opengl_desktop & opengles2 are incompatible.
+
+Would anyone have a suggestion on how to disable/ remove opengl_desktop?
+
+Thanks,
+
+Owen
+
+[-- Attachment #2: Type: text/html, Size: 4969 bytes --]
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+* Re: [meta-raspberrypi] [meta-qt6] Building qt6 on rpi4
+  2023-05-23 10:06 [meta-raspberrypi] [meta-qt6] Building qt6 on rpi4 Electronic Consult
+@ 2023-05-23 10:36 ` Electronic Consult
+  0 siblings, 0 replies; 2+ messages in thread
+From: Electronic Consult @ 2023-05-23 10:36 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2987 bytes --]
+
+Looks like I've got a solution. My qtbase_git.bbappend now contains:
+
+DISTRO_FEATURES:remove:rpi = " x11 wayland"
+PACKAGECONFIG:append:rpi = " accessibility eglfs fontconfig gles2 linuxfb tslib gbm"
+
+& this now results in an output of bitbake -v -c configure qtbase
+
+EGL .................................... yes
+OpenVG ................................. no
+OpenGL:
+Desktop OpenGL ....................... no
+OpenGL ES 2.0 ........................ yes
+OpenGL ES 3.0 ........................ yes
+OpenGL ES 3.1 ........................ yes
+OpenGL ES 3.2 ........................ yes
+Vulkan ................................. yes
+Session Management ..................... yes
+Features used by QPA backends:
+evdev .................................. yes
+libinput ............................... yes
+HiRes wheel support in libinput ........ yes
+INTEGRITY HID .......................... no
+mtdev .................................. no
+tslib .................................. yes
+xkbcommon .............................. yes
+X11 specific:
+XLib ................................. yes
+XCB Xlib ............................. yes
+EGL on X11 ........................... yes
+xkbcommon-x11 ........................ yes
+xcb-sm ............................... no
+QPA backends:
+DirectFB ............................... no
+EGLFS .................................. yes
+EGLFS details:
+EGLFS OpenWFD ........................ no
+EGLFS i.Mx6 .......................... no
+EGLFS i.Mx6 Wayland .................. no
+EGLFS RCAR ........................... no
+EGLFS EGLDevice ...................... yes
+EGLFS GBM ............................ yes
+EGLFS VSP2 ........................... no
+EGLFS Mali ........................... no
+EGLFS Raspberry Pi ................... no
+*EGLFS X11 ............................ yes*
+LinuxFB ................................ yes
+VNC .................................... yes
+VK_KHR_display ......................... yes
+
+Which is fairly close to the Qt setup (from here ( https://doc.qt.io/qt-6/configure-linux-device.html ) ) of:
+
+EGL .................................... yes
+OpenGL:
+ Desktop OpenGL ....................... no
+ OpenGL ES 2.0 ........................ yes
+ OpenGL ES 3.0 ........................ yes
+...
+evdev .................................. yes
+libinput ............................... yes
+...
+EGLFS .................................. yes
+EGLFS details:
+ EGLFS OpenWFD ........................ no
+ EGLFS i.Mx6 .......................... no
+ EGLFS i.Mx6 Wayland .................. no
+ EGLFS RCAR ........................... no
+ EGLFS EGLDevice ...................... yes
+ EGLFS GBM ............................ yes
+ EGLFS VSP2 ........................... no
+ EGLFS Mali ........................... no
+ EGLFS Raspberry Pi ................... no
+ *EGLFS X11 ............................ no*
+LinuxFB ................................ yes
+
+The only difference is EGLFS X11, how does one remove that?
+
+[-- Attachment #2: Type: text/html, Size: 4287 bytes --]
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2023-05-23 10:36 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-05-23 10:06 [meta-raspberrypi] [meta-qt6] Building qt6 on rpi4 Electronic Consult
+2023-05-23 10:36 ` Electronic Consult
+

@@ -1,0 +1,863 @@
+* LAYERSERIES_COMPAT_ variable in the layer's recipe
+@ 2022-12-01  4:27 Zoran Stojsavljevic
+  2022-12-01  6:06 ` [yocto] " Rudolf Streif
+  2022-12-01 11:09 ` Ross Burton
+  0 siblings, 2 replies; 15+ messages in thread
+From: Zoran Stojsavljevic @ 2022-12-01  4:27 UTC (permalink / raw)
+  To: Yocto-mailing-list
+
+Hello to Yocto community,
+
+As I am much more passive yocto wise these few years ( working on
+Android build systems and around, this is also a nightmare, I should
+say ;-) ), I have one Yocto question which I never really understood.
+
+I will ask it by example. I have one layer for the CAN tools and apps
+which I have created 4 years ago:
+https://github.com/ZoranStojsavljevic/meta-socketcan
+
+In there, in conf/layer.conf:
+https://github.com/ZoranStojsavljevic/meta-socketcan/blob/master/conf/layer.conf
+
+I have the following line (layers' compatibility):
+LAYERSERIES_COMPAT_meta-socketcan = "sumo thud warrior zeus dunfell
+gatesgarth hardknott honister kirkstone"
+
+I do not understand why we need to explicitly name releases for such
+simple generic layers?!
+
+Instead, for a virtual example:
+LAYERSERIES_COMPAT_meta-socketcan = "${AUTOLAYER x}"
+
+So all the layers might be included (or for at least lets say x = 4
+latest releases, where x = 0 would be include all)? I do understand
+that complex layers could NOT have such a definition (because of the
+dependencies), but for the generic layers (as such presented), this
+would be beneficial.
+
+Thank you for the answers,
+Zee
+_______
+
+
+^ permalink raw reply	[flat|nested] 15+ messages in thread
+* Re: [yocto] LAYERSERIES_COMPAT_ variable in the layer's recipe
+  2022-12-01  4:27 LAYERSERIES_COMPAT_ variable in the layer's recipe Zoran Stojsavljevic
+@ 2022-12-01  6:06 ` Rudolf Streif
+  2022-12-01  7:46   ` Martin Jansa
+  2022-12-01 11:09 ` Ross Burton
+  1 sibling, 1 reply; 15+ messages in thread
+From: Rudolf Streif @ 2022-12-01  6:06 UTC (permalink / raw)
+  To: Zoran; +Cc: Yocto-mailing-list
+
+[-- Attachment #1: Type: text/plain, Size: 2564 bytes --]
+
+On Wed, Nov 30, 2022, 20:27 Zoran <zoran.stojsavljevic@gmail.com> wrote:
+
+> Hello to Yocto community,
+>
+> As I am much more passive yocto wise these few years ( working on
+> Android build systems and around, this is also a nightmare, I should
+> say ;-) ), I have one Yocto question which I never really understood.
+>
+> I will ask it by example. I have one layer for the CAN tools and apps
+> which I have created 4 years ago:
+> https://github.com/ZoranStojsavljevic/meta-socketcan
+>
+> In there, in conf/layer.conf:
+>
+> https://github.com/ZoranStojsavljevic/meta-socketcan/blob/master/conf/layer.conf
+>
+> I have the following line (layers' compatibility):
+> LAYERSERIES_COMPAT_meta-socketcan = "sumo thud warrior zeus dunfell
+> gatesgarth hardknott honister kirkstone"
+>
+> I do not understand why we need to explicitly name releases for such
+> simple generic layers?!
+>
+
+To me this indicates that the maintainer of the layer has tested the
+compatibility of his layer with all of these releases of the Yocto Project.
+
+A maintainer of a layer should make a deliberate decision of adding a
+release or dropping one from the compatibility list. It should be an
+attestation that the layer's compatibility with the releases in the list is
+actually maintained and tested.
+
+There have been changes to the syntax to conditional variables. Your layer
+might well be compatible with all of the releases and it's great if you
+tested it. But it's not a given.
+
+>
+> Instead, for a virtual example:
+> LAYERSERIES_COMPAT_meta-socketcan = "${AUTOLAYER x}"
+>
+> So all the layers might be included (or for at least lets say x = 4
+> latest releases, where x = 0 would be include all)? I do understand
+> that complex layers could NOT have such a definition (because of the
+> dependencies), but for the generic layers (as such presented), this
+> would be beneficial.
+>
+
+I never cared for ${AUTOREV}, which is similar, in the first place for the
+very reason that it creates inconsistent behavior. This would do the same
+thing. What would the last 4 releases even mean? What is the reference and
+where is it obtained from?
+
+>
+> Thank you for the answers,
+> Zee
+
+_______
+>
+
+Best,
+:rjs
+
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#58689):
+> https://lists.yoctoproject.org/g/yocto/message/58689
+> Mute This Topic: https://lists.yoctoproject.org/mt/95375670/3617932
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> rudolf.streif@ibeeto.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 4613 bytes --]
+
+^ permalink raw reply	[flat|nested] 15+ messages in thread
+* Re: [yocto] LAYERSERIES_COMPAT_ variable in the layer's recipe
+  2022-12-01  6:06 ` [yocto] " Rudolf Streif
+@ 2022-12-01  7:46   ` Martin Jansa
+  2022-12-01 10:09     ` Alexander Kanavin
+  2022-12-01 16:41     ` Rudolf J Streif
+  0 siblings, 2 replies; 15+ messages in thread
+From: Martin Jansa @ 2022-12-01  7:46 UTC (permalink / raw)
+  To: Rudolf J Streif; +Cc: Zoran, Yocto-mailing-list
+
+[-- Attachment #1: Type: text/plain, Size: 3251 bytes --]
+
+Agreed with Rudolf.
+
+If the layer maintainer didn't bother to do at least do one build with new
+release and adjust LAYERSERIES_COMPAT, then I don't consider that layer
+well maintained (it could be someone else who uses the layer, tests it with
+new release and sends PR to adjust LAYERSERIES_COMPAT).
+
+Recently I've also seen this:
+LAYERSERIES_COMPAT_phytec = "${LAYERSERIES_COMPAT_core}"
+
+which is also bad as it completely disables the check (seen in
+https://git.phytec.de/meta-phytec/tree/conf/layer.conf#n14).
+
+On Thu, Dec 1, 2022 at 7:06 AM Rudolf J Streif <rudolf.streif@ibeeto.com>
+wrote:
+
+>
+>
+> On Wed, Nov 30, 2022, 20:27 Zoran <zoran.stojsavljevic@gmail.com> wrote:
+>
+>> Hello to Yocto community,
+>>
+>> As I am much more passive yocto wise these few years ( working on
+>> Android build systems and around, this is also a nightmare, I should
+>> say ;-) ), I have one Yocto question which I never really understood.
+>>
+>> I will ask it by example. I have one layer for the CAN tools and apps
+>> which I have created 4 years ago:
+>> https://github.com/ZoranStojsavljevic/meta-socketcan
+>>
+>> In there, in conf/layer.conf:
+>>
+>> https://github.com/ZoranStojsavljevic/meta-socketcan/blob/master/conf/layer.conf
+>>
+>> I have the following line (layers' compatibility):
+>> LAYERSERIES_COMPAT_meta-socketcan = "sumo thud warrior zeus dunfell
+>> gatesgarth hardknott honister kirkstone"
+>>
+>> I do not understand why we need to explicitly name releases for such
+>> simple generic layers?!
+>>
+>
+> To me this indicates that the maintainer of the layer has tested the
+> compatibility of his layer with all of these releases of the Yocto Project.
+>
+> A maintainer of a layer should make a deliberate decision of adding a
+> release or dropping one from the compatibility list. It should be an
+> attestation that the layer's compatibility with the releases in the list is
+> actually maintained and tested.
+>
+> There have been changes to the syntax to conditional variables. Your layer
+> might well be compatible with all of the releases and it's great if you
+> tested it. But it's not a given.
+>
+>>
+>> Instead, for a virtual example:
+>> LAYERSERIES_COMPAT_meta-socketcan = "${AUTOLAYER x}"
+>>
+>> So all the layers might be included (or for at least lets say x = 4
+>> latest releases, where x = 0 would be include all)? I do understand
+>> that complex layers could NOT have such a definition (because of the
+>> dependencies), but for the generic layers (as such presented), this
+>> would be beneficial.
+>>
+>
+> I never cared for ${AUTOREV}, which is similar, in the first place for the
+> very reason that it creates inconsistent behavior. This would do the same
+> thing. What would the last 4 releases even mean? What is the reference and
+> where is it obtained from?
+>
+>>
+>> Thank you for the answers,
+>> Zee
+>
+> _______
+>>
+>
+> Best,
+> :rjs
+>
+>>
+>>
+>>
+>>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#58690):
+> https://lists.yoctoproject.org/g/yocto/message/58690
+> Mute This Topic: https://lists.yoctoproject.org/mt/95375670/3617156
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> Martin.Jansa@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 5733 bytes --]
+
+^ permalink raw reply	[flat|nested] 15+ messages in thread
+* Re: [yocto] LAYERSERIES_COMPAT_ variable in the layer's recipe
+  2022-12-01  7:46   ` Martin Jansa
+@ 2022-12-01 10:09     ` Alexander Kanavin
+  2022-12-01 10:41       ` Richard Purdie
+  2022-12-09 11:20       ` Stefan Müller-Klieser
+  2022-12-01 16:41     ` Rudolf J Streif
+  1 sibling, 2 replies; 15+ messages in thread
+From: Alexander Kanavin @ 2022-12-01 10:09 UTC (permalink / raw)
+  To: Martin Jansa, s.mueller-klieser, n.wesp
+  Cc: Rudolf J Streif, Zoran, Yocto-mailing-list
+
+And this is the commit that did this:
+https://git.phytec.de/meta-phytec/commit/conf/layer.conf?id=8261e896d2b43211e7377feb38e919336d47c39f
+
+Shame on you, phytec. Shame on you. What you do in your layers perhaps
+doesn't matter so much, but you also give everyone a bad example to
+follow.
+
+Alex
+
+On Thu, 1 Dec 2022 at 08:47, Martin Jansa <Martin.Jansa@gmail.com> wrote:
+>
+> Agreed with Rudolf.
+>
+> If the layer maintainer didn't bother to do at least do one build with new release and adjust LAYERSERIES_COMPAT, then I don't consider that layer well maintained (it could be someone else who uses the layer, tests it with new release and sends PR to adjust LAYERSERIES_COMPAT).
+>
+> Recently I've also seen this:
+> LAYERSERIES_COMPAT_phytec = "${LAYERSERIES_COMPAT_core}"
+>
+> which is also bad as it completely disables the check (seen in https://git.phytec.de/meta-phytec/tree/conf/layer.conf#n14).
+>
+> On Thu, Dec 1, 2022 at 7:06 AM Rudolf J Streif <rudolf.streif@ibeeto.com> wrote:
+>>
+>>
+>>
+>> On Wed, Nov 30, 2022, 20:27 Zoran <zoran.stojsavljevic@gmail.com> wrote:
+>>>
+>>> Hello to Yocto community,
+>>>
+>>> As I am much more passive yocto wise these few years ( working on
+>>> Android build systems and around, this is also a nightmare, I should
+>>> say ;-) ), I have one Yocto question which I never really understood.
+>>>
+>>> I will ask it by example. I have one layer for the CAN tools and apps
+>>> which I have created 4 years ago:
+>>> https://github.com/ZoranStojsavljevic/meta-socketcan
+>>>
+>>> In there, in conf/layer.conf:
+>>> https://github.com/ZoranStojsavljevic/meta-socketcan/blob/master/conf/layer.conf
+>>>
+>>> I have the following line (layers' compatibility):
+>>> LAYERSERIES_COMPAT_meta-socketcan = "sumo thud warrior zeus dunfell
+>>> gatesgarth hardknott honister kirkstone"
+>>>
+>>> I do not understand why we need to explicitly name releases for such
+>>> simple generic layers?!
+>>
+>>
+>> To me this indicates that the maintainer of the layer has tested the compatibility of his layer with all of these releases of the Yocto Project.
+>>
+>> A maintainer of a layer should make a deliberate decision of adding a release or dropping one from the compatibility list. It should be an attestation that the layer's compatibility with the releases in the list is actually maintained and tested.
+>>
+>> There have been changes to the syntax to conditional variables. Your layer might well be compatible with all of the releases and it's great if you tested it. But it's not a given.
+>>>
+>>>
+>>> Instead, for a virtual example:
+>>> LAYERSERIES_COMPAT_meta-socketcan = "${AUTOLAYER x}"
+>>>
+>>> So all the layers might be included (or for at least lets say x = 4
+>>> latest releases, where x = 0 would be include all)? I do understand
+>>> that complex layers could NOT have such a definition (because of the
+>>> dependencies), but for the generic layers (as such presented), this
+>>> would be beneficial.
+>>
+>>
+>> I never cared for ${AUTOREV}, which is similar, in the first place for the very reason that it creates inconsistent behavior. This would do the same thing. What would the last 4 releases even mean? What is the reference and where is it obtained from?
+>>>
+>>>
+>>> Thank you for the answers,
+>>> Zee
+>>>
+>>> _______
+>>
+>>
+>> Best,
+>> :rjs
+>>>
+>>>
+>>>
+>>>
+>>
+>>
+>>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#58691): https://lists.yoctoproject.org/g/yocto/message/58691
+> Mute This Topic: https://lists.yoctoproject.org/mt/95375670/1686489
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 15+ messages in thread
+* Re: [yocto] LAYERSERIES_COMPAT_ variable in the layer's recipe
+  2022-12-01 10:09     ` Alexander Kanavin
+@ 2022-12-01 10:41       ` Richard Purdie
+  2022-12-09 11:20       ` Stefan Müller-Klieser
+  1 sibling, 0 replies; 15+ messages in thread
+From: Richard Purdie @ 2022-12-01 10:41 UTC (permalink / raw)
+  To: Alexander Kanavin, Martin Jansa, s.mueller-klieser, n.wesp
+  Cc: Rudolf J Streif, Zoran, Yocto-mailing-list
+
+On Thu, 2022-12-01 at 11:09 +0100, Alexander Kanavin wrote:
+> And this is the commit that did this:
+> https://git.phytec.de/meta-phytec/commit/conf/layer.conf?id=8261e896d2b43211e7377feb38e919336d47c39f
+> 
+> Shame on you, phytec. Shame on you. What you do in your layers perhaps
+> doesn't matter so much, but you also give everyone a bad example to
+> follow.
+
+That commit really is not in the spirit of things and I'm not happy
+people are doing that. I'd not be surprised if that stopped working
+soon.
+
+We had a huge problem with unmaintained layers where it was unclear
+which releases a master branch worked or had been tested with. An
+actively maintained layer should have no problem with updating this a
+couple of times a year. If that is an issue, it isn't actively
+maintained and it makes that clear.
+
+Cheers,
+
+Richard
+
+
+^ permalink raw reply	[flat|nested] 15+ messages in thread
+* Re: [yocto] LAYERSERIES_COMPAT_ variable in the layer's recipe
+  2022-12-01  4:27 LAYERSERIES_COMPAT_ variable in the layer's recipe Zoran Stojsavljevic
+  2022-12-01  6:06 ` [yocto] " Rudolf Streif
+@ 2022-12-01 11:09 ` Ross Burton
+  2022-12-01 11:17   ` Martin Jansa
+  2022-12-01 12:38   ` Zoran Stojsavljevic
+  1 sibling, 2 replies; 15+ messages in thread
+From: Ross Burton @ 2022-12-01 11:09 UTC (permalink / raw)
+  To: zoran.stojsavljevic; +Cc: Yocto-mailing-list
+
+On 1 Dec 2022, at 04:27, Zoran via lists.yoctoproject.org <zoran.stojsavljevic=gmail.com@lists.yoctoproject.org> wrote:
+> I do not understand why we need to explicitly name releases for such
+> simple generic layers?!
+
+The compatibility is because over time things change: override syntax has changed, classes get added or removed, functionality may appear in bitbake.  Sometimes the breakage is subtle, and a layer may parse and appear to build fine, but be broken.
+
+Your meta-socketcan layer is broken in honister onwards despite claiming compatibility, for example.
+
+Ross
+
+^ permalink raw reply	[flat|nested] 15+ messages in thread
+* Re: [yocto] LAYERSERIES_COMPAT_ variable in the layer's recipe
+  2022-12-01 11:09 ` Ross Burton
+@ 2022-12-01 11:17   ` Martin Jansa
+  2022-12-01 12:46     ` Zoran Stojsavljevic
+  2022-12-01 12:38   ` Zoran Stojsavljevic
+  1 sibling, 1 reply; 15+ messages in thread
+From: Martin Jansa @ 2022-12-01 11:17 UTC (permalink / raw)
+  To: Ross Burton; +Cc: zoran.stojsavljevic, Yocto-mailing-list
+
+[-- Attachment #1: Type: text/plain, Size: 1371 bytes --]
+
+On Thu, Dec 1, 2022 at 12:09 PM Ross Burton <ross.burton@arm.com> wrote:
+
+> On 1 Dec 2022, at 04:27, Zoran via lists.yoctoproject.org
+> <zoran.stojsavljevic=gmail.com@lists.yoctoproject.org> wrote:
+> > I do not understand why we need to explicitly name releases for such
+> > simple generic layers?!
+>
+> The compatibility is because over time things change: override syntax has
+> changed, classes get added or removed, functionality may appear in
+> bitbake.  Sometimes the breakage is subtle, and a layer may parse and
+> appear to build fine, but be broken.
+>
+> Your meta-socketcan layer is broken in honister onwards despite claiming
+> compatibility, for example.
+>
+
+And here is another example why nobody should be using meta-socketcan:
+https://github.com/ZoranStojsavljevic/meta-socketcan/commit/cefd86cd1def9ad2e63be527f8ce36a076d7e17c#
+
+You cannot change the declared LICENSE of the components, just because you
+wish them to use the same license as the layer metadata, especially when
+those components clearly declare different LICENSE in the source code, e.g.:
+https://github.com/linux-can/socketcand/commit/a7ab9878d11ac187b92dcf48b6331c228f4f4b92
+
+Using COMMON_LICENSE_DIR in LIC_FILES_CHKSUM is another anti-pattern which
+just disables whole purpose of LIC_FILES_CHKSUM and this is acceptable only
+for "pure-metadata" recipes like packagegroups or image recipes.
+
+[-- Attachment #2: Type: text/html, Size: 2119 bytes --]
+
+^ permalink raw reply	[flat|nested] 15+ messages in thread
+* Re: [yocto] LAYERSERIES_COMPAT_ variable in the layer's recipe
+  2022-12-01 11:09 ` Ross Burton
+  2022-12-01 11:17   ` Martin Jansa
+@ 2022-12-01 12:38   ` Zoran Stojsavljevic
+  1 sibling, 0 replies; 15+ messages in thread
+From: Zoran Stojsavljevic @ 2022-12-01 12:38 UTC (permalink / raw)
+  To: Ross Burton; +Cc: Yocto-mailing-list
+
+Ross,
+
+It is now broken even in hardknott. I tried it, just as I tried it
+before (it worked before).
+
+I have no idea what the ERROR is:
+
+zoran.s@NBK0005U:~/projects2/yocto/bbb-yocto/build$ bitbake -k
+core-image-minimal
+Loading cache: 100% |
+                                                                | ETA:
+ --:--:--
+Loaded 0 entries from dependency cache.
+Parsing recipes: 100%
+|#################################################################################################################|
+Time: 0:00:23
+Parsing of 814 .bb files complete (0 cached, 814 parsed). 1438
+targets, 41 skipped, 0 masked, 0 errors.
+NOTE: Resolving any missing task queue dependencies
+ERROR: Nothing RPROVIDES 'cannelloni' (but
+/home/zoran.s/projects2/yocto/bbb-yocto/poky/meta/recipes-core/images/core-image-minimal.bb
+RDEPENDS on or otherwise requires it)
+NOTE: Runtime target 'cannelloni' is unbuildable, removing...
+Missing or unbuildable dependency chain was: ['cannelloni']
+ERROR: Nothing RPROVIDES 'can-utils' (but
+/home/zoran.s/projects2/yocto/bbb-yocto/poky/meta/recipes-core/images/core-image-minimal.bb
+RDEPENDS on or otherwise requires it)
+NOTE: Runtime target 'can-utils' is unbuildable, removing...
+Missing or unbuildable dependency chain was: ['can-utils']
+ERROR: Nothing RPROVIDES 'socketcand' (but
+/home/zoran.s/projects2/yocto/bbb-yocto/poky/meta/recipes-core/images/core-image-minimal.bb
+RDEPENDS on or otherwise requires it)
+NOTE: Runtime target 'socketcand' is unbuildable, removing...
+Missing or unbuildable dependency chain was: ['socketcand']
+ERROR: Nothing RPROVIDES 'core-image-minimal'
+No eligible RPROVIDERs exist for 'core-image-minimal'
+NOTE: Runtime target 'core-image-minimal' is unbuildable, removing...
+Missing or unbuildable dependency chain was: ['core-image-minimal']
+
+
+And my /home/zoran.s/projects2/yocto/bbb-yocto/poky/meta/recipes-core/images/core-image-minimal.bb
+is:
+
+SUMMARY = "A small image just capable of allowing a device to boot."
+
+IMAGE_INSTALL = "packagegroup-core-boot ${CORE_IMAGE_EXTRA_INSTALL}"
+
+IMAGE_LINGUAS = " "
+
+LICENSE = "MIT"
+
+nano meta/recipes-core/images/core-image-minimal.bb
+
+## IMAGE_INSTALL_append = " kernel-modules"
+IMAGE_INSTALL_append = " \
+    kernel-modules \
+    cannelloni \
+    can-utils \
+    socketcand \
+    "
+
+IMAGE_ROOTFS_SIZE ?= "8192"
+IMAGE_ROOTFS_EXTRA_SPACE_append =
+"${@bb.utils.contains("DISTRO_FEATURES", "systemd", " + 4096", ""
+,d)}"
+
+Zee
+________
+
+On Thu, Dec 1, 2022 at 12:09 PM Ross Burton <Ross.Burton@arm.com> wrote:
+>
+> On 1 Dec 2022, at 04:27, Zoran via lists.yoctoproject.org <zoran.stojsavljevic=gmail.com@lists.yoctoproject.org> wrote:
+> > I do not understand why we need to explicitly name releases for such
+> > simple generic layers?!
+>
+> The compatibility is because over time things change: override syntax has changed, classes get added or removed, functionality may appear in bitbake.  Sometimes the breakage is subtle, and a layer may parse and appear to build fine, but be broken.
+>
+> Your meta-socketcan layer is broken in honister onwards despite claiming compatibility, for example.
+>
+> Ross
+
+
+^ permalink raw reply	[flat|nested] 15+ messages in thread
+* Re: [yocto] LAYERSERIES_COMPAT_ variable in the layer's recipe
+  2022-12-01 11:17   ` Martin Jansa
+@ 2022-12-01 12:46     ` Zoran Stojsavljevic
+  2022-12-01 12:48       ` Ross Burton
+  0 siblings, 1 reply; 15+ messages in thread
+From: Zoran Stojsavljevic @ 2022-12-01 12:46 UTC (permalink / raw)
+  To: Martin Jansa; +Cc: Ross Burton, Yocto-mailing-list
+
+Martin, U R too fast. Speedy Gonzales. ;-)
+
+I do agree that this is the bad practice to change licences for the
+known recipes. For the can-utils and socketcand. I'll revert this back
+to GPLv2.
+
+But, could you, please, allow me to have my own original cannelloni
+recipe (yes, I developed it with some help from this community) on my
+own terms? I DID not copy it from anywhere. It is an ORIGINAL.
+
+Please, check. Do NOT overspeed. Please.
+
+Thank you for your advice.
+
+Zee
+_______
+
+On Thu, Dec 1, 2022 at 12:18 PM Martin Jansa <martin.jansa@gmail.com> wrote:
+>
+> On Thu, Dec 1, 2022 at 12:09 PM Ross Burton <ross.burton@arm.com> wrote:
+>>
+>> On 1 Dec 2022, at 04:27, Zoran via lists.yoctoproject.org <zoran.stojsavljevic=gmail.com@lists.yoctoproject.org> wrote:
+>> > I do not understand why we need to explicitly name releases for such
+>> > simple generic layers?!
+>>
+>> The compatibility is because over time things change: override syntax has changed, classes get added or removed, functionality may appear in bitbake.  Sometimes the breakage is subtle, and a layer may parse and appear to build fine, but be broken.
+>>
+>> Your meta-socketcan layer is broken in honister onwards despite claiming compatibility, for example.
+>
+>
+> And here is another example why nobody should be using meta-socketcan:
+> https://github.com/ZoranStojsavljevic/meta-socketcan/commit/cefd86cd1def9ad2e63be527f8ce36a076d7e17c#
+>
+> You cannot change the declared LICENSE of the components, just because you wish them to use the same license as the layer metadata, especially when those components clearly declare different LICENSE in the source code, e.g.:
+> https://github.com/linux-can/socketcand/commit/a7ab9878d11ac187b92dcf48b6331c228f4f4b92
+>
+> Using COMMON_LICENSE_DIR in LIC_FILES_CHKSUM is another anti-pattern which just disables whole purpose of LIC_FILES_CHKSUM and this is acceptable only for "pure-metadata" recipes like packagegroups or image recipes.
+
+
+^ permalink raw reply	[flat|nested] 15+ messages in thread
+* Re: [yocto] LAYERSERIES_COMPAT_ variable in the layer's recipe
+  2022-12-01 12:46     ` Zoran Stojsavljevic
+@ 2022-12-01 12:48       ` Ross Burton
+  2022-12-01 13:01         ` Zoran Stojsavljevic
+  0 siblings, 1 reply; 15+ messages in thread
+From: Ross Burton @ 2022-12-01 12:48 UTC (permalink / raw)
+  To: Zoran Stojsavljevic; +Cc: Martin Jansa, Yocto-mailing-list
+
+On 1 Dec 2022, at 12:46, Zoran Stojsavljevic <zoran.stojsavljevic@gmail.com> wrote:
+> But, could you, please, allow me to have my own original cannelloni
+> recipe (yes, I developed it with some help from this community) on my
+> own terms? I DID not copy it from anywhere. It is an ORIGINAL.
+
+As I explained in the bug I filed in your repository, the LICENSE statement is the license of the contents of the packages, not the recipe itself.
+
+https://github.com/mguentner/cannelloni clearly says GPLv2.
+
+Ross
+
+^ permalink raw reply	[flat|nested] 15+ messages in thread
+* Re: [yocto] LAYERSERIES_COMPAT_ variable in the layer's recipe
+  2022-12-01 12:48       ` Ross Burton
+@ 2022-12-01 13:01         ` Zoran Stojsavljevic
+  0 siblings, 0 replies; 15+ messages in thread
+From: Zoran Stojsavljevic @ 2022-12-01 13:01 UTC (permalink / raw)
+  To: Ross Burton; +Cc: Martin Jansa, Yocto-mailing-list
+
+Agreed. Will revert.
+
+Zee
+_______
+
+On Thu, Dec 1, 2022 at 1:48 PM Ross Burton <Ross.Burton@arm.com> wrote:
+>
+> On 1 Dec 2022, at 12:46, Zoran Stojsavljevic <zoran.stojsavljevic@gmail.com> wrote:
+> > But, could you, please, allow me to have my own original cannelloni
+> > recipe (yes, I developed it with some help from this community) on my
+> > own terms? I DID not copy it from anywhere. It is an ORIGINAL.
+>
+> As I explained in the bug I filed in your repository, the LICENSE statement is the license of the contents of the packages, not the recipe itself.
+>
+> https://github.com/mguentner/cannelloni clearly says GPLv2.
+>
+> Ross
+
+
+^ permalink raw reply	[flat|nested] 15+ messages in thread
+* Re: [yocto] LAYERSERIES_COMPAT_ variable in the layer's recipe
+  2022-12-01  7:46   ` Martin Jansa
+  2022-12-01 10:09     ` Alexander Kanavin
+@ 2022-12-01 16:41     ` Rudolf J Streif
+  2022-12-01 17:01       ` Alexander Kanavin
+  1 sibling, 1 reply; 15+ messages in thread
+From: Rudolf J Streif @ 2022-12-01 16:41 UTC (permalink / raw)
+  To: Martin Jansa; +Cc: Zoran, Yocto-mailing-list
+
+
+> Recently I've also seen this:
+> LAYERSERIES_COMPAT_phytec = "${LAYERSERIES_COMPAT_core}"
+>
+Oh no, now the entire Yocto Project world knows about this hack. Now we 
+need a sanity checker for this in the insane class. :)
+
+
+
+^ permalink raw reply	[flat|nested] 15+ messages in thread
+* Re: [yocto] LAYERSERIES_COMPAT_ variable in the layer's recipe
+  2022-12-01 16:41     ` Rudolf J Streif
+@ 2022-12-01 17:01       ` Alexander Kanavin
+  2022-12-01 18:32         ` Zoran Stojsavljevic
+  0 siblings, 1 reply; 15+ messages in thread
+From: Alexander Kanavin @ 2022-12-01 17:01 UTC (permalink / raw)
+  To: Rudolf J Streif; +Cc: Martin Jansa, Zoran, Yocto-mailing-list
+
+On Thu, 1 Dec 2022 at 17:41, Rudolf J Streif <rudolf.streif@ibeeto.com> wrote:
+>
+>
+> > Recently I've also seen this:
+> > LAYERSERIES_COMPAT_phytec = "${LAYERSERIES_COMPAT_core}"
+> >
+> Oh no, now the entire Yocto Project world knows about this hack. Now we
+> need a sanity checker for this in the insane class. :)
+
+It's a slippery slope. We can also for example make bitbake forcibly
+not expand any variables in it, and write out an angry rant when
+someone tries, and then I'm sure determined people will find a way
+around that too.
+
+Alex
+
+
+^ permalink raw reply	[flat|nested] 15+ messages in thread
+* Re: [yocto] LAYERSERIES_COMPAT_ variable in the layer's recipe
+  2022-12-01 17:01       ` Alexander Kanavin
+@ 2022-12-01 18:32         ` Zoran Stojsavljevic
+  0 siblings, 0 replies; 15+ messages in thread
+From: Zoran Stojsavljevic @ 2022-12-01 18:32 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: Rudolf J Streif, Martin Jansa, Yocto-mailing-list
+
+Do not bother... This is a war between me and the entire YOCTO
+community of founders... It has been going for a while. Lot of INTEL
+guys and former INTEL guys against former INTEL guy. Me.
+
+But, I came here with Peace. It seems some people could not overcome their EGOs.
+
+I am trying to ask for a brainstorming. Now, I am trying to
+understand, why the backpors took place from kirkstone... Once my
+scripts were working for hardknott...
+
+But they do not work anymore.
+
+Well...
+
+Not my fault. Just trying to push forward.
+
+Zee
+_______
+
+On Thu, Dec 1, 2022 at 6:01 PM Alexander Kanavin <alex.kanavin@gmail.com> wrote:
+>
+> On Thu, 1 Dec 2022 at 17:41, Rudolf J Streif <rudolf.streif@ibeeto.com> wrote:
+> >
+> >
+> > > Recently I've also seen this:
+> > > LAYERSERIES_COMPAT_phytec = "${LAYERSERIES_COMPAT_core}"
+> > >
+> > Oh no, now the entire Yocto Project world knows about this hack. Now we
+> > need a sanity checker for this in the insane class. :)
+>
+> It's a slippery slope. We can also for example make bitbake forcibly
+> not expand any variables in it, and write out an angry rant when
+> someone tries, and then I'm sure determined people will find a way
+> around that too.
+>
+> Alex
+
+
+^ permalink raw reply	[flat|nested] 15+ messages in thread
+* Re: [yocto] LAYERSERIES_COMPAT_ variable in the layer's recipe
+  2022-12-01 10:09     ` Alexander Kanavin
+  2022-12-01 10:41       ` Richard Purdie
+@ 2022-12-09 11:20       ` Stefan Müller-Klieser
+  1 sibling, 0 replies; 15+ messages in thread
+From: Stefan Müller-Klieser @ 2022-12-09 11:20 UTC (permalink / raw)
+  To: alex.kanavin, Martin.Jansa, Norbert Wesp
+  Cc: zoran.stojsavljevic, yocto, rudolf.streif
+
+Am Donnerstag, dem 01.12.2022 um 11:09 +0100 schrieb Alexander Kanavin:
+> And this is the commit that did this:
+> https://git.phytec.de/meta-phytec/commit/conf/layer.conf?id=8261e896d2b43211e7377feb38e919336d47c39f
+> 
+> Shame on you, phytec. Shame on you. What you do in your layers perhaps
+> doesn't matter so much, but you also give everyone a bad example to
+> follow.
+
+Hi Alexander,
+
+instead of putting shame on people, I would propose, for a prospering
+community, to send out hints to maintainers, when an enforced mechanism
+is being disabled. I would have just ignored your email if Richard did
+not cleared things up with his patch. Thanks.
+
+Regards, Stefan
+
+> 
+> Alex
+> 
+> On Thu, 1 Dec 2022 at 08:47, Martin Jansa <Martin.Jansa@gmail.com> wrote:
+> > 
+> > Agreed with Rudolf.
+> > 
+> > If the layer maintainer didn't bother to do at least do one build with new release and adjust
+> > LAYERSERIES_COMPAT, then I don't consider that layer well maintained (it could be someone else who uses
+> > the layer, tests it with new release and sends PR to adjust LAYERSERIES_COMPAT).
+> > 
+> > Recently I've also seen this:
+> > LAYERSERIES_COMPAT_phytec = "${LAYERSERIES_COMPAT_core}"
+> > 
+> > which is also bad as it completely disables the check (seen in
+> > https://git.phytec.de/meta-phytec/tree/conf/layer.conf#n14).
+> > 
+> > On Thu, Dec 1, 2022 at 7:06 AM Rudolf J Streif <rudolf.streif@ibeeto.com> wrote:
+> > > 
+> > > 
+> > > 
+> > > On Wed, Nov 30, 2022, 20:27 Zoran <zoran.stojsavljevic@gmail.com> wrote:
+> > > > 
+> > > > Hello to Yocto community,
+> > > > 
+> > > > As I am much more passive yocto wise these few years ( working on
+> > > > Android build systems and around, this is also a nightmare, I should
+> > > > say ;-) ), I have one Yocto question which I never really understood.
+> > > > 
+> > > > I will ask it by example. I have one layer for the CAN tools and apps
+> > > > which I have created 4 years ago:
+> > > > https://github.com/ZoranStojsavljevic/meta-socketcan
+> > > > 
+> > > > In there, in conf/layer.conf:
+> > > > https://github.com/ZoranStojsavljevic/meta-socketcan/blob/master/conf/layer.conf
+> > > > 
+> > > > I have the following line (layers' compatibility):
+> > > > LAYERSERIES_COMPAT_meta-socketcan = "sumo thud warrior zeus dunfell
+> > > > gatesgarth hardknott honister kirkstone"
+> > > > 
+> > > > I do not understand why we need to explicitly name releases for such
+> > > > simple generic layers?!
+> > > 
+> > > 
+> > > To me this indicates that the maintainer of the layer has tested the compatibility of his layer with all
+> > > of these releases of the Yocto Project.
+> > > 
+> > > A maintainer of a layer should make a deliberate decision of adding a release or dropping one from the
+> > > compatibility list. It should be an attestation that the layer's compatibility with the releases in the
+> > > list is actually maintained and tested.
+> > > 
+> > > There have been changes to the syntax to conditional variables. Your layer might well be compatible with
+> > > all of the releases and it's great if you tested it. But it's not a given.
+> > > > 
+> > > > 
+> > > > Instead, for a virtual example:
+> > > > LAYERSERIES_COMPAT_meta-socketcan = "${AUTOLAYER x}"
+> > > > 
+> > > > So all the layers might be included (or for at least lets say x = 4
+> > > > latest releases, where x = 0 would be include all)? I do understand
+> > > > that complex layers could NOT have such a definition (because of the
+> > > > dependencies), but for the generic layers (as such presented), this
+> > > > would be beneficial.
+> > > 
+> > > 
+> > > I never cared for ${AUTOREV}, which is similar, in the first place for the very reason that it creates
+> > > inconsistent behavior. This would do the same thing. What would the last 4 releases even mean? What is
+> > > the reference and where is it obtained from?
+> > > > 
+> > > > 
+> > > > Thank you for the answers,
+> > > > Zee
+> > > > 
+> > > > _______
+> > > 
+> > > 
+> > > Best,
+> > > :rjs
+> > > > 
+> > > > 
+> > > > 
+> > > > 
+> > > 
+> > > 
+> > > 
+> > 
+> > -=-=-=-=-=-=-=-=-=-=-=-
+> > Links: You receive all messages sent to this group.
+> > View/Reply Online (#58691): https://lists.yoctoproject.org/g/yocto/message/58691
+> > Mute This Topic: https://lists.yoctoproject.org/mt/95375670/1686489
+> > Group Owner: yocto+owner@lists.yoctoproject.org
+> > Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com]
+> > -=-=-=-=-=-=-=-=-=-=-=-
+> > 
+
+
+^ permalink raw reply	[flat|nested] 15+ messages in thread
+end of thread, other threads:[~2022-12-09 11:20 UTC | newest]
+
+Thread overview: 15+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-12-01  4:27 LAYERSERIES_COMPAT_ variable in the layer's recipe Zoran Stojsavljevic
+2022-12-01  6:06 ` [yocto] " Rudolf Streif
+2022-12-01  7:46   ` Martin Jansa
+2022-12-01 10:09     ` Alexander Kanavin
+2022-12-01 10:41       ` Richard Purdie
+2022-12-09 11:20       ` Stefan Müller-Klieser
+2022-12-01 16:41     ` Rudolf J Streif
+2022-12-01 17:01       ` Alexander Kanavin
+2022-12-01 18:32         ` Zoran Stojsavljevic
+2022-12-01 11:09 ` Ross Burton
+2022-12-01 11:17   ` Martin Jansa
+2022-12-01 12:46     ` Zoran Stojsavljevic
+2022-12-01 12:48       ` Ross Burton
+2022-12-01 13:01         ` Zoran Stojsavljevic
+2022-12-01 12:38   ` Zoran Stojsavljevic
+

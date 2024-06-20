@@ -1,0 +1,74 @@
+* [yocto-autobuilder-helper] [PATCH] qa_email: Add headers to the script to improve debugging
+@ 2023-09-26 10:14 Richard Purdie
+  0 siblings, 0 replies; only message in thread
+From: Richard Purdie @ 2023-09-26 10:14 UTC (permalink / raw)
+  To: yocto
+
+It is hard to tell which section of the code specific error messages
+come from at present. Add more headers to the output so we can at
+least tell which section the messages are from. It also adds some
+timing information.
+
+Signed-off-by: Richard Purdie <richard.purdie@linuxfoundation.org>
+---
+ scripts/send_qa_email.py | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/scripts/send_qa_email.py b/scripts/send_qa_email.py
+index fc7fccc..8f913a6 100755
+--- a/scripts/send_qa_email.py
++++ b/scripts/send_qa_email.py
+@@ -116,6 +116,7 @@ def send_qa_email():
+     repodir = os.path.dirname(args.repojson) + "/build/repos"
+ 
+     if 'poky' in repos and os.path.exists(resulttool) and os.path.exists(querytool) and args.results_dir:
++        utils.printheader("Processing test report")
+         # Need the finalised revisions (not 'HEAD')
+         targetrepodir = "%s/poky" % (repodir)
+         revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=targetrepodir).decode('utf-8').strip()
+@@ -129,6 +130,7 @@ def send_qa_email():
+ 
+         tempdir = tempfile.mkdtemp(prefix='sendqaemail.')
+         try:
++            utils.printheader("Importing test results repo data")
+             cloneopts = []
+             if comparebranch:
+                 cloneopts = ["--branch", comparebranch]
+@@ -152,6 +154,8 @@ def send_qa_email():
+                     subprocess.check_call(["git", "branch", basebranch], cwd=tempdir)
+                     subprocess.check_call(["git", "checkout", basebranch], cwd=tempdir)
+ 
++            utils.printheader("Storing results")
++
+             subprocess.check_call([resulttool, "store", args.results_dir, tempdir])
+             if comparebranch:
+                 subprocess.check_call(["git", "push", "--all", "--force"], cwd=tempdir)
+@@ -162,6 +166,7 @@ def send_qa_email():
+             elif is_release_version(args.release) and not comparebranch and not basebranch:
+                 log.warning("Test results not published on release version. Faulty AB configuration ?")
+ 
++            utils.printheader("Processing regression report")
+             regression_base, regression_target = get_regression_base_and_target(basebranch, comparebranch, args.release, targetrepodir)
+             if regression_base and regression_target:
+                 generate_regression_report(querytool, targetrepodir, regression_base, regression_target, tempdir, args.results_dir, log)
+@@ -174,6 +179,8 @@ def send_qa_email():
+         utils.printheader("Not sending QA email")
+         sys.exit(0)
+ 
++    utils.printheader("Generating QA email")
++
+     buildhashes = ""
+     for repo in sorted(repos.keys()):
+         # gplv2 is no longer built/tested in master
+-- 
+2.39.2
+
+
+
+^ permalink raw reply related	[flat|nested] only message in thread
+only message in thread, other threads:[~2023-09-26 10:14 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-09-26 10:14 [yocto-autobuilder-helper] [PATCH] qa_email: Add headers to the script to improve debugging Richard Purdie
+

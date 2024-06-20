@@ -1,0 +1,157 @@
+* KERNEL_DEVICETREE cannot be appended?
+@ 2022-03-22 17:10 Matthias Klein
+  2022-03-22 17:29 ` [yocto] " Alexandre Belloni
+  0 siblings, 1 reply; 4+ messages in thread
+From: Matthias Klein @ 2022-03-22 17:10 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 670 bytes --]
+
+Hello,
+
+I am trying to add a device tree in a yocto based on the meta-raspberrypi layer.
+Adding the device tree via a patch in a bbapend of the kernel recipe is no problem.
+
+But all attempts to add the file in the local.conf of the variable KERNEL_DEVICETREE replace all other device trees.
+I.e. on the device is then only my new file. It seems that the "append" works like a "="?
+
+#KERNEL_DEVICETREE:raspberrypi3-64:append = " broadcom/my-custom-tree.dtb"
+KERNEL_DEVICETREE:raspberrypi3-64 += " broadcom/my-custom-tree.dtb"
+
+Is there any way to add the device tree?
+Preferably without having to create a custom machine for it?
+
+Best regards,
+Matthias
+
+
+[-- Attachment #2: Type: text/html, Size: 2808 bytes --]
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] KERNEL_DEVICETREE cannot be appended?
+  2022-03-22 17:10 KERNEL_DEVICETREE cannot be appended? Matthias Klein
+@ 2022-03-22 17:29 ` Alexandre Belloni
+  2022-03-22 17:45   ` AW: " Matthias Klein
+       [not found]   ` <16DEC50AC85C53D2.18232@lists.yoctoproject.org>
+  0 siblings, 2 replies; 4+ messages in thread
+From: Alexandre Belloni @ 2022-03-22 17:29 UTC (permalink / raw)
+  To: Matthias Klein; +Cc: yocto
+
+Hi,
+
+On 22/03/2022 17:10:10+0000, Matthias Klein wrote:
+> Hello,
+> 
+> I am trying to add a device tree in a yocto based on the meta-raspberrypi layer.
+> Adding the device tree via a patch in a bbapend of the kernel recipe is no problem.
+> 
+> But all attempts to add the file in the local.conf of the variable KERNEL_DEVICETREE replace all other device trees.
+> I.e. on the device is then only my new file. It seems that the "append" works like a "="?
+> 
+> #KERNEL_DEVICETREE:raspberrypi3-64:append = " broadcom/my-custom-tree.dtb"
+> KERNEL_DEVICETREE:raspberrypi3-64 += " broadcom/my-custom-tree.dtb"
+> 
+> Is there any way to add the device tree?
+
+Did you try RPI_KERNEL_DEVICETREE:append?
+
+
+Whatt is happening here is that KERNEL_DEVICETREE is set like that in
+rpi-base.inc:
+
+KERNEL_DEVICETREE ??= " \
+    ${RPI_KERNEL_DEVICETREE} \
+    ${RPI_KERNEL_DEVICETREE_OVERLAYS} \
+    "
+
+You are creating KERNEL_DEVICETREE:raspberrypi3-64 which is more
+specific than KERNEL_DEVICETREE and so the default content of
+KERNEL_DEVICETREE is dropped and replaced by the value of
+KERNEL_DEVICETREE:raspberrypi3-64.
+
+> Preferably without having to create a custom machine for it?
+> 
+
+You should probably create a new machine, it is a bad practice to change
+KERNEL_DEVICETREE from local.conf
+
+> Best regards,
+> Matthias
+> 
+
+> 
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#56529): https://lists.yoctoproject.org/g/yocto/message/56529
+> Mute This Topic: https://lists.yoctoproject.org/mt/89957163/3617179
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alexandre.belloni@bootlin.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+> 
+
+
+-- 
+Alexandre Belloni, co-owner and COO, Bootlin
+Embedded Linux and Kernel engineering
+https://bootlin.com
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* AW: [yocto] KERNEL_DEVICETREE cannot be appended?
+  2022-03-22 17:29 ` [yocto] " Alexandre Belloni
+@ 2022-03-22 17:45   ` Matthias Klein
+       [not found]   ` <16DEC50AC85C53D2.18232@lists.yoctoproject.org>
+  1 sibling, 0 replies; 4+ messages in thread
+From: Matthias Klein @ 2022-03-22 17:45 UTC (permalink / raw)
+  To: Alexandre Belloni; +Cc: yocto
+
+Hello Alexandre,
+
+> Did you try RPI_KERNEL_DEVICETREE:append?
+
+Thank you, that works.
+
+> You should probably create a new machine, it is a bad practice to change KERNEL_DEVICETREE from local.conf
+
+OK.
+
+Best regards,
+Matthias
+
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* AW: [yocto] KERNEL_DEVICETREE cannot be appended?
+       [not found]   ` <16DEC50AC85C53D2.18232@lists.yoctoproject.org>
+@ 2022-03-22 17:49     ` Matthias Klein
+  0 siblings, 0 replies; 4+ messages in thread
+From: Matthias Klein @ 2022-03-22 17:49 UTC (permalink / raw)
+  To: Alexandre Belloni; +Cc: yocto
+
+Hello Alexandre,
+
+> Did you try RPI_KERNEL_DEVICETREE:append?
+
+No, I was wrong.
+This also replaces all device trees.
+Only the overlays are then additionally present.
+
+I understand that it is bad practice.
+However, I would still like to understand why the "append" behaves so strangely. 
+
+Best regards,
+Matthias
+
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+end of thread, other threads:[~2022-03-22 17:49 UTC | newest]
+
+Thread overview: 4+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-03-22 17:10 KERNEL_DEVICETREE cannot be appended? Matthias Klein
+2022-03-22 17:29 ` [yocto] " Alexandre Belloni
+2022-03-22 17:45   ` AW: " Matthias Klein
+     [not found]   ` <16DEC50AC85C53D2.18232@lists.yoctoproject.org>
+2022-03-22 17:49     ` Matthias Klein
+

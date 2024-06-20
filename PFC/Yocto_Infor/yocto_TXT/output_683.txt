@@ -1,0 +1,193 @@
+* [meta-security][PATCH 1/2] oeqa: fix hash test to match new changes
+@ 2023-05-02 11:06 Armin Kuster
+  2023-05-02 11:06 ` [meta-security][PATCH 2/2] integrity-image-minimal: adapt QEMU cmdline to " Armin Kuster
+  2023-05-02 11:18 ` [yocto] [meta-security][PATCH 1/2] oeqa: fix hash test to match " Stefan Berger
+  0 siblings, 2 replies; 4+ messages in thread
+From: Armin Kuster @ 2023-05-02 11:06 UTC (permalink / raw)
+  To: yocto
+
+Signed-off-by: Armin Kuster <akuster808@gmail.com>
+---
+ meta-integrity/lib/oeqa/runtime/cases/ima.py | 10 ++++------
+ 1 file changed, 4 insertions(+), 6 deletions(-)
+
+diff --git a/meta-integrity/lib/oeqa/runtime/cases/ima.py b/meta-integrity/lib/oeqa/runtime/cases/ima.py
+index 0c8617a..6b361ca 100644
+--- a/meta-integrity/lib/oeqa/runtime/cases/ima.py
++++ b/meta-integrity/lib/oeqa/runtime/cases/ima.py
+@@ -58,21 +58,19 @@ class IMACheck(OERuntimeTestCase):
+     @OETestDepends(['ima.IMACheck.test_ima_enabled'])
+     def test_ima_hash(self):
+         ''' Test if IMA stores correct file hash '''
+-        filename = "/etc/filetest"
++        filename = "/etc/ld.so.cache"
+         ima_measure_file = "/sys/kernel/security/ima/ascii_runtime_measurements"
+-        status, output = self.target.run("echo test > %s" % filename)
+-        self.assertEqual(status, 0, "Cannot create file %s on target" % filename)
+ 
+         # wait for the IMA system to update the entry
+-        maximum_tries = 30
++        maximum_tries = 3 
+         tries = 0
+-        status, output = self.target.run("sha1sum %s" %filename)
++        status, output = self.target.run("sha256sum %s" %filename)
+         sleep(2)
+         current_hash = output.split()[0]
+         ima_hash = ""
+ 
+         while tries < maximum_tries:
+-            status, output = self.target.run("cat %s | grep %s" \
++            status, output = self.target.run("cat %s | grep -e '%s'" \
+                 % (ima_measure_file, filename))
+             # get last entry, 4th field
+             if status == 0:
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 4+ messages in thread
+* [meta-security][PATCH 2/2] integrity-image-minimal: adapt QEMU cmdline to new changes
+  2023-05-02 11:06 [meta-security][PATCH 1/2] oeqa: fix hash test to match new changes Armin Kuster
+@ 2023-05-02 11:06 ` Armin Kuster
+  2023-05-02 11:20   ` [yocto] " Stefan Berger
+  2023-05-02 11:18 ` [yocto] [meta-security][PATCH 1/2] oeqa: fix hash test to match " Stefan Berger
+  1 sibling, 1 reply; 4+ messages in thread
+From: Armin Kuster @ 2023-05-02 11:06 UTC (permalink / raw)
+  To: yocto
+
+Signed-off-by: Armin Kuster <akuster808@gmail.com>
+---
+ meta-integrity/recipes-core/images/integrity-image-minimal.bb | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/meta-integrity/recipes-core/images/integrity-image-minimal.bb b/meta-integrity/recipes-core/images/integrity-image-minimal.bb
+index f40e867..5022170 100644
+--- a/meta-integrity/recipes-core/images/integrity-image-minimal.bb
++++ b/meta-integrity/recipes-core/images/integrity-image-minimal.bb
+@@ -18,4 +18,4 @@ export IMAGE_BASENAME = "integrity-image-minimal"
+ 
+ INHERIT += "ima-evm-rootfs"
+ 
+-QB_KERNEL_CMDLINE_APPEND:append = " ima_appraise=fix ima_policy=tcb ima_policy=appraise_tcb"
++QB_KERNEL_CMDLINE_APPEND:append = " ima_policy=tcb ima_appraise=fix"
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 4+ messages in thread
+* Re: [yocto] [meta-security][PATCH 1/2] oeqa: fix hash test to match new changes
+  2023-05-02 11:06 [meta-security][PATCH 1/2] oeqa: fix hash test to match new changes Armin Kuster
+  2023-05-02 11:06 ` [meta-security][PATCH 2/2] integrity-image-minimal: adapt QEMU cmdline to " Armin Kuster
+@ 2023-05-02 11:18 ` Stefan Berger
+  1 sibling, 0 replies; 4+ messages in thread
+From: Stefan Berger @ 2023-05-02 11:18 UTC (permalink / raw)
+  To: Armin Kuster, yocto
+
+
+
+On 5/2/23 07:06, Armin Kuster wrote:
+> Signed-off-by: Armin Kuster <akuster808@gmail.com>
+
+Reviewed-by: Stefan Berger <stefanb@linux.ibm.com>
+
+> ---
+>   meta-integrity/lib/oeqa/runtime/cases/ima.py | 10 ++++------
+>   1 file changed, 4 insertions(+), 6 deletions(-)
+> 
+> diff --git a/meta-integrity/lib/oeqa/runtime/cases/ima.py b/meta-integrity/lib/oeqa/runtime/cases/ima.py
+> index 0c8617a..6b361ca 100644
+> --- a/meta-integrity/lib/oeqa/runtime/cases/ima.py
+> +++ b/meta-integrity/lib/oeqa/runtime/cases/ima.py
+> @@ -58,21 +58,19 @@ class IMACheck(OERuntimeTestCase):
+>       @OETestDepends(['ima.IMACheck.test_ima_enabled'])
+>       def test_ima_hash(self):
+>           ''' Test if IMA stores correct file hash '''
+> -        filename = "/etc/filetest"
+> +        filename = "/etc/ld.so.cache"
+>           ima_measure_file = "/sys/kernel/security/ima/ascii_runtime_measurements"
+> -        status, output = self.target.run("echo test > %s" % filename)
+> -        self.assertEqual(status, 0, "Cannot create file %s on target" % filename)
+>   
+>           # wait for the IMA system to update the entry
+> -        maximum_tries = 30
+> +        maximum_tries = 3
+>           tries = 0
+> -        status, output = self.target.run("sha1sum %s" %filename)
+> +        status, output = self.target.run("sha256sum %s" %filename)
+>           sleep(2)
+>           current_hash = output.split()[0]
+>           ima_hash = ""
+>   
+>           while tries < maximum_tries:
+> -            status, output = self.target.run("cat %s | grep %s" \
+> +            status, output = self.target.run("cat %s | grep -e '%s'" \
+>                   % (ima_measure_file, filename))
+>               # get last entry, 4th field
+>               if status == 0:
+> 
+> 
+> 
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#59835): https://lists.yoctoproject.org/g/yocto/message/59835
+> Mute This Topic: https://lists.yoctoproject.org/mt/98636143/1792208
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [stefanb@linux.ibm.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+> 
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] [meta-security][PATCH 2/2] integrity-image-minimal: adapt QEMU cmdline to new changes
+  2023-05-02 11:06 ` [meta-security][PATCH 2/2] integrity-image-minimal: adapt QEMU cmdline to " Armin Kuster
+@ 2023-05-02 11:20   ` Stefan Berger
+  0 siblings, 0 replies; 4+ messages in thread
+From: Stefan Berger @ 2023-05-02 11:20 UTC (permalink / raw)
+  To: Armin Kuster, yocto
+
+
+
+On 5/2/23 07:06, Armin Kuster wrote:
+> Signed-off-by: Armin Kuster <akuster808@gmail.com>
+> ---
+>   meta-integrity/recipes-core/images/integrity-image-minimal.bb | 2 +-
+>   1 file changed, 1 insertion(+), 1 deletion(-)
+> 
+> diff --git a/meta-integrity/recipes-core/images/integrity-image-minimal.bb b/meta-integrity/recipes-core/images/integrity-image-minimal.bb
+> index f40e867..5022170 100644
+> --- a/meta-integrity/recipes-core/images/integrity-image-minimal.bb
+> +++ b/meta-integrity/recipes-core/images/integrity-image-minimal.bb
+> @@ -18,4 +18,4 @@ export IMAGE_BASENAME = "integrity-image-minimal"
+>   
+>   INHERIT += "ima-evm-rootfs"
+>   
+> -QB_KERNEL_CMDLINE_APPEND:append = " ima_appraise=fix ima_policy=tcb ima_policy=appraise_tcb"
+> +QB_KERNEL_CMDLINE_APPEND:append = " ima_policy=tcb ima_appraise=fix"
+
+Reviewed-by: Stefan Berger <stefanb@linux.ibm.com>
+
+> 
+> 
+> 
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#59836): https://lists.yoctoproject.org/g/yocto/message/59836
+> Mute This Topic: https://lists.yoctoproject.org/mt/98636144/1792208
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [stefanb@linux.ibm.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+> 
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+end of thread, other threads:[~2023-05-02 11:20 UTC | newest]
+
+Thread overview: 4+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-05-02 11:06 [meta-security][PATCH 1/2] oeqa: fix hash test to match new changes Armin Kuster
+2023-05-02 11:06 ` [meta-security][PATCH 2/2] integrity-image-minimal: adapt QEMU cmdline to " Armin Kuster
+2023-05-02 11:20   ` [yocto] " Stefan Berger
+2023-05-02 11:18 ` [yocto] [meta-security][PATCH 1/2] oeqa: fix hash test to match " Stefan Berger
+

@@ -1,0 +1,111 @@
+* Install packages to an "image" without its dependencies being pulled in. #yocto
+@ 2021-08-20  3:41 bibibobibo
+  2021-08-20 19:35 ` [yocto] " Chuck Wolber
+  0 siblings, 1 reply; 2+ messages in thread
+From: bibibobibo @ 2021-08-20  3:41 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 863 bytes --]
+
+Greetings everyone,
+
+Is there a way to instruct Yocto's image class to install package(s) without its dependencies for an image target (i.e ext4)? For instance, we are trying to build a system where there is a main system partition and another partition that'll host additional lib, etc and during boot up we would overlay them together. Hence, the "other" partition does not really need all the same system libs, etc that already exists on the system partition. This other partition is developed by an external partner so we want to have the autonomy to update separately (i.e not mingled things together with system partition). I am having trouble finding a way to do this because Yocto seem to like to install a package long with all its dependencies (i.e glibc, etc).
+
+PS. I apologize if this is not the right place to ask the question.
+
+Thanks,
+Mike
+
+[-- Attachment #2: Type: text/html, Size: 897 bytes --]
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+* Re: [yocto] Install packages to an "image" without its dependencies being pulled in. #yocto
+  2021-08-20  3:41 Install packages to an "image" without its dependencies being pulled in. #yocto bibibobibo
+@ 2021-08-20 19:35 ` Chuck Wolber
+  0 siblings, 0 replies; 2+ messages in thread
+From: Chuck Wolber @ 2021-08-20 19:35 UTC (permalink / raw)
+  To: bibibobibo; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2811 bytes --]
+
+Yes.
+
+This is a version of the question - "how do I build an image that *ONLY*
+includes the packages I explicitly specify". This involves bypassing a lot
+of guards and bitbake tooling, but it can be done.
+
+Your mileage may vary depending on your distro setup. In particular this
+assumes you are configured to use the IPK package format. The dnf command
+had significant issues a while back, so I switched from RPM to IPK. If you
+use RPM, the OPKG_ARGS stuff not going to work for you.
+
+IMAGE_FEATURES = ""
+LDCONFIGDEPEND = ""
+IMAGE_INSTALL = ""
+PACAKGE_INSTALL = ""
+OPKG_ARGS += "--no-install-recommends --nodeps --force-depends"
+
+ROOTFS_POSTPROCESS_COMMAND_remove = "systemd_create_users; "
+ROOTFS_POSTPROCESS_COMMAND_remove = "rootfs_update_timestamp; "
+ROOTFS_POSTPROCESS_COMMAND_remove = "rootfs_reproducible; "
+
+IMAGE_CMD_cpio_prepend() {
+    IMAGE_BUILDING_DEBUGFS="true"
+}
+
+If you want the pre and postinstall scripts to trigger, you need to add an
+IMAGE_PREPROCESS_COMMAND function that takes your PACKAGE_INSTALL list and
+concatenates the package level control, preinst, and postinst scripts. This
+involves unpacking the ipk found in
+${WORKDIR}/oe-rootfs-repo/*/${PKG}_*.ipk. You may also want to post-process
+the resulting script to remove "set -e" invocations, since those scripts
+make assumptions about dependencies that you are (hopefully) safe to ignore.
+
+You may also want another IMAGE_PREPROCESS_COMMAND function that deletes
+stuff that can accidentally overwrite your image rootfs files, like
+/etc/passwd and /etc/group.
+
+Once you get it all dialed in, you can probably abstract the useful bits to
+your own image-layer bbclass so you can trivially reuse it.
+
+..Ch:W..
+
+
+On Fri, Aug 20, 2021 at 12:36 AM <bibibobibo@gmail.com> wrote:
+
+> Greetings everyone,
+>
+> Is there a way to instruct Yocto's image class to install package(s)
+> without its dependencies for an image target (i.e ext4)? For instance, we
+> are trying to build a system where there is a main system partition and
+> another partition that'll host additional lib, etc and during boot up we
+> would overlay them together. Hence, the "other" partition does not really
+> need all the same system libs, etc that already exists on the system
+> partition. This other partition is developed by an external partner so we
+> want to have the autonomy to update separately (i.e not mingled things
+> together with system partition). I am having trouble finding a way to do
+> this because Yocto seem to like to install a package long with all its
+> dependencies (i.e glibc, etc).
+>
+> PS. I apologize if this is not the right place to ask the question.
+>
+> Thanks,
+> Mike
+> 
+>
+>
+
+-- 
+*"Perfection must be reached by degrees; she requires the slow hand of
+time." - Voltaire*
+
+[-- Attachment #2: Type: text/html, Size: 3643 bytes --]
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2021-08-20 19:35 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-08-20  3:41 Install packages to an "image" without its dependencies being pulled in. #yocto bibibobibo
+2021-08-20 19:35 ` [yocto] " Chuck Wolber
+

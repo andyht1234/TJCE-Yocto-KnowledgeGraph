@@ -1,0 +1,213 @@
+* [PATCH V5] kbd:Add ptest support
+@ 2023-10-23  2:53 qiutt
+  2023-10-23 11:11 ` [OE-core] " Alexander Kanavin
+  0 siblings, 1 reply; 3+ messages in thread
+From: qiutt @ 2023-10-23  2:53 UTC (permalink / raw)
+  To: openembedded-core; +Cc: Qiu Tingting
+
+From: Qiu Tingting <qiutt@fujitsu.com>
+
+Add a ptest for kbd
+- It is taking around 1s to execute with kvm, so added it to PTESTS_FAST
+- It contains libkeymap unit tests(27 cases) and libkbdfile unit tests(13 cases)
+- Below is parts of the run log:
+  START: ptest-runner
+  2023-10-10T06:30
+  BEGIN: /usr/lib/kbd/ptest
+  ## --------------------- ##
+  ## kbd 2.6.3 test suite. ##
+  ## --------------------- ##
+
+  libkeymap unit tests
+
+  PASS: test 01
+  PASS: test 02
+  ...
+  libkbdfile unit tests
+
+  PASS: test 01
+  PASS: test 02
+  ...
+  36 tests were successful.
+  4 tests were skipped.
+  DURATION: 1
+  END: /usr/lib/kbd/ptest
+  2023-10-10T06:30
+  STOP: ptest-runner
+  TOTAL: 1 FAIL: 0
+
+Signed-off-by: Qiu Tingting <qiutt@fujitsu.com>
+---
+ .../distro/include/ptest-packagelists.inc     |  1 +
+ meta/recipes-core/kbd/kbd/run-ptest           | 10 ++++
+ meta/recipes-core/kbd/kbd_2.6.3.bb            | 46 +++++++++++++++++++
+ 3 files changed, 57 insertions(+)
+ create mode 100644 meta/recipes-core/kbd/kbd/run-ptest
+
+diff --git a/meta/conf/distro/include/ptest-packagelists.inc b/meta/conf/distro/include/ptest-packagelists.inc
+index fc42f95de2..680b01b3b5 100644
+--- a/meta/conf/distro/include/ptest-packagelists.inc
++++ b/meta/conf/distro/include/ptest-packagelists.inc
+@@ -27,6 +27,7 @@ PTESTS_FAST = "\
+     gzip \
+     json-c \
+     json-glib \
++    kbd \
+     libconvert-asn1-perl \
+     liberror-perl \
+     libgpg-error\
+diff --git a/meta/recipes-core/kbd/kbd/run-ptest b/meta/recipes-core/kbd/kbd/run-ptest
+new file mode 100644
+index 0000000000..f02994fa78
+--- /dev/null
++++ b/meta/recipes-core/kbd/kbd/run-ptest
+@@ -0,0 +1,10 @@
++#!/bin/sh
++
++# Define test work dir
++WORKDIR=@PTEST_PATH@/tests/
++
++# Run test
++cd ${WORKDIR}
++./atconfig ./testsuite
++./testsuite -c
++./testsuite --am-fmt -k unittest
+diff --git a/meta/recipes-core/kbd/kbd_2.6.3.bb b/meta/recipes-core/kbd/kbd_2.6.3.bb
+index 5287781ac1..b272d4746d 100644
+--- a/meta/recipes-core/kbd/kbd_2.6.3.bb
++++ b/meta/recipes-core/kbd/kbd_2.6.3.bb
+@@ -38,6 +38,52 @@ do_install:append () {
+     fi
+ }
+ 
++# add for ptest support
++SRC_URI += " \
++    file://run-ptest \
++"
++
++inherit ptest
++
++do_compile_ptest() {
++    # update DATADIR in Makefile
++    sed -i 's,-DDATADIR=.*,-DDATADIR=\\\"${PTEST_PATH}/tests\\\" \\,g' ${B}/tests/libkeymap/Makefile
++    sed -i 's,-DDATADIR=.*,-DDATADIR=\\\"${PTEST_PATH}/tests\\\" \\,g' ${B}/tests/helpers/Makefile
++    sed -i 's,-DDATADIR=.*,-DDATADIR=\\\"${PTEST_PATH}/tests\\\" \\,g' ${B}/tests/libkbdfile/Makefile
++
++    # recompile tests
++    oe_runmake -C ${B}/tests/ clean
++    oe_runmake -C ${B}/tests/
++}
++
++do_install_ptest() {
++    # install files from build directory
++    install -d ${D}${PTEST_PATH}/tests/
++    for cdir in `ls ${B}/tests/`; do
++        if [ -d ${B}/tests/${cdir} ]; then
++            install -d ${D}${PTEST_PATH}/tests/${cdir}/
++            find ${B}/tests/${cdir}/ -type f -not -name "*.o" -not -name "Makefile" \
++                -exec install --mode=755 {} ${D}${PTEST_PATH}/tests/${cdir}/ \;
++        else
++            if [ ${cdir} != "Makefile" ]; then
++                install --mode=755 ${B}/tests/${cdir} ${D}${PTEST_PATH}/tests/
++            fi
++        fi
++    done
++
++    # install files from src/data directory
++    install -d ${D}${PTEST_PATH}/data/keymaps/i386/qwerty/
++    install ${S}/data/keymaps/i386/qwerty/defkeymap.map ${D}${PTEST_PATH}/data/keymaps/i386/qwerty/
++
++    # install files from src/tests/data directory
++    cp --preserve=mode,timestamps --no-preserve=ownership -r ${S}/tests/data ${D}${PTEST_PATH}/tests/
++
++    # update PTEST_PATH in run-ptest and atconfig
++    sed -i "s#@PTEST_PATH@#${PTEST_PATH}#g" ${D}${PTEST_PATH}/run-ptest
++    sed -i -e 's,${B},${PTEST_PATH},g' -e 's,/\.\./${PN}-${PV},,g' ${D}${PTEST_PATH}/tests/atconfig
++
++}
++
+ inherit update-alternatives
+ 
+ ALTERNATIVE:${PN} = "chvt deallocvt fgconsole openvt showkey \
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 3+ messages in thread
+* Re: [OE-core] [PATCH V5] kbd:Add ptest support
+  2023-10-23  2:53 [PATCH V5] kbd:Add ptest support qiutt
+@ 2023-10-23 11:11 ` Alexander Kanavin
+  2023-10-24  4:12   ` qiutt
+  0 siblings, 1 reply; 3+ messages in thread
+From: Alexander Kanavin @ 2023-10-23 11:11 UTC (permalink / raw)
+  To: qiutt; +Cc: openembedded-core
+
+On Mon, 23 Oct 2023 at 04:53, qiutt@fujitsu.com <qiutt@fujitsu.com> wrote:
+> +do_compile_ptest() {
+> +    # update DATADIR in Makefile
+> +    sed -i 's,-DDATADIR=.*,-DDATADIR=\\\"${PTEST_PATH}/tests\\\" \\,g' ${B}/tests/libkeymap/Makefile
+> +    sed -i 's,-DDATADIR=.*,-DDATADIR=\\\"${PTEST_PATH}/tests\\\" \\,g' ${B}/tests/helpers/Makefile
+> +    sed -i 's,-DDATADIR=.*,-DDATADIR=\\\"${PTEST_PATH}/tests\\\" \\,g' ${B}/tests/libkbdfile/Makefile
+> +
+> +    # recompile tests
+> +    oe_runmake -C ${B}/tests/ clean
+> +    oe_runmake -C ${B}/tests/
+> +}
+
+I'd like to better understand why DATADIR needs to be reset at build
+time, with this not-that-elegant bit of code (particularly make clean
+should really be avoided). Can you show where and how DATADIR is used?
+Can we set it at runtime, for example via environment variable?
+
+Alex
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [PATCH V5] kbd:Add ptest support
+  2023-10-23 11:11 ` [OE-core] " Alexander Kanavin
+@ 2023-10-24  4:12   ` qiutt
+  0 siblings, 0 replies; 3+ messages in thread
+From: qiutt @ 2023-10-24  4:12 UTC (permalink / raw)
+  To: openembedded-core
+
+[-- Attachment #1: Type: text/plain, Size: 767 bytes --]
+
+Hi， Alex
+
+As you said, it is not-that-elegant bit of code.
+But DATADIR is used as a part of CPPFLAGS for compiling c files in tests,
+such as libkeymap/libkeymap-test01.c, libkbdfile/libkbdfile-test13.c and others.
+sample:
+
+> 
+> libkeymap/libkeymap-test01.c: f = fopen( *DATADIR* "/data/libkeymap/charset-keymap0.map",
+> "r"); libkeymap/libkeymap-test09.c:   setenv("LOADKEYS_INCLUDE_PATH",
+> DATADIR "/data/libkeymap", 1);
+
+libkeymap/ Makefile: (before reset)
+
+> 
+> AM_CPPFLAGS = \
+> $(CODE_COVERAGE_CPPFLAGS) \
+> -I$(top_srcdir)/src/libcommon \
+> -I$(top_srcdir)/src/libkbdfile \
+> -I$(top_srcdir)/src/libkeymap \
+> -DDATADIR=\"$(realpath $(top_srcdir))/tests\" \
+> -DBUILDDIR=\"$(realpath $(builddir))\"
+> 
+
+Best Regards,
+Qiu Tingting
+
+[-- Attachment #2: Type: text/html, Size: 1583 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2023-10-24  4:12 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-10-23  2:53 [PATCH V5] kbd:Add ptest support qiutt
+2023-10-23 11:11 ` [OE-core] " Alexander Kanavin
+2023-10-24  4:12   ` qiutt
+

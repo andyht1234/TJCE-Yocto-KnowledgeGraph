@@ -1,0 +1,239 @@
+* Re: [yocto] Regression in rust-cross-canadian-aarch64
+       [not found] ` <58c0ec3e-a06a-7829-1168-ef7e70b365f0@berginkonsult.se>
+@ 2022-06-28 10:09   ` Richard Purdie
+  2022-06-28 11:38   ` Richard Purdie
+  1 sibling, 0 replies; 3+ messages in thread
+From: Richard Purdie @ 2022-06-28 10:09 UTC (permalink / raw)
+  To: Peter Bergin, yocto
+
+On Tue, 2022-06-28 at 11:00 +0200, Peter Bergin wrote:
+> On 2022-06-19 22:47, Peter Bergin wrote:
+> 
+> 
+> The reason for this issue seems to be this commit:
+> 
+>      commit 781eaa955dce5deab47371c25dae72b36c011900
+>      Author: Richard Purdie <richard.purdie@linuxfoundation.org>
+>      Date:   Sat May 21 14:02:47 2022 +0100
+> 
+>          rust-common: Drop LLVM_TARGET and simplify
+> 
+>          This all seems over complicated for something which is 
+> basically always
+>          one of two values. This might even help cross-canadian work on 
+> something
+>          which isn't x86-64.
+> 
+>          (From OE-Core rev: bd36593ba3db758b3eacc974e48468a665967961)
+> 
+>          Signed-off-by: Richard Purdie <richard.purdie@linuxfoundation.org>
+> 
+> 
+> When building rust-cross-canadian-aarch64 the file 
+> 'tmp/work/x86_64-nativesdk-pokysdk-linux/rust-cross-canadian-aarch64/1.60.0-r0/targets/aarch64-poky-linux.json' 
+> will be populated with the information '"llvm-target": 
+> "x86_64-unknown-linux-gnu"'. This will lead to object files in wrong 
+> format during 'Building stage2 std artifacts (x86_64-unknown-linux-gnu 
+> -> aarch64-poky-linux)' in the do_compile step.
+> 
+> In 'meta/recipes-devtools/rust/rust-common.inc':
+> 
+>      # build tspec
+>      tspec = {}
+>      if bb.data.inherits_class('cross-canadian', d):
+>          tspec['llvm-target'] = d.getVar('RUST_HOST_SYS', arch_abi)
+>      else:
+>          tspec['llvm-target'] = d.getVar('RUST_TARGET_SYS', arch_abi)
+> 
+> So for some reason it seems intentional to set 'llvm-target' to HOST_SYS 
+> when 'cross-canadian'. The behavior has changed with this patch. Before 
+> 'llvm-target' was set to RUST_TARGET_SYS for all target archs other than 
+> x86_64 where it was set to RUST_HOST_SYS. I guess this change has to do 
+> with the commit message 'This might even help cross-canadian work on 
+> something which isn't x86-64.'? But unfortunately it seems to break the 
+> case building on x86_64 for aarch64. It would be good to get some help 
+> here to sort this out.
+
+I'm wondering if we need something like:
+
+diff --git a/meta/recipes-devtools/rust/rust-common.inc b/meta/recipes-devtools/rust/rust-common.inc
+index 621cd4ad576..ef70c48d0f4 100644
+--- a/meta/recipes-devtools/rust/rust-common.inc
++++ b/meta/recipes-devtools/rust/rust-common.inc
+@@ -309,10 +309,7 @@ def rust_gen_target(d, thing, wd, features, cpu, arch, abi=""):
+ 
+     # build tspec
+     tspec = {}
+-    if bb.data.inherits_class('cross-canadian', d):
+-        tspec['llvm-target'] = d.getVar('RUST_HOST_SYS', arch_abi)
+-    else:
+-        tspec['llvm-target'] = d.getVar('RUST_TARGET_SYS', arch_abi)
++    tspec['llvm-target'] = d.getVar('RUST_TARGET_SYS', arch_abi)
+     tspec['data-layout'] = d.getVarFlag('DATA_LAYOUT', arch_abi)
+     tspec['max-atomic-width'] = int(d.getVarFlag('MAX_ATOMIC_WIDTH', arch_abi))
+     tspec['target-pointer-width'] = d.getVarFlag('TARGET_POINTER_WIDTH', arch_abi)
+
+
+?
+
+Cheers,
+
+Richard
+
+
+
+
+^ permalink raw reply related	[flat|nested] 3+ messages in thread
+* Re: [yocto] Regression in rust-cross-canadian-aarch64
+       [not found] ` <58c0ec3e-a06a-7829-1168-ef7e70b365f0@berginkonsult.se>
+  2022-06-28 10:09   ` [yocto] Regression in rust-cross-canadian-aarch64 Richard Purdie
+@ 2022-06-28 11:38   ` Richard Purdie
+  2022-06-28 15:54     ` Randy MacLeod
+  1 sibling, 1 reply; 3+ messages in thread
+From: Richard Purdie @ 2022-06-28 11:38 UTC (permalink / raw)
+  To: Peter Bergin, yocto
+
+On Tue, 2022-06-28 at 11:00 +0200, Peter Bergin wrote:
+> When building rust-cross-canadian-aarch64 the file 
+> 'tmp/work/x86_64-nativesdk-pokysdk-linux/rust-cross-canadian-aarch64/1.60.0-r0/targets/aarch64-poky-linux.json' 
+> will be populated with the information '"llvm-target": 
+> "x86_64-unknown-linux-gnu"'. This will lead to object files in wrong 
+> format during 'Building stage2 std artifacts (x86_64-unknown-linux-gnu 
+> -> aarch64-poky-linux)' in the do_compile step.
+> 
+> In 'meta/recipes-devtools/rust/rust-common.inc':
+> 
+>      # build tspec
+>      tspec = {}
+>      if bb.data.inherits_class('cross-canadian', d):
+>          tspec['llvm-target'] = d.getVar('RUST_HOST_SYS', arch_abi)
+>      else:
+>          tspec['llvm-target'] = d.getVar('RUST_TARGET_SYS', arch_abi)
+> 
+> So for some reason it seems intentional to set 'llvm-target' to HOST_SYS 
+> when 'cross-canadian'. The behavior has changed with this patch. Before 
+> 'llvm-target' was set to RUST_TARGET_SYS for all target archs other than 
+> x86_64 where it was set to RUST_HOST_SYS. I guess this change has to do 
+> with the commit message 'This might even help cross-canadian work on 
+> something which isn't x86-64.'? But unfortunately it seems to break the 
+> case building on x86_64 for aarch64. It would be good to get some help 
+> here to sort this out.
+
+I've spent an age staring at this code this morning. I don't think
+cross-canadian has ever worked properly. It might happen that some
+combinations build but there are also some that don't and clearly never
+have.
+
+SDKMACHINE = "aarch64", MACHINE = "qemuarm64" certainly doesn't work.
+It appears to be missing a ninja-native dependency and when that is
+added, it can't find rust-llvm.
+
+Looking at the do_configure from rust.inc, it considers BUILD triplets
+and TARGET triplets but not HOST ones, which probably dooms cross-
+canadian to failure since there, BUILD != HOST != TARGET.
+
+Someone is going to have to step up and sort out the canadian cross
+rust pieces properly. Whilst my patch probably did regress one config,
+I think there are much deeper issues in there.
+
+Cheers,
+
+Richard
+
+
+
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] Regression in rust-cross-canadian-aarch64
+  2022-06-28 11:38   ` Richard Purdie
+@ 2022-06-28 15:54     ` Randy MacLeod
+  0 siblings, 0 replies; 3+ messages in thread
+From: Randy MacLeod @ 2022-06-28 15:54 UTC (permalink / raw)
+  To: Richard Purdie, Peter Bergin, yocto, Kokkonda, Sundeep, Gowda, Naveen
+
+On 2022-06-28 07:38, Richard Purdie wrote:
+> On Tue, 2022-06-28 at 11:00 +0200, Peter Bergin wrote:
+>> When building rust-cross-canadian-aarch64 the file
+>> 'tmp/work/x86_64-nativesdk-pokysdk-linux/rust-cross-canadian-aarch64/1.60.0-r0/targets/aarch64-poky-linux.json'
+>> will be populated with the information '"llvm-target":
+>> "x86_64-unknown-linux-gnu"'. This will lead to object files in wrong
+>> format during 'Building stage2 std artifacts (x86_64-unknown-linux-gnu
+>> -> aarch64-poky-linux)' in the do_compile step.
+>>
+>> In 'meta/recipes-devtools/rust/rust-common.inc':
+>>
+>>       # build tspec
+>>       tspec = {}
+>>       if bb.data.inherits_class('cross-canadian', d):
+>>           tspec['llvm-target'] = d.getVar('RUST_HOST_SYS', arch_abi)
+>>       else:
+>>           tspec['llvm-target'] = d.getVar('RUST_TARGET_SYS', arch_abi)
+>>
+>> So for some reason it seems intentional to set 'llvm-target' to HOST_SYS
+>> when 'cross-canadian'. The behavior has changed with this patch. Before
+>> 'llvm-target' was set to RUST_TARGET_SYS for all target archs other than
+>> x86_64 where it was set to RUST_HOST_SYS. I guess this change has to do
+>> with the commit message 'This might even help cross-canadian work on
+>> something which isn't x86-64.'? But unfortunately it seems to break the
+>> case building on x86_64 for aarch64. It would be good to get some help
+>> here to sort this out.
+> I've spent an age staring at this code this morning. I don't think
+> cross-canadian has ever worked properly. It might happen that some
+> combinations build but there are also some that don't and clearly never
+> have.
+>
+> SDKMACHINE = "aarch64", MACHINE = "qemuarm64" certainly doesn't work.
+> It appears to be missing a ninja-native dependency and when that is
+> added, it can't find rust-llvm.
+>
+> Looking at the do_configure from rust.inc, it considers BUILD triplets
+> and TARGET triplets but not HOST ones, which probably dooms cross-
+> canadian to failure since there, BUILD != HOST != TARGET.
+>
+> Someone is going to have to step up and sort out the canadian cross
+> rust pieces properly. Whilst my patch probably did regress one config,
+> I think there are much deeper issues in there.
+
+Sundeep and/or Naveen please take a look.
+
+Peter,
+Please open a Yocto bug and document the steps to reproduce the error.
+
+../Randy
+
+
+>
+> Cheers,
+>
+> Richard
+>
+>
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#57400): https://lists.yoctoproject.org/g/yocto/message/57400
+> Mute This Topic: https://lists.yoctoproject.org/mt/91864950/3616765
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [randy.macleod@windriver.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+-- 
+# Randy MacLeod
+# Wind River Linux
+
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2022-06-28 15:55 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+     [not found] <16FA2096B2BC4C47.21247@lists.yoctoproject.org>
+     [not found] ` <58c0ec3e-a06a-7829-1168-ef7e70b365f0@berginkonsult.se>
+2022-06-28 10:09   ` [yocto] Regression in rust-cross-canadian-aarch64 Richard Purdie
+2022-06-28 11:38   ` Richard Purdie
+2022-06-28 15:54     ` Randy MacLeod
+

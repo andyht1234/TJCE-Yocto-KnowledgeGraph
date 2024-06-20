@@ -1,0 +1,639 @@
+* Strange sporadic build issues (incremental builds in docker container)
+@ 2022-03-22  8:50 Matthias Klein
+  2022-03-22  9:25 ` [yocto] " Alexander Kanavin
+  0 siblings, 1 reply; 6+ messages in thread
+From: Matthias Klein @ 2022-03-22  8:50 UTC (permalink / raw)
+  To: yocto
+
+Hello together,
+
+I am building various kirkstone/master yoctos every night via Jenkins inside a Debian Bullseye Docker container.
+These are incremental builds, reusing the build directory and sstate-cache of the previous build. The different yoctos are built in order. Each time, a new Docker container is launched.
+(The same environment builds dunfell yoctos without any problems).
+
+Now it happens sporadically that one of the builds aborts with the following message: 
+
+stderr: The series file no longer matches the applied patches. Please run 'quilt pop -a'.
+
+They are usually alternating packages where the patch step fails with the above message. Also different yoctos are affected. But it is always the above message.
+If I then restart the failed build it usually builds cleanly.
+
+Does anyone have an idea in which direction the problem goes?
+
+Many greetings,
+Matthias
+
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] Strange sporadic build issues (incremental builds in docker container)
+  2022-03-22  8:50 Strange sporadic build issues (incremental builds in docker container) Matthias Klein
+@ 2022-03-22  9:25 ` Alexander Kanavin
+  2022-03-24  6:43   ` AW: " Matthias Klein
+  0 siblings, 1 reply; 6+ messages in thread
+From: Alexander Kanavin @ 2022-03-22  9:25 UTC (permalink / raw)
+  To: Matthias Klein; +Cc: yocto
+
+It's hard to say without the full error message, and the build
+directory of the affected recipe. The easy way out is to simply wipe
+tmp/ before each build.
+
+Alex
+
+On Tue, 22 Mar 2022 at 09:51, Matthias Klein <matthias.klein@optimeas.de> wrote:
+>
+> Hello together,
+>
+> I am building various kirkstone/master yoctos every night via Jenkins inside a Debian Bullseye Docker container.
+> These are incremental builds, reusing the build directory and sstate-cache of the previous build. The different yoctos are built in order. Each time, a new Docker container is launched.
+> (The same environment builds dunfell yoctos without any problems).
+>
+> Now it happens sporadically that one of the builds aborts with the following message:
+>
+> stderr: The series file no longer matches the applied patches. Please run 'quilt pop -a'.
+>
+> They are usually alternating packages where the patch step fails with the above message. Also different yoctos are affected. But it is always the above message.
+> If I then restart the failed build it usually builds cleanly.
+>
+> Does anyone have an idea in which direction the problem goes?
+>
+> Many greetings,
+> Matthias
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#56522): https://lists.yoctoproject.org/g/yocto/message/56522
+> Mute This Topic: https://lists.yoctoproject.org/mt/89948013/1686489
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* AW: [yocto] Strange sporadic build issues (incremental builds in docker container)
+  2022-03-22  9:25 ` [yocto] " Alexander Kanavin
+@ 2022-03-24  6:43   ` Matthias Klein
+  2022-03-24  8:31     ` Alexander Kanavin
+  0 siblings, 1 reply; 6+ messages in thread
+From: Matthias Klein @ 2022-03-24  6:43 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 3583 bytes --]
+
+Hello Alex,
+
+it occurred again:
+
+NOTE: recipe gawk-5.1.1-r0: task do_patch: Succeeded
+NOTE: Running task 1673 of 4524 (/var/jenkins_home/workspace/yocto-raspberrypi/yocto/poky/meta/recipes-devtools/python/python3-six_1.16.0.bb:do_patch)
+NOTE: recipe firstboot-1.0-r0: task do_populate_sysroot: Started
+NOTE: recipe keymaps-1.0-r31: task do_patch: Started
+NOTE: recipe python3-six-1.16.0-r0: task do_patch: Started
+NOTE: recipe python3-six-1.16.0-r0: task do_patch: Succeeded
+NOTE: Running task 1676 of 4524 (/var/jenkins_home/workspace/yocto-raspberrypi/yocto/poky/meta/recipes-devtools/perl/perl_5.34.1.bb:do_patch)
+NOTE: recipe e2fsprogs-1.46.5-r0: task do_patch: Succeeded
+ERROR: keymaps-1.0-r31 do_patch: Applying patch 'GPLv2.patch' on target directory '/var/jenkins_home/workspace/yocto-raspberrypi/build/tmp/work/raspberrypi3_64-poky-linux/keymaps/1.0-r31'
+CmdError('quilt --quiltrc /var/jenkins_home/workspace/yocto-raspberrypi/build/tmp/work/raspberrypi3_64-poky-linux/keymaps/1.0-r31/recipe-sysroot-native/etc/quiltrc push', 0, 'stdout: 
+stderr: File series fully applied, ends at patch GPLv2.patch
+')
+ERROR: Logfile of failure stored in: /var/jenkins_home/workspace/yocto-raspberrypi/build/tmp/work/raspberrypi3_64-poky-linux/keymaps/1.0-r31/temp/log.do_patch.353982
+NOTE: recipe keymaps-1.0-r31: task do_patch: Failed
+NOTE: Running task 1679 of 4524 (/var/jenkins_home/workspace/yocto-raspberrypi/yocto/poky/meta/recipes-bsp/alsa-state/alsa-state.bb:do_patch)
+ERROR: Task (/var/jenkins_home/workspace/yocto-raspberrypi/yocto/poky/meta/recipes-bsp/keymaps/keymaps_1.0.bb:do_patch) failed with exit code '1'
+
+Do you have an idea?
+
+Best regards,
+Matthias
+
+-----Ursprüngliche Nachricht-----
+Von: Alexander Kanavin <alex.kanavin@gmail.com> 
+Gesendet: Dienstag, 22. März 2022 10:26
+An: Matthias Klein <matthias.klein@optimeas.de>
+Cc: yocto@lists.yoctoproject.org
+Betreff: Re: [yocto] Strange sporadic build issues (incremental builds in docker container)
+
+It's hard to say without the full error message, and the build directory of the affected recipe. The easy way out is to simply wipe tmp/ before each build.
+
+Alex
+
+On Tue, 22 Mar 2022 at 09:51, Matthias Klein <matthias.klein@optimeas.de> wrote:
+>
+> Hello together,
+>
+> I am building various kirkstone/master yoctos every night via Jenkins inside a Debian Bullseye Docker container.
+> These are incremental builds, reusing the build directory and sstate-cache of the previous build. The different yoctos are built in order. Each time, a new Docker container is launched.
+> (The same environment builds dunfell yoctos without any problems).
+>
+> Now it happens sporadically that one of the builds aborts with the following message:
+>
+> stderr: The series file no longer matches the applied patches. Please run 'quilt pop -a'.
+>
+> They are usually alternating packages where the patch step fails with the above message. Also different yoctos are affected. But it is always the above message.
+> If I then restart the failed build it usually builds cleanly.
+>
+> Does anyone have an idea in which direction the problem goes?
+>
+> Many greetings,
+> Matthias
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#56522): 
+> https://lists.yoctoproject.org/g/yocto/message/56522
+> Mute This Topic: https://lists.yoctoproject.org/mt/89948013/1686489
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub 
+> [alex.kanavin@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+[-- Attachment #2: log.do_patch.353982 --]
+[-- Type: application/octet-stream, Size: 7595 bytes --]
+
+DEBUG: Executing python function extend_recipe_sysroot
+NOTE: Direct dependencies are ['virtual:native:/var/jenkins_home/workspace/yocto-raspberrypi/yocto/poky/meta/recipes-devtools/patch/patch_2.7.6.bb:do_populate_sysroot', '/var/jenkins_home/workspace/yocto-raspberrypi/yocto/poky/meta/recipes-devtools/quilt/quilt-native_0.67.bb:do_populate_sysroot']
+NOTE: Installed into sysroot: ['patch-native', 'quilt-native', 'libtool-native', 'attr-native', 'texinfo-dummy-native', 'gettext-minimal-native']
+NOTE: Skipping as already exists in sysroot: []
+DEBUG: sed -e 's:^[^/]*/:/var/jenkins_home/workspace/yocto-raspberrypi/build/tmp/work/raspberrypi3_64-poky-linux/keymaps/1.0-r31/recipe-sysroot-native/:g' /var/jenkins_home/workspace/yocto-raspberrypi/build/tmp/sysroots-components/x86_64/quilt-native/fixmepath /var/jenkins_home/workspace/yocto-raspberrypi/build/tmp/sysroots-components/x86_64/libtool-native/fixmepath | xargs sed -i -e 's:FIXMESTAGINGDIRTARGET:/var/jenkins_home/workspace/yocto-raspberrypi/build/tmp/work/raspberrypi3_64-poky-linux/keymaps/1.0-r31/recipe-sysroot:g; s:FIXMESTAGINGDIRHOST:/var/jenkins_home/workspace/yocto-raspberrypi/build/tmp/work/raspberrypi3_64-poky-linux/keymaps/1.0-r31/recipe-sysroot-native:g' -e 's:FIXME_PSEUDO_SYSROOT:/var/jenkins_home/workspace/yocto-raspberrypi/build/tmp/sysroots-components/x86_64/pseudo-native:g' -e 's:FIXME_HOSTTOOLS_DIR:/var/jenkins_home/workspace/yocto-raspberrypi/build/tmp/hosttools:g' -e 's:FIXME_PKGDATA_DIR:/var/jenkins_home/workspace/yocto-raspberrypi/build/tmp/pkgdata/raspberrypi3-64:g' -e 's:FIXME_PSEUDO_LOCALSTATEDIR:/var/jenkins_home/workspace/yocto-raspberrypi/build/tmp/work/raspberrypi3_64-poky-linux/keymaps/1.0-r31/pseudo/:g' -e 's:FIXME_LOGFIFO:/var/jenkins_home/workspace/yocto-raspberrypi/build/tmp/work/raspberrypi3_64-poky-linux/keymaps/1.0-r31/temp/fifo.353982:g'
+DEBUG: Python function extend_recipe_sysroot finished
+DEBUG: Executing python function do_patch
+DEBUG: Executing python function patch_do_patch
+DEBUG: Searching for keymap.sh in paths:
+    /var/jenkins_home/workspace/yocto-raspberrypi/yocto/poky/meta/recipes-bsp/keymaps/keymaps-1.0/ocean
+    /var/jenkins_home/workspace/yocto-raspberrypi/yocto/poky/meta/recipes-bsp/keymaps/keymaps/ocean
+    /var/jenkins_home/workspace/yocto-raspberrypi/yocto/poky/meta/recipes-bsp/keymaps/files/ocean
+    /var/jenkins_home/workspace/yocto-raspberrypi/yocto/poky/meta/recipes-bsp/keymaps/keymaps-1.0/raspberrypi3-64
+    /var/jenkins_home/workspace/yocto-raspberrypi/yocto/poky/meta/recipes-bsp/keymaps/keymaps/raspberrypi3-64
+    /var/jenkins_home/workspace/yocto-raspberrypi/yocto/poky/meta/recipes-bsp/keymaps/files/raspberrypi3-64
+    /var/jenkins_home/workspace/yocto-raspberrypi/yocto/poky/meta/recipes-bsp/keymaps/keymaps-1.0/raspberrypi3
+    /var/jenkins_home/workspace/yocto-raspberrypi/yocto/poky/meta/recipes-bsp/keymaps/keymaps/raspberrypi3
+    /var/jenkins_home/workspace/yocto-raspberrypi/yocto/poky/meta/recipes-bsp/keymaps/files/raspberrypi3
+    /var/jenkins_home/workspace/yocto-raspberrypi/yocto/poky/meta/recipes-bsp/keymaps/keymaps-1.0/armv8a
+    /var/jenkins_home/workspace/yocto-raspberrypi/yocto/poky/meta/recipes-bsp/keymaps/keymaps/armv8a
+    /var/jenkins_home/workspace/yocto-raspberrypi/yocto/poky/meta/recipes-bsp/keymaps/files/armv8a
+    /var/jenkins_home/workspace/yocto-raspberrypi/yocto/poky/meta/recipes-bsp/keymaps/keymaps-1.0/aarch64
+    /var/jenkins_home/workspace/yocto-raspberrypi/yocto/poky/meta/recipes-bsp/keymaps/keymaps/aarch64
+    /var/jenkins_home/workspace/yocto-raspberrypi/yocto/poky/meta/recipes-bsp/keymaps/files/aarch64
+    /var/jenkins_home/workspace/yocto-raspberrypi/yocto/poky/meta/recipes-bsp/keymaps/keymaps-1.0/rpi
+    /var/jenkins_home/workspace/yocto-raspberrypi/yocto/poky/meta/recipes-bsp/keymaps/keymaps/rpi
+    /var/jenkins_home/workspace/yocto-raspberrypi/yocto/poky/meta/recipes-bsp/keymaps/files/rpi
+    /var/jenkins_home/workspace/yocto-raspberrypi/yocto/poky/meta/recipes-bsp/keymaps/keymaps-1.0/aarch64
+    /var/jenkins_home/workspace/yocto-raspberrypi/yocto/poky/meta/recipes-bsp/keymaps/keymaps/aarch64
+    /var/jenkins_home/workspace/yocto-raspberrypi/yocto/poky/meta/recipes-bsp/keymaps/files/aarch64
+    /var/jenkins_home/workspace/yocto-raspberrypi/yocto/poky/meta/recipes-bsp/keymaps/keymaps-1.0/
+    /var/jenkins_home/workspace/yocto-raspberrypi/yocto/poky/meta/recipes-bsp/keymaps/keymaps/
+    /var/jenkins_home/workspace/yocto-raspberrypi/yocto/poky/meta/recipes-bsp/keymaps/files/
+DEBUG: Searching for GPLv2.patch in paths:
+    /var/jenkins_home/workspace/yocto-raspberrypi/yocto/poky/meta/recipes-bsp/keymaps/keymaps-1.0/ocean
+    /var/jenkins_home/workspace/yocto-raspberrypi/yocto/poky/meta/recipes-bsp/keymaps/keymaps/ocean
+    /var/jenkins_home/workspace/yocto-raspberrypi/yocto/poky/meta/recipes-bsp/keymaps/files/ocean
+    /var/jenkins_home/workspace/yocto-raspberrypi/yocto/poky/meta/recipes-bsp/keymaps/keymaps-1.0/raspberrypi3-64
+    /var/jenkins_home/workspace/yocto-raspberrypi/yocto/poky/meta/recipes-bsp/keymaps/keymaps/raspberrypi3-64
+    /var/jenkins_home/workspace/yocto-raspberrypi/yocto/poky/meta/recipes-bsp/keymaps/files/raspberrypi3-64
+    /var/jenkins_home/workspace/yocto-raspberrypi/yocto/poky/meta/recipes-bsp/keymaps/keymaps-1.0/raspberrypi3
+    /var/jenkins_home/workspace/yocto-raspberrypi/yocto/poky/meta/recipes-bsp/keymaps/keymaps/raspberrypi3
+    /var/jenkins_home/workspace/yocto-raspberrypi/yocto/poky/meta/recipes-bsp/keymaps/files/raspberrypi3
+    /var/jenkins_home/workspace/yocto-raspberrypi/yocto/poky/meta/recipes-bsp/keymaps/keymaps-1.0/armv8a
+    /var/jenkins_home/workspace/yocto-raspberrypi/yocto/poky/meta/recipes-bsp/keymaps/keymaps/armv8a
+    /var/jenkins_home/workspace/yocto-raspberrypi/yocto/poky/meta/recipes-bsp/keymaps/files/armv8a
+    /var/jenkins_home/workspace/yocto-raspberrypi/yocto/poky/meta/recipes-bsp/keymaps/keymaps-1.0/aarch64
+    /var/jenkins_home/workspace/yocto-raspberrypi/yocto/poky/meta/recipes-bsp/keymaps/keymaps/aarch64
+    /var/jenkins_home/workspace/yocto-raspberrypi/yocto/poky/meta/recipes-bsp/keymaps/files/aarch64
+    /var/jenkins_home/workspace/yocto-raspberrypi/yocto/poky/meta/recipes-bsp/keymaps/keymaps-1.0/rpi
+    /var/jenkins_home/workspace/yocto-raspberrypi/yocto/poky/meta/recipes-bsp/keymaps/keymaps/rpi
+    /var/jenkins_home/workspace/yocto-raspberrypi/yocto/poky/meta/recipes-bsp/keymaps/files/rpi
+    /var/jenkins_home/workspace/yocto-raspberrypi/yocto/poky/meta/recipes-bsp/keymaps/keymaps-1.0/aarch64
+    /var/jenkins_home/workspace/yocto-raspberrypi/yocto/poky/meta/recipes-bsp/keymaps/keymaps/aarch64
+    /var/jenkins_home/workspace/yocto-raspberrypi/yocto/poky/meta/recipes-bsp/keymaps/files/aarch64
+    /var/jenkins_home/workspace/yocto-raspberrypi/yocto/poky/meta/recipes-bsp/keymaps/keymaps-1.0/
+    /var/jenkins_home/workspace/yocto-raspberrypi/yocto/poky/meta/recipes-bsp/keymaps/keymaps/
+    /var/jenkins_home/workspace/yocto-raspberrypi/yocto/poky/meta/recipes-bsp/keymaps/files/
+NOTE: Applying patch 'GPLv2.patch' (../yocto/poky/meta/recipes-bsp/keymaps/files/GPLv2.patch)
+ERROR: Applying patch 'GPLv2.patch' on target directory '/var/jenkins_home/workspace/yocto-raspberrypi/build/tmp/work/raspberrypi3_64-poky-linux/keymaps/1.0-r31'
+CmdError('quilt --quiltrc /var/jenkins_home/workspace/yocto-raspberrypi/build/tmp/work/raspberrypi3_64-poky-linux/keymaps/1.0-r31/recipe-sysroot-native/etc/quiltrc push', 0, 'stdout: 
+stderr: File series fully applied, ends at patch GPLv2.patch
+')
+DEBUG: Python function patch_do_patch finished
+DEBUG: Python function do_patch finished
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] Strange sporadic build issues (incremental builds in docker container)
+  2022-03-24  6:43   ` AW: " Matthias Klein
+@ 2022-03-24  8:31     ` Alexander Kanavin
+       [not found]       ` <20220329162248.GA5565@localhost>
+  0 siblings, 1 reply; 6+ messages in thread
+From: Alexander Kanavin @ 2022-03-24  8:31 UTC (permalink / raw)
+  To: Matthias Klein; +Cc: yocto
+
+I don't. You need to inspect the build tree to find clues why the
+patch was applied twice. Or simpy wipe tmp/ before builds, if your
+sstate works properly that won't make the builds longer.
+
+Alex
+
+On Thu, 24 Mar 2022 at 07:43, Matthias Klein <matthias.klein@optimeas.de> wrote:
+>
+> Hello Alex,
+>
+> it occurred again:
+>
+> NOTE: recipe gawk-5.1.1-r0: task do_patch: Succeeded
+> NOTE: Running task 1673 of 4524 (/var/jenkins_home/workspace/yocto-raspberrypi/yocto/poky/meta/recipes-devtools/python/python3-six_1.16.0.bb:do_patch)
+> NOTE: recipe firstboot-1.0-r0: task do_populate_sysroot: Started
+> NOTE: recipe keymaps-1.0-r31: task do_patch: Started
+> NOTE: recipe python3-six-1.16.0-r0: task do_patch: Started
+> NOTE: recipe python3-six-1.16.0-r0: task do_patch: Succeeded
+> NOTE: Running task 1676 of 4524 (/var/jenkins_home/workspace/yocto-raspberrypi/yocto/poky/meta/recipes-devtools/perl/perl_5.34.1.bb:do_patch)
+> NOTE: recipe e2fsprogs-1.46.5-r0: task do_patch: Succeeded
+> ERROR: keymaps-1.0-r31 do_patch: Applying patch 'GPLv2.patch' on target directory '/var/jenkins_home/workspace/yocto-raspberrypi/build/tmp/work/raspberrypi3_64-poky-linux/keymaps/1.0-r31'
+> CmdError('quilt --quiltrc /var/jenkins_home/workspace/yocto-raspberrypi/build/tmp/work/raspberrypi3_64-poky-linux/keymaps/1.0-r31/recipe-sysroot-native/etc/quiltrc push', 0, 'stdout:
+> stderr: File series fully applied, ends at patch GPLv2.patch
+> ')
+> ERROR: Logfile of failure stored in: /var/jenkins_home/workspace/yocto-raspberrypi/build/tmp/work/raspberrypi3_64-poky-linux/keymaps/1.0-r31/temp/log.do_patch.353982
+> NOTE: recipe keymaps-1.0-r31: task do_patch: Failed
+> NOTE: Running task 1679 of 4524 (/var/jenkins_home/workspace/yocto-raspberrypi/yocto/poky/meta/recipes-bsp/alsa-state/alsa-state.bb:do_patch)
+> ERROR: Task (/var/jenkins_home/workspace/yocto-raspberrypi/yocto/poky/meta/recipes-bsp/keymaps/keymaps_1.0.bb:do_patch) failed with exit code '1'
+>
+> Do you have an idea?
+>
+> Best regards,
+> Matthias
+>
+> -----Ursprüngliche Nachricht-----
+> Von: Alexander Kanavin <alex.kanavin@gmail.com>
+> Gesendet: Dienstag, 22. März 2022 10:26
+> An: Matthias Klein <matthias.klein@optimeas.de>
+> Cc: yocto@lists.yoctoproject.org
+> Betreff: Re: [yocto] Strange sporadic build issues (incremental builds in docker container)
+>
+> It's hard to say without the full error message, and the build directory of the affected recipe. The easy way out is to simply wipe tmp/ before each build.
+>
+> Alex
+>
+> On Tue, 22 Mar 2022 at 09:51, Matthias Klein <matthias.klein@optimeas.de> wrote:
+> >
+> > Hello together,
+> >
+> > I am building various kirkstone/master yoctos every night via Jenkins inside a Debian Bullseye Docker container.
+> > These are incremental builds, reusing the build directory and sstate-cache of the previous build. The different yoctos are built in order. Each time, a new Docker container is launched.
+> > (The same environment builds dunfell yoctos without any problems).
+> >
+> > Now it happens sporadically that one of the builds aborts with the following message:
+> >
+> > stderr: The series file no longer matches the applied patches. Please run 'quilt pop -a'.
+> >
+> > They are usually alternating packages where the patch step fails with the above message. Also different yoctos are affected. But it is always the above message.
+> > If I then restart the failed build it usually builds cleanly.
+> >
+> > Does anyone have an idea in which direction the problem goes?
+> >
+> > Many greetings,
+> > Matthias
+> >
+> > -=-=-=-=-=-=-=-=-=-=-=-
+> > Links: You receive all messages sent to this group.
+> > View/Reply Online (#56522):
+> > https://lists.yoctoproject.org/g/yocto/message/56522
+> > Mute This Topic: https://lists.yoctoproject.org/mt/89948013/1686489
+> > Group Owner: yocto+owner@lists.yoctoproject.org
+> > Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub
+> > [alex.kanavin@gmail.com]
+> > -=-=-=-=-=-=-=-=-=-=-=-
+> >
+
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* AW: [yocto] Strange sporadic build issues (incremental builds in docker container)
+       [not found]       ` <20220329162248.GA5565@localhost>
+@ 2022-03-30  6:32         ` Matthias Klein
+       [not found]           ` <20220330134021.GA37593@localhost>
+  0 siblings, 1 reply; 6+ messages in thread
+From: Matthias Klein @ 2022-03-30  6:32 UTC (permalink / raw)
+  To: Trevor Woerner, Alexander Kanavin; +Cc: yocto
+
+Hi Trevor,
+
+thank you very much for the detailed answer.
+
+Yes, you are right, it is mostly the same recipes that fail. But they also change from time to time.
+Today it happened to me even without Jenkins and Docker, normally in the console with the recipe keymaps_1.0.bb.
+
+With the nighly builds over the Jenkins I help myself at the moment that I delete build/tmp before.
+So far, the problem has not occurred again.
+
+Many greetings,
+Matthias
+
+-----Ursprüngliche Nachricht-----
+Von: Trevor Woerner <twoerner@gmail.com> 
+Gesendet: Dienstag, 29. März 2022 18:23
+An: Alexander Kanavin <alex.kanavin@gmail.com>
+Cc: Matthias Klein <matthias.klein@optimeas.de>; yocto@lists.yoctoproject.org
+Betreff: Re: [yocto] Strange sporadic build issues (incremental builds in docker container)
+
+On Thu 2022-03-24 @ 09:31:25 AM, Alexander Kanavin wrote:
+> I don't. You need to inspect the build tree to find clues why the 
+> patch was applied twice. Or simpy wipe tmp/ before builds, if your 
+> sstate works properly that won't make the builds longer.
+> 
+> Alex
+> 
+> On Thu, 24 Mar 2022 at 07:43, Matthias Klein <matthias.klein@optimeas.de> wrote:
+> >
+> > Hello Alex,
+> >
+> > it occurred again:
+> >
+> > NOTE: recipe gawk-5.1.1-r0: task do_patch: Succeeded
+> > NOTE: Running task 1673 of 4524 
+> > (/var/jenkins_home/workspace/yocto-raspberrypi/yocto/poky/meta/recip
+> > es-devtools/python/python3-six_1.16.0.bb:do_patch)
+> > NOTE: recipe firstboot-1.0-r0: task do_populate_sysroot: Started
+> > NOTE: recipe keymaps-1.0-r31: task do_patch: Started
+> > NOTE: recipe python3-six-1.16.0-r0: task do_patch: Started
+> > NOTE: recipe python3-six-1.16.0-r0: task do_patch: Succeeded
+> > NOTE: Running task 1676 of 4524 
+> > (/var/jenkins_home/workspace/yocto-raspberrypi/yocto/poky/meta/recip
+> > es-devtools/perl/perl_5.34.1.bb:do_patch)
+> > NOTE: recipe e2fsprogs-1.46.5-r0: task do_patch: Succeeded
+> > ERROR: keymaps-1.0-r31 do_patch: Applying patch 'GPLv2.patch' on target directory '/var/jenkins_home/workspace/yocto-raspberrypi/build/tmp/work/raspberrypi3_64-poky-linux/keymaps/1.0-r31'
+> > CmdError('quilt --quiltrc /var/jenkins_home/workspace/yocto-raspberrypi/build/tmp/work/raspberrypi3_64-poky-linux/keymaps/1.0-r31/recipe-sysroot-native/etc/quiltrc push', 0, 'stdout:
+> > stderr: File series fully applied, ends at patch GPLv2.patch
+> > ')
+> > ERROR: Logfile of failure stored in: 
+> > /var/jenkins_home/workspace/yocto-raspberrypi/build/tmp/work/raspber
+> > rypi3_64-poky-linux/keymaps/1.0-r31/temp/log.do_patch.353982
+> > NOTE: recipe keymaps-1.0-r31: task do_patch: Failed
+> > NOTE: Running task 1679 of 4524 
+> > (/var/jenkins_home/workspace/yocto-raspberrypi/yocto/poky/meta/recip
+> > es-bsp/alsa-state/alsa-state.bb:do_patch)
+> > ERROR: Task (/var/jenkins_home/workspace/yocto-raspberrypi/yocto/poky/meta/recipes-bsp/keymaps/keymaps_1.0.bb:do_patch) failed with exit code '1'
+> >
+> > Do you have an idea?
+> >
+> > Best regards,
+> > Matthias
+> >
+> > -----Ursprüngliche Nachricht-----
+> > Von: Alexander Kanavin <alex.kanavin@gmail.com>
+> > Gesendet: Dienstag, 22. März 2022 10:26
+> > An: Matthias Klein <matthias.klein@optimeas.de>
+> > Cc: yocto@lists.yoctoproject.org
+> > Betreff: Re: [yocto] Strange sporadic build issues (incremental 
+> > builds in docker container)
+> >
+> > It's hard to say without the full error message, and the build directory of the affected recipe. The easy way out is to simply wipe tmp/ before each build.
+> >
+> > Alex
+> >
+> > On Tue, 22 Mar 2022 at 09:51, Matthias Klein <matthias.klein@optimeas.de> wrote:
+> > >
+> > > Hello together,
+> > >
+> > > I am building various kirkstone/master yoctos every night via Jenkins inside a Debian Bullseye Docker container.
+> > > These are incremental builds, reusing the build directory and sstate-cache of the previous build. The different yoctos are built in order. Each time, a new Docker container is launched.
+> > > (The same environment builds dunfell yoctos without any problems).
+> > >
+> > > Now it happens sporadically that one of the builds aborts with the following message:
+> > >
+> > > stderr: The series file no longer matches the applied patches. Please run 'quilt pop -a'.
+> > >
+> > > They are usually alternating packages where the patch step fails with the above message. Also different yoctos are affected. But it is always the above message.
+> > > If I then restart the failed build it usually builds cleanly.
+> > >
+> > > Does anyone have an idea in which direction the problem goes?
+
+Yes I've been seeing exactly these issues as well.
+
+I'm not using any sort of virtualization, I'm using Jenkins to do nightly builds directly on my host. My host machine is openSUSE 15.3. These problems started on Feb 21 for me.
+
+Each of my builds starts by doing a "git pull" on each of the repositories, then kicks off a build if any of the repositories changed. A fresh build will always succeed. Doing a "clean" and rebuilding will (I believe) always succeed. My gut feeling is that it somehow has something to do with having an existing build, refreshing the repositories, then rebuilding.
+
+I spent weeks trying to find a reproducer. I wrote a script to checkout one version of the repositories (before), build, checkout a newer version of the repositories (after) and rebuilding. Even in cases where I used the exact same hashes that had failed on my Jenkins build and repeating 20 times, in some cases I wasn't able to reproduce the error. I was able to find 1 reproducer involving a build for an imx28evk MACHINE, but even then after 20 iterations
+13 were bad and 7 were good. I repeated that set of 20 builds many times and it was never 100% bad.
+
+My investigations led me to believe that it might be related to rm_work and/or BB_NUMBER_THREADS/PARALLEL_MAKE. In my Jenkins builds I enable 'INHERIT += "rm_work"' and I also limit the BB_NUMBER_THREADS and set PARALLEL_MAKE. On the cmdline I was able to reduce the number of failures (sometimes to none) by removing the rm_work and THREADS/PARALLEL, but never completely eliminate it.
+In Jenkins the build failures still felt as random as they were without the change, so I can't say that it's having much effect in Jenkins, but seems to have some effect on the cmdline.
+
+I can say this with certainty: Matthias says it seems that the specific recipe that fails is random, but it's not. In every case the recipe that fails is a recipe whose source files are contained in the meta layer itself. For me the failing recipes were always:
+	modutils-initscripts
+	initscripts
+
+If you look at the recipes for those packages they do not have a SRC_URI that fetches code from some remote location then uses quilt to apply some patches.
+In both cases all of the "source" code exists in the layer itself, and somehow quilt is involved in placing them in the build area.
+
+I have dozens and dozens of these failures recorded and it is always with a recipe that follows that pattern. But 99%-ish percent of the failures are with the two packages I listed above.
+
+The failures aren't related to days when those packages change. The failures are just... sporadic.
+
+So the issue is related to:
+- recipes with in-layer sources
+- quilt (being run twice (?))
+- updating layers, and rebuilding in a build area with an existing build
+- Feb 21 2022 (or thereabouts)
+
+The issue might be related to:
+- jenkins?
+- my build host?
+- rm_work?
+- BB_NUMBER_THREADS?
+- PARALLEL_MAKE?
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* do_patch failing when executed multiple times in the same S=WORKDIR Was: [yocto] Strange sporadic build issues (incremental builds in docker container)
+       [not found]               ` <20220330212855.GA35568@localhost>
+@ 2022-05-26 12:02                 ` Martin Jansa
+  0 siblings, 0 replies; 6+ messages in thread
+From: Martin Jansa @ 2022-05-26 12:02 UTC (permalink / raw)
+  To: Trevor Woerner, openembedded-devel
+  Cc: Richard Purdie, Matthias Klein, Alexander Kanavin, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 6905 bytes --]
+
+On Wed, Mar 30, 2022 at 11:29 PM Trevor Woerner <twoerner@gmail.com> wrote:
+
+> On Wed 2022-03-30 @ 04:08:31 PM, Richard Purdie wrote:
+> > On Wed, 2022-03-30 at 09:40 -0400, Trevor Woerner wrote:
+> > > Hi Matthias,
+> > >
+> > > On Wed 2022-03-30 @ 06:32:00 AM, Matthias Klein wrote:
+> > > > Yes, you are right, it is mostly the same recipes that fail. But
+> they also change from time to time.
+> > > > Today it happened to me even without Jenkins and Docker, normally in
+> the console with the recipe keymaps_1.0.bb.
+> > >
+> > > And keymaps follows the exact same pattern as modutils-initscripts and
+> > > initscripts; namely that their sources are entirely contained in-tree:
+> > >
+> > >     keymaps/
+> > >     ├── files
+> > >     │   ├── GPLv2.patch
+> > >     │   └── keymap.sh
+> > >     └── keymaps_1.0.bb
+> > >
+> > >     keymaps/keymaps_1.0.bb
+> > >      23 SRC_URI = "file://keymap.sh \
+> > >      24            file://GPLv2.patch"
+> > >
+> > > Any recipe that follows this pattern is susceptible, it's probably
+> just a
+> > > coincidence that most of my failures happened to be with the two
+> recipes I
+> > > mentioned.
+> > >
+> > > This issue has revealed a bug, and fixing that bug would be great.
+> However,
+> > > the thing is, keymap.sh is a shell program written 12 years ago which
+> hasn't
+> > > changed since. The GPL/COPYING file is only there for "reasons". The
+> license
+> > > file doesn't *need* to be moved into the build area for this recipe to
+> get its
+> > > job done (namely installing keymap.sh into the image's sysvinit).
+> >
+> > The "good" news is I did work out how to reproduce this.
+> >
+> > bitbake keymaps -c clean
+> > bitbake keymaps
+> > bitbake keymaps -c unpack -f
+> > bitbake keymaps -c patch
+> > bitbake keymaps -c unpack -f
+> > bitbake keymaps -c patch
+>
+> Awesome! That is a very simple and quick reproducer!
+>
+> > I haven't looked at why but hopefully that helps us more forward with
+> looking at
+> > the issue.
+> >
+> > The complications with S == WORKDIR were one of the reasons I did start
+> work on
+> > patches to make it work better and maybe move fetching into a dedicated
+> > direction rather than WORKDIR and then symlink things. I never got that
+> patch to
+> > work well enough to submit though (and it is too late for a major change
+> like
+> > that in this release).
+>
+> As per our conversation I quickly tried the following (not that I expected
+> this to be a final solution, but just a poking-around kind of thing):
+>
+>         diff --git a/meta/classes/base.bbclass b/meta/classes/base.bbclass
+>         index cc81461473..503da61b3d 100644
+>         --- a/meta/classes/base.bbclass
+>         +++ b/meta/classes/base.bbclass
+>         @@ -170,6 +170,7 @@ do_unpack[dirs] = "${WORKDIR}"
+>          do_unpack[cleandirs] = "${@d.getVar('S') if
+> os.path.normpath(d.getVar('S')) != os.path.normpath(d.getVar('WORKDIR'))
+> else os.path.join('${S}', 'patches')}"
+>
+>          python base_do_unpack() {
+>         +    bb.utils.remove(d.getVar('B') + "/.pc", recurse=True)
+>              src_uri = (d.getVar('SRC_URI') or "").split()
+>              if not src_uri:
+>                  return
+>
+> And it changed the error message from:
+>
+>         $ bitbake keymaps -c patch
+>         ...
+>         ERROR: keymaps-1.0-r31 do_patch: Applying patch 'GPLv2.patch' on
+> target directory
+> '/z/build-master/quilt-fix/qemux86/nodistro/build/tmp-glibc/work/qemux86-oe-linux/keymaps/1.0-r31'
+>         CmdError('quilt --quiltrc
+> /z/build-master/quilt-fix/qemux86/nodistro/build/tmp-glibc/work/qemux86-oe-linux/keymaps/1.0-r31/recipe-sysroot-native/etc/quiltrc
+> push', 0, 'stdout:
+>         stderr: File series fully applied, ends at patch GPLv2.patch
+>         ')
+>
+> to:
+>
+>         $ bitbake keymaps -c patch
+>         ...
+>         ERROR: keymaps-1.0-r31 do_patch: Applying patch 'GPLv2.patch' on
+> target directory
+> '/z/build-master/quilt-fix/qemux86/nodistro/build/tmp-glibc/work/qemux86-oe-linux/keymaps/1.0-r31'
+>         CmdError('quilt --quiltrc
+> /z/build-master/quilt-fix/qemux86/nodistro/build/tmp-glibc/work/qemux86-oe-linux/keymaps/1.0-r31/recipe-sysroot-native/etc/quiltrc
+> push', 0, 'stdout: Applying patch GPLv2.patch
+>         The next patch would create the file COPYING,
+>         which already exists!  Applying it anyway.
+>         patching file COPYING
+>         Hunk #1 FAILED at 1.
+>         1 out of 1 hunk FAILED -- rejects in file COPYING
+>         Patch GPLv2.patch can be reverse-applied
+>
+>         stderr: ')
+>
+> progress?
+> https://www.reddit.com/r/ProgrammerHumor/comments/8j5qim/progress/
+>
+
++oe-core ML as it isn't poky/yocto specific
+
+Just small update as multiple people mentioned this (in case I don't send
+the final fix later today).
+
+There are couple recipes affected by this e.g. keymaps (.patch already
+removed in oe-core), makedevs (.patch removal sent to ML yesterday
+https://lists.openembedded.org/g/openembedded-core/message/166172), devmem2
+(https://lists.openembedded.org/g/openembedded-devel/message/97270), but
+there are other recipes with S = "${WORKDIR}" where you can trigger this
+e.g. by having a .patch file in DISTRO layer .bbappend (e.g. tzdata with
+webOS
+https://github.com/webosose/meta-webosose/blob/06e5298d9f5c47679b679081d9930f8d1c776142/meta-webos/recipes-extended/tzdata/tzdata.bbappend#L10
+)
+
+This do_patch issue is caused by:
+https://git.savannah.nongnu.org/cgit/quilt.git/commit/?id=8b39a960afcf45cd4f5804ae62b6b0656bdb191d
+introduced in kirkstone with:
+https://git.openembedded.org/openembedded-core/commit/?h=kirkstone&id=fa71afcee9ab42198c619333b77a15bd2ae02b20
+
+I'm still looking how to fix this properly, but the shortest sequence to
+reproduce this is just
+bitbake keymaps -c patch
+bitbake keymaps -c unpack -f
+bitbake keymaps -c patch
+with
+https://git.openembedded.org/openembedded-core/commit/?id=17d981005a0c0c97702ad88602b7181b69bcc9eb
+reverted.
+
+And the change in quilt behavior is causing QuiltTree.Clean (quilt pop -a
+-f) in:
+https://git.openembedded.org/openembedded-core/tree/meta/lib/oe/patch.py?id=17d981005a0c0c97702ad88602b7181b69bcc9eb#n601
+
+to fail with "No series file found" before undoing the patches in WORKDIR.
+
+Removing ".pc" as Trevor tried above doesn't help, because we really need
+quilt's help to undo the patches (in this case to delete COPYING file from
+WORKDIR before applying the .patch which tries to add it again), because
+do_unpack cannot just wipe S and start over (because S == WORKDIR) - not
+selectively removing the files listed in SRC_URI, because COPYING file
+isn't listed there.
+
+Using skip_series_check in 'quilt pop' (partially reverting the change from
+upstream) helps a bit, but might be difficult to upstream.
+
+Will send a fix later today or next week.
+
+Cheers,
+
+[-- Attachment #2: Type: text/html, Size: 9386 bytes --]
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+end of thread, other threads:[~2022-05-26 12:03 UTC | newest]
+
+Thread overview: 6+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-03-22  8:50 Strange sporadic build issues (incremental builds in docker container) Matthias Klein
+2022-03-22  9:25 ` [yocto] " Alexander Kanavin
+2022-03-24  6:43   ` AW: " Matthias Klein
+2022-03-24  8:31     ` Alexander Kanavin
+     [not found]       ` <20220329162248.GA5565@localhost>
+2022-03-30  6:32         ` AW: " Matthias Klein
+     [not found]           ` <20220330134021.GA37593@localhost>
+     [not found]             ` <45259bd7552252f4b649806913141faf1389c38a.camel@linuxfoundation.org>
+     [not found]               ` <20220330212855.GA35568@localhost>
+2022-05-26 12:02                 ` do_patch failing when executed multiple times in the same S=WORKDIR Was: " Martin Jansa
+

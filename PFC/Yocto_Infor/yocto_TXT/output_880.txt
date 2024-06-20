@@ -1,0 +1,896 @@
+* Question about psuedo abort errors
+@ 2022-06-09 16:38 Rusty Howell
+  2022-06-09 21:20 ` [yocto] " Richard Purdie
+  0 siblings, 1 reply; 13+ messages in thread
+From: Rusty Howell @ 2022-06-09 16:38 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1961 bytes --]
+
+Hello,
+
+My company is using yocto.  When building our own recipes, I get pseudo
+abort errors rather often.  I've read the wiki page about them, but I'm not
+sure exactly what we are doing wrong that is making this happen.  We have
+many recipes for various libraries and applications.  The files listed in
+the abort error log are usually C++ header files.
+
+A coworker has told me that setting PACKAGE_DEBUG_SPLIT_STYLE =
+"debug-without-src" in the local.conf will allow bitbake to ignore this
+error. But in the end, I would like to understand what exactly is the root
+cause, so that I can adjust our recipes to fix this.
+
+Here is the pseudo.log from the most recent failure. I know a lot of
+proprietary context is missing for anyone in the OSS community to give
+super confident answers, but I appreciate any suggestions.
+
+Some context here:
+* We have a legacy git repo that contains the source for several different
+libraries.
+* We use CMake recursively to build all the libs from the top level.
+* Some libs depend on other libs in the repo.
+* I am trying to build the recipe "libc4statsclient", which is just one of
+the libs in the repo.
+* The header file shown in the error is part of another library and recipe.
+
+
+ERROR: Task
+(/home/rhowell/corex-develop/yocto/sources/c4-distro/meta-c4/recipes-c4/libc4statsdclient/libc4statsdclient_git.bb:do_install)
+failed with exit code '1'
+Pseudo log:
+Setup complete, sending SIGUSR1 to pid 3063620.
+path mismatch [3 links]: ino 3804719 db
+'/home/rhowell/corex-develop/yocto/build.imx8mq-core/tmp/work/imx8mq_core-control4-linux/libc4statsdclient/local+AUTOINC+e18ad903a2-r3/package/usr/src/debug/libc4statsdclient/local+AUTOINC+e18ad903a2-r3/git/control4/c4shared/logger/logger.hpp'
+req
+'/home/rhowell/corex-develop/yocto/build.imx8mq-core/tmp/work/imx8mq_core-control4-linux/libc4statsdclient/local+AUTOINC+e18ad903a2-r3/git/control4/c4shared/logger/logger.hpp'.
+
+Thanks for your time and any suggestions.
+Rusty Howell
+
+[-- Attachment #2: Type: text/html, Size: 2331 bytes --]
+
+^ permalink raw reply	[flat|nested] 13+ messages in thread
+* Re: [yocto] Question about psuedo abort errors
+  2022-06-09 16:38 Question about psuedo abort errors Rusty Howell
+@ 2022-06-09 21:20 ` Richard Purdie
+  2022-06-10 17:05   ` Rusty Howell
+  0 siblings, 1 reply; 13+ messages in thread
+From: Richard Purdie @ 2022-06-09 21:20 UTC (permalink / raw)
+  To: Rusty Howell, yocto
+
+On Thu, 2022-06-09 at 10:38 -0600, Rusty Howell wrote:
+> My company is using yocto.  When building our own recipes, I get
+> pseudo abort errors rather often.  I've read the wiki page about
+> them, but I'm not sure exactly what we are doing wrong that is making
+> this happen.  We have many recipes for various libraries and
+> applications.  The files listed in the abort error log are usually
+> C++ header files. 
+> 
+> A coworker has told me that setting PACKAGE_DEBUG_SPLIT_STYLE =
+> "debug-without-src" in the local.conf will allow bitbake to ignore
+> this error. But in the end, I would like to understand what exactly
+> is the root cause, so that I can adjust our recipes to fix this.
+> 
+> Here is the pseudo.log from the most recent failure. I know a lot of
+> proprietary context is missing for anyone in the OSS community to
+> give super confident answers, but I appreciate any suggestions.
+> 
+> Some context here:  
+> * We have a legacy git repo that contains the source for several
+> different libraries.  
+> * We use CMake recursively to build all the libs from the top level.
+> * Some libs depend on other libs in the repo.
+> * I am trying to build the recipe "libc4statsclient", which is just
+> one of the libs in the repo.
+> * The header file shown in the error is part of another library and
+> recipe.
+> 
+> 
+> ERROR: Task (/home/rhowell/corex-develop/yocto/sources/c4-distro/meta-c4/recipes-c4/libc4statsdclient/libc4statsdclient_git.bb:do_install) failed with exit code '1' 
+> Pseudo log:
+> Setup complete, sending SIGUSR1 to pid 3063620.
+> path mismatch [3 links]: ino 3804719 db '/home/rhowell/corex-develop/yocto/build.imx8mq-core/tmp/work/imx8mq_core-control4-linux/libc4statsdclient/local+AUTOINC+e18ad903a2-r3/package/usr/src/debug/libc4statsdclient/local+AUTOINC+e18ad903a2-r3/git/control4/c4shared/logger/logger.hpp' req '/home/rhowell/corex-develop/yocto/build.imx8mq-core/tmp/work/imx8mq_core-control4-linux/libc4statsdclient/local+AUTOINC+e18ad903a2-r3/git/control4/c4shared/logger/logger.hpp'.
+> 
+> Thanks for your time and any suggestions.
+
+Starting with the error message, it says that a path of:
+
+WORKDIR/git/control4/c4shared/logger/logger.hpp
+
+was accessed and it was found in the pseudo database as:
+
+WORKDIR/package/usr/src/debug/libc4statsdclient/local+AUTOINC+e18ad903a2-r3/git/control4/c4shared/logger/logger.hpp
+
+This doesn't seem so unusual to me since recipe source files would
+often be hardlinked into package/usr/src/debug as part of the build,
+however the ordering is backwards, the git/ should be created first,
+then the WORKDIR/package one.
+
+I was thinking this was really odd, then I realised you say this
+aborted in do_install. WORKDIR/package is created by do_package, *not*
+do_install which runs before do_package. This probably starts to hint
+at what is going on.
+
+Is this a directory where a previous build has run? If so, what changed
+between the build runs?
+
+My suspicion is that WORKDIR/package is being deleted outside of pseudo
+and that is confusing things. The question is what/where it is being
+deleted. Are you using rm_work?
+
+The WORKDIR/temp/log.task_order file can be interesting to see which
+tasks reran and in which order.
+
+I appreciate this isn't an answer but it might give you an idea where
+to look...
+
+Cheers,
+
+Richard
+
+
+
+
+^ permalink raw reply	[flat|nested] 13+ messages in thread
+* Re: Question about psuedo abort errors
+  2022-06-09 21:20 ` [yocto] " Richard Purdie
+@ 2022-06-10 17:05   ` Rusty Howell
+  2022-06-10 21:11     ` [yocto] " Richard Purdie
+  0 siblings, 1 reply; 13+ messages in thread
+From: Rusty Howell @ 2022-06-10 17:05 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 385 bytes --]
+
+Thanks for the response, Richard.   Is the pseudo database located inside TMPDIR?   I have deleted the TMPDIR at times to try to get my build back to a working state. If the pseudo db is outside TMPDIR, then that would be the most likely cause of this error. But I would think that other OSS recipes would generate this same error after I delete TMPDIR, not just my company ones.
+
+[-- Attachment #2: Type: text/html, Size: 401 bytes --]
+
+^ permalink raw reply	[flat|nested] 13+ messages in thread
+* Re: [yocto] Question about psuedo abort errors
+  2022-06-10 17:05   ` Rusty Howell
+@ 2022-06-10 21:11     ` Richard Purdie
+  2023-02-23 10:27       ` Tamis
+  0 siblings, 1 reply; 13+ messages in thread
+From: Richard Purdie @ 2022-06-10 21:11 UTC (permalink / raw)
+  To: Rusty Howell, yocto
+
+On Fri, 2022-06-10 at 10:05 -0700, Rusty Howell wrote:
+> Thanks for the response, Richard.   Is the pseudo database located
+> inside TMPDIR?   I have deleted the TMPDIR at times to try to get my
+> build back to a working state. If the pseudo db is outside TMPDIR,
+> then that would be the most likely cause of this error. But I would
+> think that other OSS recipes would generate this same error after I
+> delete TMPDIR, not just my company ones.
+
+The pseudo database is per workdir (i.e. per recipe) in WORKDIR/pseudo.
+
+Cheers,
+
+Richard
+
+
+^ permalink raw reply	[flat|nested] 13+ messages in thread
+* Re: Question about psuedo abort errors
+  2022-06-10 21:11     ` [yocto] " Richard Purdie
+@ 2023-02-23 10:27       ` Tamis
+  2023-02-24 13:37         ` [yocto] " Richard Purdie
+  2023-03-05 18:08         ` [yocto] " Richard Purdie
+  0 siblings, 2 replies; 13+ messages in thread
+From: Tamis @ 2023-02-23 10:27 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 5615 bytes --]
+
+Hello,
+
+I know that this might be an old thread but we seem to deal the exact same issue in our yocto builds, that's why I am writing here.
+Recently we switched from sumo yocto branch to dunfel.
+Now some recipes with nothing special in it, just compile and install, are failing in the install phase because of pseudo abort.
+Those recipes are installing via the do_install some headers files into the usr/include folder and later those headers are share via the sysroot to other recipes.
+
+I read what has been written above but I didn't see a final solution. So I am also trying to understand the error in order to find a solution.
+If we do a clean build  (bitbake lib32-las -c cleansstate) then the recipe compiles fines. But if we invoke the building without the cleasstate the recipe fails in install phase due to pseudo.
+
+Install error:
+--------------------------------------------
+
++ install -m 0644 WORKDIR/lib32-las/M-WBS0.1-r0/git/lasiflib/include/lasif_list.h WORKDIR/lib32-las/M-WBS0.1-r0/git/lasiflib/include/lasif_pdinc.h WORKDIR/lib32-las/M-WBS0.1-r0/git/lasiflib/include/lasif_util.h WORKDIR/lib32-las/M-WBS0.1-r0/git/lasiflib/include/lasif_varmsg.h WORKDIR/lib32-las/M-WBS0.1-r0/image/usr/include
+
+abort()ing pseudo client by server request. See https://wiki.yoctoproject.org/wiki/Pseudo_Abort for more details on this.
+
+Check logfile: WORDIR/lib32-las/M-WBS0.1-r0/pseudo//pseudo.log
+
+Aborted (core dumped)
+
++ bb_exit_handler
+
++ ret=134
+
++ echo WARNING: exit code 134 from a shell command.
+
+WARNING: exit code 134 from a shell command.
+
++ exit 134
+
+---------------------------------------------------------------------------------
+
+And pseudo log error output:
+
+------------------------------------------------------------------
+
+pid 26345 [parent 26344], doing new pid setup and server start
+
+Setup complete, sending SIGUSR1 to pid 26344.
+
+path mismatch [3 links]: ino 7868999 db 'WORKDIR/lib32-las/M-WBS0.1-r0/package/usr/src/debug/lib32-las/M-WBS0.1-r0/git/lasiflib/include/lasif_list.h' req 'WORKDIR/lib32-las/M-WBS0.1-r0/git/lasiflib/include/lasif_list.h'.
+
+db cleanup for server shutdown, 08:38:52.482
+
+memory-to-file backup complete, 08:38:52.482.
+
+db cleanup finished, 08:38:52.482
+
+debug_logfile: fd 2
+
+pid 6423 [parent 6422], doing new pid setup and server start
+
+Setup complete, sending SIGUSR1 to pid 6422.
+
+path mismatch [3 links]: ino 7868999 db 'WORKDIR/lib32-las/M-WBS0.1-r0/package/usr/src/debug/lib32-las/M-WBS0.1-r0/git/lasiflib/include/lasif_list.h' req 'WORKDIR/lib32-las/M-WBS0.1-r0/git/lasiflib/include/lasif_list.h'.
+
+db cleanup for server shutdown, 09:13:45.899
+
+memory-to-file backup complete, 09:13:45.899.
+
+db cleanup finished, 09:13:45.899
+
+-----------------------------------------------------------------------------------------------------------------------------------
+
+I added the export PSEUDO_DEBUG = "nfoPcvdDyerpswikVx" in the recipe but I couldn't understand much.
+In the whole build we have the RM_WORK enabled but for that current recipe we have excluded it.
+
+Also the task order is the following:
+
+do_cleansstate (20698): log.do_cleansstate.20698
+do_cleanall (22404): log.do_cleanall.22404
+do_rm_work (24346): log.do_rm_work.24346
+do_fetch (24434): log.do_fetch.24434
+do_prepare_recipe_sysroot (24465): log.do_prepare_recipe_sysroot.24465
+do_unpack (24466): log.do_unpack.24466
+do_patch (24493): log.do_patch.24493
+do_populate_lic (24665): log.do_populate_lic.24665
+do_deploy_source_date_epoch (24666): log.do_deploy_source_date_epoch.24666
+do_configure (24765): log.do_configure.24765
+do_compile (24809): log.do_compile.24809
+do_install (27477): log.do_install.27477
+do_populate_sysroot (27510): log.do_populate_sysroot.27510
+do_package (27509): log.do_package.27509
+do_packagedata (29544): log.do_packagedata.29544
+do_package_qa (29592): log.do_package_qa.2959
+do_package_write_ipk (29593): log.do_package_write_ipk.29593
+
+Ok build till now.
+
+Next invocation
+
+do_prepare_recipe_sysroot (23311): log.do_prepare_recipe_sysroot.23311
+do_configure (23769): log.do_configure.23769
+do_compile (24132): log.do_compile.24132
+do_install (26628): log.do_install.26628
+do_install (32535): log.do_install.32535
+do_install (4454): log.do_install.4454
+do_install (26343): log.do_install.26343
+do_rm_work (4905): log.do_rm_work.4905
+do_deploy_source_date_epoch (4919): log.do_deploy_source_date_epoch.4919
+do_configure (4954): log.do_configure.4954
+do_compile (5003): log.do_compile.5003
+do_install (6421): log.do_install.6421
+
+All above are failures in do_install phase. You see multiple invocations trying to fix the error and adding more debug.
+If I don't do a cleansstate or cleanall the recipe is not building.
+We do not delete or manipulate any files in the WORKDIR folder. We might only *copy* some files after the end of the build in some folders outside of yocto. So the WORKDIR structure remains untouched from our actions.
+
+In sumo branch we did not have those issues. So something seems to have been changed in between. Right now the dunfell used branch is dunfell-23.0.21 and the latest is dunfell-23.0.22 but I don't see a pseudo fix or something similar.
+
+I could also use RM_WORK to that recipe and clean it after build, so the error would disappear but it would be good to understand what is the problem here.
+
+If requested I can also sent the full log of install along with the pseudo debug output.
+
+Rusty Howell did you solve your problem and how?
+
+Thanks a lot,
+Any suggestions would be highly appreciated,
+Panagiotis Tamtamis
+
+[-- Attachment #2: Type: text/html, Size: 6149 bytes --]
+
+^ permalink raw reply	[flat|nested] 13+ messages in thread
+* Re: [yocto] Question about psuedo abort errors
+  2023-02-23 10:27       ` Tamis
+@ 2023-02-24 13:37         ` Richard Purdie
+  2023-02-24 14:22           ` Tamis
+  2023-03-05 18:08         ` [yocto] " Richard Purdie
+  1 sibling, 1 reply; 13+ messages in thread
+From: Richard Purdie @ 2023-02-24 13:37 UTC (permalink / raw)
+  To: Tamis, yocto
+
+Hi,
+
+On Thu, 2023-02-23 at 02:27 -0800, Tamis wrote:
+> I know that this might be an old thread but we seem to deal the exact
+> same issue in our yocto builds, that's why I am writing here.
+> Recently we switched from sumo yocto branch to dunfel.
+> Now some recipes with nothing special in it, just compile and
+> install, are failing in the install phase because of pseudo abort.
+> Those recipes are installing via the do_install some headers files
+> into the usr/include folder and later those headers are share via the
+> sysroot to other recipes.
+> I read what has been written above but I didn't see a final solution.
+> So I am also trying to understand the error in order to find a
+> solution.
+> If we do a clean build  (bitbake lib32-las -c cleansstate) then the
+> recipe compiles fines. But if we invoke the building without the
+> cleasstate the recipe fails in install phase due to pseudo.
+
+I'm curious if you upgrade to the latest pseudo revision whether this
+helps at all. There was a fix that was partially related to issues like
+this.
+
+The error either means the file was deleted on disk without pseudo
+seeing it, then it was created again or that there is some kind of race
+in file creation confusing pseudo. The latest commits to pseudo try and
+fix the latter.
+
+Cheers,
+
+Richard
+
+
+
+^ permalink raw reply	[flat|nested] 13+ messages in thread
+* Re: Question about psuedo abort errors
+  2023-02-24 13:37         ` [yocto] " Richard Purdie
+@ 2023-02-24 14:22           ` Tamis
+  2023-03-03 11:23             ` Tamis
+  0 siblings, 1 reply; 13+ messages in thread
+From: Tamis @ 2023-02-24 14:22 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 673 bytes --]
+
+Hello Richard
+
+And thanks for the quick reply.
+
+> 
+> 
+> 
+> I'm curious if you upgrade to the latest pseudo revision whether this
+> helps at all. There was a fix that was partially related to issues like
+> this.
+> 
+> The error either means the file was deleted on disk without pseudo
+> seeing it, then it was created again or that there is some kind of race
+> in file creation confusing pseudo. The latest commits to pseudo try and
+> fix the latter.
+> 
+> 
+> 
+
+I see the pseudo SRCREV is different in kirkstone and master from dunfell branch one. I will check the one from kirkstone and even master and I will let you know in any case.
+
+Br,
+Panagiotis
+
+[-- Attachment #2: Type: text/html, Size: 1258 bytes --]
+
+^ permalink raw reply	[flat|nested] 13+ messages in thread
+* Re: Question about psuedo abort errors
+  2023-02-24 14:22           ` Tamis
+@ 2023-03-03 11:23             ` Tamis
+  0 siblings, 0 replies; 13+ messages in thread
+From: Tamis @ 2023-03-03 11:23 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 457 bytes --]
+
+Hello Richard,
+
+I tested with both kirkstone and master pseudo.
+I also cleaned again whole tmp and tested with latest dunfell and error still persists.
+
+When we change the SRCREV of the recipe the install will fail with the pseudo error.
+We need to cleansstate the recipe in order to work again or in order to fix that permanently we are now thinking to RM_WORK also that recipe.
+
+Would you require some more traces in order to see something more?
+
+[-- Attachment #2: Type: text/html, Size: 490 bytes --]
+
+^ permalink raw reply	[flat|nested] 13+ messages in thread
+* Re: [yocto] Question about psuedo abort errors
+  2023-02-23 10:27       ` Tamis
+  2023-02-24 13:37         ` [yocto] " Richard Purdie
+@ 2023-03-05 18:08         ` Richard Purdie
+  2023-03-06  4:54           ` ChenQi
+  1 sibling, 1 reply; 13+ messages in thread
+From: Richard Purdie @ 2023-03-05 18:08 UTC (permalink / raw)
+  To: Tamis, yocto
+
+I saw you're still having problems even with the latest pseudo
+revisions. I'll make some comments below.
+
+On Thu, 2023-02-23 at 02:27 -0800, Tamis wrote:
+> Install error:
+> --------------------------------------------
+> + install -m 0644 WORKDIR/lib32-las/M-WBS0.1-r0/git/lasiflib/include/lasif_list.h WORKDIR/lib32-las/M-WBS0.1-r0/git/lasiflib/include/lasif_pdinc.h WORKDIR/lib32-las/M-WBS0.1-r0/git/lasiflib/include/lasif_util.h WORKDIR/lib32-las/M-WBS0.1-r0/git/lasiflib/include/lasif_varmsg.h WORKDIR/lib32-las/M-WBS0.1-r0/image/usr/include
+>  
+> abort()ing pseudo client by server request. See https://wiki.yoctoproject.org/wiki/Pseudo_Abort for more details on this.
+> Check logfile: WORDIR/lib32-las/M-WBS0.1-r0/pseudo//pseudo.log
+>  
+> Aborted (core dumped)
+> + bb_exit_handler
+> + ret=134
+> + echo WARNING: exit code 134 from a shell command.
+> WARNING: exit code 134 from a shell command.
+> + exit 134
+> ---------------------------------------------------------------------------------
+> And pseudo log error output:
+> ------------------------------------------------------------------
+> pid 26345 [parent 26344], doing new pid setup and server start
+> Setup complete, sending SIGUSR1 to pid 26344.
+> path mismatch [3 links]: ino 7868999 db 'WORKDIR/lib32-las/M-WBS0.1-r0/package/usr/src/debug/lib32-las/M-WBS0.1-r0/git/lasiflib/include/lasif_list.h' req 'WORKDIR/lib32-las/M-WBS0.1-r0/git/lasiflib/include/lasif_list.h'.
+
+This is saying the file on disk with inode 7868999 is:
+WORKDIR/lib32-las/M-WBS0.1-r0/git/lasiflib/include/lasif_list.h 
+
+but the pseudo database thinks this is:
+
+WORKDIR/lib32-las/M-WBS0.1-r0/package/usr/src/debug/lib32-las/M-WBS0.1-r0/git/lasiflib/include/lasif_list.h
+
+so the question is when was this file created? It would be created by
+do_package since it is in the /package/ directory. It would seem to be
+being deleted outside of pseudo context.
+
+> db cleanup for server shutdown, 08:38:52.482
+> memory-to-file backup complete, 08:38:52.482.
+> db cleanup finished, 08:38:52.482
+> debug_logfile: fd 2
+> pid 6423 [parent 6422], doing new pid setup and server start
+> Setup complete, sending SIGUSR1 to pid 6422.
+> path mismatch [3 links]: ino 7868999 db 'WORKDIR/lib32-las/M-WBS0.1-r0/package/usr/src/debug/lib32-las/M-WBS0.1-r0/git/lasiflib/include/lasif_list.h' req 'WORKDIR/lib32-las/M-WBS0.1-r0/git/lasiflib/include/lasif_list.h'.
+> db cleanup for server shutdown, 09:13:45.899
+> memory-to-file backup complete, 09:13:45.899.
+> db cleanup finished, 09:13:45.899
+> -----------------------------------------------------------------------------------------------------------------------------------
+> 
+> I added the export PSEUDO_DEBUG = "nfoPcvdDyerpswikVx" in the recipe but I couldn't understand much.
+> In the whole build we have the RM_WORK enabled but for that current recipe we have excluded it.
+
+How are you excluding it? I have to wonder if that is somehow breaking
+things due to dependency changes.
+
+> Also the task order is the following:
+> do_cleansstate (20698): log.do_cleansstate.20698
+> do_cleanall (22404): log.do_cleanall.22404
+> do_rm_work (24346): log.do_rm_work.24346
+> do_fetch (24434): log.do_fetch.24434
+> do_prepare_recipe_sysroot (24465): log.do_prepare_recipe_sysroot.24465
+> do_unpack (24466): log.do_unpack.24466
+> do_patch (24493): log.do_patch.24493
+> do_populate_lic (24665): log.do_populate_lic.24665
+> do_deploy_source_date_epoch (24666): log.do_deploy_source_date_epoch.24666
+> do_configure (24765): log.do_configure.24765
+> do_compile (24809): log.do_compile.24809
+> do_install (27477): log.do_install.27477
+> do_populate_sysroot (27510): log.do_populate_sysroot.27510
+> do_package (27509): log.do_package.27509
+> do_packagedata (29544): log.do_packagedata.29544
+> do_package_qa (29592): log.do_package_qa.2959
+> do_package_write_ipk (29593): log.do_package_write_ipk.29593
+> 
+> Ok build till now.
+> Next invocation
+> do_prepare_recipe_sysroot (23311): log.do_prepare_recipe_sysroot.23311
+> do_configure (23769): log.do_configure.23769
+> do_compile (24132): log.do_compile.24132
+> do_install (26628): log.do_install.26628
+
+Are you saying the first failure is here in the do_install above?
+
+> do_install (32535): log.do_install.32535
+> do_install (4454): log.do_install.4454
+> do_install (26343): log.do_install.26343
+> do_rm_work (4905): log.do_rm_work.4905
+
+This is odd. Why would an rm_work run here?
+
+> do_deploy_source_date_epoch (4919): log.do_deploy_source_date_epoch.4919
+> do_configure (4954): log.do_configure.4954
+> do_compile (5003): log.do_compile.5003
+> do_install (6421): log.do_install.6421
+
+This is also odd since if rm_work did run, shouldn't the unpack/patch
+need to run again? Didn't you say you'd disabled rm_work for this
+recipe?
+
+> All above are failures in do_install phase. You see multiple
+> invocations trying to fix the error and adding more debug.
+> If I don't do a cleansstate or cleanall the recipe is not building.
+> We do not delete or manipulate any files in the WORKDIR folder. We
+> might only copy some files after the end of the build in some folders
+> outside of yocto. So the WORKDIR structure remains untouched from our
+> actions.
+
+Something is deleting the files in /package/ which is confusing pseudo.
+The question is what/when. Stepping through this and seeing when the
+files there disappear would be the next step to debug it, narrow down
+when something is deleting them.
+
+Cheers,
+
+Richard
+
+
+
+^ permalink raw reply	[flat|nested] 13+ messages in thread
+* Re: [yocto] Question about psuedo abort errors
+  2023-03-05 18:08         ` [yocto] " Richard Purdie
+@ 2023-03-06  4:54           ` ChenQi
+  2023-03-06 12:33             ` Tamis
+  0 siblings, 1 reply; 13+ messages in thread
+From: ChenQi @ 2023-03-06  4:54 UTC (permalink / raw)
+  To: yocto
+
+This is weird since ${S} is usually in PSEUDO_IGNORE_PATHS.
+And if I understand it correctly, if ${S} is in PSEUDO_IGNORE_PATHS, 
+pseudo should not complain about any file under ${S}.
+Could you please check if your recipe's PSEUDO_INGORE_PATHS contains 
+"WORKDIR/lib32-las/M-WBS0.1-r0/git"?
+
+Regards,
+Qi
+
+
+On 3/6/23 02:08, Richard Purdie wrote:
+> I saw you're still having problems even with the latest pseudo
+> revisions. I'll make some comments below.
+>
+> On Thu, 2023-02-23 at 02:27 -0800, Tamis wrote:
+>> Install error:
+>> --------------------------------------------
+>> + install -m 0644 WORKDIR/lib32-las/M-WBS0.1-r0/git/lasiflib/include/lasif_list.h WORKDIR/lib32-las/M-WBS0.1-r0/git/lasiflib/include/lasif_pdinc.h WORKDIR/lib32-las/M-WBS0.1-r0/git/lasiflib/include/lasif_util.h WORKDIR/lib32-las/M-WBS0.1-r0/git/lasiflib/include/lasif_varmsg.h WORKDIR/lib32-las/M-WBS0.1-r0/image/usr/include
+>>   
+>> abort()ing pseudo client by server request. See https://wiki.yoctoproject.org/wiki/Pseudo_Abort for more details on this.
+>> Check logfile: WORDIR/lib32-las/M-WBS0.1-r0/pseudo//pseudo.log
+>>   
+>> Aborted (core dumped)
+>> + bb_exit_handler
+>> + ret=134
+>> + echo WARNING: exit code 134 from a shell command.
+>> WARNING: exit code 134 from a shell command.
+>> + exit 134
+>> ---------------------------------------------------------------------------------
+>> And pseudo log error output:
+>> ------------------------------------------------------------------
+>> pid 26345 [parent 26344], doing new pid setup and server start
+>> Setup complete, sending SIGUSR1 to pid 26344.
+>> path mismatch [3 links]: ino 7868999 db 'WORKDIR/lib32-las/M-WBS0.1-r0/package/usr/src/debug/lib32-las/M-WBS0.1-r0/git/lasiflib/include/lasif_list.h' req 'WORKDIR/lib32-las/M-WBS0.1-r0/git/lasiflib/include/lasif_list.h'.
+> This is saying the file on disk with inode 7868999 is:
+> WORKDIR/lib32-las/M-WBS0.1-r0/git/lasiflib/include/lasif_list.h
+>
+> but the pseudo database thinks this is:
+>
+> WORKDIR/lib32-las/M-WBS0.1-r0/package/usr/src/debug/lib32-las/M-WBS0.1-r0/git/lasiflib/include/lasif_list.h
+>
+> so the question is when was this file created? It would be created by
+> do_package since it is in the /package/ directory. It would seem to be
+> being deleted outside of pseudo context.
+>
+>> db cleanup for server shutdown, 08:38:52.482
+>> memory-to-file backup complete, 08:38:52.482.
+>> db cleanup finished, 08:38:52.482
+>> debug_logfile: fd 2
+>> pid 6423 [parent 6422], doing new pid setup and server start
+>> Setup complete, sending SIGUSR1 to pid 6422.
+>> path mismatch [3 links]: ino 7868999 db 'WORKDIR/lib32-las/M-WBS0.1-r0/package/usr/src/debug/lib32-las/M-WBS0.1-r0/git/lasiflib/include/lasif_list.h' req 'WORKDIR/lib32-las/M-WBS0.1-r0/git/lasiflib/include/lasif_list.h'.
+>> db cleanup for server shutdown, 09:13:45.899
+>> memory-to-file backup complete, 09:13:45.899.
+>> db cleanup finished, 09:13:45.899
+>> -----------------------------------------------------------------------------------------------------------------------------------
+>>
+>> I added the export PSEUDO_DEBUG = "nfoPcvdDyerpswikVx" in the recipe but I couldn't understand much.
+>> In the whole build we have the RM_WORK enabled but for that current recipe we have excluded it.
+> How are you excluding it? I have to wonder if that is somehow breaking
+> things due to dependency changes.
+>
+>> Also the task order is the following:
+>> do_cleansstate (20698): log.do_cleansstate.20698
+>> do_cleanall (22404): log.do_cleanall.22404
+>> do_rm_work (24346): log.do_rm_work.24346
+>> do_fetch (24434): log.do_fetch.24434
+>> do_prepare_recipe_sysroot (24465): log.do_prepare_recipe_sysroot.24465
+>> do_unpack (24466): log.do_unpack.24466
+>> do_patch (24493): log.do_patch.24493
+>> do_populate_lic (24665): log.do_populate_lic.24665
+>> do_deploy_source_date_epoch (24666): log.do_deploy_source_date_epoch.24666
+>> do_configure (24765): log.do_configure.24765
+>> do_compile (24809): log.do_compile.24809
+>> do_install (27477): log.do_install.27477
+>> do_populate_sysroot (27510): log.do_populate_sysroot.27510
+>> do_package (27509): log.do_package.27509
+>> do_packagedata (29544): log.do_packagedata.29544
+>> do_package_qa (29592): log.do_package_qa.2959
+>> do_package_write_ipk (29593): log.do_package_write_ipk.29593
+>>
+>> Ok build till now.
+>> Next invocation
+>> do_prepare_recipe_sysroot (23311): log.do_prepare_recipe_sysroot.23311
+>> do_configure (23769): log.do_configure.23769
+>> do_compile (24132): log.do_compile.24132
+>> do_install (26628): log.do_install.26628
+> Are you saying the first failure is here in the do_install above?
+>
+>> do_install (32535): log.do_install.32535
+>> do_install (4454): log.do_install.4454
+>> do_install (26343): log.do_install.26343
+>> do_rm_work (4905): log.do_rm_work.4905
+> This is odd. Why would an rm_work run here?
+>
+>> do_deploy_source_date_epoch (4919): log.do_deploy_source_date_epoch.4919
+>> do_configure (4954): log.do_configure.4954
+>> do_compile (5003): log.do_compile.5003
+>> do_install (6421): log.do_install.6421
+> This is also odd since if rm_work did run, shouldn't the unpack/patch
+> need to run again? Didn't you say you'd disabled rm_work for this
+> recipe?
+>
+>> All above are failures in do_install phase. You see multiple
+>> invocations trying to fix the error and adding more debug.
+>> If I don't do a cleansstate or cleanall the recipe is not building.
+>> We do not delete or manipulate any files in the WORKDIR folder. We
+>> might only copy some files after the end of the build in some folders
+>> outside of yocto. So the WORKDIR structure remains untouched from our
+>> actions.
+> Something is deleting the files in /package/ which is confusing pseudo.
+> The question is what/when. Stepping through this and seeing when the
+> files there disappear would be the next step to debug it, narrow down
+> when something is deleting them.
+>
+> Cheers,
+>
+> Richard
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#59343): https://lists.yoctoproject.org/g/yocto/message/59343
+> Mute This Topic: https://lists.yoctoproject.org/mt/91650136/7304865
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/leave/11829621/7304865/1274523309/xyzzy [Qi.Chen@eng.windriver.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+
+^ permalink raw reply	[flat|nested] 13+ messages in thread
+* Re: Question about psuedo abort errors
+  2023-03-06  4:54           ` ChenQi
+@ 2023-03-06 12:33             ` Tamis
+  2023-03-09  9:19               ` Tamis
+  0 siblings, 1 reply; 13+ messages in thread
+From: Tamis @ 2023-03-06 12:33 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 3729 bytes --]
+
+Hello all,
+
+I think Qi found something. But lets see all points raised one by one:
+
+> 
+> 
+> 
+> This is saying the file on disk with inode 7868999 is:
+> WORKDIR/lib32-las/M-WBS0.1-r0/git/lasiflib/include/lasif_list.h
+> 
+> but the pseudo database thinks this is:
+> 
+> WORKDIR/lib32-las/M-WBS0.1-r0/package/usr/src/debug/lib32-las/M-WBS0.1-r0/git/lasiflib/include/lasif_list.h
+> 
+> 
+> so the question is when was this file created? It would be created by
+> do_package since it is in the /package/ directory. It would seem to be
+> being deleted outside of pseudo context.
+> 
+> 
+> 
+
+The file is indeed being created by the good execution of the do_package stage. But on subsequent execution the build fails on do_install.
+It is not being deleted outside of pseudo. As I wrote above besides a copy we do not touch the WORKDIR folder.
+Right now I have deleted that build in order to make new builds but the inodes matched with all those files into WORKDIR since they were hard links.
+The strange thing now is that while some executions before the problem was 100% reproducible now it is not. This is very odd.
+
+> 
+> 
+> 
+> How are you excluding it? I have to wonder if that is somehow breaking
+> things due to dependency changes.
+> 
+> 
+> 
+
+I am using:
+INHERIT += "rm_work"
+RM_WORK_EXCLUDE += "... lib32-las lib32-ldh ..." in local.conf
+Since you spoke about dependencies:
+ldh recipe depends on las. Both are excluded from rm_work. Sometimes we have observed the same install issue problem also to ldh recipe.
+
+> 
+> 
+> 
+> Are you saying the first failure is here in the do_install above?
+> 
+> 
+> 
+
+Yes. When I reproduced the error and made my tests.
+
+> 
+> This is odd. Why would an rm_work run here?
+
+I do not know. I guess it might runs for every recipe and if that recipe is in RM_WORK_EXCLUDE it just exits?
+
+> 
+> This is also odd since if rm_work did run, shouldn't the unpack/patch
+> need to run again? Didn't you say you'd disabled rm_work for this
+> recipe?
+
+I guess that rm_work invocation did not removed anything. Since WORKDIR files were all there. As wrote above it run and then exists doing nothing since RM_WORK_EXCLUDE is set.
+
+> 
+> Something is deleting the files in /package/ which is confusing pseudo.
+> The question is what/when. Stepping through this and seeing when the
+> files there disappear would be the next step to debug it, narrow down
+> when something is deleting them.
+> 
+
+I am like 99% sure that nothing is touching files outside pseudo. But either way I will observe the issue and report back in case I find something more and if reproduced again.
+
+> 
+> 
+> 
+> This is weird since ${S} is usually in PSEUDO_IGNORE_PATHS.
+> And if I understand it correctly, if ${S} is in PSEUDO_IGNORE_PATHS,
+> pseudo should not complain about any file under ${S}.
+> Could you please check if your recipe's PSEUDO_INGORE_PATHS contains
+> "WORKDIR/lib32-las/M-WBS0.1-r0/git"?
+> 
+> 
+> 
+
+I checked the PSEUDO_IGNORE_PATHS of the recipe.
+S = "${WORKDIR}/git/v2"
+So:
+PSEUDO_IGNORE_PATHS=".....
+WORKDIR/lib32-las/M-WBS0.1-r0/git/v2,
+WORKDIR/lib32-las/M-WBS0.1-r0/git/v2"
+
+So as you see the v2 path is into the PSEUDO paths. But the file in question is one path above and those files are being installed via do_install
+install -m 0644 ${WORKDIR}/git/lasiflib/include/* ${D}${includedir}
+
+Would above be the reason somehow? That not the whole ${WORKDIR}/git is not into PSEUDO?
+I could add in PSEUDO_IGNORE_PATHS the S = "${WORKDIR}/git to see if this will solve the problem.
+
+But first I need to manage to reproduced the error again. Manually right now I cannot. I will wait till next invocation of our CI.
+
+Regards,
+Panagiotis
+
+[-- Attachment #2: Type: text/html, Size: 5536 bytes --]
+
+^ permalink raw reply	[flat|nested] 13+ messages in thread
+* Re: Question about psuedo abort errors
+  2023-03-06 12:33             ` Tamis
+@ 2023-03-09  9:19               ` Tamis
+  2023-03-10 17:15                 ` [yocto] " Jason Andryuk
+  0 siblings, 1 reply; 13+ messages in thread
+From: Tamis @ 2023-03-09  9:19 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 621 bytes --]
+
+Hello all,
+
+I believe that we resolved the issue.
+The issue was reproduced again during latest nightly build. And then was also reproducible manually.
+So, I modified the recipe and spitted S and B variables.
+So I set:
+
+S = "${WORKDIR}/git"
+B = "${S}/v2"
+
+Fixed the paths into do_install.
+Now both B and S are into the PSEUDO_IGNORE_PATHS automatically and now if we install files from S those are now ignored.
+
+After next invocation of the recipe the error was not reproducible. So I believe that issue was resolved.
+
+Thanks a lot Richard for your input and Qi for your hint.
+
+Best regards,
+Panagiotis
+
+[-- Attachment #2: Type: text/html, Size: 691 bytes --]
+
+^ permalink raw reply	[flat|nested] 13+ messages in thread
+* Re: [yocto] Question about psuedo abort errors
+  2023-03-09  9:19               ` Tamis
+@ 2023-03-10 17:15                 ` Jason Andryuk
+  0 siblings, 0 replies; 13+ messages in thread
+From: Jason Andryuk @ 2023-03-10 17:15 UTC (permalink / raw)
+  To: Tamis; +Cc: yocto
+
+On Thu, Mar 9, 2023 at 4:19 AM Tamis <tamtamis@gmail.com> wrote:
+>
+> Hello all,
+>
+> I believe that we resolved the issue.
+> The issue was reproduced again during latest nightly build. And then was also reproducible manually.
+> So, I modified the recipe and spitted S and B variables.
+> So I set:
+>
+> S = "${WORKDIR}/git"
+> B = "${S}/v2"
+>
+> Fixed the paths into do_install.
+> Now both B and S are into the PSEUDO_IGNORE_PATHS automatically and now if we install files from S those are now ignored.
+>
+> After next invocation of the recipe the error was not reproducible. So I believe that issue was resolved.
+>
+> Thanks a lot Richard for your input and Qi for your hint.
+
+Wow, I think I've been seeing a similar issue.  Thank you so much for
+the investigation!
+
+We have some recipes building Qt libraries & binaries with qmake -
+https://gitlab.com/vglass/ivc.
+
+The QT classes use a split build dir, and we have:
+
+S="${WORKDIR}/git/src/usivc/ivclib"
+B="${SEPB}"
+SEPB="${WORKDIR}/${B}"
+
+However, the QT .pro files are full of references to parent directories like:
+SOURCES += ../syslog.cpp
+SOURCES += ../../data-structures/ringbuffer.c
+
+Would it be okay to PSEUDO_IGNORE_PATHS .= ",${WORKDIR}/git" to work
+around the issue?  It's still specified within the source directory -
+just at a higher level.  I don't know the QT build system, but ${S}
+being set down in the subdirectory with the .pro file seems needed for
+QT.
+
+Regards,
+Jason
+
+
+^ permalink raw reply	[flat|nested] 13+ messages in thread
+end of thread, other threads:[~2023-03-10 17:15 UTC | newest]
+
+Thread overview: 13+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-06-09 16:38 Question about psuedo abort errors Rusty Howell
+2022-06-09 21:20 ` [yocto] " Richard Purdie
+2022-06-10 17:05   ` Rusty Howell
+2022-06-10 21:11     ` [yocto] " Richard Purdie
+2023-02-23 10:27       ` Tamis
+2023-02-24 13:37         ` [yocto] " Richard Purdie
+2023-02-24 14:22           ` Tamis
+2023-03-03 11:23             ` Tamis
+2023-03-05 18:08         ` [yocto] " Richard Purdie
+2023-03-06  4:54           ` ChenQi
+2023-03-06 12:33             ` Tamis
+2023-03-09  9:19               ` Tamis
+2023-03-10 17:15                 ` [yocto] " Jason Andryuk
+

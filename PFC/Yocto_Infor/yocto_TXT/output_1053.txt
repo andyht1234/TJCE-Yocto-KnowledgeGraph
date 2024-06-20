@@ -1,0 +1,208 @@
+* [yocto][langdale] dropbear recipe fails to parse without pam in DISTRO_FEATURES
+@ 2023-01-13 14:25 Claude Bing
+  2023-01-13 17:11 ` Khem Raj
+  0 siblings, 1 reply; 3+ messages in thread
+From: Claude Bing @ 2023-01-13 14:25 UTC (permalink / raw)
+  To: yocto
+
+Good day everyone.
+
+We are in the process of upgrading to langdale, and I ran across a small
+problem when building dropbear. The order of external assets in SRC_URI
+seems to cause an issue when PAM is not available in DISTRO_FEATURES.
+
+ERROR:
+/home/****/yocto/poky-next/build-cyber-v/../meta/recipes-core/dropbear/dropbear_2022.82.bb:
+Unable to get checksum for dropbear SRC_URI entry
+0007-Fix-X11-build-failure-use-DROPBEAR_PRIO_LOWDELAY.patchfile: file
+could not be found
+
+When we move the following entry to the bottom of SRC_URI in
+meta/recipes-core/dropbear/dropbear_2022.82.bb, the recipe parses
+successfully:
+
+${@bb.utils.contains('DISTRO_FEATURES', 'pam', '${PAM_SRC_URI}', '', d)}
+
+Is this a good fix? Am I missing a larger issue?
+
+-- 
+Regards,
+
+Claude Bing
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto][langdale] dropbear recipe fails to parse without pam in DISTRO_FEATURES
+  2023-01-13 14:25 [yocto][langdale] dropbear recipe fails to parse without pam in DISTRO_FEATURES Claude Bing
+@ 2023-01-13 17:11 ` Khem Raj
+  2023-01-13 17:51   ` Claude Bing
+  0 siblings, 1 reply; 3+ messages in thread
+From: Khem Raj @ 2023-01-13 17:11 UTC (permalink / raw)
+  To: Claude Bing; +Cc: yocto
+
+On Fri, Jan 13, 2023 at 6:26 AM Claude Bing <cbing@cybernetics.com> wrote:
+>
+> Good day everyone.
+>
+> We are in the process of upgrading to langdale, and I ran across a small
+> problem when building dropbear. The order of external assets in SRC_URI
+> seems to cause an issue when PAM is not available in DISTRO_FEATURES.
+>
+> ERROR:
+> /home/****/yocto/poky-next/build-cyber-v/../meta/recipes-core/dropbear/dropbear_2022.82.bb:
+> Unable to get checksum for dropbear SRC_URI entry
+> 0007-Fix-X11-build-failure-use-DROPBEAR_PRIO_LOWDELAY.patchfile: file
+> could not be found
+>
+> When we move the following entry to the bottom of SRC_URI in
+> meta/recipes-core/dropbear/dropbear_2022.82.bb, the recipe parses
+> successfully:
+>
+> ${@bb.utils.contains('DISTRO_FEATURES', 'pam', '${PAM_SRC_URI}', '', d)}
+>
+> Is this a good fix? Am I missing a larger issue?
+
+try something like below it will remove the positional requirement.
+
+--- a/meta/recipes-core/dropbear/dropbear_2022.83.bb
++++ b/meta/recipes-core/dropbear/dropbear_2022.83.bb
+@@ -27,7 +27,8 @@ SRC_URI[sha256sum] =
+"bc5a121ffbc94b5171ad5ebe01be42746d50aa797c9549a4639894a167
+
+ PAM_SRC_URI = "file://0005-dropbear-enable-pam.patch \
+                file://0006-dropbear-configuration-file.patch \
+-               file://dropbear"
++               file://dropbear \
++               "
+
+ PAM_PLUGINS = "libpam-runtime \
+    pam-plugin-deny \
+
+>
+> --
+> Regards,
+>
+> Claude Bing
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> You automatically follow any topics you start or reply to.
+> View/Reply Online (#58974): https://lists.yoctoproject.org/g/yocto/message/58974
+> Mute This Topic: https://lists.yoctoproject.org/mt/96246470/1997914
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [raj.khem@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto][langdale] dropbear recipe fails to parse without pam in DISTRO_FEATURES
+  2023-01-13 17:11 ` Khem Raj
+@ 2023-01-13 17:51   ` Claude Bing
+  0 siblings, 0 replies; 3+ messages in thread
+From: Claude Bing @ 2023-01-13 17:51 UTC (permalink / raw)
+  To: yocto
+
+Forgive the text wrapping, but modifying PAM_SRC_URI still yields the
+same results. I don't want to take up too much of your time since we
+have a workaround, but I figured you would want some feedback.
+
+
+SRC_URI = "http://matt.ucc.asn.au/dropbear/releases/dropbear-${PV}.tar.bz2 \
+           file://0001-urandom-xauth-changes-to-options.h.patch \
+           file://init \
+           file://dropbearkey.service \
+           file://dropbear@.service \
+           file://dropbear.socket \
+           file://dropbear.default \
+           ${@bb.utils.contains('DISTRO_FEATURES', 'pam',
+'${PAM_SRC_URI}', '', d)} \
+           ${@bb.utils.contains('PACKAGECONFIG', 'disable-weak-ciphers',
+'file://dropbear-disable-weak-ciphers.patch', '', d)} \
+
+file://0007-Fix-X11-build-failure-use-DROPBEAR_PRIO_LOWDELAY.patch"
+
+SRC_URI[sha256sum] =
+"3a038d2bbc02bf28bbdd20c012091f741a3ec5cbe460691811d714876aad75d1"
+
+PAM_SRC_URI = "file://0005-dropbear-enable-pam.patch \
+               file://0006-dropbear-configuration-file.patch \
+               file://dropbear \
+               "
+
+-------------------
+
+ERROR:
+/home/*****/projects/yocto/poky-next/build-cyber-v/../meta/recipes-core/dropbear/dropbear_2022.82.bb:
+Unable to get checksum for dropbear SRC_URI entry
+0007-Fix-X11-build-failure-use-DROPBEAR_PRIO_LOWDELAY.patchfile: file
+could not be found
+
+On 1/13/23 12:11, Khem Raj wrote:
+> On Fri, Jan 13, 2023 at 6:26 AM Claude Bing <cbing@cybernetics.com> wrote:
+>>
+>> Good day everyone.
+>>
+>> We are in the process of upgrading to langdale, and I ran across a small
+>> problem when building dropbear. The order of external assets in SRC_URI
+>> seems to cause an issue when PAM is not available in DISTRO_FEATURES.
+>>
+>> ERROR:
+>> /home/****/yocto/poky-next/build-cyber-v/../meta/recipes-core/dropbear/dropbear_2022.82.bb:
+>> Unable to get checksum for dropbear SRC_URI entry
+>> 0007-Fix-X11-build-failure-use-DROPBEAR_PRIO_LOWDELAY.patchfile: file
+>> could not be found
+>>
+>> When we move the following entry to the bottom of SRC_URI in
+>> meta/recipes-core/dropbear/dropbear_2022.82.bb, the recipe parses
+>> successfully:
+>>
+>> ${@bb.utils.contains('DISTRO_FEATURES', 'pam', '${PAM_SRC_URI}', '', d)}
+>>
+>> Is this a good fix? Am I missing a larger issue?
+> 
+> try something like below it will remove the positional requirement.
+> 
+> --- a/meta/recipes-core/dropbear/dropbear_2022.83.bb
+> +++ b/meta/recipes-core/dropbear/dropbear_2022.83.bb
+> @@ -27,7 +27,8 @@ SRC_URI[sha256sum] =
+> "bc5a121ffbc94b5171ad5ebe01be42746d50aa797c9549a4639894a167
+> 
+>  PAM_SRC_URI = "file://0005-dropbear-enable-pam.patch \
+>                 file://0006-dropbear-configuration-file.patch \
+> -               file://dropbear"
+> +               file://dropbear \
+> +               "
+> 
+>  PAM_PLUGINS = "libpam-runtime \
+>     pam-plugin-deny \
+> 
+>>
+>> --
+>> Regards,
+>>
+>> Claude Bing
+>>
+>>
+>>
+>>
+>>
+>> -=-=-=-=-=-=-=-=-=-=-=-
+>> Links: You receive all messages sent to this group.
+>> View/Reply Online (#58980): https://lists.yoctoproject.org/g/yocto/message/58980
+>> Mute This Topic: https://lists.yoctoproject.org/mt/96246470/4618432
+>> Group Owner: yocto+owner@lists.yoctoproject.org
+>> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [cbing@cybernetics.com]
+>> -=-=-=-=-=-=-=-=-=-=-=-
+>>
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2023-01-13 17:51 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-01-13 14:25 [yocto][langdale] dropbear recipe fails to parse without pam in DISTRO_FEATURES Claude Bing
+2023-01-13 17:11 ` Khem Raj
+2023-01-13 17:51   ` Claude Bing
+

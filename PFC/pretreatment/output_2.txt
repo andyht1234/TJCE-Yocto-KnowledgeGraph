@@ -1,0 +1,313 @@
+* Trouble making a recipe for the IOBB library
+@ 2023-10-17 15:34 Iurascu Teodor
+  2023-10-21  8:30 ` [yocto] " Adrian Freihofer
+  0 siblings, 1 reply; 2+ messages in thread
+From: Iurascu Teodor @ 2023-10-17 15:34 UTC (permalink / raw)
+  To: yocto
+
+
+[-- Attachment #1.1: Type: text/plain, Size: 4304 bytes --]
+
+Hello!
+I am new to the Yocto Project and I have been trying to make a recipe to include the IOBB library in my SDK for the BeagleBone Black board. I have used devtool to create a recipe based on a fork of the library.
+
+Library makefile:
+
+LIB_PATH = ./BBBio_lib/
+DEMO_PATH = ./Demo/
+TOOLKIT_PATH = ./Toolkit/
+LAB_PATH = ./Lab/
+
+LIBRARIES = iobb
+
+all
+: libiobb.a LED ADT7301 SEVEN_SCAN SMOTOR LED_GPIO DEBOUNCING 4x4keypad
+ADC ADC_VOICE GPIO_STATUS EP_STATUS ADC_CALC lcd3-test test-outputs 
+pb-test-outputs test-inputs pb-test-inputs
+
+libiobb.a : ${LIB_PATH}BBBiolib.c ${LIB_PATH}BBBiolib.h BBBiolib_PWMSS.o BBBiolib_McSPI.o BBBiolib_ADCTSC.o i2cfunc.o
+    gcc -c ${LIB_PATH}BBBiolib.c -o ${LIB_PATH}BBBiolib.o
+  
+ ar -rs ${LIB_PATH}libiobb.a ${LIB_PATH}BBBiolib.o 
+${LIB_PATH}BBBiolib_PWMSS.o ${LIB_PATH}BBBiolib_McSPI.o 
+${LIB_PATH}BBBiolib_ADCTSC.o ${LIB_PATH}i2cfunc.o
+    cp ${LIB_PATH}libiobb.a ./
+    cp ${LIB_PATH}BBBiolib.h ./iobb.h
+    cp ${LIB_PATH}BBBiolib_ADCTSC.h ./
+    cp ${LIB_PATH}BBBiolib_McSPI.h ./
+    cp ${LIB_PATH}BBBiolib_PWMSS.h ./
+    cp ${LIB_PATH}i2cfunc.h ./
+
+BBBiolib_PWMSS.o : ${LIB_PATH}BBBiolib_PWMSS.c ${LIB_PATH}BBBiolib_PWMSS.h
+    gcc -c ${LIB_PATH}BBBiolib_PWMSS.c -o ${LIB_PATH}BBBiolib_PWMSS.o -W 
+
+BBBiolib_McSPI.o : ${LIB_PATH}BBBiolib_McSPI.c ${LIB_PATH}BBBiolib_PWMSS.h
+    gcc -c ${LIB_PATH}BBBiolib_McSPI.c -o ${LIB_PATH}BBBiolib_McSPI.o -W
+
+BBBiolib_ADCTSC.o : ${LIB_PATH}BBBiolib_ADCTSC.c ${LIB_PATH}BBBiolib_ADCTSC.h
+    gcc -c ${LIB_PATH}BBBiolib_ADCTSC.c -o ${LIB_PATH}BBBiolib_ADCTSC.o -W
+
+i2cfunc.o : ${LIB_PATH}i2cfunc.c ${LIB_PATH}i2cfunc.h
+    gcc -c ${LIB_PATH}i2cfunc.c -o ${LIB_PATH}i2cfunc.o
+
+install :  
+ifndef locatie
+    $(info locatie is [${locatie}])
+    rm -f /usr/local/include/BBBiolib.h
+    cp ${LIB_PATH}libiobb.a /usr/local/lib
+    cp ${LIB_PATH}BBBiolib.h /usr/local/include/iobb.h
+    cp ${LIB_PATH}BBBiolib_ADCTSC.h /usr/local/include
+    cp ${LIB_PATH}BBBiolib_McSPI.h /usr/local/include
+    cp ${LIB_PATH}BBBiolib_PWMSS.h /usr/local/include
+    cp ${LIB_PATH}i2cfunc.h /usr/local/include
+    ln -s /usr/local/include/iobb.h /usr/local/include/BBBiolib.h
+else
+    $(info locatie is [${locatie}])
+    rm -f $(locatie)/usr/local/include/BBBiolib.h
+    mkdir -p $(locatie)/usr/local/lib
+    mkdir -p $(locatie)/usr/local/include
+    cp ${LIB_PATH}libiobb.a $(locatie)/usr/local/lib
+    cp ${LIB_PATH}BBBiolib.h $(locatie)/usr/local/include/iobb.h
+    cp ${LIB_PATH}BBBiolib_ADCTSC.h $(locatie)/usr/local/include
+    cp ${LIB_PATH}BBBiolib_McSPI.h $(locatie)/usr/local/include
+    cp ${LIB_PATH}BBBiolib_PWMSS.h $(locatie)/usr/local/include
+    cp ${LIB_PATH}i2cfunc.h $(locatie)/usr/local/include
+    cp $(locatie)/usr/local/include/iobb.h $(locatie)/usr/local/include/BBBiolib.h
+endif
+
+recipe file:
+LICENSE = "Unknown"
+LIC_FILES_CHKSUM = "file://LICENSE;md5=7db6c9cd5c53a0a05ffa2f383b2408dc"
+
+SRC_URI = "git://github.com/TeoThatsMe/iobb;protocol=https;branch=master"
+
+# Modify these as desired
+PV = "1.0+git${SRCPV}"
+SRCREV = "1a7bdf1767f730b0d6058117e42c4ec77047b4ab"
+
+S = "${WORKDIR}/git"
+FILES:${PN} += "${base_libdir}"
+
+# NOTE: the following library dependencies are unknown, ignoring: iobb fftw3
+#       (this is based on recipes that have previously been built and packaged)
+
+# NOTE: this is a Makefile-only piece of software, so we cannot generate much of the
+# recipe automatically - you will need to examine the Makefile yourself and ensure
+# that the appropriate arguments are passed in.
+
+do_configure () {
+	# Specify any needed configure commands here
+	:
+}
+
+do_compile () {
+	# You will almost certainly need to add additional arguments here
+	oe_runmake
+}
+
+do_install () {
+	# This is a guess; additional arguments may be required
+	oe_runmake install locatie=${D}
+}
+
+I have modified the makefile with the locatie variable so that the install script installs it in the ${D} directory and not on my machine.
+Even though I am setting
+FILES:${PN} += "${base_libdir}" I am still getting this error.
+
+Do I have to set the FILES variable to something esle or am I doing something wrong before the packaging phase?
+Thank you!
+
+[-- Attachment #1.2: Type: text/html, Size: 4865 bytes --]
+
+[-- Attachment #2: dummyfile.0.part --]
+[-- Type: image/png, Size: 29952 bytes --]
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+* Re: [yocto] Trouble making a recipe for the IOBB library
+  2023-10-17 15:34 Trouble making a recipe for the IOBB library Iurascu Teodor
+@ 2023-10-21  8:30 ` Adrian Freihofer
+  0 siblings, 0 replies; 2+ messages in thread
+From: Adrian Freihofer @ 2023-10-21  8:30 UTC (permalink / raw)
+  To: Iurascu Teodor; +Cc: Yocto-mailing-list
+
+
+[-- Attachment #1.1: Type: text/plain, Size: 5775 bytes --]
+
+The best would probably be to improve the Makefile to install the files to
+standard paths such as /usr instead of /usr/local. /usr/local is usually
+used for not packaged files and therefore not handled by the default FILES
+package splitting rules of Yocto.
+
+Ideally there would be a PREFIX variable in the Makefile which defaults to
+/usr/local and gets over written by bitbake to /usr. Then also the FILES
+line should no longer be needed.
+
+Another approach would be to replace the Makefile by e.g. meson or cmake
+which both do all these details right by default.
+
+As a workaround extending the FILES line would work as well. But using
+locations like lib or usr in FILES is not a good idea. It probably adds too
+many files like debug stuff to the package.
+
+To see the variables for you recipe you might want to use bitbake -e. To
+see how bitbake spits the packages you might look into the
+packages-splitted folder in the $WORKDIR of your recipe.
+
+Regards
+Adrian
+
+
+Iurascu Teodor <iurascu_teo@hotmail.com> schrieb am Sa., 21. Okt. 2023,
+09:05:
+
+> Hello!
+> I am new to the Yocto Project and I have been trying to make a recipe to
+> include the IOBB library in my SDK for the BeagleBone Black board. I have
+> used devtool to create a recipe based on a fork of the library.
+>
+>
+> Library makefile:
+>
+>
+> LIB_PATH = ./BBBio_lib/
+> DEMO_PATH = ./Demo/
+> TOOLKIT_PATH = ./Toolkit/
+> LAB_PATH = ./Lab/
+>
+>
+> LIBRARIES = iobb
+>
+> all
+>  : libiobb.a LED ADT7301 SEVEN_SCAN SMOTOR LED_GPIO DEBOUNCING 4x4keypad
+>  ADC ADC_VOICE GPIO_STATUS EP_STATUS ADC_CALC lcd3-test test-outputs
+> pb-test-outputs test-inputs pb-test-inputs
+>
+> libiobb.a : ${LIB_PATH}BBBiolib.c ${LIB_PATH}BBBiolib.h BBBiolib_PWMSS.o BBBiolib_McSPI.o BBBiolib_ADCTSC.o i2cfunc.o
+>     gcc -c ${LIB_PATH}BBBiolib.c -o ${LIB_PATH}BBBiolib.o
+>
+>   ar -rs ${LIB_PATH}libiobb.a ${LIB_PATH}BBBiolib.o
+> ${LIB_PATH}BBBiolib_PWMSS.o ${LIB_PATH}BBBiolib_McSPI.o
+> ${LIB_PATH}BBBiolib_ADCTSC.o ${LIB_PATH}i2cfunc.o
+>     cp ${LIB_PATH}libiobb.a ./
+>     cp ${LIB_PATH}BBBiolib.h ./iobb.h
+>     cp ${LIB_PATH}BBBiolib_ADCTSC.h ./
+>     cp ${LIB_PATH}BBBiolib_McSPI.h ./
+>     cp ${LIB_PATH}BBBiolib_PWMSS.h ./
+>     cp ${LIB_PATH}i2cfunc.h ./
+>
+> BBBiolib_PWMSS.o : ${LIB_PATH}BBBiolib_PWMSS.c ${LIB_PATH}BBBiolib_PWMSS.h
+>     gcc -c ${LIB_PATH}BBBiolib_PWMSS.c -o ${LIB_PATH}BBBiolib_PWMSS.o -W
+>
+> BBBiolib_McSPI.o : ${LIB_PATH}BBBiolib_McSPI.c ${LIB_PATH}BBBiolib_PWMSS.h
+>     gcc -c ${LIB_PATH}BBBiolib_McSPI.c -o ${LIB_PATH}BBBiolib_McSPI.o -W
+>
+> BBBiolib_ADCTSC.o : ${LIB_PATH}BBBiolib_ADCTSC.c ${LIB_PATH}BBBiolib_ADCTSC.h
+>     gcc -c ${LIB_PATH}BBBiolib_ADCTSC.c -o ${LIB_PATH}BBBiolib_ADCTSC.o -W
+>
+> i2cfunc.o : ${LIB_PATH}i2cfunc.c ${LIB_PATH}i2cfunc.h
+>     gcc -c ${LIB_PATH}i2cfunc.c -o ${LIB_PATH}i2cfunc.o
+>
+> install :
+> ifndef locatie
+>     $(info locatie is [${locatie}])
+>     rm -f /usr/local/include/BBBiolib.h
+>     cp ${LIB_PATH}libiobb.a /usr/local/lib
+>     cp ${LIB_PATH}BBBiolib.h /usr/local/include/iobb.h
+>     cp ${LIB_PATH}BBBiolib_ADCTSC.h /usr/local/include
+>     cp ${LIB_PATH}BBBiolib_McSPI.h /usr/local/include
+>     cp ${LIB_PATH}BBBiolib_PWMSS.h /usr/local/include
+>     cp ${LIB_PATH}i2cfunc.h /usr/local/include
+>     ln -s /usr/local/include/iobb.h /usr/local/include/BBBiolib.h
+> else
+>     $(info locatie is [${locatie}])
+>     rm -f $(locatie)/usr/local/include/BBBiolib.h
+>     mkdir -p $(locatie)/usr/local/lib
+>     mkdir -p $(locatie)/usr/local/include
+>     cp ${LIB_PATH}libiobb.a $(locatie)/usr/local/lib
+>     cp ${LIB_PATH}BBBiolib.h $(locatie)/usr/local/include/iobb.h
+>     cp ${LIB_PATH}BBBiolib_ADCTSC.h $(locatie)/usr/local/include
+>     cp ${LIB_PATH}BBBiolib_McSPI.h $(locatie)/usr/local/include
+>     cp ${LIB_PATH}BBBiolib_PWMSS.h $(locatie)/usr/local/include
+>     cp ${LIB_PATH}i2cfunc.h $(locatie)/usr/local/include
+>     cp $(locatie)/usr/local/include/iobb.h $(locatie)/usr/local/include/BBBiolib.h
+> endif
+>
+>
+> recipe file:
+>
+> LICENSE = "Unknown"
+> LIC_FILES_CHKSUM = "file://LICENSE;md5=7db6c9cd5c53a0a05ffa2f383b2408dc"
+>
+> SRC_URI = "git://github.com/TeoThatsMe/iobb;protocol=https;branch=master"
+>
+> # Modify these as desired
+> PV = "1.0+git${SRCPV}"
+> SRCREV = "1a7bdf1767f730b0d6058117e42c4ec77047b4ab"
+>
+> S = "${WORKDIR}/git"
+> FILES:${PN} += "${base_libdir}"
+>
+> # NOTE: the following library dependencies are unknown, ignoring: iobb fftw3
+> #       (this is based on recipes that have previously been built and packaged)
+>
+> # NOTE: this is a Makefile-only piece of software, so we cannot generate much of the
+> # recipe automatically - you will need to examine the Makefile yourself and ensure
+> # that the appropriate arguments are passed in.
+>
+> do_configure () {
+> 	# Specify any needed configure commands here
+> 	:
+> }
+>
+> do_compile () {
+> 	# You will almost certainly need to add additional arguments here
+> 	oe_runmake
+> }
+>
+> do_install () {
+> 	# This is a guess; additional arguments may be required
+> 	oe_runmake install locatie=${D}
+> }
+>
+>
+> I have modified the makefile with the locatie variable so that the install
+> script installs it in the ${D} directory and not on my machine.
+> Even though I am setting
+>
+> FILES:${PN} += "${base_libdir}"
+>
+> I am still getting this error.
+>
+>
+>
+>
+> Do I have to set the FILES variable to something esle or am I doing
+> something wrong before the packaging phase?
+> Thank you!
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#61442):
+> https://lists.yoctoproject.org/g/yocto/message/61442
+> Mute This Topic: https://lists.yoctoproject.org/mt/102097263/4454582
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> adrian.freihofer@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+[-- Attachment #1.2: Type: text/html, Size: 7367 bytes --]
+
+[-- Attachment #2: dummyfile.0.part --]
+[-- Type: image/png, Size: 29952 bytes --]
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2023-10-21  8:30 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-10-17 15:34 Trouble making a recipe for the IOBB library Iurascu Teodor
+2023-10-21  8:30 ` [yocto] " Adrian Freihofer
+

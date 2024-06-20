@@ -1,0 +1,197 @@
+* #kernelmodule #kirkstone Kernel configuration fragment overriden by netfilter.cfg
+@ 2023-04-19 16:08 Gary Huband
+  2023-04-19 16:33 ` [yocto] " Bruce Ashfield
+  0 siblings, 1 reply; 2+ messages in thread
+From: Gary Huband @ 2023-04-19 16:08 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2121 bytes --]
+
+I'm using kirkstone and meta-intel for a build.  I have a few kernel configuration fragments but one of the fragment files, modbusbs.cfg, is not applied.
+
+I created each fragment with
+bitbake -c menuconfig virtual/kernel
+bitbake -c diffconfig virtual/kernel
+Then copied fragment.cfg to my layer.
+
+The files in my layer:
+
+linux-intel_%.bbappend:
+*FILESEXTRAPATHS:prepend := "${THISDIR}/${PN}:"*
+
+*SRC_URI += "\*
+*file://i2c-dev.cfg \*
+*file://modbusfw.cfg \*
+*file://vlan.cfg \*
+*"*
+
+i2c-dev.cfg:
+*CONFIG_I2C_CHARDEV=y*
+
+modbusfw.cfg:
+*CONFIG_NETFILTER_XTABLES=y*
+*CONFIG_IP_NF_IPTABLES=y*
+
+vlan.cfg:
+*CONFIG_MRP=y*
+*CONFIG_VLAN_8021Q=y*
+*CONFIG_VLAN_8021Q_MVRP=y*
+
+The i2c-dev.cfg and vlan.cfg are applied, but modbusfw.cfg is not.
+
+Part of merge_config_build.log:
+
+Value of CONFIG_I2C_CHARDEV is redefined by fragment .kernel-meta/configs/v5.15/standard/./i2c-dev.cfg:
+Previous value: CONFIG_I2C_CHARDEV=m
+New value: CONFIG_I2C_CHARDEV=y
+
+Merging .kernel-meta/configs/v5.15/standard/./modbusfw.cfg
+Value of CONFIG_IP_NF_IPTABLES is redefined by fragment .kernel-meta/configs/v5.15/standard/./modbusfw.cfg:
+Previous value: CONFIG_IP_NF_IPTABLES=m
+New value: CONFIG_IP_NF_IPTABLES=y
+
+Merging .kernel-meta/configs/v5.15/standard/./vlan.cfg
+Value of CONFIG_VLAN_8021Q is redefined by fragment .kernel-meta/configs/v5.15/standard/./vlan.cfg:
+Previous value: CONFIG_VLAN_8021Q=m
+New value: CONFIG_VLAN_8021Q=y
+
+Merging .kernel-meta/configs/v5.15/standard/cfg/virtio.cfg
+Merging .kernel-meta/configs/v5.15/standard/features/netfilter/netfilter.cfg
+Value of CONFIG_NETFILTER_XTABLES is redefined by fragment .kernel-meta/configs/v5.15/standard/features/netfilter/netfilter.cfg:
+Previous value: CONFIG_NETFILTER_XTABLES=y
+New value: CONFIG_NETFILTER_XTABLES=m
+
+Value of CONFIG_IP_NF_IPTABLES is redefined by fragment .kernel-meta/configs/v5.15/standard/features/netfilter/netfilter.cfg:
+Previous value: CONFIG_IP_NF_IPTABLES=y
+New value: CONFIG_IP_NF_IPTABLES=m
+
+So my modbusfw.cfg is being overriden by netfilter.cfg.
+
+Any suggestions to fix this?
+
+Thanks
+
+Gary
+
+[-- Attachment #2: Type: text/html, Size: 2829 bytes --]
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+* Re: [yocto] #kernelmodule #kirkstone Kernel configuration fragment overriden by netfilter.cfg
+  2023-04-19 16:08 #kernelmodule #kirkstone Kernel configuration fragment overriden by netfilter.cfg Gary Huband
+@ 2023-04-19 16:33 ` Bruce Ashfield
+  0 siblings, 0 replies; 2+ messages in thread
+From: Bruce Ashfield @ 2023-04-19 16:33 UTC (permalink / raw)
+  To: gary; +Cc: yocto
+
+On Wed, Apr 19, 2023 at 12:08 PM Gary Huband via
+lists.yoctoproject.org <gary=missionsecure.com@lists.yoctoproject.org>
+wrote:
+>
+>
+> I'm using kirkstone and meta-intel for a build.  I have a few kernel configuration fragments but one of the fragment files, modbusbs.cfg, is not applied.
+>
+
+It is of course being applied, but as you mentioned at the bottom, it
+is being overridden by a later fragment.
+
+netfilter fragments are likely coming from either the core or the
+intel KERNEL_EXTRA_FEATURES variable, which feed into KERNEL_FEATURES.
+
+KERNEL_FEATURES are always applied last, as they represent something
+that has been flagged as important/critical.
+
+You can either make your fragment a kernel feature itself (documented
+in the development manuals), or remove the netfilter fragment from
+KERNEL_EXTRA_FEATURES or KERNEL_FEATURES.
+
+Bruce
+
+> I created each fragment with
+> bitbake -c menuconfig virtual/kernel
+> bitbake -c diffconfig virtual/kernel
+> Then copied fragment.cfg to my layer.
+>
+> The files in my layer:
+>
+> linux-intel_%.bbappend:
+> FILESEXTRAPATHS:prepend := "${THISDIR}/${PN}:"
+>
+> SRC_URI += "\
+>             file://i2c-dev.cfg \
+>             file://modbusfw.cfg \
+>             file://vlan.cfg \
+>            "
+>
+> i2c-dev.cfg:
+> CONFIG_I2C_CHARDEV=y
+>
+> modbusfw.cfg:
+> CONFIG_NETFILTER_XTABLES=y
+> CONFIG_IP_NF_IPTABLES=y
+>
+> vlan.cfg:
+> CONFIG_MRP=y
+> CONFIG_VLAN_8021Q=y
+> CONFIG_VLAN_8021Q_MVRP=y
+>
+> The i2c-dev.cfg and vlan.cfg are applied, but modbusfw.cfg is not.
+>
+> Part of merge_config_build.log:
+>
+> Value of CONFIG_I2C_CHARDEV is redefined by fragment .kernel-meta/configs/v5.15/standard/./i2c-dev.cfg:
+> Previous value: CONFIG_I2C_CHARDEV=m
+> New value: CONFIG_I2C_CHARDEV=y
+>
+> Merging .kernel-meta/configs/v5.15/standard/./modbusfw.cfg
+> Value of CONFIG_IP_NF_IPTABLES is redefined by fragment .kernel-meta/configs/v5.15/standard/./modbusfw.cfg:
+> Previous value: CONFIG_IP_NF_IPTABLES=m
+> New value: CONFIG_IP_NF_IPTABLES=y
+>
+> Merging .kernel-meta/configs/v5.15/standard/./vlan.cfg
+> Value of CONFIG_VLAN_8021Q is redefined by fragment .kernel-meta/configs/v5.15/standard/./vlan.cfg:
+> Previous value: CONFIG_VLAN_8021Q=m
+> New value: CONFIG_VLAN_8021Q=y
+>
+> Merging .kernel-meta/configs/v5.15/standard/cfg/virtio.cfg
+> Merging .kernel-meta/configs/v5.15/standard/features/netfilter/netfilter.cfg
+> Value of CONFIG_NETFILTER_XTABLES is redefined by fragment .kernel-meta/configs/v5.15/standard/features/netfilter/netfilter.cfg:
+> Previous value: CONFIG_NETFILTER_XTABLES=y
+> New value: CONFIG_NETFILTER_XTABLES=m
+>
+> Value of CONFIG_IP_NF_IPTABLES is redefined by fragment .kernel-meta/configs/v5.15/standard/features/netfilter/netfilter.cfg:
+> Previous value: CONFIG_IP_NF_IPTABLES=y
+> New value: CONFIG_IP_NF_IPTABLES=m
+>
+> So my modbusfw.cfg is being overriden by netfilter.cfg.
+>
+> Any suggestions to fix this?
+>
+> Thanks
+>
+> Gary
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#59737): https://lists.yoctoproject.org/g/yocto/message/59737
+> Mute This Topic: https://lists.yoctoproject.org/mt/98370122/1050810
+> Mute #kernelmodule:https://lists.yoctoproject.org/g/yocto/mutehashtag/kernelmodule
+> Mute #kirkstone:https://lists.yoctoproject.org/g/yocto/mutehashtag/kirkstone
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [bruce.ashfield@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+-- 
+- Thou shalt not follow the NULL pointer, for chaos and madness await
+thee at its end
+- "Use the force Harry" - Gandalf, Star Trek II
+
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2023-04-19 16:33 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-04-19 16:08 #kernelmodule #kirkstone Kernel configuration fragment overriden by netfilter.cfg Gary Huband
+2023-04-19 16:33 ` [yocto] " Bruce Ashfield
+

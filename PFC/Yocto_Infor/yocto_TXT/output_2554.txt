@@ -1,0 +1,158 @@
+* Problem installing python package from a wheel #bitbake #python
+@ 2021-11-22 22:36 David Babich
+  2021-11-22 22:54 ` Problem installing python package from a wheel #bitbake David Babich
+  0 siblings, 1 reply; 3+ messages in thread
+From: David Babich @ 2021-11-22 22:36 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1457 bytes --]
+
+Hi,
+I'm attempting to create a recipe for pytorch for the TX2i using a wheel file obtained from here:
+
+https://forums.developer.nvidia.com/t/pytorch-for-jetson-version-1-10-now-available/72048
+
+Here is what I have so far for the recipe:
+
+```
+
+DESCRIPTION = "NVIDIA's Python Torch"
+
+HOMEPAGE = "https://nvidia.com"
+
+LICENSE = "BSD-3-Clause"
+
+LIC_FILES_CHKSUM = "file://../LICENSE;md5=91a5dfdaccf53b27488cb3a639e986d5"
+
+inherit setuptools3
+
+SRC_URI = "\
+
+file://torch-1.10.0-cp36-cp36m-linux_aarch64.whl \
+
+file://LICENSE \
+
+"
+
+COMPATIBLE_MACHINE = "jetson-tx2-devkit-tx2i"
+
+PACKAGE_ARCH = "${MACHINE_ARCH}"
+
+S = "${WORKDIR}/${PN}-${PV}"
+
+do_configure() {
+
+:
+
+}
+
+do_compile() {
+
+:
+
+}
+
+do_install() {
+
+pip3 install ${WORKDIR}/torch-1.10.0-cp36-cp36m-linux_aarch64.whl
+
+}
+
+DEPENDS = "python3-pip-native"
+
+```
+
+When I build I get the following ambiguous error during do_install:
+
+| WARNING: The directory '/home/ddbabich/.cache/pip' or its parent directory is not owned or is not writable by the current user. The cache has been disabled. Check the permissions and owner of that directory. If executing pip with sudo, you should use sudo's -H flag.
+
+| ERROR: torch-1.10.0-cp36-cp36m-linux_aarch64.whl is not a supported wheel on this platform.
+
+It seems like I'm missing something with the host vs. the target settings?  But I really don't have any ideas.  Any help is appreciated.
+THanks
+-David
+
+[-- Attachment #2: Type: text/html, Size: 3835 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: Problem installing python package from a wheel #bitbake
+  2021-11-22 22:36 Problem installing python package from a wheel #bitbake #python David Babich
+@ 2021-11-22 22:54 ` David Babich
+  2021-11-24 17:55   ` [yocto] " Tim Orling
+  0 siblings, 1 reply; 3+ messages in thread
+From: David Babich @ 2021-11-22 22:54 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 293 bytes --]
+
+I made it a little further by adding *--no-cache-dir* to the pip3 install command.  That got rid fo the warning about not being able to access the .cache/pip.  However I still have the error:
+
+| ERROR: torch-1.10.0-cp36-cp36m-linux_ aarch64.whl is not a supported wheel on this platform.
+
+[-- Attachment #2: Type: text/html, Size: 514 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] Problem installing python package from a wheel #bitbake
+  2021-11-22 22:54 ` Problem installing python package from a wheel #bitbake David Babich
+@ 2021-11-24 17:55   ` Tim Orling
+  0 siblings, 0 replies; 3+ messages in thread
+From: Tim Orling @ 2021-11-24 17:55 UTC (permalink / raw)
+  To: David Babich; +Cc: Yocto (yocto@lists.yoctoproject.org)
+
+[-- Attachment #1: Type: text/plain, Size: 1824 bytes --]
+
+On Mon, Nov 22, 2021 at 2:54 PM David Babich <ddbabich@bootseeds.com> wrote:
+
+> I made it a little further by adding *--no-cache-dir* to the pip3 install
+> command.  That got rid fo the warning about not being able to access the
+> .cache/pip.  However I still have the error:
+>
+> | ERROR: torch-1.10.0-cp36-cp36m-linux_aarch64.whl is not a supported
+> wheel on this platform.
+>
+> Installing third-party wheels is not something we are likely to ever
+support in Yocto Project/OpenEmbedded recipes.
+
+Are you trying to install using pip3 on target?
+Note that many factors will make it tricky for python wheels with binary
+content (C or Rust extensions). The python3 version must match, as will the
+libraries it requires.
+
+The wheel you listed was built for Python 3.6 (cp36) and ARM v8 (aarch64).
+The error is what you would see if you were trying to install an aarch64
+wheel on an x86-64 target, but other reasons could lead to that error. We
+don't know what version of glibc, gcc, etc. was used and whether those are
+going to be compatible.
+
+Also, when asking questions, please tell us which release of Yocto Project
+you are using, what the MACHINE you are building for is, which layers you
+are using (and at what release) and other information to help us help you.
+
+Cheers,
+--Tim
+
+-=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#55390):
+> https://lists.yoctoproject.org/g/yocto/message/55390
+> Mute This Topic: https://lists.yoctoproject.org/mt/87247090/924729
+> Mute #python:https://lists.yoctoproject.org/g/yocto/mutehashtag/python
+> Mute #bitbake:https://lists.yoctoproject.org/g/yocto/mutehashtag/bitbake
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> ticotimo@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 3262 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2021-11-24 17:56 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-11-22 22:36 Problem installing python package from a wheel #bitbake #python David Babich
+2021-11-22 22:54 ` Problem installing python package from a wheel #bitbake David Babich
+2021-11-24 17:55   ` [yocto] " Tim Orling
+

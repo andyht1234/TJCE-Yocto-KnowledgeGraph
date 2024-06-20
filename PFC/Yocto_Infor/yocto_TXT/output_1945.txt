@@ -1,0 +1,724 @@
+* Yocto Kernel building
+@ 2022-04-13  9:38 Rohithraj.Bhaskara
+  2022-04-13 10:36 ` tomzy
+  0 siblings, 1 reply; 7+ messages in thread
+From: Rohithraj.Bhaskara @ 2022-04-13  9:38 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 4346 bytes --]
+
+Hello,
+
+I was trying to build a kernel for layerscape ls1046ardb setup.
+I referred the meta-freescale/recipes-kernel/linux/linux-qoriq_5.4.bb file from dunfell branch.
+
+Build configuration:
+Yocto branch : dunfell
+Required kernel source : https://source.codeaurora.org/quic/femto5G/fsm/external/qoriq-components/linux_4.19-rt/commit/?h=APSS.FSM.6.6-00194-FSM10056.0&id=74700acb31e369495da22b4bbfd9e3f4315fc74a
+SRC_rev : 74700acb31e369495da22b4bbfd9e3f4315fc74a ( https://source.codeaurora.org/quic/femto5G/fsm/external/qoriq-components/linux_4.19-rt/commit/?h=APSS.FSM.6.6-00194-FSM10056.0&id=74700acb31e369495da22b4bbfd9e3f4315fc74a )
+SRC branch: APSS.FSM.6.6
+
+Here I have created separate layer and added my files under *<my_layer_name>/recipe-kernel/linux/linux-qoriq-rt_4.19.bb* path
+
+i nherit kernel qoriq_build_64bit_kernel siteinfo
+inherit fsl-kernel-localversion
+
+SUMMARY = "Linux Kernel for NXP QorIQ platforms"
+SECTION = "kernel"
+LICENSE = "GPLv2"
+LIC_FILES_CHKSUM = "file://COPYING;md5=bbea815ee2795b2f4230826c0c6b8814"
+
+SRC_URI = "https://source.codeaurora.org/quic/femto5G/fsm/external/qoriq-components/linux_4.19-rt;branch=APSS.FSM.6.6 \
+"
+SRCREV = "74700acb31e369495da22b4bbfd9e3f4315fc74a"
+
+SRC_URI[sha256sum] = "ddb8e5defcdaec9ce8cbe39d157f58a369decf7c1028cddaa6186343b7f09c2b"
+
+S = "${WORKDIR}/git"
+
+DEPENDS_append = " libgcc"
+# not put Images into /boot of rootfs, install kernel-image if needed
+RDEPENDS_${KERNEL_PACKAGE_NAME}-base = ""
+
+KERNEL_CC_append = " ${TOOLCHAIN_OPTIONS}"
+KERNEL_LD_append = " ${TOOLCHAIN_OPTIONS}"
+KERNEL_EXTRA_ARGS += "LOADADDR=${UBOOT_ENTRYPOINT}"
+
+ZIMAGE_BASE_NAME = "zImage-${PKGE}-${PKGV}-${PKGR}-${MACHINE}-${DATETIME}"
+ZIMAGE_BASE_NAME[vardepsexclude] = "DATETIME"
+
+SCMVERSION ?= "y"
+LOCALVERSION = ""
+
+FILES_${KERNEL_PACKAGE_NAME}-image += "/boot/zImage*"
+COMPATIBLE_MACHINE = "(qoriq)"
+
+When I try to build the kernel I am encountered with below errors,
+
+> 
+> ERROR: linux-qoriq-rt-4.19-r0 do_populate_lic: QA Issue: linux-qoriq-rt:
+> LIC_FILES_CHKSUM points to an invalid file:
+> /home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/4.19-r0/git/COPYING
+> [license-checksum]
+> ERROR: linux-qoriq-rt-4.19-r0 do_populate_lic: Fatal QA errors found,
+> failing task.
+> ERROR: Logfile of failure stored in:
+> /home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/4.19-r0/temp/log.do_populate_lic.44895
+> 
+> ERROR: Task
+> (/home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/../meta-rjio_bsp/recipes-kernel/linux/linux-qoriq-rt_4.19.bb:do_populate_lic)
+> failed with exit code '1'
+> ERROR: linux-qoriq-rt-4.19-r0 do_preconfigure: Execution of
+> '/home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/4.19-r0/temp/run.do_preconfigure.44894'
+> failed with exit code 1:
+> /home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/4.19-r0/temp/run.do_preconfigure.44894:
+> line 120:
+> /home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/4.19-r0/defconfig:
+> No such file or directory
+> WARNING:
+> /home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/4.19-r0/temp/run.do_preconfigure.44894:1
+> exit 1 from 'sed -e "${CONF_SED_SCRIPT}" <
+> '/home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/4.19-r0/defconfig'
+> >>
+> '/home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/4.19-r0/build/.config''
+> 
+> 
+
+Can anyone please guide me to build the kernel successfully?
+
+Thank you
+
+[-- Attachment #2: Type: text/html, Size: 12192 bytes --]
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: Yocto Kernel building
+  2022-04-13  9:38 Yocto Kernel building Rohithraj.Bhaskara
+@ 2022-04-13 10:36 ` tomzy
+  2022-04-13 10:55   ` [External]Re: [yocto] " Rohithraj.Bhaskara
+  0 siblings, 1 reply; 7+ messages in thread
+From: tomzy @ 2022-04-13 10:36 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 5532 bytes --]
+
+> 
+> Hello,I was trying to build a kernel for layerscape ls1046ardb setup.I
+> referred the meta-freescale/recipes-kernel/linux/linux-qoriq_5.4.bb file
+> from dunfell branch.Build configuration:
+> Yocto branch : dunfell
+> Required kernel source : https://source.codeaurora.org/quic/femto5G/fsm/external/qoriq-components/linux_4.19-rt/commit/?h=APSS.FSM.6.6-00194-FSM10056.0&id=74700acb31e369495da22b4bbfd9e3f4315fc74a
+> 
+> SRC_rev : 74700acb31e369495da22b4bbfd9e3f4315fc74a (
+> https://source.codeaurora.org/quic/femto5G/fsm/external/qoriq-components/linux_4.19-rt/commit/?h=APSS.FSM.6.6-00194-FSM10056.0&id=74700acb31e369495da22b4bbfd9e3f4315fc74a
+> )
+> SRC branch: APSS.FSM.6.6
+> 
+> Here I have created separate layer and added my files under *<my_layer_name>/recipe-kernel/linux/linux-qoriq-rt_4.19.bb*
+> path
+> 
+
+It is better to use [include file]( https://github.com/Freescale/meta-freescale/blob/dunfell/recipes-kernel/linux/linux-qoriq.inc )
+in similar way the
+[linux-qoriq_5.4.bb]( https://github.com/Freescale/meta-freescale/blob/dunfell/recipes-kernel/linux/linux-qoriq_5.4.bb ) does it.
+
+So the ` *linux-qoriq-rt_4.19.bb`* should be
+
+```
+
+LIC_FILES_CHKSUM = "file://COPYING;md5=bbea815ee2795b2f4230826c0c6b8814"
+
+LINUX_VERSION = "4.19.90"
+
+SRC_URI = "https://source.codeaurora.org/quic/femto5G/fsm/external/qoriq-components/linux_4.19-rt;branch=APSS.FSM.6.6 \
+"
+SRCREV = "74700acb31e369495da22b4bbfd9e3f4315fc74a"
+
+require recipes-kernel/linux/linux-qoriq.inc
+
+```
+LINUX_VERSION can be get from linux_4.19-rt repo. Please let us know it this helps.
+
+> 
+> 
+> 
+> 
+> 
+> i nherit kernel qoriq_build_64bit_kernel siteinfo
+> inherit fsl-kernel-localversion
+> 
+> SUMMARY = "Linux Kernel for NXP QorIQ platforms"
+> SECTION = "kernel"
+> LICENSE = "GPLv2"
+> LIC_FILES_CHKSUM = "file://COPYING;md5=bbea815ee2795b2f4230826c0c6b8814"
+> 
+> SRC_URI =
+> "https://source.codeaurora.org/quic/femto5G/fsm/external/qoriq-components/linux_4.19-rt;branch=APSS.FSM.6.6
+> \
+> "
+> SRCREV = "74700acb31e369495da22b4bbfd9e3f4315fc74a"
+> 
+> SRC_URI[sha256sum] =
+> "ddb8e5defcdaec9ce8cbe39d157f58a369decf7c1028cddaa6186343b7f09c2b"
+> 
+> S = "${WORKDIR}/git"
+> 
+> DEPENDS_append = " libgcc"
+> # not put Images into /boot of rootfs, install kernel-image if needed
+> RDEPENDS_${KERNEL_PACKAGE_NAME}-base = ""
+> 
+> KERNEL_CC_append = " ${TOOLCHAIN_OPTIONS}"
+> KERNEL_LD_append = " ${TOOLCHAIN_OPTIONS}"
+> KERNEL_EXTRA_ARGS += "LOADADDR=${UBOOT_ENTRYPOINT}"
+> 
+> ZIMAGE_BASE_NAME = "zImage-${PKGE}-${PKGV}-${PKGR}-${MACHINE}-${DATETIME}"
+> 
+> ZIMAGE_BASE_NAME[vardepsexclude] = "DATETIME"
+> 
+> SCMVERSION ?= "y"
+> LOCALVERSION = ""
+> 
+> FILES_${KERNEL_PACKAGE_NAME}-image += "/boot/zImage*"
+> COMPATIBLE_MACHINE = "(qoriq)"
+> 
+> 
+> 
+> When I try to build the kernel I am encountered with below errors,
+> 
+>> ERROR: linux-qoriq-rt-4.19-r0 do_populate_lic: QA Issue: linux-qoriq-rt:
+>> LIC_FILES_CHKSUM points to an invalid file:
+>> /home/rancore/rohit/git_pull/rgbbbuildscripts/build
+>> 
+>> 
+> 
+> 
+
+Looks like there is a problem with finding lic file, it may be that S points to incorrect path.
+
+> 
+> 
+>> /rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/4.19-r0/git/COPYING
+>> [license-checksum]
+>> ERROR: linux-qoriq-rt-4.19-r0 do_populate_lic: Fatal QA errors found,
+>> failing task.
+>> ERROR: Logfile of failure stored in:
+>> /home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/4.19-r0/temp/log.do_populate_lic.44895
+>> 
+>> ERROR: Task
+>> (/home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/../meta-rjio_bsp/recipes-kernel/linux/linux-qoriq-rt_4.19.bb:do_populate_lic)
+>> failed with exit code '1'
+>> ERROR: linux-qoriq-rt-4.19-r0 do_preconfigure: Execution of
+>> '/home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/4.19-r0/temp/run.do_preconfigure.44894'
+>> failed with exit code 1:
+>> /home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/4.19-r0/temp/run.do_preconfigure.44894:
+>> line 120:
+>> /home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/4.19-r0/defconfig:
+>> No such file or directory
+>> WARNING:
+>> /home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/4.19-r0/temp/run.do_preconfigure.44894:1
+>> exit 1 from 'sed -e "${CONF_SED_SCRIPT}" <
+>> '/home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/4.19-r0/defconfig'
+>> >>
+>> '/home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/4.19-r0/build/.config''
+>> 
+>> 
+> 
+> Can anyone please guide me to build the kernel successfully?
+> 
+> Thank you
+> 
+
+Regards,
+Tomasz Żyjewski
+Embedded Systems Engineer
+GPG: 5C495EA3EBEECA59
+https://3mdeb.com | @3mdeb_com
+
+[-- Attachment #2: Type: text/html, Size: 9159 bytes --]
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [External]Re: [yocto] Yocto Kernel building
+  2022-04-13 10:36 ` tomzy
+@ 2022-04-13 10:55   ` Rohithraj.Bhaskara
+  2022-04-15  7:38     ` tomzy
+  0 siblings, 1 reply; 7+ messages in thread
+From: Rohithraj.Bhaskara @ 2022-04-13 10:55 UTC (permalink / raw)
+  To: tomasz.zyjewski, yocto
+
+
+[-- Attachment #1.1: Type: text/plain, Size: 9553 bytes --]
+
+I have added the include file and compiled it. But same errors observed with few more errors.
+These errors are observed in the stage of bitbake linux-qoriq-rt -c configure.
+
+Also, found following notes while doing fetch, unpack and patch,
+NOTE: preferred version 4.19 of linux-qoriq-rt not available (for item linux-qoriq-rt)
+NOTE: versions of linux-qoriq-rt available: ${LINUX_VERSION}+git${SRCPV}
+NOTE: Resolving any missing task queue dependencies
+NOTE: preferred version 4.19 of linux-qoriq-rt not available (for item kernel-image-image)
+NOTE: versions of linux-qoriq-rt available: ${LINUX_VERSION}+git${SRCPV}
+NOTE: preferred version 4.19 of linux-qoriq-rt not available (for item kernel-base)
+NOTE: versions of linux-qoriq-rt available: ${LINUX_VERSION}+git${SRCPV}
+NOTE: preferred version 4.19 of linux-qoriq-rt not available (for item kernel-image-vmlinux)
+NOTE: versions of linux-qoriq-rt available: ${LINUX_VERSION}+git${SRCPV}
+NOTE: preferred version 4.19 of linux-qoriq-rt not available (for item kernel-image-uimage)
+NOTE: versions of linux-qoriq-rt available: ${LINUX_VERSION}+git${SRCPV}
+NOTE: preferred version 4.19 of linux-qoriq-rt not available (for item virtual/kernel)
+NOTE: versions of linux-qoriq-rt available: ${LINUX_VERSION}+git${SRCPV}
+
+Attached log file for your reference.
+
+Thank you
+________________________________
+From: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org> on behalf of tomzy <tomasz.zyjewski@3mdeb.com>
+Sent: Wednesday, April 13, 2022 4:06 PM
+To: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org>
+Subject: [External]Re: [yocto] Yocto Kernel building
+
+
+Caution: The e-mail below is from an external source. Please do not open attachments or click links unless this email comes from a known sender and you know the content is safe.
+
+
+Hello,I was trying to build a kernel for layerscape ls1046ardb setup.I referred the meta-freescale/recipes-kernel/linux/linux-qoriq_5.4.bb file from dunfell branch.Build configuration:
+Yocto branch: dunfell
+Required kernel source: https://source.codeaurora.org/quic/femto5G/fsm/external/qoriq-components/linux_4.19-rt/commit/?h=APSS.FSM.6.6-00194-FSM10056.0&id=74700acb31e369495da22b4bbfd9e3f4315fc74a<https://protect2.fireeye.com/v1/url?k=dee339fd-817806d1-dee2b302-00259087546c-50b83e5df13ccf74&q=1&e=00639fe5-1c6d-496e-8b3d-1566a6955c16&u=https%3A%2F%2Fsource.codeaurora.org%2Fquic%2Ffemto5G%2Ffsm%2Fexternal%2Fqoriq-components%2Flinux_4.19-rt%2Fcommit%2F%3Fh%3DAPSS.FSM.6.6-00194-FSM10056.0%26id%3D74700acb31e369495da22b4bbfd9e3f4315fc74a>
+SRC_rev : 74700acb31e369495da22b4bbfd9e3f4315fc74a<https://protect2.fireeye.com/v1/url?k=07722aba-58e91596-0773a045-00259087546c-8cbbd13a82d8087b&q=1&e=00639fe5-1c6d-496e-8b3d-1566a6955c16&u=https%3A%2F%2Fsource.codeaurora.org%2Fquic%2Ffemto5G%2Ffsm%2Fexternal%2Fqoriq-components%2Flinux_4.19-rt%2Fcommit%2F%3Fh%3DAPSS.FSM.6.6-00194-FSM10056.0%26id%3D74700acb31e369495da22b4bbfd9e3f4315fc74a>
+SRC branch: APSS.FSM.6.6
+
+Here I have created separate layer and added my files under <my_layer_name>/recipe-kernel/linux/linux-qoriq-rt_4.19.bb path
+
+It is better to use [include file](https://github.com/Freescale/meta-freescale/blob/dunfell/recipes-kernel/linux/linux-qoriq.inc<https://protect2.fireeye.com/v1/url?k=74400664-2bdb3948-74418c9b-00259087546c-b60a3783e1e23d49&q=1&e=00639fe5-1c6d-496e-8b3d-1566a6955c16&u=https%3A%2F%2Fgithub.com%2FFreescale%2Fmeta-freescale%2Fblob%2Fdunfell%2Frecipes-kernel%2Flinux%2Flinux-qoriq.inc>)
+in similar way the
+[linux-qoriq_5.4.bb](https://github.com/Freescale/meta-freescale/blob/dunfell/recipes-kernel/linux/linux-qoriq_5.4.bb<https://protect2.fireeye.com/v1/url?k=346aadc3-6bf192ef-346b273c-00259087546c-6ca3c4bd6579f1d9&q=1&e=00639fe5-1c6d-496e-8b3d-1566a6955c16&u=https%3A%2F%2Fgithub.com%2FFreescale%2Fmeta-freescale%2Fblob%2Fdunfell%2Frecipes-kernel%2Flinux%2Flinux-qoriq_5.4.bb> ) does it.
+
+So the `linux-qoriq-rt_4.19.bb` should be
+
+```
+
+LIC_FILES_CHKSUM = "file://COPYING;md5=bbea815ee2795b2f4230826c0c6b8814"
+
+LINUX_VERSION = "4.19.90"
+
+SRC_URI = "https://source.codeaurora.org/quic/femto5G/fsm/external/qoriq-components/linux_4.19-rt;branch=APSS.FSM.6.6<https://protect2.fireeye.com/v1/url?k=b18e890f-ee15b623-b18f03f0-00259087546c-3ca77f898d53f704&q=1&e=00639fe5-1c6d-496e-8b3d-1566a6955c16&u=https%3A%2F%2Fsource.codeaurora.org%2Fquic%2Ffemto5G%2Ffsm%2Fexternal%2Fqoriq-components%2Flinux_4.19-rt%3Bbranch%3DAPSS.FSM.6.6> \
+"
+SRCREV = "74700acb31e369495da22b4bbfd9e3f4315fc74a"
+
+require recipes-kernel/linux/linux-qoriq.inc
+
+```
+LINUX_VERSION can be get from linux_4.19-rt repo. Please let us know it this helps.
+
+
+
+inherit kernel qoriq_build_64bit_kernel siteinfo
+inherit fsl-kernel-localversion
+
+SUMMARY = "Linux Kernel for NXP QorIQ platforms"
+SECTION = "kernel"
+LICENSE = "GPLv2"
+LIC_FILES_CHKSUM = "file://COPYING;md5=bbea815ee2795b2f4230826c0c6b8814"
+
+SRC_URI = "https://source.codeaurora.org/quic/femto5G/fsm/external/qoriq-components/linux_4.19-rt;branch=APSS.FSM.6.6<https://protect2.fireeye.com/v1/url?k=a3b162d2-fc2a5dfe-a3b0e82d-00259087546c-d79ee407f52de227&q=1&e=00639fe5-1c6d-496e-8b3d-1566a6955c16&u=https%3A%2F%2Fsource.codeaurora.org%2Fquic%2Ffemto5G%2Ffsm%2Fexternal%2Fqoriq-components%2Flinux_4.19-rt%3Bbranch%3DAPSS.FSM.6.6> \
+"
+SRCREV = "74700acb31e369495da22b4bbfd9e3f4315fc74a"
+
+SRC_URI[sha256sum] = "ddb8e5defcdaec9ce8cbe39d157f58a369decf7c1028cddaa6186343b7f09c2b"
+
+S = "${WORKDIR}/git"
+
+DEPENDS_append = " libgcc"
+# not put Images into /boot of rootfs, install kernel-image if needed
+RDEPENDS_${KERNEL_PACKAGE_NAME}-base = ""
+
+KERNEL_CC_append = " ${TOOLCHAIN_OPTIONS}"
+KERNEL_LD_append = " ${TOOLCHAIN_OPTIONS}"
+KERNEL_EXTRA_ARGS += "LOADADDR=${UBOOT_ENTRYPOINT}"
+
+ZIMAGE_BASE_NAME = "zImage-${PKGE}-${PKGV}-${PKGR}-${MACHINE}-${DATETIME}"
+ZIMAGE_BASE_NAME[vardepsexclude] = "DATETIME"
+
+SCMVERSION ?= "y"
+LOCALVERSION = ""
+
+FILES_${KERNEL_PACKAGE_NAME}-image += "/boot/zImage*"
+COMPATIBLE_MACHINE = "(qoriq)"
+
+
+When I try to build the kernel I am encountered with below errors,
+ERROR: linux-qoriq-rt-4.19-r0 do_populate_lic: QA Issue: linux-qoriq-rt: LIC_FILES_CHKSUM points to an invalid file: /home/rancore/rohit/git_pull/rgbbbuildscripts/build
+Looks like there is a problem with finding lic file, it may be that S points to incorrect path.
+/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/4.19-r0/git/COPYING [license-checksum]
+ERROR: linux-qoriq-rt-4.19-r0 do_populate_lic: Fatal QA errors found, failing task.
+ERROR: Logfile of failure stored in: /home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/4.19-r0/temp/log.do_populate_lic.44895
+ERROR: Task (/home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/../meta-rjio_bsp/recipes-kernel/linux/linux-qoriq-rt_4.19.bb:do_populate_lic) failed with exit code '1'
+ERROR: linux-qoriq-rt-4.19-r0 do_preconfigure: Execution of '/home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/4.19-r0/temp/run.do_preconfigure.44894' failed with exit code 1:
+/home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/4.19-r0/temp/run.do_preconfigure.44894: line 120: /home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/4.19-r0/defconfig: No such file or directory
+WARNING: /home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/4.19-r0/temp/run.do_preconfigure.44894:1 exit 1 from 'sed -e "${CONF_SED_SCRIPT}" < '/home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/4.19-r0/defconfig' >> '/home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/4.19-r0/build/.config''
+Can anyone please guide me to build the kernel successfully?
+
+Thank you
+Regards,
+Tomasz Żyjewski
+Embedded Systems Engineer
+GPG: 5C495EA3EBEECA59
+https://3mdeb.com<https://protect2.fireeye.com/v1/url?k=555e9244-0ac5ad68-555f18bb-00259087546c-da813e4203ec050e&q=1&e=00639fe5-1c6d-496e-8b3d-1566a6955c16&u=https%3A%2F%2F3mdeb.com%2F> | @3mdeb_com
+"Confidentiality Warning: This message and any attachments are intended only for the use of the intended recipient(s). 
+are confidential and may be privileged. If you are not the intended recipient. you are hereby notified that any 
+review. re-transmission. conversion to hard copy. copying. circulation or other use of this message and any attachments is 
+strictly prohibited. If you are not the intended recipient. please notify the sender immediately by return email. 
+and delete this message and any attachments from your system.
+
+Virus Warning: Although the company has taken reasonable precautions to ensure no viruses are present in this email. 
+The company cannot accept responsibility for any loss or damage arising from the use of this email or attachment."
+
+[-- Attachment #1.2: Type: text/html, Size: 16361 bytes --]
+
+[-- Attachment #2: build_issues_after_adding_include.txt --]
+[-- Type: text/plain, Size: 16045 bytes --]
+
+Initialising tasks: 100% |##########################################################################################| Time: 0:00:00
+Sstate summary: Wanted 28 Found 19 Missed 9 Current 118 (67% match, 93% complete)
+NOTE: Executing Tasks
+WARNING: linux-qoriq-rt-${LINUX_VERSION}+git${SRCPV}-r0 do_populate_lic: Could not copy license file /home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/${LINUX_VERSION}+git${SRCPV}-r0/git/COPYING to /home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/${LINUX_VERSION}+git${SRCPV}-r0/license-destdir/linux-qoriq-rt/COPYING: [Errno 2] No such file or directory: '/home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/${LINUX_VERSION}+git${SRCPV}-r0/git/COPYING'
+ERROR: linux-qoriq-rt-${LINUX_VERSION}+git${SRCPV}-r0 do_populate_lic: QA Issue: linux-qoriq-rt: LIC_FILES_CHKSUM points to an invalid file: /home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/${LINUX_VERSION}+git${SRCPV}-r0/git/COPYING [license-checksum]
+ERROR: linux-qoriq-rt-${LINUX_VERSION}+git${SRCPV}-r0 do_populate_lic: Fatal QA errors found, failing task.
+ERROR: Logfile of failure stored in: /home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/${LINUX_VERSION}+git${SRCPV}-r0/temp/log.do_populate_lic.48627
+ERROR: Task (/home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/../meta-rjio_bsp/recipes-kernel/linux/linux-qoriq-rt_4.19.bb:do_populate_lic) failed with exit code '1'
+ERROR: linux-qoriq-rt-${LINUX_VERSION}+git${SRCPV}-r0 do_merge_delta_config: Execution of '/home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/${LINUX_VERSION}+git${SRCPV}-r0/temp/run.do_merge_delta_config.48625' failed with exit code 1:
+NOTE: make HOSTCC=gcc  -isystem/home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/+git-r0/recipe-sysroot-native/usr/include -Og -g -feliminate-unused-debug-types -pipe -L/home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/+git-r0/recipe-sysroot-native/usr/lib                         -L/home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/+git-r0/recipe-sysroot-native/lib                         -Wl,--enable-new-dtags                         -Wl,-rpath-link,/home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/+git-r0/recipe-sysroot-native/usr/lib                         -Wl,-rpath-link,/home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/+git-r0/recipe-sysroot-native/lib                         -Wl,-rpath,/home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/+git-r0/recipe-sysroot-native/usr/lib                         -Wl,-rpath,/home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/+git-r0/recipe-sysroot-native/lib                         -Wl,-O1 -Wl,--allow-shlib-undefined -Wl,--dynamic-linker=/home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/sysroots-uninative/x86_64-linux/lib/ld-linux-x86-64.so.2 HOSTCPP=gcc  -E -C /home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/+git-r0/git O=/home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/+git-r0/build defconfig
+make: *** /home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/+git-r0/git: No such file or directory.  Stop.
+ERROR: oe_runmake failed
+WARNING: /home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/${LINUX_VERSION}+git${SRCPV}-r0/temp/run.do_merge_delta_config.48625:1 exit 1 from 'exit 1'
+
+ERROR: Logfile of failure stored in: /home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/${LINUX_VERSION}+git${SRCPV}-r0/temp/log.do_merge_delta_config.48625
+Log data follows:
+| DEBUG: Executing python function extend_recipe_sysroot
+| NOTE: Direct dependencies are ['/home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/../meta/recipes-devtools/gcc/gcc-cross_9.3.bb:do_populate_sysroot', '/home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/../meta/recipes-devtools/quilt/quilt-native_0.66.bb:do_populate_sysroot', 'virtual:native:/home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/../meta/recipes-devtools/bison/bison_3.5.3.bb:do_populate_sysroot', 'virtual:native:/home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/../meta/recipes-devtools/patch/patch_2.7.6.bb:do_populate_sysroot']
+| NOTE: Installed into sysroot: []
+| NOTE: Skipping as already exists in sysroot: ['gcc-cross-aarch64', 'quilt-native', 'bison-native', 'patch-native', 'mpfr-native', 'gmp-native', 'xz-native', 'texinfo-dummy-native', 'binutils-cross-aarch64', 'gnu-config-native', 'automake-native', 'zlib-native', 'linux-libc-headers', 'libmpc-native', 'libtool-native', 'autoconf-native', 'flex-native', 'attr-native', 'gettext-minimal-native', 'm4-native']
+| DEBUG: Python function extend_recipe_sysroot finished
+| DEBUG: Executing shell function do_merge_delta_config
+| NOTE: make HOSTCC=gcc  -isystem/home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/+git-r0/recipe-sysroot-native/usr/include -Og -g -feliminate-unused-debug-types -pipe -L/home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/+git-r0/recipe-sysroot-native/usr/lib                         -L/home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/+git-r0/recipe-sysroot-native/lib                         -Wl,--enable-new-dtags                         -Wl,-rpath-link,/home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/+git-r0/recipe-sysroot-native/usr/lib                         -Wl,-rpath-link,/home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/+git-r0/recipe-sysroot-native/lib                         -Wl,-rpath,/home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/+git-r0/recipe-sysroot-native/usr/lib                         -Wl,-rpath,/home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/+git-r0/recipe-sysroot-native/lib                         -Wl,-O1 -Wl,--allow-shlib-undefined -Wl,--dynamic-linker=/home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/sysroots-uninative/x86_64-linux/lib/ld-linux-x86-64.so.2 HOSTCPP=gcc  -E -C /home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/+git-r0/git O=/home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/+git-r0/build defconfig
+| make: *** /home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/+git-r0/git: No such file or directory.  Stop.
+| ERROR: oe_runmake failed
+| WARNING: /home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/${LINUX_VERSION}+git${SRCPV}-r0/temp/run.do_merge_delta_config.48625:1 exit 1 from 'exit 1'
+| ERROR: Execution of '/home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/${LINUX_VERSION}+git${SRCPV}-r0/temp/run.do_merge_delta_config.48625' failed with exit code 1:
+| NOTE: make HOSTCC=gcc  -isystem/home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/+git-r0/recipe-sysroot-native/usr/include -Og -g -feliminate-unused-debug-types -pipe -L/home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/+git-r0/recipe-sysroot-native/usr/lib                         -L/home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/+git-r0/recipe-sysroot-native/lib                         -Wl,--enable-new-dtags                         -Wl,-rpath-link,/home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/+git-r0/recipe-sysroot-native/usr/lib                         -Wl,-rpath-link,/home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/+git-r0/recipe-sysroot-native/lib                         -Wl,-rpath,/home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/+git-r0/recipe-sysroot-native/usr/lib                         -Wl,-rpath,/home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/+git-r0/recipe-sysroot-native/lib                         -Wl,-O1 -Wl,--allow-shlib-undefined -Wl,--dynamic-linker=/home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/sysroots-uninative/x86_64-linux/lib/ld-linux-x86-64.so.2 HOSTCPP=gcc  -E -C /home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/+git-r0/git O=/home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/+git-r0/build defconfig
+| make: *** /home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/+git-r0/git: No such file or directory.  Stop.
+| ERROR: oe_runmake failed
+| WARNING: /home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/${LINUX_VERSION}+git${SRCPV}-r0/temp/run.do_merge_delta_config.48625:1 exit 1 from 'exit 1'
+|
+ERROR: Task (/home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/../meta-rjio_bsp/recipes-kernel/linux/linux-qoriq-rt_4.19.bb:do_merge_delta_config) failed with exit code '1'
+ERROR: linux-qoriq-rt-${LINUX_VERSION}+git${SRCPV}-r0 do_deploy_source_date_epoch: Error executing a python function in exec_python_func() autogenerated:
+
+The stack trace of python calls that resulted in this exception/failure was:
+File: 'exec_python_func() autogenerated', lineno: 2, function: <module>
+     0001:
+ *** 0002:sstate_hardcode_path(d)
+     0003:
+File: '/home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/../meta/classes/sstate.bbclass', lineno: 628, function: sstate_hardcode_path
+     0624:    bb.note("Removing hardcoded paths from sstate package: '%s'" % (sstate_hardcode_cmd))
+     0625:    subprocess.check_output(sstate_hardcode_cmd, shell=True, cwd=sstate_builddir)
+     0626:
+     0627:        # If the fixmefn is empty, remove it..
+ *** 0628:    if os.stat(fixmefn).st_size == 0:
+     0629:        os.remove(fixmefn)
+     0630:    else:
+     0631:        bb.note("Replacing absolute paths in fixmepath file: '%s'" % (sstate_filelist_relative_cmd))
+     0632:        subprocess.check_output(sstate_filelist_relative_cmd, shell=True)
+Exception: FileNotFoundError: [Errno 2] No such file or directory: '/home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/${LINUX_VERSION}+git${SRCPV}-r0/sstate-build-deploy_source_date_epoch/fixmepath'
+
+ERROR: Logfile of failure stored in: /home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/tmp/work/odsc3_ibtb_sku2_board-poky-linux/linux-qoriq-rt/${LINUX_VERSION}+git${SRCPV}-r0/temp/log.do_deploy_source_date_epoch.48626
+ERROR: Task (/home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/../meta-rjio_bsp/recipes-kernel/linux/linux-qoriq-rt_4.19.bb:do_deploy_source_date_epoch) failed with exit code '1'
+NOTE: Tasks Summary: Attempted 588 tasks of which 580 didn't need to be rerun and 3 failed.
+NOTE: Writing buildhistory
+NOTE: Writing buildhistory took: 1 seconds
+
+Summary: 3 tasks failed:
+  /home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/../meta-rjio_bsp/recipes-kernel/linux/linux-qoriq-rt_4.19.bb:do_populate_lic
+  /home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/../meta-rjio_bsp/recipes-kernel/linux/linux-qoriq-rt_4.19.bb:do_merge_delta_config
+  /home/rancore/rohit/git_pull/rgbbbuildscripts/build/rjio/fw_main_dev_odsc3_ibtb_sku2_board/build/poky/build/../meta-rjio_bsp/recipes-kernel/linux/linux-qoriq-rt_4.19.bb:do_deploy_source_date_epoch
+Summary: There was 1 WARNING message shown.
+Summary: There were 4 ERROR messages shown, returning a non-zero exit code.
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: Yocto Kernel building
+  2022-04-13 10:55   ` [External]Re: [yocto] " Rohithraj.Bhaskara
+@ 2022-04-15  7:38     ` tomzy
+  2022-04-15 13:04       ` Rohithraj.Bhaskara
+  0 siblings, 1 reply; 7+ messages in thread
+From: tomzy @ 2022-04-15  7:38 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1962 bytes --]
+
+> 
+> I have added the include file and compiled it. But same errors observed
+> with few more errors.
+> These errors are observed in the stage of *bitbake linux-qoriq-rt -c
+> configure*.
+> 
+
+From the log I can tell that there is some problem with paths, like bitbake could not find needed files.
+
+> 
+> 
+> 
+> Also, found following notes while doing fetch, unpack and patch,
+> 
+>> NOTE: preferred version 4.19 of linux-qoriq-rt not available (for item
+>> linux-qoriq-rt)
+>> NOTE: versions of linux-qoriq-rt available: ${LINUX_VERSION}+git${SRCPV}
+>> NOTE: Resolving any missing task queue dependencies
+>> NOTE: preferred version 4.19 of linux-qoriq-rt not available (for item
+>> kernel-image-image)
+>> NOTE: versions of linux-qoriq-rt available: ${LINUX_VERSION}+git${SRCPV}
+>> NOTE: preferred version 4.19 of linux-qoriq-rt not available (for item
+>> kernel-base)
+>> NOTE: versions of linux-qoriq-rt available: ${LINUX_VERSION}+git${SRCPV}
+>> NOTE: preferred version 4.19 of linux-qoriq-rt not available (for item
+>> kernel-image-vmlinux)
+>> NOTE: versions of linux-qoriq-rt available: ${LINUX_VERSION}+git${SRCPV}
+>> NOTE: preferred version 4.19 of linux-qoriq-rt not available (for item
+>> kernel-image-uimage)
+>> NOTE: versions of linux-qoriq-rt available: ${LINUX_VERSION}+git${SRCPV}
+>> NOTE: preferred version 4.19 of linux-qoriq-rt not available (for item
+>> virtual/kernel)
+>> NOTE: versions of linux-qoriq-rt available: ${LINUX_VERSION}+git${SRCPV}
+> 
+> 
+> 
+> 
+
+Yes, maybe it would be better to try linux-qoriq_4.19.bb and then set PREFERRED_VERSION. Unfortunately,
+I've been a bit busy lately, but if that's still a problem, I can try to reproduce it over the weekend on some basic
+configuration with meta-freescale.
+
+> 
+> 
+> 
+> 
+> Attached log file for your reference.
+> 
+> Thank you
+> 
+
+Regarding,
+
+Tomasz Żyjewski
+Embedded Systems Engineer
+GPG: 5C495EA3EBEECA59
+https://3mdeb.com | @3mdeb_com
+
+[-- Attachment #2: Type: text/html, Size: 4132 bytes --]
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: Yocto Kernel building
+  2022-04-15  7:38     ` tomzy
+@ 2022-04-15 13:04       ` Rohithraj.Bhaskara
+  0 siblings, 0 replies; 7+ messages in thread
+From: Rohithraj.Bhaskara @ 2022-04-15 13:04 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 414 bytes --]
+
+Thank you, Tomasz,
+
+I tried to build the default kernel v4.19 using linux-qoriq_4.19.bb by setting *PREFERRED_VERSION_linux-qoriq = "4.19%".* It was built successfully and later I replaced the source URL and revision of my kernel URL and revision. But I observed the same QA issue.
+
+I appreciate your valuable time towards my issues. I look forward to getting more input from you.
+
+Best regards,
+Rohithraj
+
+[-- Attachment #2: Type: text/html, Size: 471 bytes --]
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: Yocto kernel building
+  2022-04-13  5:45 Yocto kernel building Rohithraj.Bhaskara
+@ 2022-04-13  7:02 ` tomzy
+  0 siblings, 0 replies; 7+ messages in thread
+From: tomzy @ 2022-04-13  7:02 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 3211 bytes --]
+
+> 
+> Hi,
+> 
+
+Hi
+
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> The default Linux kernel is built by using *bitbake fsl-image-networking.*
+> Here, the kernel is built from *meta-freescale/recipes-kernel/linux/linux-qoriq_5.4.bb*
+> path and source code is fetching from *"git://source.codeaurora.org/external/qoriq/qoriq-components/linux;nobranch=1"*
+> .
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> So I want to use another version of the kernel that should be fetch from *"
+> https://source.codeaurora.org/quic/femto5G/fsm/external/qoriq-components/linux_4.19-rt/"
+> (
+> https://source.codeaurora.org/quic/femto5G/fsm/external/qoriq-components/linux_4.19-rt/%22
+> )* and the SRC_REV= " *74700acb31e369495da22b4bbfd9e3f4315fc74a* "
+> 
+> 
+> 
+
+When you want to use another version of the kernel it is better to create new recipe (.bb file). You
+could use existing linux-qoriq_5.10 [1] recipe as example, just change the SRC_URI, SRCREV and
+LINUX_VERSION.
+
+Than in distro or machine config you would need to set PREFERRED_VERSION_linux-qoriq to 4.19
+or whatever the version is.
+
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> For that purpose, I have created a .bbappend file and changed the SRC_URI
+> as well as SRC_REV.
+> 
+> 
+> 
+> While building bitbake is causing errors,
+> 
+> 
+> 
+> *ERROR: An uncaught exception occurred in runqueue################ | ETA:
+> 0:00:01*
+> *Traceback (most recent call last):*
+> *File
+> "/home/rancore/rohit/yocto_mmwave/yocto-sdk/sources/poky/bitbake/lib/bb/runqueue.py",
+> line 1187, in
+> RunQueueData.prepare_task_hash(tid='/home/rancore/rohit/yocto_mmwave/yocto-sdk/sources/meta-freescale/recipes-kernel/linux/linux-qoriq_5.4.bb:do_fetch'):*
+> 
+> *def prepare_task_hash(self, tid):*
+> *> bb.parse.siggen.prep_taskhash(tid, self.runtaskentries[tid].depends,
+> self.dataCaches[mc_from_tid(tid)])*
+> *self.runtaskentries[tid].hash = bb.parse.siggen.get_taskhash(tid,
+> self.runtaskentries[tid].depends, self.dataCaches[mc_from_tid(tid)])*
+> *File
+> "/home/rancore/rohit/yocto_mmwave/yocto-sdk/sources/poky/meta/lib/oe/sstatesig.py",
+> line 146, in
+> SignatureGeneratorOEEquivHash.prep_taskhash(tid='/home/rancore/rohit/yocto_mmwave/yocto-sdk/sources/meta-freescale/recipes-kernel/linux/linux-qoriq_5.4.bb:do_fetch',
+> deps=set(), dataCache=<bb.cache.CacheData object at 0x7ff029b3a0b8>):*
+> *def prep_taskhash(self, tid, deps, dataCache):*
+> *> super().prep_taskhash(tid, deps, dataCache)*
+> *if hasattr(self, "extramethod"):*
+> *File
+> "/home/rancore/rohit/yocto_mmwave/yocto-sdk/sources/poky/bitbake/lib/bb/siggen.py",
+> line 248, in
+> SignatureGeneratorOEEquivHash.prep_taskhash(tid='/home/rancore/rohit/yocto_mmwave/yocto-sdk/sources/meta-freescale/recipes-kernel/linux/linux-qoriq_5.4.bb:do_fetch',
+> deps=set(), dataCache=<bb.cache.CacheData object at 0x7ff029b3a0b8>):*
+> *else:*
+> *> checksums =
+> bb.fetch2.get_file_checksums(dataCache.file_checksums[fn][task],
+> recipename, self.localdirsexclude)*
+> *for (f,cs) in checksums:*
+> 
+> 
+> 
+> Can you please help me to resolve the issues?
+> 
+> Thank you
+> 
+
+Regards,
+
+Tomasz Żyjewski
+Embedded Systems Engineer
+GPG: 5C495EA3EBEECA59
+https://3mdeb.com | @3mdeb_com
+
+> 
+> 
+>
+
+[-- Attachment #2: Type: text/html, Size: 5756 bytes --]
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Yocto kernel building
+@ 2022-04-13  5:45 Rohithraj.Bhaskara
+  2022-04-13  7:02 ` tomzy
+  0 siblings, 1 reply; 7+ messages in thread
+From: Rohithraj.Bhaskara @ 2022-04-13  5:45 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 3206 bytes --]
+
+Hi,
+
+
+The default Linux kernel is built by using bitbake fsl-image-networking. Here, the kernel is built from meta-freescale/recipes-kernel/linux/linux-qoriq_5.4.bb path and source code is fetching from "git://source.codeaurora.org/external/qoriq/qoriq-components/linux;nobranch=1".
+
+
+
+So I want to use another version of the kernel that should be fetch from "https://source.codeaurora.org/quic/femto5G/fsm/external/qoriq-components/linux_4.19-rt/"<https://source.codeaurora.org/quic/femto5G/fsm/external/qoriq-components/linux_4.19-rt/%22> and the SRC_REV= "74700acb31e369495da22b4bbfd9e3f4315fc74a"
+
+
+
+For that purpose, I have created a .bbappend file and changed the SRC_URI as well as SRC_REV.
+
+While building bitbake is causing errors,
+
+ERROR: An uncaught exception occurred in runqueue################ | ETA: 0:00:01
+Traceback (most recent call last):
+File "/home/rancore/rohit/yocto_mmwave/yocto-sdk/sources/poky/bitbake/lib/bb/runqueue.py", line 1187, in RunQueueData.prepare_task_hash(tid='/home/rancore/rohit/yocto_mmwave/yocto-sdk/sources/meta-freescale/recipes-kernel/linux/linux-qoriq_5.4.bb:do_fetch'):
+def prepare_task_hash(self, tid):
+> bb.parse.siggen.prep_taskhash(tid, self.runtaskentries[tid].depends, self.dataCaches[mc_from_tid(tid)])
+self.runtaskentries[tid].hash = bb.parse.siggen.get_taskhash(tid, self.runtaskentries[tid].depends, self.dataCaches[mc_from_tid(tid)])
+File "/home/rancore/rohit/yocto_mmwave/yocto-sdk/sources/poky/meta/lib/oe/sstatesig.py", line 146, in SignatureGeneratorOEEquivHash.prep_taskhash(tid='/home/rancore/rohit/yocto_mmwave/yocto-sdk/sources/meta-freescale/recipes-kernel/linux/linux-qoriq_5.4.bb:do_fetch', deps=set(), dataCache=<bb.cache.CacheData object at 0x7ff029b3a0b8>):
+def prep_taskhash(self, tid, deps, dataCache):
+> super().prep_taskhash(tid, deps, dataCache)
+if hasattr(self, "extramethod"):
+File "/home/rancore/rohit/yocto_mmwave/yocto-sdk/sources/poky/bitbake/lib/bb/siggen.py", line 248, in SignatureGeneratorOEEquivHash.prep_taskhash(tid='/home/rancore/rohit/yocto_mmwave/yocto-sdk/sources/meta-freescale/recipes-kernel/linux/linux-qoriq_5.4.bb:do_fetch', deps=set(), dataCache=<bb.cache.CacheData object at 0x7ff029b3a0b8>):
+else:
+> checksums = bb.fetch2.get_file_checksums(dataCache.file_checksums[fn][task], recipename, self.localdirsexclude)
+for (f,cs) in checksums:
+
+Can you please help me to resolve the issues?
+
+Thank you
+"Confidentiality Warning: This message and any attachments are intended only for the use of the intended recipient(s). 
+are confidential and may be privileged. If you are not the intended recipient. you are hereby notified that any 
+review. re-transmission. conversion to hard copy. copying. circulation or other use of this message and any attachments is 
+strictly prohibited. If you are not the intended recipient. please notify the sender immediately by return email. 
+and delete this message and any attachments from your system.
+
+Virus Warning: Although the company has taken reasonable precautions to ensure no viruses are present in this email. 
+The company cannot accept responsibility for any loss or damage arising from the use of this email or attachment."
+
+[-- Attachment #2: Type: text/html, Size: 8169 bytes --]
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+end of thread, other threads:[~2022-04-18 14:26 UTC | newest]
+
+Thread overview: 7+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-04-13  9:38 Yocto Kernel building Rohithraj.Bhaskara
+2022-04-13 10:36 ` tomzy
+2022-04-13 10:55   ` [External]Re: [yocto] " Rohithraj.Bhaskara
+2022-04-15  7:38     ` tomzy
+2022-04-15 13:04       ` Rohithraj.Bhaskara
+  -- strict thread matches above, loose matches on Subject: below --
+2022-04-13  5:45 Yocto kernel building Rohithraj.Bhaskara
+2022-04-13  7:02 ` tomzy
+

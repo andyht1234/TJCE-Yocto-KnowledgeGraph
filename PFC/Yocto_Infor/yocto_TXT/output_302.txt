@@ -1,0 +1,125 @@
+* the way to create patch for Linux kernel configuration
+@ 2023-08-05  0:19 Crane
+  2023-08-05 16:05 ` Crane
+  0 siblings, 1 reply; 3+ messages in thread
+From: Crane @ 2023-08-05  0:19 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1810 bytes --]
+
+Hello,
+
+How do you create a patch for Linux kernel configuration in a customized layer on top of an initial patch. It is a patch based on the original defconfig from vendor meta layer? I tried different ways, but none of them work.
+
+The initial .bbappend is like this. I would like to make further changes on top of that.
+
+SRCREV = "0086da6acd41600d47b87b05874f99704216426f"
+
+FILESEXTRAPATHS:prepend := "${THISDIR}/${PN}:"
+
+SRC_URI += "\
+file://devtool-fragment.cfg \
+"
+
+1. use devtool to modify the current kernel configuration
+After using devtool menuconfig to modify the kernel configuration, the .config is updated.
+But, here is a big BUT, after using devtool build to build kernel image, the kernel image is still built using the defconfig originally from the vendor meta layer meta-raspberrypi.
+If using devtool update-recipe to create a patch any way, then do devtool reset and use bitbake to build the kernel image, the result is the same (the kernel image uses original defconfig).
+
+2. use git format-patch to create a patch file and then add the patch file into .bbappend.
+Say, a patch 0001-update-kernel-config-to-enable-uart-console.patch is added into files folder.
+Then add one line in .bbappend file like this:
+SRCREV = "0086da6acd41600d47b87b05874f99704216426f"
+
+FILESEXTRAPATHS:prepend := "${THISDIR}/${PN}:"
+
+SRC_URI += "\
+file://devtool-fragment.cfg \
+file://0001-update-kernel-config-to-enable-uart-console.patch \
+"
+But this way, the patch couldn't be applied at all. An error is caused.
+
+3. Tried to use git to create a patch in different folder
+Most of tries got the same result.
+One of them seems applied. But from the result, it is actually not applied.
+
+So, which way should work? Anything missing in what I did.
+
+Thanks for your help!
+
+Crane
+
+[-- Attachment #2: Type: text/html, Size: 2449 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: the way to create patch for Linux kernel configuration
+  2023-08-05  0:19 the way to create patch for Linux kernel configuration Crane
+@ 2023-08-05 16:05 ` Crane
+  2023-08-24  7:49   ` [yocto] " Karthik Poduval
+  0 siblings, 1 reply; 3+ messages in thread
+From: Crane @ 2023-08-05 16:05 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 415 bytes --]
+
+Finally found two ways to do this and worked in my case:
+1. use bitbake -c diffconfig to create a fragment config and then add the fragment config to a .bbappend
+2. add an out-of-tree defconfig in .bb
+The documentation says out-of-tree defconfig takes precedence. But in my case KBUILD_DEFCONFIG is used and the out-of-tree defconfig is dropped.
+No idea why. I have to use KBUILD_DEFCONFIG:remove to clear it.
+
+[-- Attachment #2: Type: text/html, Size: 465 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] the way to create patch for Linux kernel configuration
+  2023-08-05 16:05 ` Crane
+@ 2023-08-24  7:49   ` Karthik Poduval
+  0 siblings, 0 replies; 3+ messages in thread
+From: Karthik Poduval @ 2023-08-24  7:49 UTC (permalink / raw)
+  To: Crane; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1190 bytes --]
+
+You could try using SCC like linux-yocto recipe does it here.
+https://git.yoctoproject.org/poky/plain/meta/recipes-kernel/linux/linux-yocto_6.1.bb
+
+I have use this in the past to override bsp layer config and also add
+patches in my own derived bsp layer.
+
+--
+Regards,
+Karthik Poduval
+
+
+On Sat, Aug 5, 2023, 9:05 AM Crane <crane2018@gmail.com> wrote:
+
+> Finally found two ways to do this and worked in my case:
+> 1. use bitbake -c diffconfig to create a fragment config and then add the
+> fragment config to a .bbappend
+> 2. add an out-of-tree defconfig in .bb
+>     The documentation says out-of-tree defconfig takes precedence. But in
+> my case KBUILD_DEFCONFIG is used and the out-of-tree defconfig is dropped.
+>     No idea why. I have to use KBUILD_DEFCONFIG:remove to clear it.
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#60717):
+> https://lists.yoctoproject.org/g/yocto/message/60717
+> Mute This Topic: https://lists.yoctoproject.org/mt/100557707/3618339
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> karthik.poduval@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 2249 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2023-08-24  7:50 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-08-05  0:19 the way to create patch for Linux kernel configuration Crane
+2023-08-05 16:05 ` Crane
+2023-08-24  7:49   ` [yocto] " Karthik Poduval
+

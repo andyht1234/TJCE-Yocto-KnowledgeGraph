@@ -1,0 +1,232 @@
+* Sharing sstate cache across build nodes
+@ 2021-09-10 17:16 Rusty Howell
+  2021-09-11 10:24 ` [yocto] " Richard Purdie
+  0 siblings, 1 reply; 6+ messages in thread
+From: Rusty Howell @ 2021-09-10 17:16 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1532 bytes --]
+
+Hello,
+We are having a problem with the PR server resetting the PR number it is
+returning for a given package/arch/checksum.  Our setup is as follows:  We
+have multiple linux servers being used as build nodes. Each node can build
+any one of four MACHINE types that we have defined in our distro. These
+builds actually happen inside a docker container on the build nodes.  We
+have a global PR server running on a separate server.
+
+Each node has it's own SSTATE_DIR, DL_DIR, and all bitbake builds on a node
+will use the same SSTATE_DIR, DL_DIR. Those directories are shared with the
+docker containers.
+
+Our distro has many recipes that have a git SRC_URI with a branch name as
+the rev. So they need to use AUTOINC.
+What we are noticing is that once in a while, the revs being served out by
+the PR server will be reset back to 0, and thus break upgrade-ability with
+the debian packages.
+
+I have been unable to find much information about how to properly configure
+multiple build nodes so that they all have consistent PR values from the PR
+server.
+
+I know there are several directories that might be necessary to achieve my
+goal.
+PERSISTENT_DIR, SSTATE_DIR, BUILDHISTORY_DIR, DL_DIR
+
+Can someone help explain which dirs should/must be shared via NFS/smb
+across all build nodes? Which directories are node-specific and only need
+to be cached locally (but not NFS) and used for all local build jobs? Does
+changing the MACHINE type on the build affect how/if these directories can
+be shared?
+Thanks a lot
+
+[-- Attachment #2: Type: text/html, Size: 1711 bytes --]
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] Sharing sstate cache across build nodes
+  2021-09-10 17:16 Sharing sstate cache across build nodes Rusty Howell
+@ 2021-09-11 10:24 ` Richard Purdie
+  2021-09-16  4:26   ` Rusty Howell
+  2021-09-16  4:34   ` Rusty Howell
+  0 siblings, 2 replies; 6+ messages in thread
+From: Richard Purdie @ 2021-09-11 10:24 UTC (permalink / raw)
+  To: Rusty Howell, yocto
+
+On Fri, 2021-09-10 at 11:16 -0600, Rusty Howell wrote:
+> We are having a problem with the PR server resetting the PR number it is
+> returning for a given package/arch/checksum.  Our setup is as follows:  We
+> have multiple linux servers being used as build nodes. Each node can build any
+> one of four MACHINE types that we have defined in our distro. These builds
+> actually happen inside a docker container on the build nodes.  We have a
+> global PR server running on a separate server. 
+> 
+> Each node has it's own SSTATE_DIR, DL_DIR, and all bitbake builds on a node
+> will use the same SSTATE_DIR, DL_DIR. Those directories are shared with the
+> docker containers.
+> 
+> Our distro has many recipes that have a git SRC_URI with a branch name as the
+> rev. So they need to use AUTOINC.
+> What we are noticing is that once in a while, the revs being served out by the
+> PR server will be reset back to 0, and thus break upgrade-ability with the
+> debian packages. 
+> 
+> I have been unable to find much information about how to properly configure
+> multiple build nodes so that they all have consistent PR values from the PR
+> server.
+> 
+> I know there are several directories that might be necessary to achieve my
+> goal.
+> PERSISTENT_DIR, SSTATE_DIR, BUILDHISTORY_DIR, DL_DIR
+> 
+> Can someone help explain which dirs should/must be shared via NFS/smb across
+> all build nodes? Which directories are node-specific and only need to be
+> cached locally (but not NFS) and used for all local build jobs? Does changing
+> the MACHINE type on the build affect how/if these directories can be shared?
+
+In general you need the sstate and the PR server to match. Using multiple
+different pools of sstate with the same PR server will probably not work so
+well.
+
+It won't matter about DL_DIR or PERSISTENT_DIR.
+
+Cheers,
+
+Richard
+
+
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: Sharing sstate cache across build nodes
+  2021-09-11 10:24 ` [yocto] " Richard Purdie
+@ 2021-09-16  4:26   ` Rusty Howell
+  2021-09-16  4:34   ` Rusty Howell
+  1 sibling, 0 replies; 6+ messages in thread
+From: Rusty Howell @ 2021-09-16  4:26 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1405 bytes --]
+
+Below is an accidental DM between Richard and myself. I am posting it here
+for others.
+
+> When setting up a shared sstate cache via NFS, do all the build hosts have
+> read/write access to the sstate cache at the same time?  Doesn't that cause
+> corruption in the sstate cache?  If they only have read-only access, is there
+> anything to consider when selecting which build host will generate the sstate
+> cache that is shared?
+
+Writes to SSTATE_DIR are careful and should use atomic moves into place so
+sharing read/write via NFS should be safe. We do test this on our autobuilder
+quite heavily.
+
+The main gotcha people run into with sstate is deletion since we can't handle
+deletion of files from sstate with builds running without the builds potentially
+showing non-fatal errors. We just don't delete things often on the main AB.
+
+> Finally, Is it beneficial to use BUILDHISTORY_PUSH_REPO on all the build hosts
+> so there is a unified build history?
+
+It can be useful, we do this for a subset of our core builds but the repo does
+get large. The buildhistory codepaths are a lot more complex and likely to have
+concurrency issues.
+
+> Is it problematic to share SSTATE across build hosts
+> (all Ubuntu 20.04 x86_64) if they build for different MACHINE types (ie
+> qemux86-64, imx8mq, beaglebone-yocto)?
+
+No, sstate is designed to be shared like that.
+
+Cheers,
+
+Richard
+
+[-- Attachment #2: Type: text/html, Size: 1654 bytes --]
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: Sharing sstate cache across build nodes
+  2021-09-11 10:24 ` [yocto] " Richard Purdie
+  2021-09-16  4:26   ` Rusty Howell
+@ 2021-09-16  4:34   ` Rusty Howell
+  2021-09-16  4:50     ` [yocto] " Khem Raj
+  2021-09-20  9:37     ` Ross Burton
+  1 sibling, 2 replies; 6+ messages in thread
+From: Rusty Howell @ 2021-09-16  4:34 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 836 bytes --]
+
+Thanks for the replies, Richard.
+
+Can SSTATE_DIR be shared across build hosts with different OS's  (Ubuntu 18.04, ubuntu 20.04, etc, RHEL)?
+
+Our build hosts are somewhat ephemeral.  Occasionally we need to swap out a build host for another one. So to bring on a new fresh build host and have it cooperate correctly with the other build hosts and the PR server, what does it need?  I understand having the NFS mounted SSTATE_DIR, and using the PRSERV_HOST variable set correctly. But what else?  Does the new build host need access to a shared PERSISTENT_DIR or a shared BUILDHISTORY_DIR?
+
+What happens if the shared SSTATE cache get corrupted and has to be deleted?   Won't that cause all the PR server values to reset?  We just want to make sure we know how to recover from a situation like that.
+Thanks a bunch.
+Rusty
+
+[-- Attachment #2: Type: text/html, Size: 943 bytes --]
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] Sharing sstate cache across build nodes
+  2021-09-16  4:34   ` Rusty Howell
+@ 2021-09-16  4:50     ` Khem Raj
+  2021-09-20  9:37     ` Ross Burton
+  1 sibling, 0 replies; 6+ messages in thread
+From: Khem Raj @ 2021-09-16  4:50 UTC (permalink / raw)
+  To: Rusty Howell; +Cc: Yocto-mailing-list
+
+On Wed, Sep 15, 2021 at 9:34 PM Rusty Howell <rustyhowell@gmail.com> wrote:
+>
+> Thanks for the replies, Richard.
+>
+> Can SSTATE_DIR be shared across build hosts with different OS's  (Ubuntu 18.04, ubuntu 20.04, etc, RHEL)?
+
+yes if you use uninative ( which is default in poky) then it should be
+able to share across multiple build hosts.
+
+>
+> Our build hosts are somewhat ephemeral.  Occasionally we need to swap out a build host for another one. So to bring on a new fresh build host and have it cooperate correctly with the other build hosts and the PR server, what does it need?  I understand having the NFS mounted SSTATE_DIR, and using the PRSERV_HOST variable set correctly. But what else?  Does the new build host need access to a shared PERSISTENT_DIR or a shared BUILDHISTORY_DIR?
+>
+> What happens if the shared SSTATE cache get corrupted and has to be deleted?   Won't that cause all the PR server values to reset?  We just want to make sure we know how to recover from a situation like that.
+
+if you preserve PR server data then you should be good. sstate can be
+regenerated.
+
+> Thanks a bunch.
+> Rusty
+> 
+>
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] Sharing sstate cache across build nodes
+  2021-09-16  4:34   ` Rusty Howell
+  2021-09-16  4:50     ` [yocto] " Khem Raj
+@ 2021-09-20  9:37     ` Ross Burton
+  1 sibling, 0 replies; 6+ messages in thread
+From: Ross Burton @ 2021-09-20  9:37 UTC (permalink / raw)
+  To: Rusty Howell; +Cc: Yocto
+
+On Thu, 16 Sept 2021 at 05:34, Rusty Howell <rustyhowell@gmail.com> wrote:
+> Can SSTATE_DIR be shared across build hosts with different OS's  (Ubuntu 18.04, ubuntu 20.04, etc, RHEL)?
+
+If you don't use uninative, then the sstate can be in a single
+directory but artifacts won't be shared. If you use uninative then the
+native will be shared between the build hosts.
+
+Basically, there's no situation where you can't use a single sstate directory.
+
+Ross
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+end of thread, other threads:[~2021-09-20  9:37 UTC | newest]
+
+Thread overview: 6+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-09-10 17:16 Sharing sstate cache across build nodes Rusty Howell
+2021-09-11 10:24 ` [yocto] " Richard Purdie
+2021-09-16  4:26   ` Rusty Howell
+2021-09-16  4:34   ` Rusty Howell
+2021-09-16  4:50     ` [yocto] " Khem Raj
+2021-09-20  9:37     ` Ross Burton
+

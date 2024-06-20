@@ -1,0 +1,344 @@
+* [meta-rockchip][kirkstone][PATCH] rk3588(s): add
+@ 2023-10-05  9:00 Quentin Schulz
+  2023-10-05  9:30 ` Quentin Schulz
+  2023-10-13 16:15 ` [yocto] " Trevor Woerner
+  0 siblings, 2 replies; 3+ messages in thread
+From: Quentin Schulz @ 2023-10-05  9:00 UTC (permalink / raw)
+  To: twoerner; +Cc: yocto, Quentin Schulz
+
+From: Trevor Woerner <twoerner@gmail.com>
+
+Unfortunately the TF-A project does not currently have support for
+the rk3588. Therefore, for the time-being, the only way to supply a
+TPL/DDR-init for the rk3588 is to use the closed-source rkbin binaries
+from Rockchip. If/when TF-A adds support for the rk3588 we can investigate
+switching.
+
+The rk3588 comes in two variants: rk3588 and rk3588s. The "s" option is a
+stripped-down version of the rk3588. In the Linux kernel these two SoCs are
+kept separate, with the rk3588 building on the rk3588s, so we've mimicked that
+same behaviour here.
+
+Signed-off-by: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+Signed-off-by: Trevor Woerner <twoerner@gmail.com>
+[backported from f8af59dd7cd7 ("rock-5b: add")]
+[removed support for rock-5b since no decent linux-yocto support in kirkstone]
+[removed KERNEL_FEATURES and kmeta since no decent linux-yocto support in kirkstone]
+[renamed INIT_FIRMWARE_DEPENDS to ATF_DEPENDS]
+[tested on downstream board with downstream kernel and u-boot]
+Signed-off-by: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+---
+ conf/machine/include/rk3588.inc         |  6 ++++
+ conf/machine/include/rk3588s.inc        | 16 +++++++++++
+ recipes-bsp/rkbin/rockchip-rkbin_git.bb | 37 +++++++++++++++++++++++++
+ recipes-bsp/u-boot/u-boot%.bbappend     |  6 ++++
+ 4 files changed, 65 insertions(+)
+ create mode 100644 conf/machine/include/rk3588.inc
+ create mode 100644 conf/machine/include/rk3588s.inc
+ create mode 100644 recipes-bsp/rkbin/rockchip-rkbin_git.bb
+
+diff --git a/conf/machine/include/rk3588.inc b/conf/machine/include/rk3588.inc
+new file mode 100644
+index 0000000..34f0627
+--- /dev/null
++++ b/conf/machine/include/rk3588.inc
+@@ -0,0 +1,6 @@
++MACHINEOVERRIDES =. "rk3588:"
++
++# the rk3588s is a "stripped-down" version of the rk3588
++# in the kernel's device-tree the rk3588 builds on top of the rk3588s
++# so anything that is valid for the rk3588s is valid for the rk3588
++require conf/machine/include/rk3588s.inc
+diff --git a/conf/machine/include/rk3588s.inc b/conf/machine/include/rk3588s.inc
+new file mode 100644
+index 0000000..3da226e
+--- /dev/null
++++ b/conf/machine/include/rk3588s.inc
+@@ -0,0 +1,16 @@
++MACHINEOVERRIDES =. "rk3588s:"
++DEFAULTTUNE ?= "cortexa76-cortexa55-crypto"
++
++require conf/machine/include/arm/armv8-2a/tune-cortexa76-cortexa55.inc
++require conf/machine/include/rockchip-defaults.inc
++require conf/machine/include/rockchip-wic.inc
++
++KBUILD_DEFCONFIG ?= "defconfig"
++KERNEL_CLASSES = "kernel-fitimage"
++KERNEL_IMAGETYPE = "fitImage"
++
++PREFERRED_PROVIDER_trusted-firmware-a = "rockchip-rkbin"
++PREFERRED_PROVIDER_optee-os = "rockchip-rkbin"
++
++UBOOT_SUFFIX ?= "itb"
++UBOOT_ENTRYPOINT ?= "0x06000000"
+diff --git a/recipes-bsp/rkbin/rockchip-rkbin_git.bb b/recipes-bsp/rkbin/rockchip-rkbin_git.bb
+new file mode 100644
+index 0000000..7fefb01
+--- /dev/null
++++ b/recipes-bsp/rkbin/rockchip-rkbin_git.bb
+@@ -0,0 +1,37 @@
++DESCRIPTION = "Rockchip Firmware and Tool Binaries"
++LICENSE = "Proprietary"
++LIC_FILES_CHKSUM = "file://LICENSE;md5=15faa4a01e7eb0f5d33f9f2bcc7bff62"
++
++SRC_URI = "git://github.com/rockchip-linux/rkbin;protocol=https;branch=master"
++SRCREV = "b4558da0860ca48bf1a571dd33ccba580b9abe23"
++
++PROVIDES += "trusted-firmware-a"
++PROVIDES += "optee-os"
++
++inherit bin_package deploy
++
++S = "${WORKDIR}/git"
++
++COMPATIBLE_MACHINE = ""
++COMPATIBLE_MACHINE:rk3588s = "rk3588s"
++
++PACKAGE_ARCH = "${MACHINE_ARCH}"
++
++do_install() {
++	# Nothing in this recipe is useful in a filesystem
++	:
++}
++
++PACKAGES = "${PN}"
++ALLOW_EMPTY:${PN} = "1"
++
++do_deploy() {
++	# Prebuilt TF-A
++	install -m 644 ${S}/bin/rk35/rk3588_bl31_v*.elf ${DEPLOYDIR}/bl31-rk3588.elf
++	# Prebuilt OPTEE-OS
++	install -m 644 ${S}/bin/rk35/rk3588_bl32_v*.bin ${DEPLOYDIR}/tee-rk3588.bin
++	# Prebuilt U-Boot TPL (DDR init)
++	install -m 644 ${S}/bin/rk35/rk3588_ddr_lp4_2112MHz_lp5_2736MHz_v*.bin ${DEPLOYDIR}/ddr-rk3588.bin
++}
++
++addtask deploy after do_install
+diff --git a/recipes-bsp/u-boot/u-boot%.bbappend b/recipes-bsp/u-boot/u-boot%.bbappend
+index de1f2ca..c611377 100644
+--- a/recipes-bsp/u-boot/u-boot%.bbappend
++++ b/recipes-bsp/u-boot/u-boot%.bbappend
+@@ -7,6 +7,12 @@ do_compile:append:rock2-square () {
+ 
+ ATF_DEPENDS ??= ""
+ 
++EXTRA_OEMAKE:append:rk3588s = " \
++	BL31=${DEPLOY_DIR_IMAGE}/bl31-rk3588.elf \
++	ROCKCHIP_TPL=${DEPLOY_DIR_IMAGE}/ddr-rk3588.bin \
++	"
++ATF_DEPENDS:rk3588s = " rockchip-rkbin:do_deploy"
++
+ EXTRA_OEMAKE:append:rk3399 = " BL31=${DEPLOY_DIR_IMAGE}/bl31-rk3399.elf"
+ ATF_DEPENDS:rk3399 = " trusted-firmware-a:do_deploy"
+ EXTRA_OEMAKE:append:rk3328 = " BL31=${DEPLOY_DIR_IMAGE}/bl31-rk3328.elf"
+-- 
+2.41.0
+
+
+
+^ permalink raw reply related	[flat|nested] 3+ messages in thread
+* Re: [meta-rockchip][kirkstone][PATCH] rk3588(s): add
+  2023-10-05  9:00 [meta-rockchip][kirkstone][PATCH] rk3588(s): add Quentin Schulz
+@ 2023-10-05  9:30 ` Quentin Schulz
+  2023-10-13 16:15 ` [yocto] " Trevor Woerner
+  1 sibling, 0 replies; 3+ messages in thread
+From: Quentin Schulz @ 2023-10-05  9:30 UTC (permalink / raw)
+  To: Quentin Schulz, twoerner; +Cc: yocto
+
+Hi Trevor,
+
+On 10/5/23 11:00, Quentin Schulz wrote:
+> From: Trevor Woerner <twoerner@gmail.com>
+> 
+> Unfortunately the TF-A project does not currently have support for
+> the rk3588. Therefore, for the time-being, the only way to supply a
+> TPL/DDR-init for the rk3588 is to use the closed-source rkbin binaries
+> from Rockchip. If/when TF-A adds support for the rk3588 we can investigate
+> switching.
+> 
+> The rk3588 comes in two variants: rk3588 and rk3588s. The "s" option is a
+> stripped-down version of the rk3588. In the Linux kernel these two SoCs are
+> kept separate, with the rk3588 building on the rk3588s, so we've mimicked that
+> same behaviour here.
+> 
+> Signed-off-by: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+> Signed-off-by: Trevor Woerner <twoerner@gmail.com>
+> [backported from f8af59dd7cd7 ("rock-5b: add")]
+> [removed support for rock-5b since no decent linux-yocto support in kirkstone]
+> [removed KERNEL_FEATURES and kmeta since no decent linux-yocto support in kirkstone]
+> [renamed INIT_FIRMWARE_DEPENDS to ATF_DEPENDS]
+
+^^^ This is actually something we probably need to discuss?
+
+This makes it harder to backport patches from the master branch to 
+kirkstone because we have to be careful to rename those variables before 
+applying the patch (even if somehow it applies cleanly).
+
+On the other hand, migrating to the new name means we break the current 
+behavior for downstream users of meta-rockchip.
+
+Cheers,
+Quentin
+
+> [tested on downstream board with downstream kernel and u-boot]
+> Signed-off-by: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+> ---
+>   conf/machine/include/rk3588.inc         |  6 ++++
+>   conf/machine/include/rk3588s.inc        | 16 +++++++++++
+>   recipes-bsp/rkbin/rockchip-rkbin_git.bb | 37 +++++++++++++++++++++++++
+>   recipes-bsp/u-boot/u-boot%.bbappend     |  6 ++++
+>   4 files changed, 65 insertions(+)
+>   create mode 100644 conf/machine/include/rk3588.inc
+>   create mode 100644 conf/machine/include/rk3588s.inc
+>   create mode 100644 recipes-bsp/rkbin/rockchip-rkbin_git.bb
+> 
+> diff --git a/conf/machine/include/rk3588.inc b/conf/machine/include/rk3588.inc
+> new file mode 100644
+> index 0000000..34f0627
+> --- /dev/null
+> +++ b/conf/machine/include/rk3588.inc
+> @@ -0,0 +1,6 @@
+> +MACHINEOVERRIDES =. "rk3588:"
+> +
+> +# the rk3588s is a "stripped-down" version of the rk3588
+> +# in the kernel's device-tree the rk3588 builds on top of the rk3588s
+> +# so anything that is valid for the rk3588s is valid for the rk3588
+> +require conf/machine/include/rk3588s.inc
+> diff --git a/conf/machine/include/rk3588s.inc b/conf/machine/include/rk3588s.inc
+> new file mode 100644
+> index 0000000..3da226e
+> --- /dev/null
+> +++ b/conf/machine/include/rk3588s.inc
+> @@ -0,0 +1,16 @@
+> +MACHINEOVERRIDES =. "rk3588s:"
+> +DEFAULTTUNE ?= "cortexa76-cortexa55-crypto"
+> +
+> +require conf/machine/include/arm/armv8-2a/tune-cortexa76-cortexa55.inc
+> +require conf/machine/include/rockchip-defaults.inc
+> +require conf/machine/include/rockchip-wic.inc
+> +
+> +KBUILD_DEFCONFIG ?= "defconfig"
+> +KERNEL_CLASSES = "kernel-fitimage"
+> +KERNEL_IMAGETYPE = "fitImage"
+> +
+> +PREFERRED_PROVIDER_trusted-firmware-a = "rockchip-rkbin"
+> +PREFERRED_PROVIDER_optee-os = "rockchip-rkbin"
+> +
+> +UBOOT_SUFFIX ?= "itb"
+> +UBOOT_ENTRYPOINT ?= "0x06000000"
+> diff --git a/recipes-bsp/rkbin/rockchip-rkbin_git.bb b/recipes-bsp/rkbin/rockchip-rkbin_git.bb
+> new file mode 100644
+> index 0000000..7fefb01
+> --- /dev/null
+> +++ b/recipes-bsp/rkbin/rockchip-rkbin_git.bb
+> @@ -0,0 +1,37 @@
+> +DESCRIPTION = "Rockchip Firmware and Tool Binaries"
+> +LICENSE = "Proprietary"
+> +LIC_FILES_CHKSUM = "file://LICENSE;md5=15faa4a01e7eb0f5d33f9f2bcc7bff62"
+> +
+> +SRC_URI = "git://github.com/rockchip-linux/rkbin;protocol=https;branch=master"
+> +SRCREV = "b4558da0860ca48bf1a571dd33ccba580b9abe23"
+> +
+> +PROVIDES += "trusted-firmware-a"
+> +PROVIDES += "optee-os"
+> +
+> +inherit bin_package deploy
+> +
+> +S = "${WORKDIR}/git"
+> +
+> +COMPATIBLE_MACHINE = ""
+> +COMPATIBLE_MACHINE:rk3588s = "rk3588s"
+> +
+> +PACKAGE_ARCH = "${MACHINE_ARCH}"
+> +
+> +do_install() {
+> +	# Nothing in this recipe is useful in a filesystem
+> +	:
+> +}
+> +
+> +PACKAGES = "${PN}"
+> +ALLOW_EMPTY:${PN} = "1"
+> +
+> +do_deploy() {
+> +	# Prebuilt TF-A
+> +	install -m 644 ${S}/bin/rk35/rk3588_bl31_v*.elf ${DEPLOYDIR}/bl31-rk3588.elf
+> +	# Prebuilt OPTEE-OS
+> +	install -m 644 ${S}/bin/rk35/rk3588_bl32_v*.bin ${DEPLOYDIR}/tee-rk3588.bin
+> +	# Prebuilt U-Boot TPL (DDR init)
+> +	install -m 644 ${S}/bin/rk35/rk3588_ddr_lp4_2112MHz_lp5_2736MHz_v*.bin ${DEPLOYDIR}/ddr-rk3588.bin
+> +}
+> +
+> +addtask deploy after do_install
+> diff --git a/recipes-bsp/u-boot/u-boot%.bbappend b/recipes-bsp/u-boot/u-boot%.bbappend
+> index de1f2ca..c611377 100644
+> --- a/recipes-bsp/u-boot/u-boot%.bbappend
+> +++ b/recipes-bsp/u-boot/u-boot%.bbappend
+> @@ -7,6 +7,12 @@ do_compile:append:rock2-square () {
+>   
+>   ATF_DEPENDS ??= ""
+>   
+> +EXTRA_OEMAKE:append:rk3588s = " \
+> +	BL31=${DEPLOY_DIR_IMAGE}/bl31-rk3588.elf \
+> +	ROCKCHIP_TPL=${DEPLOY_DIR_IMAGE}/ddr-rk3588.bin \
+> +	"
+> +ATF_DEPENDS:rk3588s = " rockchip-rkbin:do_deploy"
+> +
+>   EXTRA_OEMAKE:append:rk3399 = " BL31=${DEPLOY_DIR_IMAGE}/bl31-rk3399.elf"
+>   ATF_DEPENDS:rk3399 = " trusted-firmware-a:do_deploy"
+>   EXTRA_OEMAKE:append:rk3328 = " BL31=${DEPLOY_DIR_IMAGE}/bl31-rk3328.elf"
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] [meta-rockchip][kirkstone][PATCH] rk3588(s): add
+  2023-10-05  9:00 [meta-rockchip][kirkstone][PATCH] rk3588(s): add Quentin Schulz
+  2023-10-05  9:30 ` Quentin Schulz
+@ 2023-10-13 16:15 ` Trevor Woerner
+  1 sibling, 0 replies; 3+ messages in thread
+From: Trevor Woerner @ 2023-10-13 16:15 UTC (permalink / raw)
+  To: Quentin Schulz; +Cc: yocto, Quentin Schulz
+
+On Thu 2023-10-05 @ 11:00:16 AM, Quentin Schulz wrote:
+> From: Trevor Woerner <twoerner@gmail.com>
+> 
+> Unfortunately the TF-A project does not currently have support for
+> the rk3588. Therefore, for the time-being, the only way to supply a
+> TPL/DDR-init for the rk3588 is to use the closed-source rkbin binaries
+> from Rockchip. If/when TF-A adds support for the rk3588 we can investigate
+> switching.
+> 
+> The rk3588 comes in two variants: rk3588 and rk3588s. The "s" option is a
+> stripped-down version of the rk3588. In the Linux kernel these two SoCs are
+> kept separate, with the rk3588 building on the rk3588s, so we've mimicked that
+> same behaviour here.
+> 
+> Signed-off-by: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+> Signed-off-by: Trevor Woerner <twoerner@gmail.com>
+> [backported from f8af59dd7cd7 ("rock-5b: add")]
+> [removed support for rock-5b since no decent linux-yocto support in kirkstone]
+> [removed KERNEL_FEATURES and kmeta since no decent linux-yocto support in kirkstone]
+> [renamed INIT_FIRMWARE_DEPENDS to ATF_DEPENDS]
+> [tested on downstream board with downstream kernel and u-boot]
+> Signed-off-by: Quentin Schulz <quentin.schulz@theobroma-systems.com>
+> ---
+>  conf/machine/include/rk3588.inc         |  6 ++++
+>  conf/machine/include/rk3588s.inc        | 16 +++++++++++
+>  recipes-bsp/rkbin/rockchip-rkbin_git.bb | 37 +++++++++++++++++++++++++
+>  recipes-bsp/u-boot/u-boot%.bbappend     |  6 ++++
+>  4 files changed, 65 insertions(+)
+>  create mode 100644 conf/machine/include/rk3588.inc
+>  create mode 100644 conf/machine/include/rk3588s.inc
+>  create mode 100644 recipes-bsp/rkbin/rockchip-rkbin_git.bb
+
+Applied to meta-rockchip, kirkstone branch.
+Thanks!
+
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2023-10-13 16:15 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-10-05  9:00 [meta-rockchip][kirkstone][PATCH] rk3588(s): add Quentin Schulz
+2023-10-05  9:30 ` Quentin Schulz
+2023-10-13 16:15 ` [yocto] " Trevor Woerner
+

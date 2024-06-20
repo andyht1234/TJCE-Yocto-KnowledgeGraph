@@ -1,0 +1,96 @@
+* [yocto][meta-mingw][PATCH] tests: Map WORKDIR to W: to shorten paths
+@ 2022-12-08 16:48 Joshua Watt
+  0 siblings, 0 replies; only message in thread
+From: Joshua Watt @ 2022-12-08 16:48 UTC (permalink / raw)
+  To: yocto; +Cc: Joshua Watt
+
+In some cases Wine (and Windows proper) struggle with very long paths;
+in particular the way that gcc invokes the 'cc1' subprogram is limited
+in how deep the path to the subprogram can be. This can cause issues
+when testing the SDK under wine, as the paths can easily get quite long
+and exceed this limit. In order to work around this, setup the Wine test
+context so that the W: drive maps to the SDK image ${WORKDIR}, which
+allows wine to effectively use paths relative to this directory making
+them significantly shorter.
+
+Signed-off-by: Joshua Watt <JPEWhacker@gmail.com>
+---
+ lib/oeqa/sdkmingw/case.py    |  4 ++--
+ lib/oeqa/sdkmingw/context.py | 11 ++++++++++-
+ lib/oeqa/sdkmingw/testsdk.py |  5 ++++-
+ 3 files changed, 16 insertions(+), 4 deletions(-)
+
+diff --git a/lib/oeqa/sdkmingw/case.py b/lib/oeqa/sdkmingw/case.py
+index 169c143..dee7d3d 100644
+--- a/lib/oeqa/sdkmingw/case.py
++++ b/lib/oeqa/sdkmingw/case.py
+@@ -56,7 +56,7 @@ class OESDKMinGWTestCase(OESDKTestCase):
+                 return s[1:-1]
+             return s
+ 
+-        command = ['wine', 'cmd', '/c', self.tc.wine_sdk_env, '>', 'NUL', '&&', 'cd', self.wine_test_dir, '&&']
++        command = ['wine', 'cmd', '/c', self.tc.wine_sdk_env, '>', 'NUL', '&&']
+ 
+         # Perform some massaging so that commands can be written naturally in
+         # test cases. shlex.split() in Non-posix mode gets us most of the way
+@@ -65,7 +65,7 @@ class OESDKMinGWTestCase(OESDKTestCase):
+         command.extend(strip_quotes(s) for s in shlex.split(cmd, posix=False))
+ 
+         return subprocess.check_output(command, env=self.tc.get_wine_env(),
+-                stderr=subprocess.STDOUT, universal_newlines=True)
++                stderr=subprocess.STDOUT, universal_newlines=True, cwd=self.test_dir)
+ 
+     def assertIsTargetElf(self, path):
+         import oe.qa
+diff --git a/lib/oeqa/sdkmingw/context.py b/lib/oeqa/sdkmingw/context.py
+index edabcbd..5319223 100644
+--- a/lib/oeqa/sdkmingw/context.py
++++ b/lib/oeqa/sdkmingw/context.py
+@@ -12,10 +12,19 @@ class OESDKMinGWTestContext(OESDKTestContext):
+     sdk_files_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "files")
+ 
+     def __init__(self, td=None, logger=None, sdk_dir=None, sdk_env=None, wine_prefix=None,
+-            wine_arch=None, target_pkg_manifest=None, host_pkg_manifest=None):
++            wine_arch=None, wine_devices={}, target_pkg_manifest=None, host_pkg_manifest=None):
+         super(OESDKMinGWTestContext, self).__init__(td, logger, sdk_dir, sdk_env, target_pkg_manifest, host_pkg_manifest)
+         self.wine_prefix = wine_prefix
+         self.wine_arch = wine_arch
++        # Create the wine environment
++        subprocess.check_output(["wine", "cmd", "/c", "echo 1"], env=self.get_wine_env())
++
++        device_dir  = "%s/dosdevices" % wine_prefix
++        bb.utils.mkdirhier(device_dir)
++        for device, path in wine_devices.items():
++            device_path = "%s/%s" % (device_dir, device)
++            os.symlink(os.path.relpath(path, device_dir), device_path)
++
+         self.wine_sdk_dir = self.wine_path(sdk_dir)
+         self.wine_sdk_env = self.wine_path(sdk_env)
+ 
+diff --git a/lib/oeqa/sdkmingw/testsdk.py b/lib/oeqa/sdkmingw/testsdk.py
+index 173cfd9..5c80bb4 100644
+--- a/lib/oeqa/sdkmingw/testsdk.py
++++ b/lib/oeqa/sdkmingw/testsdk.py
+@@ -44,6 +44,9 @@ class TestSDKMinGW(TestSDK):
+ 
+         return {
+             'wine_prefix': wine_prefix,
+-            'wine_arch': d.getVar('TESTSDK_WINEARCH') or 'win64'
++            'wine_arch': d.getVar('TESTSDK_WINEARCH') or 'win64',
++            'wine_devices': {
++                'w:': d.getVar("WORKDIR"),
+             }
++        }
+ 
+-- 
+2.33.0
+
+
+
+^ permalink raw reply related	[flat|nested] only message in thread
+only message in thread, other threads:[~2022-12-08 16:48 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-12-08 16:48 [yocto][meta-mingw][PATCH] tests: Map WORKDIR to W: to shorten paths Joshua Watt
+

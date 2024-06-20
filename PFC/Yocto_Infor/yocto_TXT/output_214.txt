@@ -1,0 +1,662 @@
+* EXTRA_USERS_PARAMS doesn't work to generate password for root and add new users
+@ 2023-08-22  1:58 Crane
+  2023-08-22  6:58 ` [yocto] " Mauro Salvini
+  0 siblings, 1 reply; 14+ messages in thread
+From: Crane @ 2023-08-22  1:58 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 687 bytes --]
+
+Hello,
+
+I am trying to generate a password for root and add a new user. Here is the code in the image recipe:
+
+IMAGE_FEATURES:remove = "debug-tweaks"
+INHERIT += "extrausers"
+EXTRA_USERS_PARAMS += "usermod -P root root; useradd -P 2023 crane"
+
+When using "inherit extrausers", there is an error of "usermod command did not succeed."
+
+When checking the parameter, the result is:
+EXTRA_USERS_PARAMS=" usermod -P root root; useradd -P 2023 crane; "
+
+The image does requires a password for root, but doesn't generate anything in /etc/shadow and doesn't add new user in /etc/shadow as well.
+
+I am wondering what might be missing. Can anyone give me any clue?
+
+Thanks!
+Crane
+
+[-- Attachment #2: Type: text/html, Size: 878 bytes --]
+
+^ permalink raw reply	[flat|nested] 14+ messages in thread
+* Re: [yocto] EXTRA_USERS_PARAMS doesn't work to generate password for root and add new users
+  2023-08-22  1:58 EXTRA_USERS_PARAMS doesn't work to generate password for root and add new users Crane
+@ 2023-08-22  6:58 ` Mauro Salvini
+  2023-08-22 15:16   ` Crane
+  0 siblings, 1 reply; 14+ messages in thread
+From: Mauro Salvini @ 2023-08-22  6:58 UTC (permalink / raw)
+  To: yocto; +Cc: crane2018
+
+On 22/08/23 03:58, Crane wrote:
+> Hello,
+> 
+> I am trying to generate a password for root and add a new user. Here is 
+> the code in the image recipe:
+> 
+> IMAGE_FEATURES:remove = "debug-tweaks"
+> INHERIT += "extrausers"
+> EXTRA_USERS_PARAMS += "usermod -P root root; useradd -P 2023 crane"
+> 
+> When using "inherit extrausers", there is an error of "usermod command 
+> did not succeed."
+> 
+> When checking the parameter, the result is:
+> EXTRA_USERS_PARAMS=" usermod -P root root; useradd -P 2023 crane; "
+> 
+> The image does requires a password for root, but doesn't generate 
+> anything in /etc/shadow and doesn't add new user in /etc/shadow as well.
+> 
+> I am wondering what might be missing. Can anyone give me any clue?
+> 
+> Thanks!
+> Crane
+> 
+> 
+
+Hi,
+
+the error could be related to the -P option in useradd command: the 
+option, that allows to pass a cleartext password to the command, is not 
+present anymore in recent useradd versions.
+
+Instead you can use the -p option, that allows to pass an encrypted 
+password.
+Something like that:
+
+EXTRA_USERS_PARAMS=" usermod -p `openssl passwd -6 root` root; useradd 
+-P 2023 crane; "
+
+Regards
+-- 
+Mauro Salvini | KOAN sas | Bergamo - Italia
+embedded software engineering
+http://KoanSoftware.com
+
+
+
+^ permalink raw reply	[flat|nested] 14+ messages in thread
+* Re: EXTRA_USERS_PARAMS doesn't work to generate password for root and add new users
+  2023-08-22  6:58 ` [yocto] " Mauro Salvini
+@ 2023-08-22 15:16   ` Crane
+  2023-08-22 15:33     ` Crane
+  2023-08-22 15:36     ` [yocto] " Mauro Salvini
+  0 siblings, 2 replies; 14+ messages in thread
+From: Crane @ 2023-08-22 15:16 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 530 bytes --]
+
+Thanks Mauro for your input.
+
+I referred two posts from Koan Software in my work. One is to use devtool to modify recipe and another one is to add system service to image. Very clearly explained. Thanks!
+
+Good point. I tried, but in my case it looks still not generating the password and also no new user added.
+And I am afraid that the $ symbol in the encrypted password string might prevent it from being applied. I tried to add \ before $ symbol. And it's also not working.
+
+Wondering what else might be still missing.
+
+[-- Attachment #2: Type: text/html, Size: 576 bytes --]
+
+^ permalink raw reply	[flat|nested] 14+ messages in thread
+* Re: EXTRA_USERS_PARAMS doesn't work to generate password for root and add new users
+  2023-08-22 15:16   ` Crane
+@ 2023-08-22 15:33     ` Crane
+  2023-08-22 15:36     ` [yocto] " Mauro Salvini
+  1 sibling, 0 replies; 14+ messages in thread
+From: Crane @ 2023-08-22 15:33 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 498 bytes --]
+
+Here is the variable value:
+EXTRA_USERS_PARAMS=" usermod -p 'openssl passwd -6 root' root; useradd -p 'openssl passwd -6 2023' crane; "
+
+Actually no need to add \ before $ symbol.  \ is already added as below:
+EXTRA_USERS_PARAMS=" usermod -p '\$6\$9UMdfjsa9kYD4oQB\$a3jUptBObMgh8palvzovMriEp8X0d/7xHHOj7WdcBKXvhcUvOBOzFTAdl3.NDi.CGwMtpwfB3J6dvxRQN.iUq.' root; useradd -p '\$6\$IfrdWN4tMhCHSL6E\$NS3/r/qO3kSKNh0PVtqmrocLAxbdkUZu3cYg7czkMy9Y42le02G92hgxRVvsFogjCufY4BRdjRdaW77K/kT170' crane; "
+
+[-- Attachment #2: Type: text/html, Size: 710 bytes --]
+
+^ permalink raw reply	[flat|nested] 14+ messages in thread
+* Re: [yocto] EXTRA_USERS_PARAMS doesn't work to generate password for root and add new users
+  2023-08-22 15:16   ` Crane
+  2023-08-22 15:33     ` Crane
+@ 2023-08-22 15:36     ` Mauro Salvini
+  2023-08-22 16:00       ` Crane
+  1 sibling, 1 reply; 14+ messages in thread
+From: Mauro Salvini @ 2023-08-22 15:36 UTC (permalink / raw)
+  To: yocto; +Cc: crane2018
+
+On 22/08/23 17:16, Crane wrote:
+> Thanks Mauro for your input.
+> 
+> I referred two posts from Koan Software in my work. One is to use 
+> devtool to modify recipe and another one is to add system service to 
+> image. Very clearly explained. Thanks!
+> 
+> Good point. I tried, but in my case it looks still not generating the 
+> password and also no new user added.
+> And I am afraid that the $ symbol in the encrypted password string might 
+> prevent it from being applied. I tried to add \ before $ symbol. And 
+> it's also not working.
+
+oh, indeed.
+
+Try with this:
+
+EXTRA_USERS_PARAMS=" usermod -p '$(openssl passwd -6 root)' root; 
+useradd -p '$(openssl passwd -6 2023)' crane; "
+
+> 
+> Wondering what else might be still missing.
+> 
+
+
+-- 
+Mauro Salvini | KOAN sas | Bergamo - Italia
+embedded software engineering
+✆:+39 351-9518710
+http://KoanSoftware.com
+
+
+
+^ permalink raw reply	[flat|nested] 14+ messages in thread
+* Re: EXTRA_USERS_PARAMS doesn't work to generate password for root and add new users
+  2023-08-22 15:36     ` [yocto] " Mauro Salvini
+@ 2023-08-22 16:00       ` Crane
+  2023-08-23  7:45         ` [yocto] " Mauro Salvini
+  0 siblings, 1 reply; 14+ messages in thread
+From: Crane @ 2023-08-22 16:00 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 407 bytes --]
+
+On Tue, Aug 22, 2023 at 11:36 AM, Mauro wrote:
+
+> 
+> Try with this:
+> 
+> EXTRA_USERS_PARAMS=" usermod -p '$(openssl passwd -6 root)' root; useradd
+> -p '$(openssl passwd -6 2023)' crane; "
+
+Not working.
+Here is the value of the variable becoming:
+EXTRA_USERS_PARAMS=" usermod -p '\$(openssl passwd -6 root)' root; useradd -p '\$(openssl passwd -6 2023)' crane; "
+One \ is added before $ symbol.
+
+[-- Attachment #2: Type: text/html, Size: 559 bytes --]
+
+^ permalink raw reply	[flat|nested] 14+ messages in thread
+* Re: [yocto] EXTRA_USERS_PARAMS doesn't work to generate password for root and add new users
+  2023-08-22 16:00       ` Crane
+@ 2023-08-23  7:45         ` Mauro Salvini
+  2023-08-23 13:50           ` Crane
+  0 siblings, 1 reply; 14+ messages in thread
+From: Mauro Salvini @ 2023-08-23  7:45 UTC (permalink / raw)
+  To: yocto; +Cc: crane2018
+
+On 22/08/23 18:00, Crane wrote:
+> On Tue, Aug 22, 2023 at 11:36 AM, Mauro wrote:
+> 
+>     Try with this:
+> 
+>     EXTRA_USERS_PARAMS=" usermod -p '$(openssl passwd -6 root)' root;
+>     useradd -p '$(openssl passwd -6 2023)' crane; "
+> 
+
+Uh, I'm using this one successfully, on a Yocto Warrior.
+
+> Not working.
+> Here is the value of the variable becoming:
+> EXTRA_USERS_PARAMS=" usermod -p '\$(openssl passwd -6 root)' root; 
+> useradd -p '\$(openssl passwd -6 2023)' crane; "
+> One \ is added before $ symbol.
+> 
+> 
+
+Then the \ is added automatically by Yocto? Maybe something has changed 
+in variables parsing...or could be a bug? Don't know, help needed from 
+the experts!
+
+You can put the encrypted password (the result of the "openssl passwd -6 
+root" command) directly in the variable, taking care to put a "\" before 
+the three "$" contained in the string. Something like this:
+
+EXTRA_USERS_PARAMS=" usermod -p 
+'\$6\$CEM0hANiVS9VXN8N\$Q9XK1KTpq2faq2fNbSRLNeeA4mmQsl8g1Gwl3QnTPlRPb5ljCAa./bbhffcthXxUen4jSFL6HKGQPlHZNQkfA/' 
+root; useradd -p 
+'\$6\$5wVybJkbuowR0iMi\$tnEJEEbXbcRfksKRSt7rjlY1hRERrjqFOlCaa0s1ivISxAHT7MFdcnZvVbRHgkqRSYzA1oLUxtR0LuvDTMPR5/' 
+crane; "
+
+By the way, this approach has the advantage to mask the password.
+
+
+-- 
+Mauro Salvini | KOAN sas | Bergamo - Italia
+embedded software engineering
+http://KoanSoftware.com
+
+
+
+^ permalink raw reply	[flat|nested] 14+ messages in thread
+* Re: EXTRA_USERS_PARAMS doesn't work to generate password for root and add new users
+  2023-08-23  7:45         ` [yocto] " Mauro Salvini
+@ 2023-08-23 13:50           ` Crane
+  2023-08-24  5:11             ` Jeffrey Simons
+  0 siblings, 1 reply; 14+ messages in thread
+From: Crane @ 2023-08-23 13:50 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 748 bytes --]
+
+On Wed, Aug 23, 2023 at 03:45 AM, Mauro wrote:
+
+> 
+> You can put the encrypted password (the result of the "openssl passwd -6
+> root" command) directly in the variable, taking care to put a "\" before
+> the three "$" contained in the string. Something like this:
+> 
+> EXTRA_USERS_PARAMS=" usermod -p
+> '\$6\$CEM0hANiVS9VXN8N\$Q9XK1KTpq2faq2fNbSRLNeeA4mmQsl8g1Gwl3QnTPlRPb5ljCAa./bbhffcthXxUen4jSFL6HKGQPlHZNQkfA/'
+> root; useradd -p
+> '\$6\$5wVybJkbuowR0iMi\$tnEJEEbXbcRfksKRSt7rjlY1hRERrjqFOlCaa0s1ivISxAHT7MFdcnZvVbRHgkqRSYzA1oLUxtR0LuvDTMPR5/'
+> crane; "
+
+Tried as well. And a \ is added automatically in front of $, so no need to add it. But still not working.
+There must be something else missing. Anyway to debug in this case?
+
+[-- Attachment #2: Type: text/html, Size: 759 bytes --]
+
+^ permalink raw reply	[flat|nested] 14+ messages in thread
+* Re: EXTRA_USERS_PARAMS doesn't work to generate password for root and add new users
+  2023-08-23 13:50           ` Crane
+@ 2023-08-24  5:11             ` Jeffrey Simons
+  2023-08-24  5:22               ` [yocto] " Khem Raj
+  0 siblings, 1 reply; 14+ messages in thread
+From: Jeffrey Simons @ 2023-08-24  5:11 UTC (permalink / raw)
+  To: yocto
+
+On Wed, Aug 23, 2023 at 03:50 PM, Crane wrote:
+
+>
+> On Wed, Aug 23, 2023 at 03:45 AM, Mauro wrote:
+> 
+> > 
+> > You can put the encrypted password (the result of the "openssl passwd -6
+> > root" command) directly in the variable, taking care to put a "\" before
+> > the three "$" contained in the string. Something like this:
+> > 
+> > EXTRA_USERS_PARAMS=" usermod -p
+> >
+> '\$6\$CEM0hANiVS9VXN8N\$Q9XK1KTpq2faq2fNbSRLNeeA4mmQsl8g1Gwl3QnTPlRPb5ljCAa./bbhffcthXxUen4jSFL6HKGQPlHZNQkfA/'
+> > root; useradd -p
+> >
+> '\$6\$5wVybJkbuowR0iMi\$tnEJEEbXbcRfksKRSt7rjlY1hRERrjqFOlCaa0s1ivISxAHT7MFdcnZvVbRHgkqRSYzA1oLUxtR0LuvDTMPR5/'
+> > crane; "
+> 
+> Tried as well. And a \ is added automatically in front of $, so no need to add
+> it. But still not working.
+> There must be something else missing. Anyway to debug in this case?
+>
+
+From testing I have observed that the extrausers does not work from a recipe, while useradd works correctly from a recipe.
+The extrausers should work as expected from within the distribution description, so you might want to try that.
+
+For debugging you could print the bitbake variables to screen (-e) and grep on the EXTRA_USERS_PARAMS.
+
+Hope this is will help you solving the issue.
+
+-- 
+With kind regards,
+
+Jeffrey Simons
+
+Software Engineer
+Royal Boon Edam International B.V.
+
+
+^ permalink raw reply	[flat|nested] 14+ messages in thread
+* Re: [yocto] EXTRA_USERS_PARAMS doesn't work to generate password for root and add new users
+  2023-08-24  5:11             ` Jeffrey Simons
+@ 2023-08-24  5:22               ` Khem Raj
+  2023-08-24  8:20                 ` Mauro Salvini
+  0 siblings, 1 reply; 14+ messages in thread
+From: Khem Raj @ 2023-08-24  5:22 UTC (permalink / raw)
+  To: Jeffrey Simons; +Cc: yocto
+
+On Wed, Aug 23, 2023 at 10:11 PM Jeffrey Simons
+<jeffrey.simons@boonedam.com> wrote:
+>
+> On Wed, Aug 23, 2023 at 03:50 PM, Crane wrote:
+>
+> >
+> > On Wed, Aug 23, 2023 at 03:45 AM, Mauro wrote:
+> >
+> > >
+> > > You can put the encrypted password (the result of the "openssl passwd -6
+> > > root" command) directly in the variable, taking care to put a "\" before
+> > > the three "$" contained in the string. Something like this:
+> > >
+> > > EXTRA_USERS_PARAMS=" usermod -p
+> > >
+> > '\$6\$CEM0hANiVS9VXN8N\$Q9XK1KTpq2faq2fNbSRLNeeA4mmQsl8g1Gwl3QnTPlRPb5ljCAa./bbhffcthXxUen4jSFL6HKGQPlHZNQkfA/'
+> > > root; useradd -p
+> > >
+> > '\$6\$5wVybJkbuowR0iMi\$tnEJEEbXbcRfksKRSt7rjlY1hRERrjqFOlCaa0s1ivISxAHT7MFdcnZvVbRHgkqRSYzA1oLUxtR0LuvDTMPR5/'
+> > > crane; "
+> >
+> > Tried as well. And a \ is added automatically in front of $, so no need to add
+> > it. But still not working.
+> > There must be something else missing. Anyway to debug in this case?
+> >
+>
+> From testing I have observed that the extrausers does not work from a recipe, while useradd works correctly from a recipe.
+> The extrausers should work as expected from within the distribution description, so you might want to try that.
+>
+> For debugging you could print the bitbake variables to screen (-e) and grep on the EXTRA_USERS_PARAMS.
+>
+
+See this
+
+https://github.com/YoeDistro/yoe-distro/blob/master/conf/projects/rpi4-64/config.conf#L57-L66
+
+you might try something like that in config metadata e.g. local.conf
+
+> Hope this is will help you solving the issue.
+>
+> --
+> With kind regards,
+>
+> Jeffrey Simons
+>
+> Software Engineer
+> Royal Boon Edam International B.V.
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> You automatically follow any topics you start or reply to.
+> View/Reply Online (#60870): https://lists.yoctoproject.org/g/yocto/message/60870
+> Mute This Topic: https://lists.yoctoproject.org/mt/100887124/1997914
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [raj.khem@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 14+ messages in thread
+* Re: [yocto] EXTRA_USERS_PARAMS doesn't work to generate password for root and add new users
+  2023-08-24  5:22               ` [yocto] " Khem Raj
+@ 2023-08-24  8:20                 ` Mauro Salvini
+  2023-08-27  3:26                   ` Crane
+  0 siblings, 1 reply; 14+ messages in thread
+From: Mauro Salvini @ 2023-08-24  8:20 UTC (permalink / raw)
+  To: yocto
+
+On 24/08/23 07:22, Khem Raj wrote:
+> On Wed, Aug 23, 2023 at 10:11 PM Jeffrey Simons
+> <jeffrey.simons@boonedam.com> wrote:
+>>
+>> On Wed, Aug 23, 2023 at 03:50 PM, Crane wrote:
+>>
+>>>
+>>> On Wed, Aug 23, 2023 at 03:45 AM, Mauro wrote:
+>>>
+>>>>
+>>>> You can put the encrypted password (the result of the "openssl passwd -6
+>>>> root" command) directly in the variable, taking care to put a "\" before
+>>>> the three "$" contained in the string. Something like this:
+>>>>
+>>>> EXTRA_USERS_PARAMS=" usermod -p
+>>>>
+>>> '\$6\$CEM0hANiVS9VXN8N\$Q9XK1KTpq2faq2fNbSRLNeeA4mmQsl8g1Gwl3QnTPlRPb5ljCAa./bbhffcthXxUen4jSFL6HKGQPlHZNQkfA/'
+>>>> root; useradd -p
+>>>>
+>>> '\$6\$5wVybJkbuowR0iMi\$tnEJEEbXbcRfksKRSt7rjlY1hRERrjqFOlCaa0s1ivISxAHT7MFdcnZvVbRHgkqRSYzA1oLUxtR0LuvDTMPR5/'
+>>>> crane; "
+>>>
+>>> Tried as well. And a \ is added automatically in front of $, so no need to add
+>>> it. But still not working.
+>>> There must be something else missing. Anyway to debug in this case?
+>>>
+>>
+>>  From testing I have observed that the extrausers does not work from a recipe, while useradd works correctly from a recipe.
+>> The extrausers should work as expected from within the distribution description, so you might want to try that.
+>>
+>> For debugging you could print the bitbake variables to screen (-e) and grep on the EXTRA_USERS_PARAMS.
+>>
+> 
+> See this
+> 
+> https://github.com/YoeDistro/yoe-distro/blob/master/conf/projects/rpi4-64/config.conf#L57-L66
+> 
+> you might try something like that in config metadata e.g. local.conf
+> 
+>> Hope this is will help you solving the issue.
+>>
+>> --
+>> With kind regards,
+>>
+>> Jeffrey Simons
+>>
+>> Software Engineer
+>> Royal Boon Edam International B.V.
+>>
+
+Hi all,
+
+I did some tests on a Yocto Kirkstone using qemux86-64.
+
+I can confirm that:
+
+- using extrausers class in local.conf (as pointed out by Khem) works 
+properly
+
+   INHERIT += "extrausers"
+   EXTRA_USERS_PARAMS = "useradd -p '$(openssl passwd -6 crane)' crane;"
+
+   OR (escaped cyphered password)
+
+   INHERIT += "extrausers"
+   EXTRA_USERS_PARAMS = "useradd -p 
+'\$6\$z6vHqLrwnkHbcf5n\$0Fod3ijjV0XcGLYJm.EcomRXsL63p3ntbmznEjp7FHQq4sDtd/YFcAbw5Dg4/iQAsAyee7YG5/LNTe4nCwxzg1' 
+crane;"
+
+- using extrausers class in image recipe works properly
+
+   inherit extrausers
+   EXTRA_USERS_PARAMS = "useradd -p '$(openssl passwd -6 crane)' crane;"
+
+   OR (escaped cyphered password)
+
+   inherit extrausers
+   MY_PASSWORD = 
+"$6$jAB6jLC45xV7v9yY$nZS7WymiLb1152aV51mYDc0RNctmYi9M0xS9bkXUCIafCGQ/EyIp76.kltVKWt5U4YjHkTOGymP7OJ6p9DVpN."
+   EXTRA_USERS_PARAMS = "useradd -p '${MY_PASSWORD}' crane;"
+
+- using useradd class in a recipe works
+
+   inherit useradd
+   DEPENDS += "openssl-native"
+   USERADD_PARAM:${PN}-user3 = "-u 1202 -d /home/user3 -r -s /bin/sh -p 
+'$(openssl passwd -6 user3)' user3"
+
+   OR (escaped cyphered password)
+
+   inherit useradd
+   USERADD_PARAM:${PN}-user3 = "-u 1202 -d /home/user3 -r -s /bin/sh -p 
+'\$6\$bblNDDxePa6LNBbE\$3P5MkG2pUFY1TI1A2Y9CXjA83gvnrO7UMQkcWOEOO7MN4ESJHG7wqfiYWOeHPGZSEKM5/3bcMHDsDBfxpZKRv1' 
+user3"
+
+The only thing to pay attention to is to add
+
+   DEPENDS += "openssl-native"
+
+in the recipe in case the openssl form is used.
+
+To Crane: please try to build the image and test it, don't stop at Yocto 
+variables analysis step.
+
+regards
+
+[1] 
+https://docs.yoctoproject.org/ref-manual/classes.html?highlight=useradd#extrausers
+
+-- 
+Mauro Salvini | KOAN sas | Bergamo - Italia
+embedded software engineering
+http://KoanSoftware.com
+
+
+
+^ permalink raw reply	[flat|nested] 14+ messages in thread
+* Re: EXTRA_USERS_PARAMS doesn't work to generate password for root and add new users
+  2023-08-24  8:20                 ` Mauro Salvini
+@ 2023-08-27  3:26                   ` Crane
+  2023-08-29  7:08                     ` [yocto] " Mauro Salvini
+  0 siblings, 1 reply; 14+ messages in thread
+From: Crane @ 2023-08-27  3:26 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 734 bytes --]
+
+On Thu, Aug 24, 2023 at 04:21 AM, Mauro wrote:
+
+> 
+> To Crane: please try to build the image and test it, don't stop at Yocto
+> variables analysis step.
+
+Thanks Mauro so much.
+
+Indeed, it is not relevant the value of the variable, but where it is assigned.
+It doesn't work to assign these values in image recipe, but works in local.conf.
+
+I am wondering what's the different in assigning the value in different locations. Maybe it is relevant to the building sequence. If it is assigned later, it is useless. Is there any rule to follow? Or it is just from experience?
+
+Another question I think of is how you guys source control local.conf. It looks it might be much different from project to project.
+
+Thanks!
+Crane
+
+[-- Attachment #2: Type: text/html, Size: 792 bytes --]
+
+^ permalink raw reply	[flat|nested] 14+ messages in thread
+* Re: [yocto] EXTRA_USERS_PARAMS doesn't work to generate password for root and add new users
+  2023-08-27  3:26                   ` Crane
+@ 2023-08-29  7:08                     ` Mauro Salvini
+  2023-09-01 14:46                       ` Crane
+  0 siblings, 1 reply; 14+ messages in thread
+From: Mauro Salvini @ 2023-08-29  7:08 UTC (permalink / raw)
+  To: yocto
+
+On 27/08/23 05:26, Crane wrote:
+> On Thu, Aug 24, 2023 at 04:21 AM, Mauro wrote:
+> 
+>     To Crane: please try to build the image and test it, don't stop at
+>     Yocto variables analysis step.
+> 
+> Thanks Mauro so much.
+> 
+> Indeed, it is not relevant the value of the variable, but where it is 
+> assigned.
+> It doesn't work to assign these values in image recipe, but works in 
+> local.conf.
+> 
+
+extrausers class (and then EXTRA_USERS_PARAMS) works both in image 
+recipe and in local.conf, both with the openssl command and with the 
+ciphered password.
+
+> I am wondering what's the different in assigning the value in different 
+> locations. Maybe it is relevant to the building sequence. If it is 
+> assigned later, it is useless. Is there any rule to follow? Or it is 
+> just from experience?
+> 
+
+extrauser class is designed to add or modify users at image level, then 
+it must be used in image recipes or in a .conf file. [1]
+
+useradd class is designed to create users at package level, then it must 
+be used in normal (not image) recipes only. [2]
+
+[1] https://docs.yoctoproject.org/ref-manual/classes.html#extrausers
+[2] https://docs.yoctoproject.org/ref-manual/classes.html#useradd
+
+> Another question I think of is how you guys source control local.conf. 
+> It looks it might be much different from project to project.
+> 
+> Thanks!
+> Crane
+
+-- 
+Mauro Salvini | KOAN sas | Bergamo - Italia
+embedded software engineering
+✆:+39 351-9518710
+http://KoanSoftware.com
+
+
+
+^ permalink raw reply	[flat|nested] 14+ messages in thread
+* Re: EXTRA_USERS_PARAMS doesn't work to generate password for root and add new users
+  2023-08-29  7:08                     ` [yocto] " Mauro Salvini
+@ 2023-09-01 14:46                       ` Crane
+  0 siblings, 0 replies; 14+ messages in thread
+From: Crane @ 2023-09-01 14:46 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 949 bytes --]
+
+On Tue, Aug 29, 2023 at 03:08 AM, Mauro wrote:
+
+> 
+> extrauser class is designed to add or modify users at image level, then it
+> must be used in image recipes or in a .conf file. [1]
+> 
+> useradd class is designed to create users at package level, then it must
+> be used in normal (not image) recipes only. [2]
+> 
+> [1] https://docs.yoctoproject.org/ref-manual/classes.html#extrausers
+> [2] https://docs.yoctoproject.org/ref-manual/classes.html#useradd
+
+Thanks Manro for sharing these links. Now I see a big pool of classes that can be used.
+
+Eventually I found that why it doesn't work for me to add EXTRA_USER_PARAMS in image recipe is that I used this line: INHERIT += "extrausers"
+instead of this line: inherit extrausers
+to use the class extrausers.
+
+But at the beginning there was an error when using "inherit extrauser". Now it works fine. I couldn't figure out why. But anyway it works this way now.
+
+Regards,
+Crane
+
+[-- Attachment #2: Type: text/html, Size: 1242 bytes --]
+
+^ permalink raw reply	[flat|nested] 14+ messages in thread
+end of thread, other threads:[~2023-09-01 14:46 UTC | newest]
+
+Thread overview: 14+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-08-22  1:58 EXTRA_USERS_PARAMS doesn't work to generate password for root and add new users Crane
+2023-08-22  6:58 ` [yocto] " Mauro Salvini
+2023-08-22 15:16   ` Crane
+2023-08-22 15:33     ` Crane
+2023-08-22 15:36     ` [yocto] " Mauro Salvini
+2023-08-22 16:00       ` Crane
+2023-08-23  7:45         ` [yocto] " Mauro Salvini
+2023-08-23 13:50           ` Crane
+2023-08-24  5:11             ` Jeffrey Simons
+2023-08-24  5:22               ` [yocto] " Khem Raj
+2023-08-24  8:20                 ` Mauro Salvini
+2023-08-27  3:26                   ` Crane
+2023-08-29  7:08                     ` [yocto] " Mauro Salvini
+2023-09-01 14:46                       ` Crane
+

@@ -1,0 +1,152 @@
+* [meta-security][PATCH] checksecurity: update to 2.0.16
+@ 2023-04-02 19:59 Armin Kuster
+  0 siblings, 0 replies; only message in thread
+From: Armin Kuster @ 2023-04-02 19:59 UTC (permalink / raw)
+  To: yocto
+
+Drop setuid-log-folder.patch, using sed instead.
+Refresh patch check-setuid-use-more-portable-find-args.patch
+
+Signed-off-by: Armin Kuster <akuster808@gmail.com>
+---
+ ...rity_2.0.15.bb => checksecurity_2.0.16.bb} | 18 +++++--
+ ...k-setuid-use-more-portable-find-args.patch | 16 +++---
+ .../files/setuid-log-folder.patch             | 52 -------------------
+ 3 files changed, 21 insertions(+), 65 deletions(-)
+ rename dynamic-layers/meta-perl/recipes-scanners/checksecurity/{checksecurity_2.0.15.bb => checksecurity_2.0.16.bb} (57%)
+ delete mode 100644 dynamic-layers/meta-perl/recipes-scanners/checksecurity/files/setuid-log-folder.patch
+
+diff --git a/dynamic-layers/meta-perl/recipes-scanners/checksecurity/checksecurity_2.0.15.bb b/dynamic-layers/meta-perl/recipes-scanners/checksecurity/checksecurity_2.0.16.bb
+similarity index 57%
+rename from dynamic-layers/meta-perl/recipes-scanners/checksecurity/checksecurity_2.0.15.bb
+rename to dynamic-layers/meta-perl/recipes-scanners/checksecurity/checksecurity_2.0.16.bb
+index e053a15..8006c9f 100644
+--- a/dynamic-layers/meta-perl/recipes-scanners/checksecurity/checksecurity_2.0.15.bb
++++ b/dynamic-layers/meta-perl/recipes-scanners/checksecurity/checksecurity_2.0.16.bb
+@@ -4,14 +4,22 @@ SECTION = "security"
+ LICENSE = "GPL-2.0-only"
+ LIC_FILES_CHKSUM = "file://${COMMON_LICENSE_DIR}/GPL-2.0-only;md5=801f80980d171dd6425610833a22dbe6"
+ 
+-SRC_URI = "http://ftp.de.debian.org/debian/pool/main/c/checksecurity/checksecurity_${PV}.tar.gz \
+-           file://setuid-log-folder.patch \
+-           file://check-setuid-use-more-portable-find-args.patch"
++SRC_URI = "http://ftp.de.debian.org/debian/pool/main/c/checksecurity/checksecurity_${PV}+nmu1.tar.gz \
++           file://check-setuid-use-more-portable-find-args.patch \
++          "
+ 
+-SRC_URI[md5sum] = "a30161c3e24d3be710b2fd13fcd1f32f"
+-SRC_URI[sha256sum] = "67abe3d6391c96146e96f376d3fd6eb7a9418b0f7fe205b465219889791dba32"
++SRC_URI[sha256sum] = "9803b3760e9ec48e06ebaf48cec081db48c6fe72254a476224e4c5c55ed97fb0"
++
++S = "${WORKDIR}/checksecurity-${PV}+nmu1"
++
++
++# allow for anylocal, no need to patch
++LOGDIR="/etc/checksecurity"
+ 
+ do_compile() {
++    sed -i -e "s;LOGDIR=/var/log/setuid;LOGDIR=${LOGDIR};g" ${B}/etc/check-setuid.conf
++    sed -i -e "s;LOGDIR=/var/log/setuid;LOGDIR=${LOGDIR};g" ${B}/plugins/check-setuid
++    sed -i -e "s;LOGDIR:=/var/log/setuid;LOGDIR:=${LOGDIR};g" ${B}/plugins/check-setuid
+ }
+ 
+ do_install() {
+diff --git a/dynamic-layers/meta-perl/recipes-scanners/checksecurity/files/check-setuid-use-more-portable-find-args.patch b/dynamic-layers/meta-perl/recipes-scanners/checksecurity/files/check-setuid-use-more-portable-find-args.patch
+index f1fe8ed..1a2f364 100644
+--- a/dynamic-layers/meta-perl/recipes-scanners/checksecurity/files/check-setuid-use-more-portable-find-args.patch
++++ b/dynamic-layers/meta-perl/recipes-scanners/checksecurity/files/check-setuid-use-more-portable-find-args.patch
+@@ -8,16 +8,16 @@ Signed-off-by: Christopher Larson <chris_larson@mentor.com>
+  plugins/check-setuid | 6 +++---
+  1 file changed, 3 insertions(+), 3 deletions(-)
+ 
+-Index: checksecurity-2.0.15/plugins/check-setuid
++Index: checksecurity-2.0.16+nmu1/plugins/check-setuid
+ ===================================================================
+---- checksecurity-2.0.15.orig/plugins/check-setuid	2018-09-06 00:49:23.930934294 +0500
+-+++ checksecurity-2.0.15/plugins/check-setuid	2018-09-06 00:49:49.694934757 +0500
+-@@ -99,7 +99,7 @@
+- ionice -t -c3 \
++--- checksecurity-2.0.16+nmu1.orig/plugins/check-setuid
+++++ checksecurity-2.0.16+nmu1/plugins/check-setuid
++@@ -100,7 +100,7 @@ ionice -t -c3 \
+  find `mount | grep -vE "$CHECKSECURITY_FILTER" | cut -d ' ' -f 3` \
++         -ignore_readdir_race  \
+  	-xdev $PATHCHK \
+--	\( -type f -perm +06000 -o \( \( -type b -o -type c \) \
+-+	\( -type f \( -perm -4000 -o -perm -2000 \) -o \( \( -type b -o -type c \) \
++-	\( -type f -perm /06000 -o \( \( -type b -o -type c \) \
+++    \( -type f \( -perm -4000 -o -perm -2000 \) -o \( \( -type b -o -type c \) \	
+  	$DEVCHK \) \) \
+-         -ignore_readdir_race  \
+  	-printf "%8i %5m %3n %-10u %-10g %9s %t %h/%f\n" |
++ 	sort -k 12 >$TMPSETUID
+diff --git a/dynamic-layers/meta-perl/recipes-scanners/checksecurity/files/setuid-log-folder.patch b/dynamic-layers/meta-perl/recipes-scanners/checksecurity/files/setuid-log-folder.patch
+deleted file mode 100644
+index 540ea9c..0000000
+--- a/dynamic-layers/meta-perl/recipes-scanners/checksecurity/files/setuid-log-folder.patch
++++ /dev/null
+@@ -1,52 +0,0 @@
+-From 24dbeec135ff83f2fd35ef12fe9842f02d6fd337 Mon Sep 17 00:00:00 2001
+-From: Andrei Dinu <andrei.adrianx.dinu@intel.com>
+-Date: Thu, 20 Jun 2013 15:14:55 +0300
+-Subject: [PATCH] changed log folder for check-setuid
+-
+-check-setuid was creating logs in /var/log directory,
+-which cannot be created persistently. To avoid errors
+-the log folder was changed to /etc/checksecurity/.
+-
+-Signed-off-by: Andrei Dinu <andrei.adrianx.dinu@intel.com>
+----
+- etc/check-setuid.conf |    2 +-
+- plugins/check-setuid  |    6 +++---
+- 2 files changed, 4 insertions(+), 4 deletions(-)
+-
+-diff --git a/etc/check-setuid.conf b/etc/check-setuid.conf
+-index 621336f..e1532c0 100644
+---- a/etc/check-setuid.conf
+-+++ b/etc/check-setuid.conf
+-@@ -116,4 +116,4 @@ CHECKSECURITY_PATHFILTER="-false"
+- #
+- # Location of setuid file databases. 
+- #
+--LOGDIR=/var/log/setuid
+-+LOGDIR=/etc/checksecurity/
+-diff --git a/plugins/check-setuid b/plugins/check-setuid
+-index 8d6f90b..bdb21c1 100755
+---- a/plugins/check-setuid
+-+++ b/plugins/check-setuid
+-@@ -44,8 +44,8 @@ if [ `/usr/bin/id -u` != 0 ] ; then
+-    exit 1
+- fi
+- 
+--TMPSETUID=${LOGDIR:=/var/log/setuid}/setuid.new.tmp
+--TMPDIFF=${LOGDIR:=/var/log/setuid}/setuid.diff.tmp
+-+TMPSETUID=${LOGDIR:=/etc/checksecurity/}/setuid.new.tmp
+-+TMPDIFF=${LOGDIR:=/etc/checksecurity/}/setuid.diff.tmp
+- 
+- #
+- # Check for NFS/AFS mounts that are not nosuid/nodev
+-@@ -75,7 +75,7 @@ if [ "$CHECKSECURITY_NOFINDERRORS" = "TRUE" ] ; then
+- fi
+- 
+- # Guard against undefined vars
+--[ -z "$LOGDIR" ] && LOGDIR=/var/log/setuid
+-+[ -z "$LOGDIR" ] && LOGDIR=/etc/checksecurity/
+- if [ ! -e "$LOGDIR" ] ; then
+-     echo "ERROR: Log directory $LOGDIR does not exist"
+-     exit 1
+--- 
+-1.7.9.5
+-
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] only message in thread
+only message in thread, other threads:[~2023-04-02 20:00 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-04-02 19:59 [meta-security][PATCH] checksecurity: update to 2.0.16 Armin Kuster
+

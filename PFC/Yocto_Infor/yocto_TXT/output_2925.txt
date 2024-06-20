@@ -1,0 +1,346 @@
+* extrausers-bbclass: plaintext password (since shadow update to 4.9)
+@ 2021-08-30 12:54 Matthias Klein
+  2021-08-30 18:45 ` [yocto] " Markus Volk
+  2021-08-30 20:51 ` Peter Bergin
+  0 siblings, 2 replies; 7+ messages in thread
+From: Matthias Klein @ 2021-08-30 12:54 UTC (permalink / raw)
+  To: yocto
+
+Hello,
+
+I am trying to find a working alternative for the old -P option.
+
+Previous: 
+EXTRA_USERS_PARAMS = "usermod -P toor root;"
+
+The suggestions from this thread don't seem to work: https://lists.openembedded.org/g/openembedded-core/topic/84548199
+
+Current: 
+hash="$(python3 -c "import crypt; print(crypt.crypt('toor', crypt.METHOD_SHA512))")"
+EXTRA_USERS_PARAMS = "usermod -p ${hash} root;"
+
+The hashed password does not seem to be escaped properly in the extrausers-bbclass. The password in the shadow file is missing $ characters.
+
+Is there a way (with the current master branch) to define a password?
+
+Many greetings,
+Matthias
+
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] extrausers-bbclass: plaintext password (since shadow update to 4.9)
+  2021-08-30 12:54 extrausers-bbclass: plaintext password (since shadow update to 4.9) Matthias Klein
+@ 2021-08-30 18:45 ` Markus Volk
+  2021-08-31  7:00   ` Matthias Klein
+  2021-08-30 20:51 ` Peter Bergin
+  1 sibling, 1 reply; 7+ messages in thread
+From: Markus Volk @ 2021-08-30 18:45 UTC (permalink / raw)
+  To: Matthias Klein; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1510 bytes --]
+
+I also have problems with setting passwords in current master branch. I 
+only can provide a hacky workaround. I added the following lines to my 
+image recipe to inject the passwords manually after rootfs creation:
+
+RETRO_USER_PASSWORD ?= "retro"
+ROOT_USER_PASSWORD ?= "root"
+ROOTFS_POSTPROCESS_COMMAND += "set_root_passwd;"
+ROOTFS_POSTPROCESS_COMMAND += "set_retro_passwd;"
+
+set_root_passwd() {
+    ROOTPW_ENCRYPTED="$(openssl passwd -6 -salt xyz ${ROOT_USER_PASSWORD})"
+    sed -i "s%^root:[^:]*:%root:${ROOTPW_ENCRYPTED}:%" 
+${IMAGE_ROOTFS}/etc/shadow
+}
+
+set_retro_passwd() {
+    RETROPW_ENCRYPTED="$(openssl passwd -6 -salt xyz 
+${RETRO_USER_PASSWORD})"
+    sed -i "s%^retro:[^:]*:%retro:${RETROPW_ENCRYPTED}:%" 
+${IMAGE_ROOTFS}/etc/shadow
+}
+
+
+Am 30.08.21 um 14:54 schrieb Matthias Klein:
+> Hello,
+>
+> I am trying to find a working alternative for the old -P option.
+>
+> Previous:
+> EXTRA_USERS_PARAMS = "usermod -P toor root;"
+>
+> The suggestions from this thread don't seem to work: https://lists.openembedded.org/g/openembedded-core/topic/84548199
+>
+> Current:
+> hash="$(python3 -c "import crypt; print(crypt.crypt('toor', crypt.METHOD_SHA512))")"
+> EXTRA_USERS_PARAMS = "usermod -p ${hash} root;"
+>
+> The hashed password does not seem to be escaped properly in the extrausers-bbclass. The password in the shadow file is missing $ characters.
+>
+> Is there a way (with the current master branch) to define a password?
+>
+> Many greetings,
+> Matthias
+>
+>
+> 
+>
+
+[-- Attachment #2: Type: text/html, Size: 2311 bytes --]
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] extrausers-bbclass: plaintext password (since shadow update to 4.9)
+  2021-08-30 12:54 extrausers-bbclass: plaintext password (since shadow update to 4.9) Matthias Klein
+  2021-08-30 18:45 ` [yocto] " Markus Volk
+@ 2021-08-30 20:51 ` Peter Bergin
+  2021-08-31  7:03   ` Matthias Klein
+  1 sibling, 1 reply; 7+ messages in thread
+From: Peter Bergin @ 2021-08-30 20:51 UTC (permalink / raw)
+  To: Matthias Klein, yocto
+
+On 2021-08-30 14:54, Matthias Klein wrote:
+
+> Hello,
+>
+> I am trying to find a working alternative for the old -P option.
+>
+> Previous:
+> EXTRA_USERS_PARAMS = "usermod -P toor root;"
+>
+> The suggestions from this thread don't seem to work: https://lists.openembedded.org/g/openembedded-core/topic/84548199
+>
+> Current:
+> hash="$(python3 -c "import crypt; print(crypt.crypt('toor', crypt.METHOD_SHA512))")"
+> EXTRA_USERS_PARAMS = "usermod -p ${hash} root;"
+>
+> The hashed password does not seem to be escaped properly in the extrausers-bbclass. The password in the shadow file is missing $ characters.
+>
+> Is there a way (with the current master branch) to define a password?
+>
+>
+You have to escape the password string in the recipe. Use '\\\$' to 
+escape the '$' token. There are some levels of evaluation of the 
+expression and that's the reason for multiple '\'. Just iterate until 
+you have the correct string in the shadow file, also check the 
+log.do_rootfs where you can see the parameters to usermod.
+
+/Peter
+
+
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] extrausers-bbclass: plaintext password (since shadow update to 4.9)
+  2021-08-30 18:45 ` [yocto] " Markus Volk
+@ 2021-08-31  7:00   ` Matthias Klein
+  0 siblings, 0 replies; 7+ messages in thread
+From: Matthias Klein @ 2021-08-31  7:00 UTC (permalink / raw)
+  To: Markus Volk; +Cc: yocto
+
+Hello Markus,
+
+thanks for the workaround!
+Works great.
+
+Many greetings,
+Matthias
+
+
+Von: Markus Volk <f_l_k@t-online.de> 
+Gesendet: Montag, 30. August 2021 20:46
+An: Matthias Klein <matthias.klein@optimeas.de>
+Cc: yocto@lists.yoctoproject.org
+Betreff: Re: [yocto] extrausers-bbclass: plaintext password (since shadow update to 4.9)
+
+I also have problems with setting passwords in current master branch. I only can provide a hacky workaround. I added the following lines to my image recipe to inject the passwords manually after rootfs creation:
+
+RETRO_USER_PASSWORD ?= "retro"
+ROOT_USER_PASSWORD ?= "root"
+ROOTFS_POSTPROCESS_COMMAND += "set_root_passwd;"
+ROOTFS_POSTPROCESS_COMMAND += "set_retro_passwd;"
+
+set_root_passwd() {
+   ROOTPW_ENCRYPTED="$(openssl passwd -6 -salt xyz ${ROOT_USER_PASSWORD})"
+   sed -i "s%^root:[^:]*:%root:${ROOTPW_ENCRYPTED}:%" ${IMAGE_ROOTFS}/etc/shadow
+}
+
+set_retro_passwd() {
+   RETROPW_ENCRYPTED="$(openssl passwd -6 -salt xyz ${RETRO_USER_PASSWORD})"
+   sed -i "s%^retro:[^:]*:%retro:${RETROPW_ENCRYPTED}:%" ${IMAGE_ROOTFS}/etc/shadow
+}
+
+Am 30.08.21 um 14:54 schrieb Matthias Klein:
+Hello,
+
+I am trying to find a working alternative for the old -P option.
+
+Previous: 
+EXTRA_USERS_PARAMS = "usermod -P toor root;"
+
+The suggestions from this thread don't seem to work: https://lists.openembedded.org/g/openembedded-core/topic/84548199
+
+Current: 
+hash="$(python3 -c "import crypt; print(crypt.crypt('toor', crypt.METHOD_SHA512))")"
+EXTRA_USERS_PARAMS = "usermod -p ${hash} root;"
+
+The hashed password does not seem to be escaped properly in the extrausers-bbclass. The password in the shadow file is missing $ characters.
+
+Is there a way (with the current master branch) to define a password?
+
+Many greetings,
+Matthias
+
+
+
+
+
+
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] extrausers-bbclass: plaintext password (since shadow update to 4.9)
+  2021-08-30 20:51 ` Peter Bergin
+@ 2021-08-31  7:03   ` Matthias Klein
+  2021-08-31  7:45     ` Peter Bergin
+  0 siblings, 1 reply; 7+ messages in thread
+From: Matthias Klein @ 2021-08-31  7:03 UTC (permalink / raw)
+  To: Peter Bergin, yocto
+
+Hello Peter,
+
+I have already tried many things to pass the hash escaped to the extrausers-bbclass.
+
+But I have not found a way to set the password with EXTRA_USERS_PARAMS.
+Do you know a working variant?
+
+Many greetings,
+Matthias
+
+-----Ursprüngliche Nachricht-----
+Von: Peter Bergin <peter@berginkonsult.se> 
+Gesendet: Montag, 30. August 2021 22:52
+An: Matthias Klein <matthias.klein@optimeas.de>; yocto@lists.yoctoproject.org
+Betreff: Re: [yocto] extrausers-bbclass: plaintext password (since shadow update to 4.9)
+
+On 2021-08-30 14:54, Matthias Klein wrote:
+
+> Hello,
+>
+> I am trying to find a working alternative for the old -P option.
+>
+> Previous:
+> EXTRA_USERS_PARAMS = "usermod -P toor root;"
+>
+> The suggestions from this thread don't seem to work: 
+> https://lists.openembedded.org/g/openembedded-core/topic/84548199
+>
+> Current:
+> hash="$(python3 -c "import crypt; print(crypt.crypt('toor', crypt.METHOD_SHA512))")"
+> EXTRA_USERS_PARAMS = "usermod -p ${hash} root;"
+>
+> The hashed password does not seem to be escaped properly in the extrausers-bbclass. The password in the shadow file is missing $ characters.
+>
+> Is there a way (with the current master branch) to define a password?
+>
+>
+You have to escape the password string in the recipe. Use '\\\$' to escape the '$' token. There are some levels of evaluation of the expression and that's the reason for multiple '\'. Just iterate until you have the correct string in the shadow file, also check the log.do_rootfs where you can see the parameters to usermod.
+
+/Peter
+
+
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] extrausers-bbclass: plaintext password (since shadow update to 4.9)
+  2021-08-31  7:03   ` Matthias Klein
+@ 2021-08-31  7:45     ` Peter Bergin
+  2021-08-31 12:48       ` Matthias Klein
+  0 siblings, 1 reply; 7+ messages in thread
+From: Peter Bergin @ 2021-08-31  7:45 UTC (permalink / raw)
+  To: Matthias Klein, yocto
+
+Hi Matthias,
+
+On 2021-08-31 09:03, Matthias Klein wrote:
+> But I have not found a way to set the password with EXTRA_USERS_PARAMS.
+> Do you know a working variant?
+
+Is it a requirement that you need to regenerate the hash on every build? 
+If not one solution can be:
+
+     inherit extrausers
+
+     #
+     # HASH generated with this command:
+     # python3 -c "import crypt; print(crypt.crypt('toor', 
+crypt.METHOD_SHA512))"
+     #
+     HASH = 
+"\\\$6\\\$8Z5vMcqCIB19PgY8\\\$Sv4kAfsH1k.SANHL5JVb6hdqmQWHOeH0Rjrjyii7fGAK20Gclj/.qiBvUPnAfh.WSsr1.XV0pUNom2L9oYYDV/"
+
+     EXTRA_USERS_PARAMS = " \
+        usermod -p ${HASH} root; \
+     "
+
+Best regards,
+/Peter
+
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+* Re: [yocto] extrausers-bbclass: plaintext password (since shadow update to 4.9)
+  2021-08-31  7:45     ` Peter Bergin
+@ 2021-08-31 12:48       ` Matthias Klein
+  0 siblings, 0 replies; 7+ messages in thread
+From: Matthias Klein @ 2021-08-31 12:48 UTC (permalink / raw)
+  To: Peter Bergin, yocto
+
+Hello Peter,
+
+thanks for the solution!
+
+Many greetings,
+Matthias
+
+-----Ursprüngliche Nachricht-----
+Von: Peter Bergin <peter@berginkonsult.se> 
+Gesendet: Dienstag, 31. August 2021 09:45
+An: Matthias Klein <matthias.klein@optimeas.de>; yocto@lists.yoctoproject.org
+Betreff: Re: [yocto] extrausers-bbclass: plaintext password (since shadow update to 4.9)
+
+Hi Matthias,
+
+On 2021-08-31 09:03, Matthias Klein wrote:
+> But I have not found a way to set the password with EXTRA_USERS_PARAMS.
+> Do you know a working variant?
+
+Is it a requirement that you need to regenerate the hash on every build? 
+If not one solution can be:
+
+     inherit extrausers
+
+     #
+     # HASH generated with this command:
+     # python3 -c "import crypt; print(crypt.crypt('toor', crypt.METHOD_SHA512))"
+     #
+     HASH =
+"\\\$6\\\$8Z5vMcqCIB19PgY8\\\$Sv4kAfsH1k.SANHL5JVb6hdqmQWHOeH0Rjrjyii7fGAK20Gclj/.qiBvUPnAfh.WSsr1.XV0pUNom2L9oYYDV/"
+
+     EXTRA_USERS_PARAMS = " \
+        usermod -p ${HASH} root; \
+     "
+
+Best regards,
+/Peter
+
+
+^ permalink raw reply	[flat|nested] 7+ messages in thread
+end of thread, other threads:[~2021-08-31 12:48 UTC | newest]
+
+Thread overview: 7+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-08-30 12:54 extrausers-bbclass: plaintext password (since shadow update to 4.9) Matthias Klein
+2021-08-30 18:45 ` [yocto] " Markus Volk
+2021-08-31  7:00   ` Matthias Klein
+2021-08-30 20:51 ` Peter Bergin
+2021-08-31  7:03   ` Matthias Klein
+2021-08-31  7:45     ` Peter Bergin
+2021-08-31 12:48       ` Matthias Klein
+

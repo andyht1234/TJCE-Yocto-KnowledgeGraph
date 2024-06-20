@@ -1,0 +1,108 @@
+* openssh not working since updating to kernel 5.15
+@ 2023-02-13  9:02 gcblair
+       [not found] ` <1b153bce-a66a-45ee-a5c6-963ea6fb1c82.949ef384-8293-46b8-903f-40a477c056ae.c9c9fbe7-0137-413c-bb60-76e468a5ee32@emailsignatures365.codetwo.com>
+  0 siblings, 1 reply; 2+ messages in thread
+From: gcblair @ 2023-02-13  9:02 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 503 bytes --]
+
+Hi,
+
+We updated our kernel from 4.x to 5.15 and for some reason openssh has stopped working
+
+We see that sshd.socket is running but not sshd@.service
+When I run sshd manually I cannot connect
+Everything else seems fine - no error messages
+
+The only thing I changed was the kernel version but I cant seem to understand how that could affect something like openssh
+This is how I added opnessh:
+IMAGE_FEATURES += "ssh-server-openssh package-management tools-debug"
+
+Would apprecaite any help!
+
+[-- Attachment #2: Type: text/html, Size: 629 bytes --]
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+* Re: [yocto] openssh not working since updating to kernel 5.15
+       [not found] ` <1b153bce-a66a-45ee-a5c6-963ea6fb1c82.949ef384-8293-46b8-903f-40a477c056ae.c9c9fbe7-0137-413c-bb60-76e468a5ee32@emailsignatures365.codetwo.com>
+@ 2023-02-15  7:59   ` Mike Looijmans
+  0 siblings, 0 replies; 2+ messages in thread
+From: Mike Looijmans @ 2023-02-15  7:59 UTC (permalink / raw)
+  To: yocto
+
+Bumped against similar issues with ssh servers (also dropbear) and the problem 
+turned out to be a "lack of entropy".
+
+It takes the ssh server up to several minutes to initialize on an embedded 
+system, because there's no source of randomness and /dev/random just blocks.
+
+When you connect to such a system with SSH, everything is fine, no errors, but 
+the connection won't show any activity for a long time.
+
+
+You can speed it up by writing some random strings to /dev/random.
+
+A quick workaround is to just add "haveged" to your image. That creates an 
+entropy source based on CPU characteristics, which is questionable from a 
+security point of view. A secure workaround would be to have an actual 
+hardware random number generator on board somewhere.
+
+--
+M.
+
+
+
+Met vriendelijke groet / kind regards,
+
+Mike Looijmans
+System Expert
+
+
+TOPIC Embedded Products B.V.
+Materiaalweg 4, 5681 RJ Best
+The Netherlands
+
+T: +31 (0) 499 33 69 69
+E: mike.looijmans@topicproducts.com
+W: www.topic.nl
+
+Please consider the environment before printing this e-mail
+On 13-02-2023 10:02, gcblair via lists.yoctoproject.org wrote:
+> Hi,
+> 
+> We updated our kernel from 4.x to 5.15 and for some reason openssh has stopped 
+> working
+> 
+> We see that sshd.socket is running but not sshd@.service <mailto:sshd@.service>
+> When I run sshd manually I cannot connect
+> Everything else seems fine - no error messages
+> 
+> The only thing I changed was the kernel version but I cant seem to understand 
+> how that could affect something like openssh
+> This is how I added opnessh:
+> IMAGE_FEATURES += "ssh-server-openssh package-management tools-debug"
+> 
+> Would apprecaite any help!
+> 
+> 
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#59213): https://lists.yoctoproject.org/g/yocto/message/59213
+> Mute This Topic: https://lists.yoctoproject.org/mt/96932170/3618446
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [mike.looijmans@topic.nl]
+> -=-=-=-=-=-=-=-=-=-=-=-
+> 
+
+
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2023-02-15  8:00 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-02-13  9:02 openssh not working since updating to kernel 5.15 gcblair
+     [not found] ` <1b153bce-a66a-45ee-a5c6-963ea6fb1c82.949ef384-8293-46b8-903f-40a477c056ae.c9c9fbe7-0137-413c-bb60-76e468a5ee32@emailsignatures365.codetwo.com>
+2023-02-15  7:59   ` [yocto] " Mike Looijmans
+

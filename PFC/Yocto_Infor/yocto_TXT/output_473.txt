@@ -1,0 +1,276 @@
+* Facing issue with new repo build in yocto
+@ 2023-06-16  6:43 Prashant Badsheshi
+  2023-06-16 16:53 ` [yocto] " Trevor Gamblin
+  0 siblings, 1 reply; 2+ messages in thread
+From: Prashant Badsheshi @ 2023-06-16  6:43 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2272 bytes --]
+
+Added a new repo/recipe called “displayport”, please find the bb file
+pasted below.
+
+Did a “devtool modify displayport”. Got the displayport folder in my local
+workspace/sources/.
+
+Added the required meson.build, source and header filles.
+
+
+
+Able to build it using command “bitbake displayport”.
+
+
+
+But it is not building when I do a full build using “bitabke
+obmc-phospor-image”.
+
+It seems like it is not picking up the displayport repo/recipe when I do
+full build.
+
+
+
+Can you help here to understand what is the problem?
+
+
+
+Thanks,
+
+Prashant
+
+
+
+
+
+/meta-hpe/meta-ilo/recipes-hpe/displayport$ ls
+
+displayport_git.bb
+
+
+
+meta-hpe/meta-ilo/recipes-hpe/displayport$ cat displayport_git.bb
+
+
+
+# Package summary
+
+
+
+SUMMARY = "Display Port VAS"
+
+
+
+LICENSE = "CLOSED"
+
+
+
+BRANCH = "${BRANCH_DISPLAYPORT}"
+
+SRCREV = "${SRCREV_DISPLAYPORT}"
+
+SRC_URI = "git://
+git@github.hpe.com/Cornerstone/displayport.git;protocol=ssh;branch=${BRANCH}
+"
+
+
+
+SYSTEMD_SERVICE_${PN} += "com.hpe.bmc.dp.service"
+
+
+
+DEPENDS += " libmemmap libutils libfyi systemd svcsilo"
+
+
+
+RDEPENDS_${PN} = "systemd libutils libfyi libmemmap svcsilo"
+
+
+
+S= "${WORKDIR}/git"
+
+PV = "1.0+git"
+
+
+
+#inherit ilo-meson systemd
+
+inherit meson systemd
+
+
+
+MESON_BUILDTYPE_hpe-dbg = "debug"
+
+
+
+
+
+ws/work/myopenbmc_jemu64_6apr$ git diff
+
+diff --git a/meta-hpe/meta-ilo/conf/distro/include/ilo-src-revs.inc
+b/meta-hpe/meta-ilo/conf/distro/include/ilo-src-revs.inc
+
+index 42f695ae32..f017bfd326 100644
+
+--- a/meta-hpe/meta-ilo/conf/distro/include/ilo-src-revs.inc
+
++++ b/meta-hpe/meta-ilo/conf/distro/include/ilo-src-revs.inc
+
+@@ -46,6 +46,7 @@ SRCREV_VIRTUAL_MEDIA          = "${AUTOREV}"
+
+SRCREV_GXP_FRU_DEVICE         = "${AUTOREV}"
+
+SRCREV_GXP_DBUS_SENSORS       = "${AUTOREV}"
+
+SRCREV_RESTSERVER             = "${AUTOREV}"
+
++SRCREV_DISPLAYPORT            = "${AUTOREV}"
+
+
+
+#List down the branches of various recipes here
+
+BRANCH_GXP2_BOOTBLOCK         = "main"
+
+@@ -92,3 +93,4 @@ BRANCH_VIRTUAL_MEDIA          = "main"
+
+BRANCH_GXP_FRU_DEVICE         = "main"
+
+BRANCH_GXP_DBUS_SENSORS       = "main"
+
+BRANCH_RESTSERVER             = "main"
+
++BRANCH_DISPLAYPORT            = "main"
+
+[-- Attachment #2: Type: text/html, Size: 9664 bytes --]
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+* Re: [yocto] Facing issue with new repo build in yocto
+  2023-06-16  6:43 Facing issue with new repo build in yocto Prashant Badsheshi
+@ 2023-06-16 16:53 ` Trevor Gamblin
+  0 siblings, 0 replies; 2+ messages in thread
+From: Trevor Gamblin @ 2023-06-16 16:53 UTC (permalink / raw)
+  To: Prashant Badsheshi, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2845 bytes --]
+
+
+On 2023-06-16 02:43, Prashant Badsheshi wrote:
+>
+>
+> Added a new repo/recipe called “displayport”, please find the bb file 
+> pasted below.
+>
+> Did a “devtool modify displayport”. Got the displayport folder in my 
+> local workspace/sources/.
+>
+> Added the required meson.build, source and header filles.
+>
+> Able to build it using command “bitbake displayport”.
+>
+> But it is not building when I do a full build using “bitabke 
+> obmc-phospor-image”.
+>
+> It seems like it is not picking up the displayport repo/recipe when I 
+> do full build.
+>
+> Can you help here to understand what is the problem?
+>
+Have you added IMAGE_INSTALL:append = " displayport" to your 
+conf/local.conf file?
+>
+> Thanks,
+>
+> Prashant
+>
+> /meta-hpe/meta-ilo/recipes-hpe/displayport$ ls
+>
+> displayport_git.bb <http://displayport_git.bb>
+>
+> meta-hpe/meta-ilo/recipes-hpe/displayport$ cat displayport_git.bb 
+> <http://displayport_git.bb>
+>
+> # Package summary
+>
+> SUMMARY = "Display Port VAS"
+>
+> LICENSE = "CLOSED"
+>
+> BRANCH = "${BRANCH_DISPLAYPORT}"
+>
+> SRCREV = "${SRCREV_DISPLAYPORT}"
+>
+> SRC_URI = 
+> "git://git@github.hpe.com/Cornerstone/displayport.git;protocol=ssh;branch=${BRANCH} 
+> <http://git@github.hpe.com/Cornerstone/displayport.git;protocol=ssh;branch=${BRANCH}>"
+>
+> SYSTEMD_SERVICE_${PN} += "com.hpe.bmc.dp.service"
+>
+> DEPENDS += " libmemmap libutils libfyi systemd svcsilo"
+>
+> RDEPENDS_${PN} = "systemd libutils libfyi libmemmap svcsilo"
+>
+> S= "${WORKDIR}/git"
+>
+> PV = "1.0+git"
+>
+> #inherit ilo-meson systemd
+>
+> inherit meson systemd
+>
+> MESON_BUILDTYPE_hpe-dbg = "debug"
+>
+> ws/work/myopenbmc_jemu64_6apr$ git diff
+>
+> diff --git a/meta-hpe/meta-ilo/conf/distro/include/ilo-src-revs.inc 
+> b/meta-hpe/meta-ilo/conf/distro/include/ilo-src-revs.inc
+>
+> index 42f695ae32..f017bfd326 100644
+>
+> --- a/meta-hpe/meta-ilo/conf/distro/include/ilo-src-revs.inc
+>
+> +++ b/meta-hpe/meta-ilo/conf/distro/include/ilo-src-revs.inc
+>
+> @@ -46,6 +46,7 @@ SRCREV_VIRTUAL_MEDIA = "${AUTOREV}"
+>
+> SRCREV_GXP_FRU_DEVICE = "${AUTOREV}"
+>
+> SRCREV_GXP_DBUS_SENSORS = "${AUTOREV}"
+>
+> SRCREV_RESTSERVER = "${AUTOREV}"
+>
+> +SRCREV_DISPLAYPORT = "${AUTOREV}"
+>
+> #List down the branches of various recipes here
+>
+> BRANCH_GXP2_BOOTBLOCK = "main"
+>
+> @@ -92,3 +93,4 @@ BRANCH_VIRTUAL_MEDIA          = "main"
+>
+> BRANCH_GXP_FRU_DEVICE = "main"
+>
+> BRANCH_GXP_DBUS_SENSORS = "main"
+>
+> BRANCH_RESTSERVER = "main"
+>
+> +BRANCH_DISPLAYPORT = "main"
+>
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#60326):https://lists.yoctoproject.org/g/yocto/message/60326
+> Mute This Topic:https://lists.yoctoproject.org/mt/99574226/7611679
+> Group Owner:yocto+owner@lists.yoctoproject.org
+> Unsubscribe:https://lists.yoctoproject.org/g/yocto/unsub  [tgamblin@baylibre.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+[-- Attachment #2: Type: text/html, Size: 13484 bytes --]
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2023-06-16 16:53 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-06-16  6:43 Facing issue with new repo build in yocto Prashant Badsheshi
+2023-06-16 16:53 ` [yocto] " Trevor Gamblin
+

@@ -1,0 +1,90 @@
+* Yocto Autobuilder: Latency Monitor and AB-INT -- Minutes from: Apr 29, 2021
+@ 2021-04-29 14:31 Randy MacLeod
+  0 siblings, 0 replies; only message in thread
+From: Randy MacLeod @ 2021-04-29 14:31 UTC (permalink / raw)
+  To: Sakib Sajal, alexandre.belloni, richard.purdie, Wold, Saul,
+	Trevor Gamblin, Yocto discussion list
+
+Attendees: Richard, Randy
+
+To Do:
+======
+
+Data Collection: (Sakib)
+------------------------
+
+1. run iostat if it exists:
+    iostat -y -z -x 5 1
+        -y     Omit first report with statistics since system boot, if
+               displaying multiple records at given interval.
+        -x     Display extended statistics.
+        -z     Tell iostat to omit output for any devices for which there
+               was no activity during the sample period.
+    5 1: monitor for 5 seconds, run 1 time.
+
+2. use filenames that show what host, the data came from.
+    Currently we have:
+    - testresults/pkgman-deb-non-deb/2021-04-28--02-31/host_stats_0_top.txt
+    - testresults/beaglebone/2021-04-28--01-08/host_stats_2.txt
+
+3. We add the tail of the cooker log but we need to know which
+    cooker log this softlink comes from so add that as a header
+    and to be paranoid as a trailer in case the softlink changes while
+    the collection is underway.
+
+4. Collect the logs produced on error.
+
+5. If the tail of the cooker logs isn't sufficient,
+    match the start/complete logs and report all tasks that
+    are not complete:
+
+
+General topics
+--------------
+
+We talked about the job server for make-based recipes. Trevor is going
+to look at that and if it goes well, perhaps also look at doing 
+something similar for ninja (or samarai) builds.
+
+
+Just as we can do co-operative load/compile management for make/ninja 
+builds, we may have to co-ordinate I/O intensive activities.
+RP mentioned that there's some task-based process limiting that
+is done in the fetcher code. We suspect that the bottleneck is
+around writes to sstate-cache and other write operations but we
+need either proof from logging or to make a change and wait days
+or weeks to see if the error rate has improved. The first option
+is preferred.
+
+
+Why is qemu start-up still slow?
+Saul added code to use the Qemu Machine Protocol (QMP) so that
+we can monitor/query Qemu. He had a bug where the process seemed
+to have started because it's pid (file?) was available but the socket
+for communicating with qemu was not yet bound. Adding a loop and some
+short sleeps fixes the bug but it's odd that even with things running
+from tmpfs, the start-up is slow.
+  - is there a logging flag or code for monitoring the start-up that we
+    can use?
+  - if not, can/should we patch qemu
+  - do we need to also copy the kernel that qemu is loading into tmpfs?
+
+  - Alex was (is?) going to instrument the initial copy into tmpfs
+    to record how log that takes from beginning to end and perhaps with
+    additional detail from the middle-end (compiler joke!).
+
+It would be good if Saul can use QMP to help us understand what
+is making qemuppc slow or hang on startup.
+
+
+-- 
+# Randy MacLeod
+# Wind River Linux
+
+^ permalink raw reply	[flat|nested] only message in thread
+only message in thread, other threads:[~2021-04-29 14:31 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-04-29 14:31 Yocto Autobuilder: Latency Monitor and AB-INT -- Minutes from: Apr 29, 2021 Randy MacLeod
+

@@ -1,0 +1,91 @@
+* How to remove -rpath and -rpath-link from BUILD_LDFLAGS env variable to solve following error: QA Issue: package python3-scipy contains bad RPATH? #python #bitbake
+@ 2021-08-30  7:49 surfinride
+  0 siblings, 0 replies; only message in thread
+From: surfinride @ 2021-08-30  7:49 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 4146 bytes --]
+
+Hey there. I am building a Boot2Qt image for my Jetson Nano. Yocto release is dunfell. Currently I am trying to build the scipy library release 1.5.3. This is the recipe I am using:
+
+> 
+> inherit pypi setuptools3
+> 
+> SUMMARY = "SciPy: Scientific Library for Python"
+> HOMEPAGE = "https://www.scipy.org"
+> LICENSE = "BSD"
+> LIC_FILES_CHKSUM =
+> "file://LICENSE.txt;md5=8256119827cf2bbe63512d4868075867"
+> 
+> SRC_URI += " file://0001-Allow-passing-flags-via-FARCH-for-mach.patch"
+> SRC_URI[md5sum] = "ecf5c58e4df1d257abf1634d51cb9205"
+> SRC_URI[sha256sum] =
+> "ddae76784574cc4c172f3d5edd7308be16078dd3b977e8746860c76c195fa707"
+> 
+> DEPENDS += "${PYTHON_PN}-numpy ${PYTHON_PN}-numpy-native
+> ${PYTHON_PN}-pybind11-native lapack"
+> RDEPENDS_${PN} += "${PYTHON_PN}-numpy lapack"
+> 
+> CLEANBROKEN = "1"
+> 
+> export LAPACK = "${STAGING_LIBDIR}"
+> export BLAS = "${STAGING_LIBDIR}"
+> 
+> export F90 = "${TARGET_PREFIX}gfortran"
+> export FARCH = "${TUNE_CCARGS}"
+> # Numpy expects the LDSHARED env variable to point to a single
+> # executable, but OE sets it to include some flags as well. So we split
+> # the existing LDSHARED variable into the base executable and flags, and
+> # prepend the flags into LDFLAGS
+> LDFLAGS_prepend := "${@" ".join(d.getVar('LDSHARED', True).split()[1:])} "
+> 
+> export LDSHARED := "${@d.getVar('LDSHARED', True).split()[0]}"
+> 
+> # Tell Numpy to look in target sysroot site-packages directory for
+> libraries
+> LDFLAGS_append = "
+> -L${STAGING_LIBDIR}/${PYTHON_DIR}/site-packages/numpy/core/lib"
+
+This recipe fails with the bad RPATH error. Complete error log here ( https://pastebin.ubuntu.com/p/2K9sqxkhSn/ ).
+
+This is what the Yocto documentation has to say about the bad RPATH error:
+
+> 
+> -package <packagename> contains bad RPATH <rpath> in file <file>
+> [rpaths]The specified binary produced by the recipe contains dynamic
+> library load paths (rpaths) that contain build system paths such as
+> TMPDIR, which are incorrect for the target and could potentially be a
+> security issue. Check for bad -rpathoptions being passed to the linker in
+> your do_compile log. Depending on the build system used by the software
+> being built, there might be a configure option to disable rpath usage
+> completely within the build of the software.
+
+I looked in the run.do_configure file. This is what the BUILD_LDFLAGS variable is set like:
+> 
+> 
+> export
+> BUILD_LDFLAGS="-L/media/dell/ext4_volume/jetson-nano-build-files/tmp/work/aarch64-poky-linux/python3-scipy/1.5.3-r0/recipe-sysroot-native/usr/lib
+> -L/media/dell/ext4_volume/jetson-nano-build-files/tmp/work/aarch64-poky-linux/python3-scipy/1.5.3-r0/recipe-sysroot-native/lib
+> -Wl,--enable-new-dtags                        
+> -Wl,-rpath-link,/media/dell/ext4_volume/jetson-nano-build-files/tmp/work/aarch64-poky-linux/python3-scipy/1.5.3-r0/recipe-sysroot-native/usr/lib
+> -Wl,-rpath-link,/media/dell/ext4_volume/jetson-nano-build-files/tmp/work/aarch64-poky-linux/python3-scipy/1.5.3-r0/recipe-sysroot-native/lib
+> -Wl,-rpath,/media/dell/ext4_volume/jetson-nano-build-files/tmp/work/aarch64-poky-linux/python3-scipy/1.5.3-r0/recipe-sysroot-native/usr/lib
+> -Wl,-rpath,/media/dell/ext4_volume/jetson-nano-build-files/tmp/work/aarch64-poky-linux/python3-scipy/1.5.3-r0/recipe-sysroot-native/lib
+> -Wl,-O1 -Wl,--allow-shlib-undefined
+> -Wl,--dynamic-linker=/media/dell/ext4_volume/jetson-nano-build-files/tmp/sysroots-uninative/x86_64-linux/lib/ld-linux-x86-64.so.2"
+> 
+
+So I created a copy of bitbake.conf in my custom layer and set the priority of the layer above the poky/meta/ layer. With this the -rpath and -rpath-link options are removed from the BUILD_LDFLAGS variable. Now if I build the package, the build still fails with the same error.
+Running grep on the tmp/work/aarch64-poky-linux/python3-scipy/1.5.3-r0/temp/ showed that -rpath option is still being passed to gcc. Complete log.do_compile here. ( https://pastebin.ubuntu.com/p/tvpn8zTZ7q/ )
+
+Right now I am kind of clueless as to how I should approach debugging this. Would really appreciate any help. Thanks.
+
+[-- Attachment #2: Type: text/html, Size: 6136 bytes --]
+
+^ permalink raw reply	[flat|nested] only message in thread
+only message in thread, other threads:[~2021-08-30  7:49 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-08-30  7:49 How to remove -rpath and -rpath-link from BUILD_LDFLAGS env variable to solve following error: QA Issue: package python3-scipy contains bad RPATH? #python #bitbake surfinride
+

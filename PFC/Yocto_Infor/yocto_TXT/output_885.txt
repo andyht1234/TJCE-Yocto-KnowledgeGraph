@@ -1,0 +1,194 @@
+* How to install files to custom partition?
+@ 2023-03-08  7:09 Sourabh Hegde
+  2023-03-08 11:24 ` [yocto] " Alexander Kanavin
+  0 siblings, 1 reply; 5+ messages in thread
+From: Sourabh Hegde @ 2023-03-08  7:09 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 513 bytes --]
+
+Hello,
+
+I have some files which I need to install them to a custom partition (to /mnt/custom). But, I couldn't find any installation variables to install files to /mnt/ (partiton other than rootfs).
+I want to do something like below:
+
+do_install() {
+install -d ${D}$<mnt>/custom
+install -m 0755 ${S}/sample.sh ${D}$<mnt>/custom/sample.sh
+}
+
+But I think this is not supported or not easily possible.
+
+Can anyone please let me know how to install files to partition other than / ?
+
+Thanks in advance
+
+[-- Attachment #2: Type: text/html, Size: 643 bytes --]
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] How to install files to custom partition?
+  2023-03-08  7:09 How to install files to custom partition? Sourabh Hegde
+@ 2023-03-08 11:24 ` Alexander Kanavin
+  2023-03-08 16:18   ` Sourabh Hegde
+  0 siblings, 1 reply; 5+ messages in thread
+From: Alexander Kanavin @ 2023-03-08 11:24 UTC (permalink / raw)
+  To: Sourabh Hegde; +Cc: yocto
+
+I think it goes like this.
+
+In your recipe you need to install files into the root directory of
+the partition itself and not its mount point, e.g. strip the
+mnt/custom prefix.
+
+Then you need to create an image recipe that will install one or more
+of the packages that contain the files that should be on the
+partition.
+
+Then you can compose a complete 'bundle' containing all the needed
+partitions (created from image recipes) that can be written to a disk
+of the target device, using wic for example like described here:
+https://git.yoctoproject.org/poky/tree/scripts/lib/wic/canned-wks/directdisk-multi-rootfs.wks?h=master-next
+
+There's a manual for wic too:
+https://docs.yoctoproject.org/dev/dev-manual/wic.html
+
+Alex
+
+On Wed, 8 Mar 2023 at 08:09, Sourabh Hegde <hrsourabh011@gmail.com> wrote:
+>
+> Hello,
+>
+> I have some files which I need to install them to a custom partition (to /mnt/custom). But, I couldn't find any installation variables to install files to /mnt/ (partiton other than rootfs).
+> I want to do something like below:
+>
+> do_install() {
+>     install -d ${D}$<mnt>/custom
+>     install -m 0755 ${S}/sample.sh ${D}$<mnt>/custom/sample.sh
+> }
+>
+> But I think this is not supported or not easily possible.
+>
+> Can anyone please let me know how to install files to partition other than / ?
+>
+> Thanks in advance
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#59363): https://lists.yoctoproject.org/g/yocto/message/59363
+> Mute This Topic: https://lists.yoctoproject.org/mt/97467970/1686489
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: How to install files to custom partition?
+  2023-03-08 11:24 ` [yocto] " Alexander Kanavin
+@ 2023-03-08 16:18   ` Sourabh Hegde
+  2023-03-08 16:34     ` Sourabh Hegde
+  0 siblings, 1 reply; 5+ messages in thread
+From: Sourabh Hegde @ 2023-03-08 16:18 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 704 bytes --]
+
+Hello Alex,
+
+Thanks for the update.
+
+I already have a partition created using .wks file. "--label custom" is used here
+
+> 
+> In your recipe you need to install files into the root directory of
+> the partition itself and not its mount point,
+> 
+
+Do you mean like this below?
+
+do_install() {
+install -d ${D}${custom}/
+install -m 0755 ${S}/sample.sh ${D}${custom}/sample.sh
+}
+
+I am not sure if I understodd below statement fully:
+
+"Then you need to create an image recipe that will install one or more of the packages that contain the files that should be on the partition."
+
+I think adding FILES_${PN} should take care of this, right?
+
+FILES_${PN} = " \
+${custom}/sample.sh \
+"
+
+[-- Attachment #2: Type: text/html, Size: 1165 bytes --]
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: How to install files to custom partition?
+  2023-03-08 16:18   ` Sourabh Hegde
+@ 2023-03-08 16:34     ` Sourabh Hegde
+  2023-03-08 18:35       ` [yocto] " Alexander Kanavin
+  0 siblings, 1 reply; 5+ messages in thread
+From: Sourabh Hegde @ 2023-03-08 16:34 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 283 bytes --]
+
+Hello,
+
+Update: Tried below approach
+
+do_install() {
+install -d ${D}${custom}/
+install -m 0755 ${S}/sample.sh ${D}${custom}/sample.sh
+}
+
+FILES_${PN} = " \
+${custom}/sample.sh \
+"
+
+But, getting the error "Files/directories were installed but not shipped in any package"
+
+[-- Attachment #2: Type: text/html, Size: 426 bytes --]
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+* Re: [yocto] How to install files to custom partition?
+  2023-03-08 16:34     ` Sourabh Hegde
+@ 2023-03-08 18:35       ` Alexander Kanavin
+  0 siblings, 0 replies; 5+ messages in thread
+From: Alexander Kanavin @ 2023-03-08 18:35 UTC (permalink / raw)
+  To: Sourabh Hegde; +Cc: yocto
+
+On Wed, 8 Mar 2023 at 17:34, Sourabh Hegde <hrsourabh011@gmail.com> wrote:
+> Update: Tried below approach
+>
+> do_install() {
+>     install -d ${D}${custom}/
+>     install -m 0755 ${S}/sample.sh ${D}${custom}/sample.sh
+> }
+>
+> FILES_${PN} = " \
+>     ${custom}/sample.sh \
+> "
+>
+> But, getting the error "Files/directories were installed but not shipped in any package"
+
+This is not enough information. To be able to help, I need to see the
+complete recipe, the command you are issuing, and the complete error
+message that happens. You can simply publish your work in public git
+somewhere as well.
+
+Alex
+
+
+^ permalink raw reply	[flat|nested] 5+ messages in thread
+end of thread, other threads:[~2023-03-08 18:35 UTC | newest]
+
+Thread overview: 5+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-03-08  7:09 How to install files to custom partition? Sourabh Hegde
+2023-03-08 11:24 ` [yocto] " Alexander Kanavin
+2023-03-08 16:18   ` Sourabh Hegde
+2023-03-08 16:34     ` Sourabh Hegde
+2023-03-08 18:35       ` [yocto] " Alexander Kanavin
+

@@ -1,0 +1,116 @@
+* Git Fetcher Branch Default
+@ 2021-05-12 12:51 Chuck Wolber
+  2021-05-12 13:38 ` [bitbake-devel] " Konrad Weihmann
+  2021-05-12 13:48 ` Martin Jansa
+  0 siblings, 2 replies; 3+ messages in thread
+From: Chuck Wolber @ 2021-05-12 12:51 UTC (permalink / raw)
+  To: bitbake-devel, Yocto-mailing-list
+
+I got a fetcher failure on go-systemd today, which puzzled me. That
+recipe has not changed in ages, and the SRCPV hash is clearly visible
+in the repository.
+
+After looking at it closer, it seems that github.com/coreos/go-systemd
+has changed its default branch from master to main about six days ago.
+This appears to break a fundamental assumption on the part of the
+fetcher when looking for SRCREV and SRCPV hashes.
+
+Looking at lib/bb/fetch2/git.py makes it evident that this is the
+case. I can trivially fix this with a .bbappend, but it seems to me
+that the fundamental default branch assumption needs to be updated.
+
+Has anyone discussed adding main to the list of default branches to
+try? If not, I may be able to come up with a patch, but the code does
+process default branches as a list, so I will need to think a bit on
+the best way to approach this. Any guidance would be appreciated.
+
+..Ch:W..
+
+
+-- 
+"Perfection must be reached by degrees; she requires the slow hand of
+time." - Voltaire
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [bitbake-devel] Git Fetcher Branch Default
+  2021-05-12 12:51 Git Fetcher Branch Default Chuck Wolber
+@ 2021-05-12 13:38 ` Konrad Weihmann
+  2021-05-12 13:48 ` Martin Jansa
+  1 sibling, 0 replies; 3+ messages in thread
+From: Konrad Weihmann @ 2021-05-12 13:38 UTC (permalink / raw)
+  To: Chuck Wolber; +Cc: bitbake-devel, Yocto-mailing-list
+
+[-- Attachment #1: Type: text/html, Size: 2295 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [bitbake-devel] Git Fetcher Branch Default
+  2021-05-12 12:51 Git Fetcher Branch Default Chuck Wolber
+  2021-05-12 13:38 ` [bitbake-devel] " Konrad Weihmann
+@ 2021-05-12 13:48 ` Martin Jansa
+  1 sibling, 0 replies; 3+ messages in thread
+From: Martin Jansa @ 2021-05-12 13:48 UTC (permalink / raw)
+  To: Chuck Wolber; +Cc: bitbake-devel, Yocto-mailing-list
+
+[-- Attachment #1: Type: text/plain, Size: 2369 bytes --]
+
+On Wed, May 12, 2021 at 05:51:24AM -0700, Chuck Wolber wrote:
+> I got a fetcher failure on go-systemd today, which puzzled me. That
+> recipe has not changed in ages, and the SRCPV hash is clearly visible
+> in the repository.
+> 
+> After looking at it closer, it seems that github.com/coreos/go-systemd
+> has changed its default branch from master to main about six days ago.
+> This appears to break a fundamental assumption on the part of the
+> fetcher when looking for SRCREV and SRCPV hashes.
+> 
+> Looking at lib/bb/fetch2/git.py makes it evident that this is the
+> case. I can trivially fix this with a .bbappend, but it seems to me
+> that the fundamental default branch assumption needs to be updated.
+> 
+> Has anyone discussed adding main to the list of default branches to
+> try? If not, I may be able to come up with a patch, but the code does
+> process default branches as a list, so I will need to think a bit on
+> the best way to approach this. Any guidance would be appreciated.
+
+I agree it's a bit annoying that some projects have chosen to rename the
+existing branches instead of just adopting "main" to be the default
+branch only for new projects (as the defaults changed e.g. on github).
+
+I've already added explicit branch=main in 10+ recipes in various layers
+for dunfell and newer branches (ostree in meta-oe just today or e.g.
+https://github.com/ros/meta-ros/pull/846 yesterday).
+
+Luckily it's easy to fix with local bbappend, so even people using
+unsupported release (zeus and older) can do so or finally upgrade to
+some supported release which might have this fix already.
+
+It was also discussed shortly in #yocto yeasterday:
+
+22:38 < zeddii> RP: did we come up with a policy on anything we can do
+with the fetcher to make "main" be a fallback default to master. Or was
+the end decision to just add explicit branch statements everywhere ?
+23:21 < RP> zeddii: I'm open to patch proposals or we just set the
+branch on urls
+23:23 < RP> zeddii: being explicit is perhaps the better option that
+magic in the fetcher
+
+And I agree with RP, especially because fetcher magic won't get
+backported to old bitbake used in zeus and older anyway, so it won't
+help there and backporting fetcher change locally will be more risky
+than backporting simple SRC_URI change for individual recipes which need
+it.
+
+Regards,
+
+[-- Attachment #2: signature.asc --]
+[-- Type: application/pgp-signature, Size: 201 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2021-05-12 13:49 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-05-12 12:51 Git Fetcher Branch Default Chuck Wolber
+2021-05-12 13:38 ` [bitbake-devel] " Konrad Weihmann
+2021-05-12 13:48 ` Martin Jansa
+

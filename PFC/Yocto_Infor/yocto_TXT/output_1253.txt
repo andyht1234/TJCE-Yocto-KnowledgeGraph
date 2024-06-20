@@ -1,0 +1,179 @@
+* unable to install nmcli
+@ 2022-11-02 21:16 Ron Eggler
+  2022-11-02 21:38 ` kapllaj.elvis
+  0 siblings, 1 reply; 3+ messages in thread
+From: Ron Eggler @ 2022-11-02 21:16 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2675 bytes --]
+
+Hi,
+
+I would like to install nmcli.
+I'm working with yocto dunfell and to achieve this, I added  the 
+following to IMAGE_INSTALL in 
+meta-laird-cp-pre-3.4/recipes-packages/images/sample-image-cp-lwb5plus.bb:
+
+          laird-networkmanager \
+         networkmanager-nmcli \
+         "
+and added the meta-laird-cp-pre-3.4 layer to bblayers.conf
+but still a
+tar -tvjf 
+tmp/deploy/images/machine-name/my-image-smarc-rzv2l-<date>.rootfs.tar.bz2 
+| grep nmcli
+does not return anything when I expect it to. There should be an nmcli 
+binary in the rootfs, should there not?
+
+Also:
+$ bitbake -s |grep nmcli
+Does not return anything either but:
+$ bitbake -s |grep networkmanager
+returns:
+lib32-lrd-networkmanager-sterling               :10.4.0.10-r0
+lib32-lrd-networkmanager-summit                 :10.4.0.10-r0
+lib32-networkmanager                              :1.22.10-r0
+lib32-networkmanager-openvpn                       :1.8.12-r0
+lib32-python3-networkmanager                          :2.1-r0
+lrd-networkmanager-sterling                     :10.4.0.10-r0
+lrd-networkmanager-summit                       :10.4.0.10-r0
+networkmanager                                    :1.22.10-r0
+networkmanager-openvpn                             :1.8.12-r0
+python3-networkmanager                                :2.1-r0
+
+What else am I missing to get nmcli?
+
+
+meta-laird-cp-pre-3.4/recipes-packages/images/sample-image-cp-lwb5plus.bb:
+
+DESCRIPTION = "Sterling LWB5+ SDIO/UART M.2 (diversity antenna) sample 
+image"
+LICENSE = "MIT"
+
+inherit core-image
+
+export IMAGE_BASENAME = "${PN}"
+
+IMAGE_FEATURES += "\
+         ssh-server-dropbear \
+         splash \
+         "
+
+IMAGE_FEATURES_remove = "\
+         tools-profile \
+         tools-debug \
+         tools-testapps \
+         "
+
+IMAGE_INSTALL += "\
+         iproute2 \
+         rng-tools \
+         ca-certificates \
+         tzdata \
+         alsa-utils \
+         htop \
+         ethtool \
+         iperf3 \
+         tcpdump \
+         iw \
+         kernel-module-lwb5p-backports-laird \
+         lwb5plus-sdio-div-firmware \
+         sterling-supplicant-lwb \
+         laird-networkmanager \
+         networkmanager-nmcli \
+
+         "
+
+-- 
+
+
+*RON EGGLER*
+Firmware Engineer
+(he/him/his)
+www.mistywest.com
+MistyWest Logo
+
+[-- Attachment #2.1: Type: text/html, Size: 3928 bytes --]
+
+[-- Attachment #2.2: 2018_MistyWest_LogoCombo_FINAL_RGB.png --]
+[-- Type: image/png, Size: 43986 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: unable to install nmcli
+  2022-11-02 21:16 unable to install nmcli Ron Eggler
+@ 2022-11-02 21:38 ` kapllaj.elvis
+  2022-11-02 22:30   ` [yocto] " Ron Eggler
+  0 siblings, 1 reply; 3+ messages in thread
+From: kapllaj.elvis @ 2022-11-02 21:38 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 801 bytes --]
+
+Hi,
+I don't know it there is a mistake on your message, but you inserted the lines on:
+
+* recipes-packages/images/ *sample-image-cp-lwb5plus*.bb
+
+but then you are searching the tar on image name "
+
+* tmp/deploy/images/machine-name/ *my-image-smarc-rzv2l-* <date>.rootfs.tar.bz2
+
+Unless you include/inherit the file sample-image-cp-lwb5plus.bb on my-image-smarc-rzv2l.bb file, this wouldn't work.
+You should make sure the IMAGE_INSTALL is correctly appended on the image file you are compiling. To debug this, you could print the IMAGE_INSTALL variable for the image, and see if the nmcli package is there:
+
+bitbake -e sample-image-cp-lwb5plus | grep "IMAGE_INSTALL="
+
+Another way to check what is installed on the image is to open the manifest file on the deploy directory (*.manifest)
+
+[-- Attachment #2: Type: text/html, Size: 907 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+* Re: [yocto] unable to install nmcli
+  2022-11-02 21:38 ` kapllaj.elvis
+@ 2022-11-02 22:30   ` Ron Eggler
+  0 siblings, 0 replies; 3+ messages in thread
+From: Ron Eggler @ 2022-11-02 22:30 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1050 bytes --]
+
+
+On 2022-11-02 2:38 p.m., kapllaj.elvis@gmail.com wrote:
+>
+> Hi,
+> I don't know it there is a mistake on your message, but you inserted 
+> the lines on:
+>
+>   * recipes-packages/images/*sample-image-cp-lwb5plus*.bb
+>
+> but then you are searching the tar on image name "
+>
+>   * tmp/deploy/images/machine-name/*my-image-smarc-rzv2l-*<date>.rootfs.tar.bz2
+>
+> Unless you include/inherit the file sample-image-cp-lwb5plus.bb on 
+> my-image-smarc-rzv2l.bb file, this wouldn't work.
+> You should make sure the IMAGE_INSTALL is correctly appended on the 
+> image file you are compiling. To debug this, you could print the 
+> IMAGE_INSTALL variable for the image, and see if the nmcli package is 
+> there:
+>
+> bitbake -e sample-image-cp-lwb5plus | grep "IMAGE_INSTALL="
+>
+> Another way to check what is installed on the image is to open the 
+> manifest file on the deploy directory (*.manifest)
+>
+Oh, I see! I did not realize that I was changing the IMAGE_INSTALL 
+variable in the wrong image to begin with . Thanks for directing me to 
+the realization! :)
+
+[-- Attachment #2: Type: text/html, Size: 1737 bytes --]
+
+^ permalink raw reply	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2022-11-02 22:30 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-11-02 21:16 unable to install nmcli Ron Eggler
+2022-11-02 21:38 ` kapllaj.elvis
+2022-11-02 22:30   ` [yocto] " Ron Eggler
+

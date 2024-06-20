@@ -1,0 +1,160 @@
+* [meta-selinux][PATCH 1/3] selinux-image.bbclass: refactor bbclass
+@ 2023-09-22  2:22 Yi Zhao
+  2023-09-22  2:22 ` [meta-selinux][PATCH 2/3] selinux-autorelabel: enable labeling during build Yi Zhao
+  2023-09-22  2:22 ` [meta-selinux][PATCH 3/3] README: update Yi Zhao
+  0 siblings, 2 replies; 3+ messages in thread
+From: Yi Zhao @ 2023-09-22  2:22 UTC (permalink / raw)
+  To: yocto, joe.macdonald, joe_macdonald
+
+The selinux_set_labels function should run as late as possible. To
+guarantee that, we append it to IMAGE_PREPROCESS_COMMAND in
+RecipePreFinalise event handler, this ensures it is the last function in
+IMAGE_PREPROCESS_COMMAND.
+
+After refactoring, system using systemd can also label selinux contexts
+during build.
+
+Signed-off-by: Yi Zhao <yi.zhao@windriver.com>
+---
+ classes/selinux-image.bbclass | 32 +++++++++++++++++++++++---------
+ 1 file changed, 23 insertions(+), 9 deletions(-)
+
+diff --git a/classes/selinux-image.bbclass b/classes/selinux-image.bbclass
+index 23645b7..b4f9321 100644
+--- a/classes/selinux-image.bbclass
++++ b/classes/selinux-image.bbclass
+@@ -1,15 +1,29 @@
+-selinux_set_labels () {
+-    POL_TYPE=$(sed -n -e "s&^SELINUXTYPE[[:space:]]*=[[:space:]]*\([0-9A-Za-z_]\+\)&\1&p" ${IMAGE_ROOTFS}/${sysconfdir}/selinux/config)
+-    if ! setfiles -m -r ${IMAGE_ROOTFS} ${IMAGE_ROOTFS}/${sysconfdir}/selinux/${POL_TYPE}/contexts/files/file_contexts ${IMAGE_ROOTFS}
+-    then
+-        echo WARNING: Unable to set filesystem context, setfiles / restorecon must be run on the live image.
+-        touch ${IMAGE_ROOTFS}/.autorelabel
+-        exit 0
++selinux_set_labels() {
++    if [ -f ${IMAGE_ROOTFS}/${sysconfdir}/selinux/config ]; then
++        POL_TYPE=$(sed -n -e "s&^SELINUXTYPE[[:space:]]*=[[:space:]]*\([0-9A-Za-z_]\+\)&\1&p" ${IMAGE_ROOTFS}/${sysconfdir}/selinux/config)
++        if ! setfiles -m -r ${IMAGE_ROOTFS} ${IMAGE_ROOTFS}/${sysconfdir}/selinux/${POL_TYPE}/contexts/files/file_contexts ${IMAGE_ROOTFS}
++        then
++            bbwarn "Failed to set security contexts. Restoring security contexts will run on first boot."
++            echo "# first boot relabelling" > ${IMAGE_ROOTFS}/.autorelabel
++        fi
+     fi
+ }
+ 
+-DEPENDS += "policycoreutils-native"
++# The selinux_set_labels function should run as late as possible. Append
++# it to IMAGE_PREPROCESS_COMMAND in RecipePreFinalise event handler,
++# this ensures it is the last function in IMAGE_PREPROCESS_COMMAND.
++python selinux_setlabels_handler() {
++    if not d or 'selinux' not in d.getVar('DISTRO_FEATURES').split():
++        return
+ 
+-IMAGE_PREPROCESS_COMMAND:append = " selinux_set_labels ;"
++    if d.getVar('FIRST_BOOT_RELABEL') == '1':
++        return
++
++    d.appendVar('IMAGE_PREPROCESS_COMMAND', ' selinux_set_labels; ')
++    d.appendVarFlag('do_image', 'depends', ' policycoreutils-native:do_populate_sysroot')
++}
++
++addhandler selinux_setlabels_handler
++selinux_setlabels_handler[eventmask] = "bb.event.RecipePreFinalise"
+ 
+ inherit core-image
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 3+ messages in thread
+* [meta-selinux][PATCH 2/3] selinux-autorelabel: enable labeling during build
+  2023-09-22  2:22 [meta-selinux][PATCH 1/3] selinux-image.bbclass: refactor bbclass Yi Zhao
+@ 2023-09-22  2:22 ` Yi Zhao
+  2023-09-22  2:22 ` [meta-selinux][PATCH 3/3] README: update Yi Zhao
+  1 sibling, 0 replies; 3+ messages in thread
+From: Yi Zhao @ 2023-09-22  2:22 UTC (permalink / raw)
+  To: yocto, joe.macdonald, joe_macdonald
+
+Previously, system using systemd would label selinux contexts on first
+boot. While system using sysvinit would label during build. Add a
+variable FIRST_BOOT_RELABEL as a switch to control labeling to make the
+behavior of sysvinit and systemd consistent.
+
+Set FIRST_BOOT_RELABEL to 1 in local.conf to enable labeling on first
+boot.
+
+Signed-off-by: Yi Zhao <yi.zhao@windriver.com>
+---
+ recipes-security/selinux-scripts/selinux-autorelabel_0.1.bb | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/recipes-security/selinux-scripts/selinux-autorelabel_0.1.bb b/recipes-security/selinux-scripts/selinux-autorelabel_0.1.bb
+index a919445..9fd066c 100644
+--- a/recipes-security/selinux-scripts/selinux-autorelabel_0.1.bb
++++ b/recipes-security/selinux-scripts/selinux-autorelabel_0.1.bb
+@@ -20,7 +20,7 @@ INITSCRIPT_PARAMS = "start 01 S ."
+ require selinux-initsh.inc
+ 
+ do_install:append() {
+-	if ${@bb.utils.contains('DISTRO_FEATURES', 'systemd', 'true', 'false', d)}; then
+-		echo "# first boot relabelling" > ${D}/.autorelabel
+-	fi
++    if ${@bb.utils.contains('FIRST_BOOT_RELABEL', '1', 'true', 'false', d)}; then
++        echo "# first boot relabelling" > ${D}/.autorelabel
++    fi
+ }
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 3+ messages in thread
+* [meta-selinux][PATCH 3/3] README: update
+  2023-09-22  2:22 [meta-selinux][PATCH 1/3] selinux-image.bbclass: refactor bbclass Yi Zhao
+  2023-09-22  2:22 ` [meta-selinux][PATCH 2/3] selinux-autorelabel: enable labeling during build Yi Zhao
+@ 2023-09-22  2:22 ` Yi Zhao
+  1 sibling, 0 replies; 3+ messages in thread
+From: Yi Zhao @ 2023-09-22  2:22 UTC (permalink / raw)
+  To: yocto, joe.macdonald, joe_macdonald
+
+Add how to enable labeling on first boot.
+
+Signed-off-by: Yi Zhao <yi.zhao@windriver.com>
+---
+ README | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/README b/README
+index 77b6253..67708f7 100644
+--- a/README
++++ b/README
+@@ -75,6 +75,14 @@ VIRTUAL-RUNTIME_init_manager = "systemd"
+ DISTRO_FEATURES_BACKFILL_CONSIDERED = ""
+ 
+ 
++Enable labeling on first boot
++----------------------------
++By default, the system will label selinux contexts during build. To enable
++labeling on first boot. Set FIRST_BOOT_RELABEL to 1 in local.conf:
++
++FIRST_BOOT_RELABEL = "1"
++
++
+ Starting up the system
+ ----------------------
+ Most likely the reference policy selected will not just work "out of the box".
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] 3+ messages in thread
+end of thread, other threads:[~2023-09-22  2:23 UTC | newest]
+
+Thread overview: 3+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-09-22  2:22 [meta-selinux][PATCH 1/3] selinux-image.bbclass: refactor bbclass Yi Zhao
+2023-09-22  2:22 ` [meta-selinux][PATCH 2/3] selinux-autorelabel: enable labeling during build Yi Zhao
+2023-09-22  2:22 ` [meta-selinux][PATCH 3/3] README: update Yi Zhao
+

@@ -1,0 +1,240 @@
+* [Yocto] Launching script at the very end of the image process
+@ 2021-06-30  9:33 yann.cardaillac
+  2021-06-30 10:27 ` Richard Purdie
+  0 siblings, 1 reply; 4+ messages in thread
+From: yann.cardaillac @ 2021-06-30  9:33 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 900 bytes --]
+
+Hi yall,
+
+I'm switching from buildroot to yocto and trying to figure out how to do the equivalent of a POST_BUILD_SCRIPT.
+
+Indeed I want to format the images built in a specific format for latter use and CI needs.
+
+I've made a recipe (.inc) that I'm able to access directly doing so:
+
+bitbake ycn-image -c release_ycn
+
+To give a bit more context here's how I've made it :
+
+File ycn-image.bb:
+
+SUMMARY = "Ycn image"
+...
+
+require recipes-core/images/core-image-base.bb
+...
+inherit package-list
+
+require ycn-release.inc
+...
+
+File ycn-release.inc:
+
+do_release_ycn() {
+...
+}
+addtask release_ycn after do_image_complete after do_deploy_kernelmodules
+
+I've also tried to use IMAGE_POSTPROCESS_COMMAND without much success since it wasn't running at the proper moment.
+
+If you happen to have any leads on the subject please don't hesitate to share!
+
+Best regards,
+
+Yann
+
+[-- Attachment #2: Type: text/html, Size: 4731 bytes --]
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [Yocto] Launching script at the very end of the image process
+  2021-06-30  9:33 [Yocto] Launching script at the very end of the image process yann.cardaillac
+@ 2021-06-30 10:27 ` Richard Purdie
+  2021-06-30 10:41   ` Cardaillac, Yann
+  0 siblings, 1 reply; 4+ messages in thread
+From: Richard Purdie @ 2021-06-30 10:27 UTC (permalink / raw)
+  To: Cardaillac, Yann, yocto
+
+On Wed, 2021-06-30 at 09:33 +0000, Cardaillac, Yann wrote:
+> I’m switching from buildroot to yocto and trying to figure out how to do the equivalent of a
+> POST_BUILD_SCRIPT.
+>  
+> Indeed I want to format the images built in a specific format for latter use and CI needs.
+
+In OE, the equivalent for that is probably the image types code.
+See http://git.yoctoproject.org/cgit.cgi/poky/tree/meta/classes/image_types.bbclass
+
+You can define your own custom image types to extend the system. Some of our defaults
+are quite simple (tar), some are quite complex (wic has its own bbclass).
+
+> I’ve also tried to use IMAGE_POSTPROCESS_COMMAND without much success since it 
+> wasn’t running at the proper moment.
+
+When is "the right moment"? :)
+
+Cheers,
+
+Richard
+
+
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [Yocto] Launching script at the very end of the image process
+  2021-06-30 10:27 ` Richard Purdie
+@ 2021-06-30 10:41   ` Cardaillac, Yann
+  2021-06-30 11:07     ` Richard Purdie
+  0 siblings, 1 reply; 4+ messages in thread
+From: Cardaillac, Yann @ 2021-06-30 10:41 UTC (permalink / raw)
+  To: Richard Purdie, yocto
+
+Hi Richard,
+
+Many thanks for the fast answer.
+
+> > I’m switching from buildroot to yocto and trying to figure out how to 
+> > do the equivalent of a POST_BUILD_SCRIPT.
+> >
+> > Indeed I want to format the images built in a specific format for latter use and CI needs.
+>
+> In OE, the equivalent for that is probably the image types code.
+> See http://git.yoctoproject.org/cgit.cgi/poky/tree/meta/classes/image_types.bbclass
+>
+> You can define your own custom image types to extend the system. Some of our defaults are quite simple (tar), some are quite complex (wic has its own bbclass).
+
+I said image, but it was probably not the best word, I just want to make a tarball of the generated image + adding some file in it.
+
+Here's the complete file with the job :
+
+FILESEXTRAPATHS_prepend := "${THISDIR}/files:"
+
+SRC_URI += "file://nallino-custom-params.txt"
+SRC_URI += "file://configuration_instruction_to_do_on_GUF.txt"
+
+do_release_ycn() {
+
+    rm -rf ${DEPLOY_DIR_IMAGE}/ycn_release
+    mkdir -p ${DEPLOY_DIR_IMAGE}/ycn_release/overlays
+    cp ${DEPLOY_DIR_IMAGE}/fng-install.sh ${DEPLOY_DIR_IMAGE}/ycn_release
+    cp ${DEPLOY_DIR_IMAGE}/ycn-image-imx6ullguf.tar.gz ${DEPLOY_DIR_IMAGE}/ycn_release/guf-image-imx6ullguf.tar.gz
+    cp ${DEPLOY_DIR_IMAGE}/*.dtbo ${DEPLOY_DIR_IMAGE}/ycn_release/overlays
+    cp ${WORKDIR}/nallino-custom-params.txt ${DEPLOY_DIR_IMAGE}/ycn_release/
+    cp ${WORKDIR}/configuration_instruction_to_do_on_GUF.txt ${DEPLOY_DIR_IMAGE}/ycn_release/
+    tar -czf ${DEPLOY_DIR_IMAGE}/ycn_release.tar.gz ${DEPLOY_DIR_IMAGE}/ycn_release
+
+}
+addtask release_ycn after do_image_complete after do_deploy_kernelmodules
+
+>
+> > I’ve also tried to use IMAGE_POSTPROCESS_COMMAND without much success 
+> > since it wasn’t running at the proper moment.
+
+> When is "the right moment"? :)
+
+The right moment, is at the very end of bitbake, indeed I want the job to be the overall last job!
+
+Thanks again, 
+
+Yann
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [Yocto] Launching script at the very end of the image process
+  2021-06-30 10:41   ` Cardaillac, Yann
+@ 2021-06-30 11:07     ` Richard Purdie
+  0 siblings, 0 replies; 4+ messages in thread
+From: Richard Purdie @ 2021-06-30 11:07 UTC (permalink / raw)
+  To: Cardaillac, Yann, yocto
+
+On Wed, 2021-06-30 at 10:41 +0000, Cardaillac, Yann wrote:
+> Hi Richard,
+> 
+> Many thanks for the fast answer.
+> 
+> > > I’m switching from buildroot to yocto and trying to figure out how to 
+> > > do the equivalent of a POST_BUILD_SCRIPT.
+> > > 
+> > > Indeed I want to format the images built in a specific format for latter use and CI needs.
+> > 
+> > In OE, the equivalent for that is probably the image types code.
+> > See http://git.yoctoproject.org/cgit.cgi/poky/tree/meta/classes/image_types.bbclass
+> > 
+> > You can define your own custom image types to extend the system. Some of our defaults are quite simple (tar), some are quite complex (wic has its own bbclass).
+> 
+> I said image, but it was probably not the best word, I just want to make a tarball 
+> of the generated image + adding some file in it.
+> 
+> Here's the complete file with the job :
+> 
+> FILESEXTRAPATHS_prepend := "${THISDIR}/files:"
+> 
+> SRC_URI += "file://nallino-custom-params.txt"
+> SRC_URI += "file://configuration_instruction_to_do_on_GUF.txt"
+> 
+> do_release_ycn() {
+> 
+>     rm -rf ${DEPLOY_DIR_IMAGE}/ycn_release
+>     mkdir -p ${DEPLOY_DIR_IMAGE}/ycn_release/overlays
+>     cp ${DEPLOY_DIR_IMAGE}/fng-install.sh ${DEPLOY_DIR_IMAGE}/ycn_release
+>     cp ${DEPLOY_DIR_IMAGE}/ycn-image-imx6ullguf.tar.gz ${DEPLOY_DIR_IMAGE}/ycn_release/guf-image-imx6ullguf.tar.gz
+>     cp ${DEPLOY_DIR_IMAGE}/*.dtbo ${DEPLOY_DIR_IMAGE}/ycn_release/overlays
+>     cp ${WORKDIR}/nallino-custom-params.txt ${DEPLOY_DIR_IMAGE}/ycn_release/
+>     cp ${WORKDIR}/configuration_instruction_to_do_on_GUF.txt ${DEPLOY_DIR_IMAGE}/ycn_release/
+>     tar -czf ${DEPLOY_DIR_IMAGE}/ycn_release.tar.gz ${DEPLOY_DIR_IMAGE}/ycn_release
+> 
+> }
+> addtask release_ycn after do_image_complete after do_deploy_kernelmodules
+> 
+
+You're used to poking around things in buildroot, OE doesn't quite like you
+doing that so much :)
+
+You shouldn't really be poking around DEPLOY_DIR without letting the build
+system know what you're doing. Intermediate files like the intermediate directory
+you're using to create the tarball above should really be in WORKDIR.
+That is itself won't break, it just not good practise. Ideally you'd write
+a separate recipe to do this final piece with a do_deploy task, using the
+deploy bbclass which would them take care of removing obsolete versions 
+when you rebuild and so on.
+
+> > > I’ve also tried to use IMAGE_POSTPROCESS_COMMAND without much success 
+> > > since it wasn’t running at the proper moment.
+> 
+> > When is "the right moment"? :)
+> 
+> The right moment, is at the very end of bitbake, indeed I want the job 
+> to be the overall last job!
+
+You're not really helping us help you find a solution since you've not described
+what you'd expect to be happening that isn't happening. How is what you have
+failing?
+
+I'm going to take a leap and guess that some of the files you expect there
+aren't? Maybe the dtbo files from some other do_deploy tasks? If that is true
+you're missing dependencies for your task. You can do things like:
+
+do_release_ycn[depends] += "virtual/kernel:do_deploy"
+
+I'd caution against "last" as it is a fine concept until two things want to 
+be "last". It is usually better to describe the dependencies properly.
+
+Cheers,
+
+Richard
+
+
+
+
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+end of thread, other threads:[~2021-06-30 11:07 UTC | newest]
+
+Thread overview: 4+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-06-30  9:33 [Yocto] Launching script at the very end of the image process yann.cardaillac
+2021-06-30 10:27 ` Richard Purdie
+2021-06-30 10:41   ` Cardaillac, Yann
+2021-06-30 11:07     ` Richard Purdie
+

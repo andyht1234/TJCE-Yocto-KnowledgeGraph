@@ -1,0 +1,1456 @@
+* [meta-rockchip][PATCH 1/4] centralize console settings
+@ 2021-06-23 15:24 Trevor Woerner
+  2021-06-23 15:24 ` [meta-rockchip][PATCH 2/4] wic console device and baud Trevor Woerner
+                   ` (3 more replies)
+  0 siblings, 4 replies; 8+ messages in thread
+From: Trevor Woerner @ 2021-06-23 15:24 UTC (permalink / raw)
+  To: yocto
+
+The console settings (baud and device) are scrambled and spread throughout the
+MACHINE configurations. Consolidate them and set defaults which are then
+overridden only as required.
+
+Signed-off-by: Trevor Woerner <twoerner@gmail.com>
+---
+ conf/machine/include/nanopi-m4.inc         | 2 --
+ conf/machine/include/rk3066.inc            | 1 +
+ conf/machine/include/rk3188.inc            | 3 +++
+ conf/machine/include/rk3288.inc            | 2 +-
+ conf/machine/include/rk3328.inc            | 2 --
+ conf/machine/include/rk3399.inc            | 2 --
+ conf/machine/include/rock-pi-4.inc         | 2 --
+ conf/machine/include/rockchip-defaults.inc | 3 +++
+ conf/machine/marsboard-rk3066.conf         | 1 -
+ conf/machine/radxarock.conf                | 1 -
+ 10 files changed, 8 insertions(+), 11 deletions(-)
+
+diff --git a/conf/machine/include/nanopi-m4.inc b/conf/machine/include/nanopi-m4.inc
+index a14b705..8a7c1d9 100644
+--- a/conf/machine/include/nanopi-m4.inc
++++ b/conf/machine/include/nanopi-m4.inc
+@@ -21,5 +21,3 @@ WKS_FILE_DEPENDS ?= " \
+ IMAGE_BOOT_FILES ?= "\
+     ${KERNEL_IMAGETYPE} \
+     "
+-
+-SERIAL_CONSOLES = "1500000;ttyS2"
+diff --git a/conf/machine/include/rk3066.inc b/conf/machine/include/rk3066.inc
+index dffbee0..76744ee 100644
+--- a/conf/machine/include/rk3066.inc
++++ b/conf/machine/include/rk3066.inc
+@@ -7,5 +7,6 @@ require conf/machine/include/tune-cortexa9.inc
+ require conf/machine/include/soc-family.inc
+ require conf/machine/include/rockchip-defaults.inc
+ 
++RK_CONSOLE_BAUD = "115200"
+ KBUILD_DEFCONFIG = "multi_v7_defconfig"
+ KERNEL_IMAGETYPE = "zImage"
+diff --git a/conf/machine/include/rk3188.inc b/conf/machine/include/rk3188.inc
+index 59e65d1..e21bbf7 100644
+--- a/conf/machine/include/rk3188.inc
++++ b/conf/machine/include/rk3188.inc
+@@ -9,3 +9,6 @@ require conf/machine/include/rockchip-defaults.inc
+ 
+ KBUILD_DEFCONFIG = "multi_v7_defconfig"
+ KERNEL_IMAGETYPE = "zImage"
++
++RK_CONSOLE_BAUD = "115200"
++RK_CONSOLE_DEVICE = "ttyFIQ0"
+diff --git a/conf/machine/include/rk3288.inc b/conf/machine/include/rk3288.inc
+index 480e250..2715e73 100644
+--- a/conf/machine/include/rk3288.inc
++++ b/conf/machine/include/rk3288.inc
+@@ -10,7 +10,7 @@ require conf/machine/include/rockchip-defaults.inc
+ KBUILD_DEFCONFIG ?= "multi_v7_defconfig"
+ KERNEL_IMAGETYPE = "zImage"
+ 
+-SERIAL_CONSOLES = "115200;ttyS2"
++RK_CONSOLE_BAUD = "115200"
+ 
+ PREFERRED_PROVIDER_virtual/bootloader ?= "u-boot"
+ SPL_BINARY ?= "idbloader.img"
+diff --git a/conf/machine/include/rk3328.inc b/conf/machine/include/rk3328.inc
+index a4bbc5d..5b11868 100644
+--- a/conf/machine/include/rk3328.inc
++++ b/conf/machine/include/rk3328.inc
+@@ -19,7 +19,5 @@ TFA_BUILD_TARGET = "bl31"
+ UBOOT_SUFFIX ?= "itb"
+ UBOOT_ENTRYPOINT ?= "0x06000000"
+ 
+-SERIAL_CONSOLES = "1500000;ttyS2"
+-
+ PREFERRED_PROVIDER_virtual/bootloader ?= "u-boot"
+ SPL_BINARY ?= "idbloader.img"
+diff --git a/conf/machine/include/rk3399.inc b/conf/machine/include/rk3399.inc
+index f6b7826..9f9f474 100644
+--- a/conf/machine/include/rk3399.inc
++++ b/conf/machine/include/rk3399.inc
+@@ -19,8 +19,6 @@ TFA_BUILD_TARGET = "bl31"
+ UBOOT_SUFFIX ?= "itb"
+ UBOOT_ENTRYPOINT ?= "0x06000000"
+ 
+-SERIAL_CONSOLES = "115200;ttyS2"
+-
+ PREFERRED_PROVIDER_virtual/bootloader ?= "u-boot"
+ SPL_BINARY ?= "idbloader.img"
+ 
+diff --git a/conf/machine/include/rock-pi-4.inc b/conf/machine/include/rock-pi-4.inc
+index 9c21084..a3e60c7 100644
+--- a/conf/machine/include/rock-pi-4.inc
++++ b/conf/machine/include/rock-pi-4.inc
+@@ -17,6 +17,4 @@ IMAGE_BOOT_FILES ?= "\
+     ${KERNEL_IMAGETYPE} \
+     "
+ 
+-SERIAL_CONSOLES = "1500000;ttyS2"
+-
+ MACHINE_EXTRA_RRECOMMENDS += "kernel-modules"
+diff --git a/conf/machine/include/rockchip-defaults.inc b/conf/machine/include/rockchip-defaults.inc
+index a4e2a2c..fe4052e 100644
+--- a/conf/machine/include/rockchip-defaults.inc
++++ b/conf/machine/include/rockchip-defaults.inc
+@@ -21,6 +21,9 @@ XSERVER = " \
+ 	"
+ 
+ # misc
++RK_CONSOLE_DEVICE ?= "ttyS2"
++RK_CONSOLE_BAUD ?= "1500000"
++SERIAL_CONSOLES = "${RK_CONSOLE_BAUD};${RK_CONSOLE_DEVICE}"
+ IMAGE_FSTYPES += "ext4"
+ 
+ # boot device (sd-card/emmc)
+diff --git a/conf/machine/marsboard-rk3066.conf b/conf/machine/marsboard-rk3066.conf
+index 09414bc..52fd256 100644
+--- a/conf/machine/marsboard-rk3066.conf
++++ b/conf/machine/marsboard-rk3066.conf
+@@ -8,5 +8,4 @@
+ 
+ require conf/machine/include/rk3066.inc
+ 
+-SERIAL_CONSOLES = "115200;ttyS2"
+ KERNEL_DEVICETREE = "rk3066a-marsboard.dtb"
+diff --git a/conf/machine/radxarock.conf b/conf/machine/radxarock.conf
+index 2036f6a..42d8848 100644
+--- a/conf/machine/radxarock.conf
++++ b/conf/machine/radxarock.conf
+@@ -9,5 +9,4 @@
+ 
+ require conf/machine/include/rk3188.inc
+ 
+-SERIAL_CONSOLES = "115200;ttyFIQ0"
+ KERNEL_DEVICETREE = "rk3188-radxarock.dtb"
+-- 
+2.30.0.rc0
+
+
+^ permalink raw reply related	[flat|nested] 8+ messages in thread
+* [meta-rockchip][PATCH 2/4] wic console device and baud
+  2021-06-23 15:24 [meta-rockchip][PATCH 1/4] centralize console settings Trevor Woerner
+@ 2021-06-23 15:24 ` Trevor Woerner
+  2021-06-23 15:24 ` [meta-rockchip][PATCH 3/4] machine common include cleanup Trevor Woerner
+                   ` (2 subsequent siblings)
+  3 siblings, 0 replies; 8+ messages in thread
+From: Trevor Woerner @ 2021-06-23 15:24 UTC (permalink / raw)
+  To: yocto
+
+Take the console device and baud settings from the MACHINE configurations and
+reuse them in the wic files. This reduces duplication and eliminates a
+potential source of mistakes.
+
+Signed-off-by: Trevor Woerner <twoerner@gmail.com>
+---
+ conf/machine/include/rockchip-defaults.inc | 2 +-
+ wic/firefly-rk3288.wks                     | 2 +-
+ wic/rock-pi-4.wks                          | 2 +-
+ wic/rock-pi-e.wks                          | 2 +-
+ wic/tinker-board.wks                       | 2 +-
+ wic/vyasa-rk3288.wks                       | 2 +-
+ 6 files changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/conf/machine/include/rockchip-defaults.inc b/conf/machine/include/rockchip-defaults.inc
+index fe4052e..3e7a2f2 100644
+--- a/conf/machine/include/rockchip-defaults.inc
++++ b/conf/machine/include/rockchip-defaults.inc
+@@ -28,5 +28,5 @@ IMAGE_FSTYPES += "ext4"
+ 
+ # boot device (sd-card/emmc)
+ RK_BOOT_DEVICE ??= "mmcblk0"
+-WICVARS_append = " RK_BOOT_DEVICE"
++WICVARS_append = " RK_BOOT_DEVICE RK_CONSOLE_BAUD RK_CONSOLE_DEVICE"
+ 
+diff --git a/wic/firefly-rk3288.wks b/wic/firefly-rk3288.wks
+index da0067f..7b14d1f 100644
+--- a/wic/firefly-rk3288.wks
++++ b/wic/firefly-rk3288.wks
+@@ -4,4 +4,4 @@
+ include rk3288-boot.wks
+ part / --ondisk ${RK_BOOT_DEVICE} --source rootfs --fstype=ext4 --label root
+ 
+-bootloader --ptable gpt --append="console=tty1 console=ttyS2,115200n8 rw root=/dev/${RK_BOOT_DEVICE}p7 rootfstype=ext4 init=/sbin/init"
++bootloader --ptable gpt --append="console=tty1 console=${RK_CONSOLE_DEVICE},${RK_CONSOLE_BAUD}n8 rw root=/dev/${RK_BOOT_DEVICE}p7 rootfstype=ext4 init=/sbin/init"
+diff --git a/wic/rock-pi-4.wks b/wic/rock-pi-4.wks
+index c6174a9..5c02e9f 100644
+--- a/wic/rock-pi-4.wks
++++ b/wic/rock-pi-4.wks
+@@ -4,4 +4,4 @@
+ include rk3399-boot.wks
+ part / --ondisk ${RK_BOOT_DEVICE} --source rootfs --fstype=ext4 --label root
+ 
+-bootloader --ptable gpt --append="console=tty1 console=ttyS2,1500000n8 rw root=/dev/${RK_BOOT_DEVICE}p7 rootfstype=ext4 init=/sbin/init"
++bootloader --ptable gpt --append="console=tty1 console=${RK_CONSOLE_DEVICE},${RK_CONSOLE_BAUD}n8 rw root=/dev/${RK_BOOT_DEVICE}p7 rootfstype=ext4 init=/sbin/init"
+diff --git a/wic/rock-pi-e.wks b/wic/rock-pi-e.wks
+index 97f84d1..9c10d90 100644
+--- a/wic/rock-pi-e.wks
++++ b/wic/rock-pi-e.wks
+@@ -1,4 +1,4 @@
+ include rk3328-boot.wks
+ part / --ondisk ${RK_BOOT_DEVICE} --source rootfs --fstype=ext4 --label root
+ 
+-bootloader --ptable gpt --append="console=tty1 console=ttyS2,1500000n8 rw root=/dev/${RK_BOOT_DEVICE}p7 rootfstype=ext4 init=/sbin/init"
++bootloader --ptable gpt --append="console=tty1 console=${RK_CONSOLE_DEVICE},${RK_CONSOLE_BAUD}n8 rw root=/dev/${RK_BOOT_DEVICE}p7 rootfstype=ext4 init=/sbin/init"
+diff --git a/wic/tinker-board.wks b/wic/tinker-board.wks
+index 5a63ce0..00ae820 100644
+--- a/wic/tinker-board.wks
++++ b/wic/tinker-board.wks
+@@ -5,4 +5,4 @@ include rk3288-boot.wks
+ 
+ part / --ondisk ${RK_BOOT_DEVICE} --source rootfs --fstype=ext4 --label root
+ 
+-bootloader --ptable gpt --append="console=tty1 console=ttyS2,115200n8 rw root=/dev/${RK_BOOT_DEVICE}p7 rootfstype=ext4 init=/sbin/init"
++bootloader --ptable gpt --append="console=tty1 console=${RK_CONSOLE_DEVICE},${RK_CONSOLE_BAUD}n8 rw root=/dev/${RK_BOOT_DEVICE}p7 rootfstype=ext4 init=/sbin/init"
+diff --git a/wic/vyasa-rk3288.wks b/wic/vyasa-rk3288.wks
+index 5db65df..5346fbd 100644
+--- a/wic/vyasa-rk3288.wks
++++ b/wic/vyasa-rk3288.wks
+@@ -4,5 +4,5 @@
+ include rk3288-boot.wks
+ part / --ondisk ${RK_BOOT_DEVICE} --source rootfs --fstype=ext4 --label root
+ 
+-bootloader --ptable gpt --append="console=tty1 console=ttyS2,115200n8 rw root=/dev/${RK_BOOT_DEVICE}p7 rootfstype=ext4 init=/sbin/init"
++bootloader --ptable gpt --append="console=tty1 console=${RK_CONSOLE_DEVICE},${RK_CONSOLE_BAUD}n8 rw root=/dev/${RK_BOOT_DEVICE}p7 rootfstype=ext4 init=/sbin/init"
+ 
+-- 
+2.30.0.rc0
+
+
+^ permalink raw reply related	[flat|nested] 8+ messages in thread
+* [meta-rockchip][PATCH 3/4] machine common include cleanup
+  2021-06-23 15:24 [meta-rockchip][PATCH 1/4] centralize console settings Trevor Woerner
+  2021-06-23 15:24 ` [meta-rockchip][PATCH 2/4] wic console device and baud Trevor Woerner
+@ 2021-06-23 15:24 ` Trevor Woerner
+  2021-06-23 15:24 ` [meta-rockchip][PATCH 4/4] wic/wks cleanup Trevor Woerner
+  2021-06-23 15:32 ` [yocto] [meta-rockchip][PATCH 1/4] centralize console settings Khem Raj
+  3 siblings, 0 replies; 8+ messages in thread
+From: Trevor Woerner @ 2021-06-23 15:24 UTC (permalink / raw)
+  To: yocto
+
+Break out the conf/machine/include/rockchip-defaults.inc into:
+- conf/machine/include/rockchip-defaults.inc
+- conf/machine/include/rockchip-32.inc
+- conf/machine/include/rockchip-64.inc
+- conf/machine/include/rockchip-wic.inc
+
+Re-organize the machine and SoC configurations to make use of these common
+include files to reduce duplication of common elements.
+
+For every currently-defined machine in meta-rockchip, the following variables
+were checked before and after this change to make sure the results were
+correct and/or reasonable:
+- RK_CONSOLE_BAUD
+- RK_CONSOLE_DEVICE
+- SERIAL_CONSOLES
+- WKS_FILE
+- UBOOT_SUFFIX
+- SPL_BINARY
+- UBOOT_ENTRYPOINT
+- UBOOT_MACHINE
+- KBUILD_DEFCONFIG
+- KERNEL_IMAGETYPE
+- KERNEL_DEVICETREE
+- TFA_BUILD_TARGET
+- TFA_PLATFORM
+- IMAGE_FSTYPES
+- RK_BOOT_DEVICE
+- IMAGE_BOOT_FILES
+
+The following boards were boot-tested after this change to make sure they
+booted to a console login prompt correctly (core-image-base):
+- tinker-board
+- rock-pi-e
+- rock64
+- nanopi-m4-2gb
+- rock-pi-4b
+
+Signed-off-by: Trevor Woerner <twoerner@gmail.com>
+---
+ conf/machine/firefly-rk3288.conf           | 15 ++-------------
+ conf/machine/include/nanopi-m4.inc         | 13 +------------
+ conf/machine/include/rk3066.inc            |  2 +-
+ conf/machine/include/rk3188.inc            |  2 +-
+ conf/machine/include/rk3288.inc            | 10 +++-------
+ conf/machine/include/rk3328.inc            | 13 ++-----------
+ conf/machine/include/rk3399.inc            | 14 ++------------
+ conf/machine/include/rock-pi-4.inc         | 15 +--------------
+ conf/machine/include/rockchip-32.inc       |  4 ++++
+ conf/machine/include/rockchip-64.inc       | 12 ++++++++++++
+ conf/machine/include/rockchip-defaults.inc | 12 +++++++-----
+ conf/machine/include/rockchip-wic.inc      | 10 ++++++++++
+ conf/machine/include/tinker.inc            | 15 ++-------------
+ conf/machine/rock-pi-e.conf                | 12 ------------
+ conf/machine/rock2-square.conf             |  4 ++--
+ conf/machine/rock64.conf                   | 15 +--------------
+ conf/machine/vyasa-rk3288.conf             | 15 ++-------------
+ 17 files changed, 53 insertions(+), 130 deletions(-)
+ create mode 100644 conf/machine/include/rockchip-32.inc
+ create mode 100644 conf/machine/include/rockchip-64.inc
+ create mode 100644 conf/machine/include/rockchip-wic.inc
+
+diff --git a/conf/machine/firefly-rk3288.conf b/conf/machine/firefly-rk3288.conf
+index 2a5f0ba..dab513b 100644
+--- a/conf/machine/firefly-rk3288.conf
++++ b/conf/machine/firefly-rk3288.conf
+@@ -11,16 +11,5 @@ require conf/machine/include/rk3288.inc
+ KERNEL_DEVICETREE = "rk3288-firefly.dtb"
+ UBOOT_MACHINE = "firefly-rk3288_defconfig"
+ 
+-WKS_FILE ?= "firefly-rk3288.wks"
+-IMAGE_FSTYPES += "wic wic.bmap"
+-
+-WKS_FILE_DEPENDS ?= " \
+-    mtools-native \
+-    dosfstools-native \
+-    virtual/bootloader \
+-    virtual/kernel \
+-    "
+-IMAGE_BOOT_FILES ?= "\
+-    ${KERNEL_IMAGETYPE} \
+-    ${KERNEL_DEVICETREE} \
+-    "
++WKS_FILE = "firefly-rk3288.wks"
++IMAGE_BOOT_FILES += "${KERNEL_DEVICETREE}"
+diff --git a/conf/machine/include/nanopi-m4.inc b/conf/machine/include/nanopi-m4.inc
+index 8a7c1d9..f728063 100644
+--- a/conf/machine/include/nanopi-m4.inc
++++ b/conf/machine/include/nanopi-m4.inc
+@@ -9,15 +9,4 @@ KMACHINE = "nanopi-m4"
+ KERNEL_DEVICETREE = "rockchip/rk3399-nanopi-m4.dtb"
+ 
+ RK_BOOT_DEVICE = "mmcblk1"
+-WKS_FILE ?= "rock-pi-4.wks"
+-IMAGE_FSTYPES += "wic wic.bmap"
+-
+-WKS_FILE_DEPENDS ?= " \
+-    mtools-native \
+-    dosfstools-native \
+-    virtual/bootloader \
+-    virtual/kernel \
+-    "
+-IMAGE_BOOT_FILES ?= "\
+-    ${KERNEL_IMAGETYPE} \
+-    "
++WKS_FILE = "rock-pi-4.wks"
+diff --git a/conf/machine/include/rk3066.inc b/conf/machine/include/rk3066.inc
+index 76744ee..63bf9de 100644
+--- a/conf/machine/include/rk3066.inc
++++ b/conf/machine/include/rk3066.inc
+@@ -6,7 +6,7 @@ SOC_FAMILY = "rk3066"
+ require conf/machine/include/tune-cortexa9.inc
+ require conf/machine/include/soc-family.inc
+ require conf/machine/include/rockchip-defaults.inc
++require conf/machine/include/rockchip-32.inc
+ 
+-RK_CONSOLE_BAUD = "115200"
+ KBUILD_DEFCONFIG = "multi_v7_defconfig"
+ KERNEL_IMAGETYPE = "zImage"
+diff --git a/conf/machine/include/rk3188.inc b/conf/machine/include/rk3188.inc
+index e21bbf7..ca0857d 100644
+--- a/conf/machine/include/rk3188.inc
++++ b/conf/machine/include/rk3188.inc
+@@ -6,9 +6,9 @@ SOC_FAMILY  = "rk3188"
+ require conf/machine/include/tune-cortexa9.inc
+ require conf/machine/include/soc-family.inc
+ require conf/machine/include/rockchip-defaults.inc
++require conf/machine/include/rockchip-32.inc
+ 
+ KBUILD_DEFCONFIG = "multi_v7_defconfig"
+ KERNEL_IMAGETYPE = "zImage"
+ 
+-RK_CONSOLE_BAUD = "115200"
+ RK_CONSOLE_DEVICE = "ttyFIQ0"
+diff --git a/conf/machine/include/rk3288.inc b/conf/machine/include/rk3288.inc
+index 2715e73..21892b7 100644
+--- a/conf/machine/include/rk3288.inc
++++ b/conf/machine/include/rk3288.inc
+@@ -6,12 +6,8 @@ SOC_FAMILY = "rk3288"
+ require conf/machine/include/tune-cortexa17.inc
+ require conf/machine/include/soc-family.inc
+ require conf/machine/include/rockchip-defaults.inc
++require conf/machine/include/rockchip-32.inc
++require conf/machine/include/rockchip-wic.inc
+ 
+ KBUILD_DEFCONFIG ?= "multi_v7_defconfig"
+-KERNEL_IMAGETYPE = "zImage"
+-
+-RK_CONSOLE_BAUD = "115200"
+-
+-PREFERRED_PROVIDER_virtual/bootloader ?= "u-boot"
+-SPL_BINARY ?= "idbloader.img"
+-
++KERNEL_IMAGETYPE ?= "zImage"
+diff --git a/conf/machine/include/rk3328.inc b/conf/machine/include/rk3328.inc
+index 5b11868..e09489e 100644
+--- a/conf/machine/include/rk3328.inc
++++ b/conf/machine/include/rk3328.inc
+@@ -8,16 +8,7 @@ DEFAULTTUNE ?= "cortexa53-crypto"
+ require conf/machine/include/soc-family.inc
+ require conf/machine/include/tune-cortexa53.inc
+ require conf/machine/include/rockchip-defaults.inc
+-
+-KBUILD_DEFCONFIG ?= "defconfig"
+-KERNEL_CLASSES = "kernel-fitimage"
+-KERNEL_IMAGETYPE = "fitImage"
++require conf/machine/include/rockchip-64.inc
++require conf/machine/include/rockchip-wic.inc
+ 
+ TFA_PLATFORM = "rk3328"
+-TFA_BUILD_TARGET = "bl31"
+-
+-UBOOT_SUFFIX ?= "itb"
+-UBOOT_ENTRYPOINT ?= "0x06000000"
+-
+-PREFERRED_PROVIDER_virtual/bootloader ?= "u-boot"
+-SPL_BINARY ?= "idbloader.img"
+diff --git a/conf/machine/include/rk3399.inc b/conf/machine/include/rk3399.inc
+index 9f9f474..23a6fb4 100644
+--- a/conf/machine/include/rk3399.inc
++++ b/conf/machine/include/rk3399.inc
+@@ -8,17 +8,7 @@ DEFAULTTUNE ?= "cortexa72-cortexa53-crypto"
+ require conf/machine/include/soc-family.inc
+ require conf/machine/include/tune-cortexa72-cortexa53.inc
+ require conf/machine/include/rockchip-defaults.inc
+-
+-KBUILD_DEFCONFIG ?= "defconfig"
+-KERNEL_CLASSES = "kernel-fitimage"
+-KERNEL_IMAGETYPE = "fitImage"
++require conf/machine/include/rockchip-64.inc
++require conf/machine/include/rockchip-wic.inc
+ 
+ TFA_PLATFORM = "rk3399"
+-TFA_BUILD_TARGET = "bl31"
+-
+-UBOOT_SUFFIX ?= "itb"
+-UBOOT_ENTRYPOINT ?= "0x06000000"
+-
+-PREFERRED_PROVIDER_virtual/bootloader ?= "u-boot"
+-SPL_BINARY ?= "idbloader.img"
+-
+diff --git a/conf/machine/include/rock-pi-4.inc b/conf/machine/include/rock-pi-4.inc
+index a3e60c7..00f1040 100644
+--- a/conf/machine/include/rock-pi-4.inc
++++ b/conf/machine/include/rock-pi-4.inc
+@@ -4,17 +4,4 @@ MACHINEOVERRIDES =. "rock-pi-4:"
+ require conf/machine/include/rk3399.inc
+ 
+ RK_BOOT_DEVICE = "mmcblk1"
+-WKS_FILE ?= "rock-pi-4.wks"
+-IMAGE_FSTYPES += "wic wic.bmap"
+-
+-WKS_FILE_DEPENDS ?= " \
+-    mtools-native \
+-    dosfstools-native \
+-    virtual/bootloader \
+-    virtual/kernel \
+-    "
+-IMAGE_BOOT_FILES ?= "\
+-    ${KERNEL_IMAGETYPE} \
+-    "
+-
+-MACHINE_EXTRA_RRECOMMENDS += "kernel-modules"
++WKS_FILE = "rock-pi-4.wks"
+diff --git a/conf/machine/include/rockchip-32.inc b/conf/machine/include/rockchip-32.inc
+new file mode 100644
+index 0000000..27e960e
+--- /dev/null
++++ b/conf/machine/include/rockchip-32.inc
+@@ -0,0 +1,4 @@
++# meta-rockchip defaults for 32-bit systems
++
++UBOOT_SUFFIX ?= "bin"
++RK_CONSOLE_BAUD ?= "115200"
+diff --git a/conf/machine/include/rockchip-64.inc b/conf/machine/include/rockchip-64.inc
+new file mode 100644
+index 0000000..f394c31
+--- /dev/null
++++ b/conf/machine/include/rockchip-64.inc
+@@ -0,0 +1,12 @@
++# meta-rockchip defaults for 64-bit systems
++
++UBOOT_SUFFIX ?= "itb"
++UBOOT_ENTRYPOINT ?= "0x06000000"
++
++RK_CONSOLE_BAUD ?= "1500000"
++
++KBUILD_DEFCONFIG ??= "defconfig"
++KERNEL_CLASSES ?= "kernel-fitimage"
++KERNEL_IMAGETYPE ?= "fitImage"
++
++TFA_BUILD_TARGET ?= "bl31"
+diff --git a/conf/machine/include/rockchip-defaults.inc b/conf/machine/include/rockchip-defaults.inc
+index 3e7a2f2..36528fa 100644
+--- a/conf/machine/include/rockchip-defaults.inc
++++ b/conf/machine/include/rockchip-defaults.inc
+@@ -1,9 +1,10 @@
+-# meta-rockchip default settings
++# common meta-rockchip default settings
+ 
+ # kernel
+ PREFERRED_PROVIDER_virtual/kernel ?= "linux-yocto"
+ KCONFIG_MODE ?= "alldefconfig"
+ LINUX_VERSION_EXTENSION ?= "-rockchip"
++MACHINE_EXTRA_RRECOMMENDS += "kernel-modules"
+ 
+ # xserver
+ PREFERRED_PROVIDER_virtual/xserver = "xserver-xorg"
+@@ -20,13 +21,14 @@ XSERVER = " \
+ 	xf86-input-keyboard \
+ 	"
+ 
++# u-boot
++PREFERRED_PROVIDER_virtual/bootloader ?= "u-boot"
++SPL_BINARY ?= "idbloader.img"
++
+ # misc
+-RK_CONSOLE_DEVICE ?= "ttyS2"
+-RK_CONSOLE_BAUD ?= "1500000"
++RK_CONSOLE_DEVICE ??= "ttyS2"
+ SERIAL_CONSOLES = "${RK_CONSOLE_BAUD};${RK_CONSOLE_DEVICE}"
+-IMAGE_FSTYPES += "ext4"
+ 
+ # boot device (sd-card/emmc)
+ RK_BOOT_DEVICE ??= "mmcblk0"
+ WICVARS_append = " RK_BOOT_DEVICE RK_CONSOLE_BAUD RK_CONSOLE_DEVICE"
+-
+diff --git a/conf/machine/include/rockchip-wic.inc b/conf/machine/include/rockchip-wic.inc
+new file mode 100644
+index 0000000..5d1eea7
+--- /dev/null
++++ b/conf/machine/include/rockchip-wic.inc
+@@ -0,0 +1,10 @@
++# common defaults for systems that use wic
++
++IMAGE_FSTYPES += "wic wic.bmap"
++WKS_FILE_DEPENDS = " \
++	mtools-native \
++	dosfstools-native \
++	virtual/bootloader \
++	virtual/kernel \
++	"
++IMAGE_BOOT_FILES ?= "${KERNEL_IMAGETYPE}"
+diff --git a/conf/machine/include/tinker.inc b/conf/machine/include/tinker.inc
+index e851b59..b8a33c9 100644
+--- a/conf/machine/include/tinker.inc
++++ b/conf/machine/include/tinker.inc
+@@ -1,15 +1,4 @@
+ require conf/machine/include/rk3288.inc
+ 
+-WKS_FILE ?= "tinker-board.wks"
+-IMAGE_FSTYPES += "wic wic.bmap"
+-
+-WKS_FILE_DEPENDS ?= " \
+-    mtools-native \
+-    dosfstools-native \
+-    virtual/bootloader \
+-    virtual/kernel \
+-    "
+-IMAGE_BOOT_FILES ?= "\
+-    ${KERNEL_IMAGETYPE} \
+-    ${KERNEL_DEVICETREE} \
+-    "
++WKS_FILE = "tinker-board.wks"
++IMAGE_BOOT_FILES += "${KERNEL_DEVICETREE}"
+diff --git a/conf/machine/rock-pi-e.conf b/conf/machine/rock-pi-e.conf
+index 38362a0..b46b266 100644
+--- a/conf/machine/rock-pi-e.conf
++++ b/conf/machine/rock-pi-e.conf
+@@ -9,19 +9,7 @@ MACHINEOVERRIDES =. "rock-pi-e:"
+ 
+ PREFERRED_PROVIDER_virtual/kernel = "linux-stable-bleeding"
+ KERNEL_DEVICETREE = "rockchip/rk3328-rock-pi-e.dtb"
+-MACHINE_EXTRA_RRECOMMENDS += "kernel-modules"
+ 
+-PREFERRED_PROVIDER_virtual/bootloader = "u-boot"
+ UBOOT_MACHINE = "rock-pi-e-rk3328_defconfig"
+ 
+ WKS_FILE = "rock-pi-e.wks"
+-IMAGE_FSTYPES += "wic.xz wic.bmap"
+-WKS_FILE_DEPENDS = " \
+-    mtools-native \
+-    dosfstools-native \
+-    virtual/bootloader \
+-    virtual/kernel \
+-    "
+-IMAGE_BOOT_FILES ?= " \
+-    ${KERNEL_IMAGETYPE} \
+-    "
+diff --git a/conf/machine/rock2-square.conf b/conf/machine/rock2-square.conf
+index 46064ee..ec04f74 100644
+--- a/conf/machine/rock2-square.conf
++++ b/conf/machine/rock2-square.conf
+@@ -14,6 +14,6 @@ UBOOT_MACHINE = "rock2_defconfig"
+ 
+ # This board doesn't support the combined idbloader, so resort to the older
+ # image class
+-IMAGE_FSTYPES += "rockchip-gpt-img"
++IMAGE_FSTYPES += "ext4 rockchip-gpt-img"
++IMAGE_FSTYPES_remove = "wic wic.bmap"
+ IMAGE_CLASSES += "rockchip-gpt-img"
+-
+diff --git a/conf/machine/rock64.conf b/conf/machine/rock64.conf
+index acda018..d7f3212 100644
+--- a/conf/machine/rock64.conf
++++ b/conf/machine/rock64.conf
+@@ -15,17 +15,4 @@ KERNEL_DEVICETREE = "rockchip/rk3328-rock64.dtb"
+ # set to mmcblk0 for booting from optional eMMC
+ RK_BOOT_DEVICE ?= "mmcblk1"
+ 
+-WKS_FILE ?= "rock-pi-e.wks"
+-IMAGE_FSTYPES += "wic wic.bmap"
+-
+-WKS_FILE_DEPENDS ?= " \
+-    mtools-native \
+-    dosfstools-native \
+-    virtual/bootloader \
+-    virtual/kernel \
+-    "
+-IMAGE_BOOT_FILES ?= "\
+-    ${KERNEL_IMAGETYPE} \
+-    "
+-
+-KBUILD_DEFCONFIG = "defconfig"
++WKS_FILE = "rock-pi-e.wks"
+diff --git a/conf/machine/vyasa-rk3288.conf b/conf/machine/vyasa-rk3288.conf
+index c92c821..5a99b20 100644
+--- a/conf/machine/vyasa-rk3288.conf
++++ b/conf/machine/vyasa-rk3288.conf
+@@ -14,16 +14,5 @@ KERNEL_EXTRA_ARGS += "LOADADDR=0x02000000"
+ UBOOT_MACHINE = "vyasa-rk3288_defconfig"
+ 
+ RK_BOOT_DEVICE = "mmcblk2"
+-WKS_FILE ?= "vyasa-rk3288.wks"
+-IMAGE_FSTYPES += "wic wic.bmap"
+-
+-WKS_FILE_DEPENDS ?= " \
+-    mtools-native \
+-    dosfstools-native \
+-    virtual/bootloader \
+-    virtual/kernel \
+-    "
+-IMAGE_BOOT_FILES ?= "\
+-    ${KERNEL_IMAGETYPE} \
+-    ${KERNEL_DEVICETREE} \
+-    "
++WKS_FILE = "vyasa-rk3288.wks"
++IMAGE_BOOT_FILES += "${KERNEL_DEVICETREE}"
+-- 
+2.30.0.rc0
+
+
+^ permalink raw reply related	[flat|nested] 8+ messages in thread
+* [meta-rockchip][PATCH 4/4] wic/wks cleanup
+  2021-06-23 15:24 [meta-rockchip][PATCH 1/4] centralize console settings Trevor Woerner
+  2021-06-23 15:24 ` [meta-rockchip][PATCH 2/4] wic console device and baud Trevor Woerner
+  2021-06-23 15:24 ` [meta-rockchip][PATCH 3/4] machine common include cleanup Trevor Woerner
+@ 2021-06-23 15:24 ` Trevor Woerner
+  2021-06-23 15:32 ` [yocto] [meta-rockchip][PATCH 1/4] centralize console settings Khem Raj
+  3 siblings, 0 replies; 8+ messages in thread
+From: Trevor Woerner @ 2021-06-23 15:24 UTC (permalink / raw)
+  To: yocto
+
+Instead of having SoC-specific wks files and machine-specific wks files, it
+turns out all we need is one rockchip-specific wks file; any differences
+can be specified with variables.
+
+Boot tested with the following boards (core-image-base):
+- tinker-board
+- rock-pi-e
+- rock64
+- nanopi-m4-2gb
+- rock-pi-4b
+
+Signed-off-by: Trevor Woerner <twoerner@gmail.com>
+---
+ conf/machine/firefly-rk3288.conf           |  1 -
+ conf/machine/include/nanopi-m4.inc         |  1 -
+ conf/machine/include/rock-pi-4.inc         |  1 -
+ conf/machine/include/rockchip-defaults.inc |  4 ----
+ conf/machine/include/rockchip-wic.inc      | 12 +++++++++++
+ conf/machine/include/tinker.inc            |  1 -
+ conf/machine/rock-pi-e.conf                |  2 --
+ conf/machine/rock64.conf                   |  2 --
+ conf/machine/vyasa-rk3288.conf             |  1 -
+ wic/firefly-rk3288.wks                     |  7 -------
+ wic/rk3328-boot.wks                        | 23 ---------------------
+ wic/rk3399-boot.wks                        | 24 ----------------------
+ wic/rock-pi-4.wks                          |  7 -------
+ wic/rock-pi-e.wks                          |  4 ----
+ wic/{rk3288-boot.wks => rockchip.wks}      | 10 ++++++---
+ wic/tinker-board.wks                       |  8 --------
+ wic/vyasa-rk3288.wks                       |  8 --------
+ 17 files changed, 19 insertions(+), 97 deletions(-)
+ delete mode 100644 wic/firefly-rk3288.wks
+ delete mode 100644 wic/rk3328-boot.wks
+ delete mode 100644 wic/rk3399-boot.wks
+ delete mode 100644 wic/rock-pi-4.wks
+ delete mode 100644 wic/rock-pi-e.wks
+ rename wic/{rk3288-boot.wks => rockchip.wks} (71%)
+ delete mode 100644 wic/tinker-board.wks
+ delete mode 100644 wic/vyasa-rk3288.wks
+
+diff --git a/conf/machine/firefly-rk3288.conf b/conf/machine/firefly-rk3288.conf
+index dab513b..58b94df 100644
+--- a/conf/machine/firefly-rk3288.conf
++++ b/conf/machine/firefly-rk3288.conf
+@@ -11,5 +11,4 @@ require conf/machine/include/rk3288.inc
+ KERNEL_DEVICETREE = "rk3288-firefly.dtb"
+ UBOOT_MACHINE = "firefly-rk3288_defconfig"
+ 
+-WKS_FILE = "firefly-rk3288.wks"
+ IMAGE_BOOT_FILES += "${KERNEL_DEVICETREE}"
+diff --git a/conf/machine/include/nanopi-m4.inc b/conf/machine/include/nanopi-m4.inc
+index f728063..aca3023 100644
+--- a/conf/machine/include/nanopi-m4.inc
++++ b/conf/machine/include/nanopi-m4.inc
+@@ -9,4 +9,3 @@ KMACHINE = "nanopi-m4"
+ KERNEL_DEVICETREE = "rockchip/rk3399-nanopi-m4.dtb"
+ 
+ RK_BOOT_DEVICE = "mmcblk1"
+-WKS_FILE = "rock-pi-4.wks"
+diff --git a/conf/machine/include/rock-pi-4.inc b/conf/machine/include/rock-pi-4.inc
+index 00f1040..941d805 100644
+--- a/conf/machine/include/rock-pi-4.inc
++++ b/conf/machine/include/rock-pi-4.inc
+@@ -4,4 +4,3 @@ MACHINEOVERRIDES =. "rock-pi-4:"
+ require conf/machine/include/rk3399.inc
+ 
+ RK_BOOT_DEVICE = "mmcblk1"
+-WKS_FILE = "rock-pi-4.wks"
+diff --git a/conf/machine/include/rockchip-defaults.inc b/conf/machine/include/rockchip-defaults.inc
+index 36528fa..0a4dbd0 100644
+--- a/conf/machine/include/rockchip-defaults.inc
++++ b/conf/machine/include/rockchip-defaults.inc
+@@ -28,7 +28,3 @@ SPL_BINARY ?= "idbloader.img"
+ # misc
+ RK_CONSOLE_DEVICE ??= "ttyS2"
+ SERIAL_CONSOLES = "${RK_CONSOLE_BAUD};${RK_CONSOLE_DEVICE}"
+-
+-# boot device (sd-card/emmc)
+-RK_BOOT_DEVICE ??= "mmcblk0"
+-WICVARS_append = " RK_BOOT_DEVICE RK_CONSOLE_BAUD RK_CONSOLE_DEVICE"
+diff --git a/conf/machine/include/rockchip-wic.inc b/conf/machine/include/rockchip-wic.inc
+index 5d1eea7..4de13d4 100644
+--- a/conf/machine/include/rockchip-wic.inc
++++ b/conf/machine/include/rockchip-wic.inc
+@@ -8,3 +8,15 @@ WKS_FILE_DEPENDS = " \
+ 	virtual/kernel \
+ 	"
+ IMAGE_BOOT_FILES ?= "${KERNEL_IMAGETYPE}"
++
++# boot device (sd-card/emmc)
++RK_BOOT_DEVICE ??= "mmcblk0"
++
++WKS_FILE = "rockchip.wks"
++WICVARS_append = " \
++	RK_BOOT_DEVICE \
++	RK_CONSOLE_BAUD \
++	RK_CONSOLE_DEVICE \
++	SPL_BINARY \
++	UBOOT_SUFFIX \
++	"
+diff --git a/conf/machine/include/tinker.inc b/conf/machine/include/tinker.inc
+index b8a33c9..e60190d 100644
+--- a/conf/machine/include/tinker.inc
++++ b/conf/machine/include/tinker.inc
+@@ -1,4 +1,3 @@
+ require conf/machine/include/rk3288.inc
+ 
+-WKS_FILE = "tinker-board.wks"
+ IMAGE_BOOT_FILES += "${KERNEL_DEVICETREE}"
+diff --git a/conf/machine/rock-pi-e.conf b/conf/machine/rock-pi-e.conf
+index b46b266..5eb67b5 100644
+--- a/conf/machine/rock-pi-e.conf
++++ b/conf/machine/rock-pi-e.conf
+@@ -11,5 +11,3 @@ PREFERRED_PROVIDER_virtual/kernel = "linux-stable-bleeding"
+ KERNEL_DEVICETREE = "rockchip/rk3328-rock-pi-e.dtb"
+ 
+ UBOOT_MACHINE = "rock-pi-e-rk3328_defconfig"
+-
+-WKS_FILE = "rock-pi-e.wks"
+diff --git a/conf/machine/rock64.conf b/conf/machine/rock64.conf
+index d7f3212..f0aa2f4 100644
+--- a/conf/machine/rock64.conf
++++ b/conf/machine/rock64.conf
+@@ -14,5 +14,3 @@ KERNEL_DEVICETREE = "rockchip/rk3328-rock64.dtb"
+ 
+ # set to mmcblk0 for booting from optional eMMC
+ RK_BOOT_DEVICE ?= "mmcblk1"
+-
+-WKS_FILE = "rock-pi-e.wks"
+diff --git a/conf/machine/vyasa-rk3288.conf b/conf/machine/vyasa-rk3288.conf
+index 5a99b20..b48c4f0 100644
+--- a/conf/machine/vyasa-rk3288.conf
++++ b/conf/machine/vyasa-rk3288.conf
+@@ -14,5 +14,4 @@ KERNEL_EXTRA_ARGS += "LOADADDR=0x02000000"
+ UBOOT_MACHINE = "vyasa-rk3288_defconfig"
+ 
+ RK_BOOT_DEVICE = "mmcblk2"
+-WKS_FILE = "vyasa-rk3288.wks"
+ IMAGE_BOOT_FILES += "${KERNEL_DEVICETREE}"
+diff --git a/wic/firefly-rk3288.wks b/wic/firefly-rk3288.wks
+deleted file mode 100644
+index 7b14d1f..0000000
+--- a/wic/firefly-rk3288.wks
++++ /dev/null
+@@ -1,7 +0,0 @@
+-# Copyright (C) 2019 Garmin Ltd. or its subsidiaries
+-# Released under the MIT license (see COPYING.MIT for the terms)
+-
+-include rk3288-boot.wks
+-part / --ondisk ${RK_BOOT_DEVICE} --source rootfs --fstype=ext4 --label root
+-
+-bootloader --ptable gpt --append="console=tty1 console=${RK_CONSOLE_DEVICE},${RK_CONSOLE_BAUD}n8 rw root=/dev/${RK_BOOT_DEVICE}p7 rootfstype=ext4 init=/sbin/init"
+diff --git a/wic/rk3328-boot.wks b/wic/rk3328-boot.wks
+deleted file mode 100644
+index 194145b..0000000
+--- a/wic/rk3328-boot.wks
++++ /dev/null
+@@ -1,23 +0,0 @@
+-# Copyright (C) 2021 Trevor Woerner
+-# Released under the MIT license (see COPYING.MIT for the terms)
+-#
+-# Disk layout
+-# Note that the reference documentation refers to 512 byte disk sectors, but
+-# wic uses 1KB blocks
+-#
+-#   Partition   Start Sector    Number of Sectors
+-#   loader1     64              8000
+-#   reserved1   8064            128
+-#   reserved2   8192            8192
+-#   loader2     16384           8192
+-#   atf         24576           8192
+-#   boot        32768           229376
+-#   root        262144          -           (suggested)
+-#
+-
+-part loader1    --offset 32     --fixed-size 4000K            --ondisk ${RK_BOOT_DEVICE} --source rawcopy --sourceparams="file=idbloader.img"
+-part reserved1  --offset 4032   --fixed-size 64K              --ondisk ${RK_BOOT_DEVICE}
+-part reserved2  --offset 4096   --fixed-size 4096K            --ondisk ${RK_BOOT_DEVICE}
+-part loader2    --offset 8192   --fixed-size 4096K            --ondisk ${RK_BOOT_DEVICE} --source rawcopy --sourceparams="file=u-boot.itb"
+-part atf        --offset 12288  --fixed-size 4096K            --ondisk ${RK_BOOT_DEVICE}
+-part /boot      --offset 16384  --size       114688K --active --ondisk ${RK_BOOT_DEVICE} --source bootimg-partition --fstype=vfat --label boot --sourceparams="loader=u-boot"
+diff --git a/wic/rk3399-boot.wks b/wic/rk3399-boot.wks
+deleted file mode 100644
+index 8a65179..0000000
+--- a/wic/rk3399-boot.wks
++++ /dev/null
+@@ -1,24 +0,0 @@
+-# Copyright (C) 2020 Garmin Ltd. or its subsidiaries
+-# Released under the MIT license (see COPYING.MIT for the terms)
+-#
+-# Disk layout
+-# Note that the reference documentation refers to 512 byte disk sectors, but
+-# wic uses 1KB blocks
+-#
+-#   Partition   Start Sector    Number of Sectors
+-#   loader1     64              8000
+-#   reserved1   8064            128
+-#   reserved2   8192            8192
+-#   loader2     16384           8192
+-#   atf         24576           8192
+-#   boot        32768           229376
+-#   root        262144          -           (suggested)
+-#
+-
+-part loader1    --offset 32     --fixed-size 4000K            --ondisk ${RK_BOOT_DEVICE} --source rawcopy --sourceparams="file=idbloader.img"
+-part reserved1  --offset 4032   --fixed-size 64K              --ondisk ${RK_BOOT_DEVICE}
+-part reserved2  --offset 4096   --fixed-size 4096K            --ondisk ${RK_BOOT_DEVICE}
+-part loader2    --offset 8192   --fixed-size 4096K            --ondisk ${RK_BOOT_DEVICE} --source rawcopy --sourceparams="file=u-boot.itb"
+-part atf        --offset 12288  --fixed-size 4096K            --ondisk ${RK_BOOT_DEVICE}
+-part /boot      --offset 16384  --size       114688K --active --ondisk ${RK_BOOT_DEVICE} --source bootimg-partition --fstype=vfat --label boot --sourceparams="loader=u-boot"
+-
+diff --git a/wic/rock-pi-4.wks b/wic/rock-pi-4.wks
+deleted file mode 100644
+index 5c02e9f..0000000
+--- a/wic/rock-pi-4.wks
++++ /dev/null
+@@ -1,7 +0,0 @@
+-# Copyright (C) 2020 Garmin Ltd. or its subsidiaries
+-# Released under the MIT license (see COPYING.MIT for the terms)
+-
+-include rk3399-boot.wks
+-part / --ondisk ${RK_BOOT_DEVICE} --source rootfs --fstype=ext4 --label root
+-
+-bootloader --ptable gpt --append="console=tty1 console=${RK_CONSOLE_DEVICE},${RK_CONSOLE_BAUD}n8 rw root=/dev/${RK_BOOT_DEVICE}p7 rootfstype=ext4 init=/sbin/init"
+diff --git a/wic/rock-pi-e.wks b/wic/rock-pi-e.wks
+deleted file mode 100644
+index 9c10d90..0000000
+--- a/wic/rock-pi-e.wks
++++ /dev/null
+@@ -1,4 +0,0 @@
+-include rk3328-boot.wks
+-part / --ondisk ${RK_BOOT_DEVICE} --source rootfs --fstype=ext4 --label root
+-
+-bootloader --ptable gpt --append="console=tty1 console=${RK_CONSOLE_DEVICE},${RK_CONSOLE_BAUD}n8 rw root=/dev/${RK_BOOT_DEVICE}p7 rootfstype=ext4 init=/sbin/init"
+diff --git a/wic/rk3288-boot.wks b/wic/rockchip.wks
+similarity index 71%
+rename from wic/rk3288-boot.wks
+rename to wic/rockchip.wks
+index e4d30cc..dfbf7f2 100644
+--- a/wic/rk3288-boot.wks
++++ b/wic/rockchip.wks
+@@ -1,4 +1,5 @@
+-# Copyright (C) 2020 Garmin Ltd. or its subsidiaries
++# Copyright (C) 2021 Trevor Woerner <twoerner@gmail.com>
++# Copyright (C) 2019,2020 Garmin Ltd. or its subsidiaries
+ # Released under the MIT license (see COPYING.MIT for the terms)
+ #
+ # Disk layout
+@@ -15,10 +16,13 @@
+ #   root        262144          -           (suggested)
+ #
+ 
+-part loader1    --offset 32     --fixed-size 4000K            --ondisk ${RK_BOOT_DEVICE} --source rawcopy --sourceparams="file=idbloader.img"
++part loader1    --offset 32     --fixed-size 4000K            --ondisk ${RK_BOOT_DEVICE} --source rawcopy --sourceparams="file=${SPL_BINARY}"
+ part reserved1  --offset 4032   --fixed-size 64K              --ondisk ${RK_BOOT_DEVICE}
+ part reserved2  --offset 4096   --fixed-size 4096K            --ondisk ${RK_BOOT_DEVICE}
+-part loader2    --offset 8192   --fixed-size 4096K            --ondisk ${RK_BOOT_DEVICE} --source rawcopy --sourceparams="file=u-boot.bin"
++part loader2    --offset 8192   --fixed-size 4096K            --ondisk ${RK_BOOT_DEVICE} --source rawcopy --sourceparams="file=u-boot.${UBOOT_SUFFIX}"
+ part atf        --offset 12288  --fixed-size 4096K            --ondisk ${RK_BOOT_DEVICE}
+ part /boot      --offset 16384  --size       114688K --active --ondisk ${RK_BOOT_DEVICE} --source bootimg-partition --fstype=vfat --label boot --sourceparams="loader=u-boot"
+ 
++part / --ondisk ${RK_BOOT_DEVICE} --source rootfs --fstype=ext4 --label root
++
++bootloader --ptable gpt --append="console=tty1 console=${RK_CONSOLE_DEVICE},${RK_CONSOLE_BAUD}n8 rw root=/dev/${RK_BOOT_DEVICE}p7 rootfstype=ext4 init=/sbin/init"
+diff --git a/wic/tinker-board.wks b/wic/tinker-board.wks
+deleted file mode 100644
+index 00ae820..0000000
+--- a/wic/tinker-board.wks
++++ /dev/null
+@@ -1,8 +0,0 @@
+-# Copyright (C) 2019 Garmin Ltd. or its subsidiaries
+-# Released under the MIT license (see COPYING.MIT for the terms)
+-
+-include rk3288-boot.wks
+-
+-part / --ondisk ${RK_BOOT_DEVICE} --source rootfs --fstype=ext4 --label root
+-
+-bootloader --ptable gpt --append="console=tty1 console=${RK_CONSOLE_DEVICE},${RK_CONSOLE_BAUD}n8 rw root=/dev/${RK_BOOT_DEVICE}p7 rootfstype=ext4 init=/sbin/init"
+diff --git a/wic/vyasa-rk3288.wks b/wic/vyasa-rk3288.wks
+deleted file mode 100644
+index 5346fbd..0000000
+--- a/wic/vyasa-rk3288.wks
++++ /dev/null
+@@ -1,8 +0,0 @@
+-# Copyright (C) 2019 Garmin Ltd. or its subsidiaries
+-# Released under the MIT license (see COPYING.MIT for the terms)
+-
+-include rk3288-boot.wks
+-part / --ondisk ${RK_BOOT_DEVICE} --source rootfs --fstype=ext4 --label root
+-
+-bootloader --ptable gpt --append="console=tty1 console=${RK_CONSOLE_DEVICE},${RK_CONSOLE_BAUD}n8 rw root=/dev/${RK_BOOT_DEVICE}p7 rootfstype=ext4 init=/sbin/init"
+-
+-- 
+2.30.0.rc0
+
+
+^ permalink raw reply related	[flat|nested] 8+ messages in thread
+* Re: [yocto] [meta-rockchip][PATCH 1/4] centralize console settings
+  2021-06-23 15:24 [meta-rockchip][PATCH 1/4] centralize console settings Trevor Woerner
+                   ` (2 preceding siblings ...)
+  2021-06-23 15:24 ` [meta-rockchip][PATCH 4/4] wic/wks cleanup Trevor Woerner
+@ 2021-06-23 15:32 ` Khem Raj
+  2021-06-23 18:10   ` Yann Dirson
+  3 siblings, 1 reply; 8+ messages in thread
+From: Khem Raj @ 2021-06-23 15:32 UTC (permalink / raw)
+  To: Trevor Woerner; +Cc: Yocto-mailing-list
+
+On Wed, Jun 23, 2021 at 8:25 AM Trevor Woerner <twoerner@gmail.com> wrote:
+>
+> The console settings (baud and device) are scrambled and spread throughout the
+> MACHINE configurations. Consolidate them and set defaults which are then
+> overridden only as required.
+>
+> Signed-off-by: Trevor Woerner <twoerner@gmail.com>
+> ---
+>  conf/machine/include/nanopi-m4.inc         | 2 --
+>  conf/machine/include/rk3066.inc            | 1 +
+>  conf/machine/include/rk3188.inc            | 3 +++
+>  conf/machine/include/rk3288.inc            | 2 +-
+>  conf/machine/include/rk3328.inc            | 2 --
+>  conf/machine/include/rk3399.inc            | 2 --
+>  conf/machine/include/rock-pi-4.inc         | 2 --
+>  conf/machine/include/rockchip-defaults.inc | 3 +++
+>  conf/machine/marsboard-rk3066.conf         | 1 -
+>  conf/machine/radxarock.conf                | 1 -
+>  10 files changed, 8 insertions(+), 11 deletions(-)
+>
+> diff --git a/conf/machine/include/nanopi-m4.inc b/conf/machine/include/nanopi-m4.inc
+> index a14b705..8a7c1d9 100644
+> --- a/conf/machine/include/nanopi-m4.inc
+> +++ b/conf/machine/include/nanopi-m4.inc
+> @@ -21,5 +21,3 @@ WKS_FILE_DEPENDS ?= " \
+>  IMAGE_BOOT_FILES ?= "\
+>      ${KERNEL_IMAGETYPE} \
+>      "
+> -
+> -SERIAL_CONSOLES = "1500000;ttyS2"
+> diff --git a/conf/machine/include/rk3066.inc b/conf/machine/include/rk3066.inc
+> index dffbee0..76744ee 100644
+> --- a/conf/machine/include/rk3066.inc
+> +++ b/conf/machine/include/rk3066.inc
+> @@ -7,5 +7,6 @@ require conf/machine/include/tune-cortexa9.inc
+>  require conf/machine/include/soc-family.inc
+>  require conf/machine/include/rockchip-defaults.inc
+>
+> +RK_CONSOLE_BAUD = "115200"
+>  KBUILD_DEFCONFIG = "multi_v7_defconfig"
+>  KERNEL_IMAGETYPE = "zImage"
+> diff --git a/conf/machine/include/rk3188.inc b/conf/machine/include/rk3188.inc
+> index 59e65d1..e21bbf7 100644
+> --- a/conf/machine/include/rk3188.inc
+> +++ b/conf/machine/include/rk3188.inc
+> @@ -9,3 +9,6 @@ require conf/machine/include/rockchip-defaults.inc
+>
+>  KBUILD_DEFCONFIG = "multi_v7_defconfig"
+>  KERNEL_IMAGETYPE = "zImage"
+> +
+> +RK_CONSOLE_BAUD = "115200"
+> +RK_CONSOLE_DEVICE = "ttyFIQ0"
+
+while I appreciate this change, it does have an effect of removing the
+users away from
+BSP variables that core metadata layers have, e.g. SERIAL_CONSOLES is
+a well defined
+and documented variable and if we synthesize it then its hidden which
+is fine if we document
+the new variables equally well although that means every BSP will
+invent these kind of
+variables so if a person was doing RPI and comes to work on rockchip
+boards he has more
+learnings to do.
+
+> diff --git a/conf/machine/include/rk3288.inc b/conf/machine/include/rk3288.inc
+> index 480e250..2715e73 100644
+> --- a/conf/machine/include/rk3288.inc
+> +++ b/conf/machine/include/rk3288.inc
+> @@ -10,7 +10,7 @@ require conf/machine/include/rockchip-defaults.inc
+>  KBUILD_DEFCONFIG ?= "multi_v7_defconfig"
+>  KERNEL_IMAGETYPE = "zImage"
+>
+> -SERIAL_CONSOLES = "115200;ttyS2"
+> +RK_CONSOLE_BAUD = "115200"
+>
+>  PREFERRED_PROVIDER_virtual/bootloader ?= "u-boot"
+>  SPL_BINARY ?= "idbloader.img"
+> diff --git a/conf/machine/include/rk3328.inc b/conf/machine/include/rk3328.inc
+> index a4bbc5d..5b11868 100644
+> --- a/conf/machine/include/rk3328.inc
+> +++ b/conf/machine/include/rk3328.inc
+> @@ -19,7 +19,5 @@ TFA_BUILD_TARGET = "bl31"
+>  UBOOT_SUFFIX ?= "itb"
+>  UBOOT_ENTRYPOINT ?= "0x06000000"
+>
+> -SERIAL_CONSOLES = "1500000;ttyS2"
+> -
+>  PREFERRED_PROVIDER_virtual/bootloader ?= "u-boot"
+>  SPL_BINARY ?= "idbloader.img"
+> diff --git a/conf/machine/include/rk3399.inc b/conf/machine/include/rk3399.inc
+> index f6b7826..9f9f474 100644
+> --- a/conf/machine/include/rk3399.inc
+> +++ b/conf/machine/include/rk3399.inc
+> @@ -19,8 +19,6 @@ TFA_BUILD_TARGET = "bl31"
+>  UBOOT_SUFFIX ?= "itb"
+>  UBOOT_ENTRYPOINT ?= "0x06000000"
+>
+> -SERIAL_CONSOLES = "115200;ttyS2"
+> -
+>  PREFERRED_PROVIDER_virtual/bootloader ?= "u-boot"
+>  SPL_BINARY ?= "idbloader.img"
+>
+> diff --git a/conf/machine/include/rock-pi-4.inc b/conf/machine/include/rock-pi-4.inc
+> index 9c21084..a3e60c7 100644
+> --- a/conf/machine/include/rock-pi-4.inc
+> +++ b/conf/machine/include/rock-pi-4.inc
+> @@ -17,6 +17,4 @@ IMAGE_BOOT_FILES ?= "\
+>      ${KERNEL_IMAGETYPE} \
+>      "
+>
+> -SERIAL_CONSOLES = "1500000;ttyS2"
+> -
+>  MACHINE_EXTRA_RRECOMMENDS += "kernel-modules"
+> diff --git a/conf/machine/include/rockchip-defaults.inc b/conf/machine/include/rockchip-defaults.inc
+> index a4e2a2c..fe4052e 100644
+> --- a/conf/machine/include/rockchip-defaults.inc
+> +++ b/conf/machine/include/rockchip-defaults.inc
+> @@ -21,6 +21,9 @@ XSERVER = " \
+>         "
+>
+>  # misc
+> +RK_CONSOLE_DEVICE ?= "ttyS2"
+> +RK_CONSOLE_BAUD ?= "1500000"
+> +SERIAL_CONSOLES = "${RK_CONSOLE_BAUD};${RK_CONSOLE_DEVICE}"
+>  IMAGE_FSTYPES += "ext4"
+>
+>  # boot device (sd-card/emmc)
+> diff --git a/conf/machine/marsboard-rk3066.conf b/conf/machine/marsboard-rk3066.conf
+> index 09414bc..52fd256 100644
+> --- a/conf/machine/marsboard-rk3066.conf
+> +++ b/conf/machine/marsboard-rk3066.conf
+> @@ -8,5 +8,4 @@
+>
+>  require conf/machine/include/rk3066.inc
+>
+> -SERIAL_CONSOLES = "115200;ttyS2"
+>  KERNEL_DEVICETREE = "rk3066a-marsboard.dtb"
+> diff --git a/conf/machine/radxarock.conf b/conf/machine/radxarock.conf
+> index 2036f6a..42d8848 100644
+> --- a/conf/machine/radxarock.conf
+> +++ b/conf/machine/radxarock.conf
+> @@ -9,5 +9,4 @@
+>
+>  require conf/machine/include/rk3188.inc
+>
+> -SERIAL_CONSOLES = "115200;ttyFIQ0"
+>  KERNEL_DEVICETREE = "rk3188-radxarock.dtb"
+> --
+> 2.30.0.rc0
+>
+>
+> 
+>
+
+^ permalink raw reply	[flat|nested] 8+ messages in thread
+* Re: [yocto] [meta-rockchip][PATCH 1/4] centralize console settings
+  2021-06-23 15:32 ` [yocto] [meta-rockchip][PATCH 1/4] centralize console settings Khem Raj
+@ 2021-06-23 18:10   ` Yann Dirson
+  2021-06-23 18:51     ` Trevor Woerner
+  0 siblings, 1 reply; 8+ messages in thread
+From: Yann Dirson @ 2021-06-23 18:10 UTC (permalink / raw)
+  To: Khem Raj; +Cc: Yocto-mailing-list, Trevor Woerner
+
+
+
+----- Mail original -----
+> De: "Khem Raj" <raj.khem@gmail.com>
+> À: "Trevor Woerner" <twoerner@gmail.com>
+> Cc: "Yocto-mailing-list" <yocto@lists.yoctoproject.org>
+> Envoyé: Mercredi 23 Juin 2021 11:32:57
+> Objet: Re: [yocto] [meta-rockchip][PATCH 1/4] centralize console settings
+> 
+> On Wed, Jun 23, 2021 at 8:25 AM Trevor Woerner <twoerner@gmail.com>
+> wrote:
+> >
+> > The console settings (baud and device) are scrambled and spread
+> > throughout the
+> > MACHINE configurations. Consolidate them and set defaults which are
+> > then
+> > overridden only as required.
+> >
+> > Signed-off-by: Trevor Woerner <twoerner@gmail.com>
+> > ---
+> >  conf/machine/include/nanopi-m4.inc         | 2 --
+> >  conf/machine/include/rk3066.inc            | 1 +
+> >  conf/machine/include/rk3188.inc            | 3 +++
+> >  conf/machine/include/rk3288.inc            | 2 +-
+> >  conf/machine/include/rk3328.inc            | 2 --
+> >  conf/machine/include/rk3399.inc            | 2 --
+> >  conf/machine/include/rock-pi-4.inc         | 2 --
+> >  conf/machine/include/rockchip-defaults.inc | 3 +++
+> >  conf/machine/marsboard-rk3066.conf         | 1 -
+> >  conf/machine/radxarock.conf                | 1 -
+> >  10 files changed, 8 insertions(+), 11 deletions(-)
+> >
+> > diff --git a/conf/machine/include/nanopi-m4.inc
+> > b/conf/machine/include/nanopi-m4.inc
+> > index a14b705..8a7c1d9 100644
+> > --- a/conf/machine/include/nanopi-m4.inc
+> > +++ b/conf/machine/include/nanopi-m4.inc
+> > @@ -21,5 +21,3 @@ WKS_FILE_DEPENDS ?= " \
+> >  IMAGE_BOOT_FILES ?= "\
+> >      ${KERNEL_IMAGETYPE} \
+> >      "
+> > -
+> > -SERIAL_CONSOLES = "1500000;ttyS2"
+> > diff --git a/conf/machine/include/rk3066.inc
+> > b/conf/machine/include/rk3066.inc
+> > index dffbee0..76744ee 100644
+> > --- a/conf/machine/include/rk3066.inc
+> > +++ b/conf/machine/include/rk3066.inc
+> > @@ -7,5 +7,6 @@ require conf/machine/include/tune-cortexa9.inc
+> >  require conf/machine/include/soc-family.inc
+> >  require conf/machine/include/rockchip-defaults.inc
+> >
+> > +RK_CONSOLE_BAUD = "115200"
+> >  KBUILD_DEFCONFIG = "multi_v7_defconfig"
+> >  KERNEL_IMAGETYPE = "zImage"
+> > diff --git a/conf/machine/include/rk3188.inc
+> > b/conf/machine/include/rk3188.inc
+> > index 59e65d1..e21bbf7 100644
+> > --- a/conf/machine/include/rk3188.inc
+> > +++ b/conf/machine/include/rk3188.inc
+> > @@ -9,3 +9,6 @@ require conf/machine/include/rockchip-defaults.inc
+> >
+> >  KBUILD_DEFCONFIG = "multi_v7_defconfig"
+> >  KERNEL_IMAGETYPE = "zImage"
+> > +
+> > +RK_CONSOLE_BAUD = "115200"
+> > +RK_CONSOLE_DEVICE = "ttyFIQ0"
+> 
+> while I appreciate this change, it does have an effect of removing
+> the
+> users away from
+> BSP variables that core metadata layers have, e.g. SERIAL_CONSOLES is
+> a well defined
+> and documented variable and if we synthesize it then its hidden which
+> is fine if we document
+> the new variables equally well although that means every BSP will
+> invent these kind of
+> variables so if a person was doing RPI and comes to work on rockchip
+> boards he has more
+> learnings to do.
+
+What about making this change at the poky level, then ?
+
+> 
+> > diff --git a/conf/machine/include/rk3288.inc
+> > b/conf/machine/include/rk3288.inc
+> > index 480e250..2715e73 100644
+> > --- a/conf/machine/include/rk3288.inc
+> > +++ b/conf/machine/include/rk3288.inc
+> > @@ -10,7 +10,7 @@ require
+> > conf/machine/include/rockchip-defaults.inc
+> >  KBUILD_DEFCONFIG ?= "multi_v7_defconfig"
+> >  KERNEL_IMAGETYPE = "zImage"
+> >
+> > -SERIAL_CONSOLES = "115200;ttyS2"
+> > +RK_CONSOLE_BAUD = "115200"
+> >
+> >  PREFERRED_PROVIDER_virtual/bootloader ?= "u-boot"
+> >  SPL_BINARY ?= "idbloader.img"
+> > diff --git a/conf/machine/include/rk3328.inc
+> > b/conf/machine/include/rk3328.inc
+> > index a4bbc5d..5b11868 100644
+> > --- a/conf/machine/include/rk3328.inc
+> > +++ b/conf/machine/include/rk3328.inc
+> > @@ -19,7 +19,5 @@ TFA_BUILD_TARGET = "bl31"
+> >  UBOOT_SUFFIX ?= "itb"
+> >  UBOOT_ENTRYPOINT ?= "0x06000000"
+> >
+> > -SERIAL_CONSOLES = "1500000;ttyS2"
+> > -
+> >  PREFERRED_PROVIDER_virtual/bootloader ?= "u-boot"
+> >  SPL_BINARY ?= "idbloader.img"
+> > diff --git a/conf/machine/include/rk3399.inc
+> > b/conf/machine/include/rk3399.inc
+> > index f6b7826..9f9f474 100644
+> > --- a/conf/machine/include/rk3399.inc
+> > +++ b/conf/machine/include/rk3399.inc
+> > @@ -19,8 +19,6 @@ TFA_BUILD_TARGET = "bl31"
+> >  UBOOT_SUFFIX ?= "itb"
+> >  UBOOT_ENTRYPOINT ?= "0x06000000"
+> >
+> > -SERIAL_CONSOLES = "115200;ttyS2"
+> > -
+> >  PREFERRED_PROVIDER_virtual/bootloader ?= "u-boot"
+> >  SPL_BINARY ?= "idbloader.img"
+> >
+> > diff --git a/conf/machine/include/rock-pi-4.inc
+> > b/conf/machine/include/rock-pi-4.inc
+> > index 9c21084..a3e60c7 100644
+> > --- a/conf/machine/include/rock-pi-4.inc
+> > +++ b/conf/machine/include/rock-pi-4.inc
+> > @@ -17,6 +17,4 @@ IMAGE_BOOT_FILES ?= "\
+> >      ${KERNEL_IMAGETYPE} \
+> >      "
+> >
+> > -SERIAL_CONSOLES = "1500000;ttyS2"
+> > -
+> >  MACHINE_EXTRA_RRECOMMENDS += "kernel-modules"
+> > diff --git a/conf/machine/include/rockchip-defaults.inc
+> > b/conf/machine/include/rockchip-defaults.inc
+> > index a4e2a2c..fe4052e 100644
+> > --- a/conf/machine/include/rockchip-defaults.inc
+> > +++ b/conf/machine/include/rockchip-defaults.inc
+> > @@ -21,6 +21,9 @@ XSERVER = " \
+> >         "
+> >
+> >  # misc
+> > +RK_CONSOLE_DEVICE ?= "ttyS2"
+> > +RK_CONSOLE_BAUD ?= "1500000"
+> > +SERIAL_CONSOLES = "${RK_CONSOLE_BAUD};${RK_CONSOLE_DEVICE}"
+> >  IMAGE_FSTYPES += "ext4"
+> >
+> >  # boot device (sd-card/emmc)
+> > diff --git a/conf/machine/marsboard-rk3066.conf
+> > b/conf/machine/marsboard-rk3066.conf
+> > index 09414bc..52fd256 100644
+> > --- a/conf/machine/marsboard-rk3066.conf
+> > +++ b/conf/machine/marsboard-rk3066.conf
+> > @@ -8,5 +8,4 @@
+> >
+> >  require conf/machine/include/rk3066.inc
+> >
+> > -SERIAL_CONSOLES = "115200;ttyS2"
+> >  KERNEL_DEVICETREE = "rk3066a-marsboard.dtb"
+> > diff --git a/conf/machine/radxarock.conf
+> > b/conf/machine/radxarock.conf
+> > index 2036f6a..42d8848 100644
+> > --- a/conf/machine/radxarock.conf
+> > +++ b/conf/machine/radxarock.conf
+> > @@ -9,5 +9,4 @@
+> >
+> >  require conf/machine/include/rk3188.inc
+> >
+> > -SERIAL_CONSOLES = "115200;ttyFIQ0"
+> >  KERNEL_DEVICETREE = "rk3188-radxarock.dtb"
+> > --
+> > 2.30.0.rc0
+> >
+> >
+> > 
+> >
+> 
+> 
+> 
+> 
+> 
+
+^ permalink raw reply	[flat|nested] 8+ messages in thread
+* Re: [yocto] [meta-rockchip][PATCH 1/4] centralize console settings
+  2021-06-23 18:10   ` Yann Dirson
+@ 2021-06-23 18:51     ` Trevor Woerner
+  2021-06-23 19:38       ` Yann Dirson
+  0 siblings, 1 reply; 8+ messages in thread
+From: Trevor Woerner @ 2021-06-23 18:51 UTC (permalink / raw)
+  To: ydirson; +Cc: Khem Raj, Yocto-mailing-list
+
+On Wed 2021-06-23 @ 08:10:07 PM, ydirson@free.fr wrote:
+> > De: "Khem Raj" <raj.khem@gmail.com>
+> > À: "Trevor Woerner" <twoerner@gmail.com>
+> > Cc: "Yocto-mailing-list" <yocto@lists.yoctoproject.org>
+> > Envoyé: Mercredi 23 Juin 2021 11:32:57
+> > Objet: Re: [yocto] [meta-rockchip][PATCH 1/4] centralize console settings
+
+> > > +RK_CONSOLE_BAUD = "115200"
+> > > +RK_CONSOLE_DEVICE = "ttyFIQ0"
+> > 
+> > while I appreciate this change, it does have an effect of removing
+> > the
+> > users away from
+> > BSP variables that core metadata layers have, e.g. SERIAL_CONSOLES is
+> > a well defined
+> > and documented variable and if we synthesize it then its hidden which
+> > is fine if we document
+> > the new variables equally well although that means every BSP will
+> > invent these kind of
+> > variables so if a person was doing RPI and comes to work on rockchip
+> > boards he has more
+> > learnings to do.
+
+Good point, thanks for mentioning it.
+
+> What about making this change at the poky level, then ?
+
+I suspect it would break things in all sorts of unimaginable ways ;-)
+
+For example, SERIAL_CONSOLES (note: plural) can contain more than one
+baud+device pair so if we try to break out the baud and device then we'd need
+an array (?) so we could break out multiple baud and device pairs (?), and
+then that would get messy...  ugh!
+
+^ permalink raw reply	[flat|nested] 8+ messages in thread
+* Re: [yocto] [meta-rockchip][PATCH 1/4] centralize console settings
+  2021-06-23 18:51     ` Trevor Woerner
+@ 2021-06-23 19:38       ` Yann Dirson
+  0 siblings, 0 replies; 8+ messages in thread
+From: Yann Dirson @ 2021-06-23 19:38 UTC (permalink / raw)
+  To: Trevor Woerner; +Cc: Khem Raj, Yocto-mailing-list
+
+
+> De: "Trevor Woerner" <twoerner@gmail.com>
+> À: ydirson@free.fr
+> Cc: "Khem Raj" <raj.khem@gmail.com>, "Yocto-mailing-list" <yocto@lists.yoctoproject.org>
+> Envoyé: Mercredi 23 Juin 2021 14:51:39
+> Objet: Re: [yocto] [meta-rockchip][PATCH 1/4] centralize console settings
+> 
+> On Wed 2021-06-23 @ 08:10:07 PM, ydirson@free.fr wrote:
+> > > De: "Khem Raj" <raj.khem@gmail.com>
+> > > À: "Trevor Woerner" <twoerner@gmail.com>
+> > > Cc: "Yocto-mailing-list" <yocto@lists.yoctoproject.org>
+> > > Envoyé: Mercredi 23 Juin 2021 11:32:57
+> > > Objet: Re: [yocto] [meta-rockchip][PATCH 1/4] centralize console
+> > > settings
+> 
+> > > > +RK_CONSOLE_BAUD = "115200"
+> > > > +RK_CONSOLE_DEVICE = "ttyFIQ0"
+> > > 
+> > > while I appreciate this change, it does have an effect of
+> > > removing
+> > > the
+> > > users away from
+> > > BSP variables that core metadata layers have, e.g.
+> > > SERIAL_CONSOLES is
+> > > a well defined
+> > > and documented variable and if we synthesize it then its hidden
+> > > which
+> > > is fine if we document
+> > > the new variables equally well although that means every BSP will
+> > > invent these kind of
+> > > variables so if a person was doing RPI and comes to work on
+> > > rockchip
+> > > boards he has more
+> > > learnings to do.
+> 
+> Good point, thanks for mentioning it.
+> 
+> > What about making this change at the poky level, then ?
+> 
+> I suspect it would break things in all sorts of unimaginable ways ;-)
+> 
+> For example, SERIAL_CONSOLES (note: plural) can contain more than one
+> baud+device pair so if we try to break out the baud and device then
+> we'd need
+> an array (?) so we could break out multiple baud and device pairs
+> (?), and
+> then that would get messy...  ugh!
+
+Damned that makes things more complicated :)
+
+That could push us along the following lines ?
+
+ CONSOLE_DEVICES = "/dev/ttyS2 /dev/tty1"
+ CONSOLE_BAUD_ttyS2 = "1500000"
+ CONSOLE_BAUD_tty1 = "115200"
+
+(well, with /dev/ being what it is, CONSOLE_DEVICES = "ttyS2 tty1" could
+even be decided as sufficient, removing any possibility for syntactic
+ambiguities)
+
+or maybe even this ?
+
+ CONSOLE_BAUD = <default value>
+ CONSOLE_BAUD[/dev/ttyS2] = <overriden value>
+
+^ permalink raw reply	[flat|nested] 8+ messages in thread
+end of thread, other threads:[~2021-06-23 19:38 UTC | newest]
+
+Thread overview: 8+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-06-23 15:24 [meta-rockchip][PATCH 1/4] centralize console settings Trevor Woerner
+2021-06-23 15:24 ` [meta-rockchip][PATCH 2/4] wic console device and baud Trevor Woerner
+2021-06-23 15:24 ` [meta-rockchip][PATCH 3/4] machine common include cleanup Trevor Woerner
+2021-06-23 15:24 ` [meta-rockchip][PATCH 4/4] wic/wks cleanup Trevor Woerner
+2021-06-23 15:32 ` [yocto] [meta-rockchip][PATCH 1/4] centralize console settings Khem Raj
+2021-06-23 18:10   ` Yann Dirson
+2021-06-23 18:51     ` Trevor Woerner
+2021-06-23 19:38       ` Yann Dirson
+

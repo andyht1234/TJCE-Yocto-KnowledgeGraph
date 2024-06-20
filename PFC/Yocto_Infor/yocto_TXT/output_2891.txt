@@ -1,0 +1,154 @@
+* [yocto] Yocto Autobuilder: Latency Monitor and AB-INT - Meeting notes: Sept 9, 2021
+@ 2021-09-09 15:52 Randy MacLeod
+  0 siblings, 0 replies; only message in thread
+From: Randy MacLeod @ 2021-09-09 15:52 UTC (permalink / raw)
+  To: Sakib Sajal, alexandre.belloni, richard.purdie, Wold, Saul,
+	Trevor Gamblin, Surendran, Kiran
+  Cc: yocto
+
+
+YP AB Intermittent failures meeting
+===================================
+Sept 9, 2021, 9 AM ET
+https://windriver.zoom.us/j/3696693975
+
+Attendees: Kiran, Richard, Trevor, Randy!
+
+
+Summary:
+========
+
+Ptest results continue to improve but there's still room
+for even more improvement.
+
+The make/ninja load average limit is in but it's not clear
+if it's effective yet and it breaks dunfell. Trevor investigating
+(Aug 26!, Sept 9).  Trevor is going to get back to this!
+
+
+If anyone wants to help, we could use more eyes on the logs,
+particularly the summary logs and understanding iostat #
+when the dd test times out.
+
+
+
+Plans for the week:
+===================
+
+     Richard: QA results for M3, etc.
+     Alex: SWAT plans. September email, training. libevent monotonic fix!
+     Sakib: hook more responsive load average in to latency test. (v3)
+     Trevor: patch to set PARALLEL_MAKE : -l 50
+       -> dunfell, gatesgarth, hardknott (Aug 5 - it's a priority)
+       Investigate dunfell which failed with this change.
+       - data on WR AB load average.
+     Saul: SBOM
+     Randy: Vacation
+     Kiran: probably work on one of the ptest failures.
+
+
+Nothing much new below here. Keeping the list since it's still to-do.
+
+../Randy
+
+Meeting Notes:
+==============
+
+1. job server
+
+- ninja could be patched with make's more responsive algorithm
+     next or is this good enough?
+
+   Aug 26:
+   Randy made some graphs that show that the -l NUM results
+   in the number of compile jobs oscillates *wildly* between 0 and 200
+   on a 192 core builder compiling chromium. What I did was:
+   $ bitbake -c cleansstate chromium-x11
+   $ bitbake -c configure chromium-x11
+   $ bitbake -c compile chromium-x11
+   and while that compile was running:
+   $ while [ ! -f /tmp/compiling-chromium-is-done ]; do \
+        cat /proc/loadavg >> procs-load.log   ; sleep 0.5 ;
+     done
+   Results so far:
+      https://postimg.cc/gallery/3hjfYfG/f8f46c97
+   Next step is either:
+   a. collect data as above for an image build and see if the sub-optimal
+      ninja behaviour makes a difference
+   and/or
+   b. patch ninja with make's more responsive load avg
+      algorithm:
+         https://git.savannah.gnu.org/cgit/make.git/commit/?id=d8728efc8
+
+
+- Richard suggested that we extract make's code for measuring the load
+     average to a separate binary and run it in the periodic io latency
+     test. Also can we translate it to python?
+     - Trevor is working on this and had some problems so next week.
+       (Aug 19 - Trevor is back from vaction so maybe next week.)
+
+- Trevor to see if the load average change really did reduce load
+   on WR build systems. (Aug 19)
+
+2. AB status
+
+      Trevor is learning about buildbot and working on a scheduling bug
+      (CentOS worker?)
+
+      bitbake layer setup tool should allow multiple backends:
+        eg: kas, a y-a-helper.
+
+      ptest cases are improving, we may be close to done!
+      Let's wait a week to see how things go.
+      (July29, Aug 5, Aug 19,  we're not done...)
+
+      - lttng-tools ptest is failing. RP is working on it with upstream.
+        The timeout (done on Aug 5) increase hasn't helped.
+
+
+3. Sakib's improvements to the logging are merged.
+
+      Sakib generated a summary of all high latency 'top' logs from
+      ~July 23->July 29 by just running his summary script on the
+      merged raw top logs.
+
+     More analysis required....
+
+
+Still relevant parts of
+Previous Meeting Notes:
+=======================
+
+
+4. bitbake server timeout ( no change july 29, Aug 19)
+
+      "Timeout while waiting for a reply from the bitbake server (60s)"
+
+5. io stalls (no update: July 29)
+
+      Richard said that it would make sense to write an ftrace utility
+      / script to monitor io latency and we could install it with sudo
+      Ch^W mentioned ftrace on IRC.
+      Sakib and Randy will work on that but not for a week or two
+      or longer! (Aug 19).
+
+      Randy collected iostat data on 3 build server:
+          https://postimg.cc/gallery/8cN6LYB
+      We agreed that having -ty-2 be ~ 100 utilization for many hours
+      in a row is not acceptable and that a threshold of ~ 10 minutes
+      at 100% utilization may be a reasonable limt. I need to figure out
+      if I can get data on the fraction of IO done per IO clas since
+      we do use ionice to do clean-up and other activities.
+
+
+../Randy
+
+
+
+^ permalink raw reply	[flat|nested] only message in thread
+only message in thread, other threads:[~2021-09-09 15:52 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-09-09 15:52 [yocto] Yocto Autobuilder: Latency Monitor and AB-INT - Meeting notes: Sept 9, 2021 Randy MacLeod
+

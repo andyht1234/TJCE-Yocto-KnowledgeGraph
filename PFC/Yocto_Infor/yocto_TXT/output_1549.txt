@@ -1,0 +1,143 @@
+* Re: [yocto] RDEPENDS of something provided by ALTERNATIVE
+       [not found] ` <ME3PR01MB661227E878D8E6B5B3254050809C9@ME3PR01MB6612.ausprd01.prod.outlook.com>
+@ 2022-08-03  7:25   ` Martin Jansa
+  2022-08-03  8:06     ` Richard Purdie
+  0 siblings, 1 reply; 2+ messages in thread
+From: Martin Jansa @ 2022-08-03  7:25 UTC (permalink / raw)
+  To: Craig McQueen; +Cc: yocto
+
+
+[-- Attachment #1.1: Type: text/plain, Size: 2222 bytes --]
+
+You can use VIRTUAL-RUNTIME_sed variable instead of 'sed' _everywhere_ and
+then change the preferred runtime provider in your DISTRO config.
+
+Similar case for "stat" from busybox in webOS OSE:
+https://github.com/webosose/meta-webosose/search?q=VIRTUAL-RUNTIME_stat
+
+and much worse case (because too many places add runtime dependency on
+bash) to replace bash:
+https://github.com/webosose/meta-webosose/search?q=VIRTUAL-RUNTIME_bash
+see
+https://bugzilla.yoctoproject.org/show_bug.cgi?id=9217#c5
+
+Regards,
+
+On Wed, Aug 3, 2022 at 7:03 AM Craig McQueen <craig.mcqueen@innerrange.com>
+wrote:
+
+> I have a recipe which contains a script that uses /bin/sed.
+>
+> When I build it, I get an error:
+>
+> ERROR: myrecipe-1.2.3-r0 do_package_qa: QA Issue: /lib/myrecipe/mycommand
+> contained in package myrecipe requires /bin/sed, but no providers found in
+> RDEPENDS:myrecipe? [file-rdeps]
+>
+> My final image contains the BusyBox implementation of sed, so it will be
+> fine at runtime.
+>
+> If I add to my recipe RDEPENDS:${PN} += "sed", then when the image is
+> built then it uses /bin/sed from the "sed" package, rather than being happy
+> to use the BusyBox sed.
+>
+> So, what is the correct way to specify a RDEPENDS to say that it depends
+> on _any_ implementation of /bin/sed from any ALTERNATIVE provider?
+>
+> --
+> Craig McQueen
+>
+>
+>
+>
+> <https://www.linkedin.com/company/inner-range-global>
+> <https://twitter.com/Inner_Range> <https://www.youtube.com/innerrange>
+>
+>
+>
+>
+> *Craig McQueen*Embedded Systems Engineer
+> t
+> e
+> w :
+> :
+> : +61 3 9780 4378 <+61%203%209780%204378>
+> craig.mcqueen@innerrange.com
+> innerrange.com <http://www.innerrange.com>
+>  Inner Range • 1 Millennium Court • Knoxfield • Victoria • 3180
+> • Australia
+>
+>
+>
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#57757):
+> https://lists.yoctoproject.org/g/yocto/message/57757
+> Mute This Topic: https://lists.yoctoproject.org/mt/92786950/3617156
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> Martin.Jansa@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+[-- Attachment #1.2: Type: text/html, Size: 7347 bytes --]
+
+[-- Attachment #2: ir-logo_f85269af-e37c-4042-b67a-7a903f6f387d.png --]
+[-- Type: image/png, Size: 24966 bytes --]
+
+[-- Attachment #3: SocialLink_Linkedin_32x32_afeefbca-ed45-43fe-92a0-f72f81b506c7.png --]
+[-- Type: image/png, Size: 468 bytes --]
+
+[-- Attachment #4: SocialLink_Twitter_32x32_4c4138b0-4a60-4da0-ac5f-16b0717f844b.png --]
+[-- Type: image/png, Size: 619 bytes --]
+
+[-- Attachment #5: SocialLink_Youtube_32x32_d5104d2f-6769-421a-97ec-b788e060c72a.png --]
+[-- Type: image/png, Size: 817 bytes --]
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+* Re: [yocto] RDEPENDS of something provided by ALTERNATIVE
+  2022-08-03  7:25   ` [yocto] RDEPENDS of something provided by ALTERNATIVE Martin Jansa
+@ 2022-08-03  8:06     ` Richard Purdie
+  0 siblings, 0 replies; 2+ messages in thread
+From: Richard Purdie @ 2022-08-03  8:06 UTC (permalink / raw)
+  To: Martin Jansa, Craig McQueen; +Cc: yocto
+
+On Wed, 2022-08-03 at 09:25 +0200, Martin Jansa wrote:
+> You can use VIRTUAL-RUNTIME_sed variable instead of 'sed'
+> _everywhere_ and then change the preferred runtime provider in your
+> DISTRO config.
+> 
+> Similar case for "stat" from busybox in webOS OSE:
+> https://github.com/webosose/meta-webosose/search?q=VIRTUAL-RUNTIME_stat
+> 
+> and much worse case (because too many places add runtime dependency
+> on bash) to replace bash:
+> https://github.com/webosose/meta-webosose/search?q=VIRTUAL-RUNTIME_bash
+> see
+> https://bugzilla.yoctoproject.org/show_bug.cgi?id=9217#c5
+
+This is where we should perhaps think about the filter variable option
+Joshua and I have talked about periodically as that could handle this
+in a much neater and generic way, at the unfortunate cost of
+complexity.
+
+The multilib code already tries to do this kind of remapping.
+
+Cheers,
+
+Richard
+
+
+^ permalink raw reply	[flat|nested] 2+ messages in thread
+end of thread, other threads:[~2022-08-03  8:06 UTC | newest]
+
+Thread overview: 2+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+     [not found] <80bf30b6-c5f8-4dbd-96fd-1bd52e1c129b.03082a28-859c-4ed7-bdd3-b360c084ba83.200c086d-1ebc-447c-bcf7-1ae3360185ee@emailsignatures365.codetwo.com>
+     [not found] ` <ME3PR01MB661227E878D8E6B5B3254050809C9@ME3PR01MB6612.ausprd01.prod.outlook.com>
+2022-08-03  7:25   ` [yocto] RDEPENDS of something provided by ALTERNATIVE Martin Jansa
+2022-08-03  8:06     ` Richard Purdie
+

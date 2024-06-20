@@ -1,0 +1,88 @@
+* [meta-zephyr][PATCH] qemuzephyrrunner.py: add tmpfsdir support
+@ 2021-04-25 22:07 Jon Mason
+  0 siblings, 0 replies; only message in thread
+From: Jon Mason @ 2021-04-25 22:07 UTC (permalink / raw)
+  To: yocto
+
+OE-Core rev: fd1c26ab426c3699ffd8082b83d65a84c8eb8bff added an
+additional parameter, tmpfsdir, to the API.  This caused testimage to no
+longer work in meta-zephyr.  Add that parameter and everything is happy
+now.
+
+Signed-off-by: Jon Mason <jon.mason@arm.com>
+---
+ lib/oeqa/controllers/zephyrtargetcontrol.py | 6 +++---
+ lib/oeqa/utils/qemuzephyrrunner.py          | 8 ++++++--
+ 2 files changed, 9 insertions(+), 5 deletions(-)
+
+diff --git a/lib/oeqa/controllers/zephyrtargetcontrol.py b/lib/oeqa/controllers/zephyrtargetcontrol.py
+index 8e94cb53673d..1dd7fd22543f 100644
+--- a/lib/oeqa/controllers/zephyrtargetcontrol.py
++++ b/lib/oeqa/controllers/zephyrtargetcontrol.py
+@@ -14,8 +14,8 @@ class QemuTargetZephyr(OETarget):
+     def __init__(self, logger, ip, server_ip,
+             machine='', rootfs='', tmpdir ='',dir_image ='',display=None,
+             kernel='',boottime=60,bootlog='',kvm=False,slirp=False,
+-            dump_dir='',serial_ports=0,ovmf=None,target_modules_path='',powercontrol_cmd='',powercontrol_extra_args='',
+-            serialcontrol_cmd=None,serialcontrol_extra_args='',testimage_dump_target='' ):
++            dump_dir='',serial_ports=0,ovmf=None,tmpfsdir='' ,target_modules_path='',powercontrol_cmd='',powercontrol_extra_args='',
++            serialcontrol_cmd=None,serialcontrol_extra_args='',testimage_dump_target=''):
+ 
+         timeout =  300
+         user = 'root'
+@@ -48,7 +48,7 @@ class QemuTargetZephyr(OETarget):
+                                  logfile=self.qemulog, boottime=boottime,
+                                  use_kvm=kvm, dump_dir=dump_dir,
+                                  dump_host_cmds=dump_host_cmds,
+-                                 logger = logger)
++                                 logger = logger, tmpfsdir=tmpfsdir)
+ 
+ 
+     def start(self, params=None, runqemuparams=None, extra_bootparams=None):
+diff --git a/lib/oeqa/utils/qemuzephyrrunner.py b/lib/oeqa/utils/qemuzephyrrunner.py
+index 0308f1e50e29..e8a1bd4544cf 100644
+--- a/lib/oeqa/utils/qemuzephyrrunner.py
++++ b/lib/oeqa/utils/qemuzephyrrunner.py
+@@ -18,11 +18,12 @@ from oeqa.utils.qemurunner import QemuRunner
+ 
+ class QemuZephyrRunner(QemuRunner):
+ 
+-    def __init__(self, machine, rootfs, display, tmpdir, deploy_dir_image, logfile, boottime, dump_dir, dump_host_cmds, use_kvm, logger):
++    def __init__(self, machine, rootfs, display, tmpdir, deploy_dir_image, logfile, boottime, dump_dir, dump_host_cmds, use_kvm, logger, tmpfsdir):
++
+ 
+         QemuRunner.__init__(self, machine, rootfs, display, tmpdir,
+                             deploy_dir_image, logfile, boottime, None,
+-                            None, use_kvm, logger)
++                            None, use_kvm, logger, tmpfsdir)
+ 
+         # Popen object for runqemu
+         self.socketfile = tempfile.NamedTemporaryFile()
+@@ -32,6 +33,7 @@ class QemuZephyrRunner(QemuRunner):
+ 
+         self.kernel = rootfs
+         self.deploy_dir_image = deploy_dir_image
++        self.tmpfsdir = tmpfsdir
+         self.logfile = logfile
+         self.use_kvm = use_kvm
+ 
+@@ -73,6 +75,8 @@ class QemuZephyrRunner(QemuRunner):
+             return False
+         else:
+             os.environ["DEPLOY_DIR_IMAGE"] = self.deploy_dir_image
++        if self.tmpfsdir:
++            env["RUNQEMU_TMPFS_DIR"] = self.tmpfsdir
+ 
+         if not os.path.exists(self.kernel):
+             bb.error("Invalid kernel path: %s" % self.kernel)
+-- 
+2.20.1
+
+
+^ permalink raw reply related	[flat|nested] only message in thread
+only message in thread, other threads:[~2021-04-25 22:07 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-04-25 22:07 [meta-zephyr][PATCH] qemuzephyrrunner.py: add tmpfsdir support Jon Mason
+

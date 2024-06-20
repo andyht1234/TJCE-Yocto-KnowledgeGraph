@@ -1,0 +1,395 @@
+* Re: [yocto] Red alert but apparently harmless setscene errors
+       [not found] <b4336117-2693-c1f4-30fb-08b92a5e5e1a@bootlin.com>
+@ 2022-01-13 17:37 ` Jose Quaresma
+       [not found]   ` <9963686e-1acb-2cf0-a33b-74713ab99b51@bootlin.com>
+  2022-01-13 17:49 ` Joshua Watt
+  1 sibling, 1 reply; 4+ messages in thread
+From: Jose Quaresma @ 2022-01-13 17:37 UTC (permalink / raw)
+  To: Michael Opdenacker; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 4746 bytes --]
+
+Hi,
+
+I've seen the same for some time now when building core-image-minimal with
+yocto state mirror and hashequiv servers.
+
+After some investigation I think the root cause is some
+bandwidth/connection limitation on the http yocto mirror.
+
+Reducing the BB_NUMBER_THREADS="1" to a single core solves many of the
+fetch issues for me,
+my config is the default one with:
+
+  BB_NUMBER_THREADS="1"
+  SSTATE_MIRRORS = "file://.*
+http://sstate.yoctoproject.org/dev/PATH;downloadfilename=PATH"
+  BB_HASHSERVE_UPSTREAM = "typhoon.yocto.io:8687"
+
+Jose
+
+Michael Opdenacker <michael.opdenacker@bootlin.com> escreveu no dia quinta,
+13/01/2022 à(s) 17:23:
+
+> Hi,
+>
+> Sharing this before opening a bug if needed...
+>
+> I'm building the latest Poky ("core-image-minimal" plus a few extra
+> packages).
+>
+> I'm always getting the below setscene errors after upgrading my Poky
+> sources:
+>
+> ... <more similar errors before>
+> WARNING: libffi-native-3.4.2-r0 do_populate_sysroot_setscene: Failed to
+> fetch URL
+>
+> file://universal/c8/be/sstate:libffi-native:x86_64-linux:3.4.2:r0:x86_64:7:c8be7b784ce8ebbf6d897367bc8e96f6718040858d61f9a4f6aa5325821b0ce5_populate_sysroot.tar.zst.siginfo;downloadfilename=universal/c8/be/sstate:libffi-native:x86_64-linux:3.4.2:r0:x86_64:7:c8be7b784ce8ebbf6d897367bc8e96f6718040858d61f9a4f6aa5325821b0ce5_populate_sysroot.tar.zst.siginfo,
+> attempting MIRRORS if available
+> ERROR: libffi-native-3.4.2-r0 do_populate_sysroot_setscene: Fetcher
+> failure: Unable to find file
+>
+> file://universal/c8/be/sstate:libffi-native:x86_64-linux:3.4.2:r0:x86_64:7:c8be7b784ce8ebbf6d897367bc8e96f6718040858d61f9a4f6aa5325821b0ce5_populate_sysroot.tar.zst.siginfo;downloadfilename=universal/c8/be/sstate:libffi-native:x86_64-linux:3.4.2:r0:x86_64:7:c8be7b784ce8ebbf6d897367bc8e96f6718040858d61f9a4f6aa5325821b0ce5_populate_sysroot.tar.zst.siginfo
+> anywhere. The paths that were searched were:
+>     /media/mike/ssd/yocto/poky/build/sstate-cache
+>     /media/mike/ssd/yocto/poky/build/sstate-cache
+> WARNING: libpcre2-native-10.39-r0 do_populate_sysroot_setscene: Failed
+> to fetch URL
+>
+> file://universal/bf/03/sstate:libpcre2-native:x86_64-linux:10.39:r0:x86_64:7:bf035286ff06470377fe9c9298ba116222c9d557f2fa44d418beb919aa185db9_populate_sysroot.tar.zst.siginfo;downloadfilename=universal/bf/03/sstate:libpcre2-native:x86_64-linux:10.39:r0:x86_64:7:bf035286ff06470377fe9c9298ba116222c9d557f2fa44d418beb919aa185db9_populate_sysroot.tar.zst.siginfo,
+> attempting MIRRORS if available
+> ERROR: libpcre2-native-10.39-r0 do_populate_sysroot_setscene: Fetcher
+> failure: Unable to find file
+>
+> file://universal/bf/03/sstate:libpcre2-native:x86_64-linux:10.39:r0:x86_64:7:bf035286ff06470377fe9c9298ba116222c9d557f2fa44d418beb919aa185db9_populate_sysroot.tar.zst.siginfo;downloadfilename=universal/bf/03/sstate:libpcre2-native:x86_64-linux:10.39:r0:x86_64:7:bf035286ff06470377fe9c9298ba116222c9d557f2fa44d418beb919aa185db9_populate_sysroot.tar.zst.siginfo
+> anywhere. The paths that were searched were:
+>     /media/mike/ssd/yocto/poky/build/sstate-cache
+>     /media/mike/ssd/yocto/poky/build/sstate-cache
+> ERROR: libpcre2-native-10.39-r0 do_populate_sysroot_setscene: No
+> suitable staging package found
+> ERROR: Logfile of failure stored in:
+>
+> /media/mike/ssd/yocto/poky/build/tmp/work/x86_64-linux/libpcre2-native/10.39-r0/temp/log.do_populate_sysroot_setscene.315121
+> WARNING: Setscene task
+>
+> (virtual:native:/media/mike/ssd/yocto/poky/meta/recipes-support/libpcre/libpcre2_10.39.bb:
+> do_populate_sysroot_setscene)
+> failed with exit code '1' - real task will be run instead
+> Currently  4 running tasks (1838 of 1838/467 of 4630)  10%
+> |################
+>
+> As expected, the error messages are highlighted in red, but they are not
+> critical as BitBake can always build the corresponding recipes from
+> sources.
+>
+> Two questions:
+>
+>   * Anything wrong with my local sstate cache? Should I erase it?
+>   * Should these issues really be treated as errors, scaring users that
+>     something could be wrong while the resulting build looks correct
+> anyway?
+>
+> Thanks in advance
+> Michael.
+>
+> --
+> Michael Opdenacker, Bootlin
+> Embedded Linux and Kernel engineering
+> https://bootlin.com
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#55838):
+> https://lists.yoctoproject.org/g/yocto/message/55838
+> Mute This Topic: https://lists.yoctoproject.org/mt/88401713/5052612
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [
+> quaresma.jose@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+>
+
+-- 
+Best regards,
+
+José Quaresma
+
+[-- Attachment #2: Type: text/html, Size: 6100 bytes --]
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] Red alert but apparently harmless setscene errors
+       [not found] <b4336117-2693-c1f4-30fb-08b92a5e5e1a@bootlin.com>
+  2022-01-13 17:37 ` [yocto] Red alert but apparently harmless setscene errors Jose Quaresma
+@ 2022-01-13 17:49 ` Joshua Watt
+  1 sibling, 0 replies; 4+ messages in thread
+From: Joshua Watt @ 2022-01-13 17:49 UTC (permalink / raw)
+  To: Michael Opdenacker; +Cc: yocto
+
+On Thu, Jan 13, 2022 at 11:23 AM Michael Opdenacker
+<michael.opdenacker@bootlin.com> wrote:
+>
+> Hi,
+>
+> Sharing this before opening a bug if needed...
+>
+> I'm building the latest Poky ("core-image-minimal" plus a few extra
+> packages).
+>
+> I'm always getting the below setscene errors after upgrading my Poky
+> sources:
+>
+> ... <more similar errors before>
+> WARNING: libffi-native-3.4.2-r0 do_populate_sysroot_setscene: Failed to
+> fetch URL
+> file://universal/c8/be/sstate:libffi-native:x86_64-linux:3.4.2:r0:x86_64:7:c8be7b784ce8ebbf6d897367bc8e96f6718040858d61f9a4f6aa5325821b0ce5_populate_sysroot.tar.zst.siginfo;downloadfilename=universal/c8/be/sstate:libffi-native:x86_64-linux:3.4.2:r0:x86_64:7:c8be7b784ce8ebbf6d897367bc8e96f6718040858d61f9a4f6aa5325821b0ce5_populate_sysroot.tar.zst.siginfo,
+> attempting MIRRORS if available
+> ERROR: libffi-native-3.4.2-r0 do_populate_sysroot_setscene: Fetcher
+> failure: Unable to find file
+> file://universal/c8/be/sstate:libffi-native:x86_64-linux:3.4.2:r0:x86_64:7:c8be7b784ce8ebbf6d897367bc8e96f6718040858d61f9a4f6aa5325821b0ce5_populate_sysroot.tar.zst.siginfo;downloadfilename=universal/c8/be/sstate:libffi-native:x86_64-linux:3.4.2:r0:x86_64:7:c8be7b784ce8ebbf6d897367bc8e96f6718040858d61f9a4f6aa5325821b0ce5_populate_sysroot.tar.zst.siginfo
+> anywhere. The paths that were searched were:
+>     /media/mike/ssd/yocto/poky/build/sstate-cache
+>     /media/mike/ssd/yocto/poky/build/sstate-cache
+> WARNING: libpcre2-native-10.39-r0 do_populate_sysroot_setscene: Failed
+> to fetch URL
+> file://universal/bf/03/sstate:libpcre2-native:x86_64-linux:10.39:r0:x86_64:7:bf035286ff06470377fe9c9298ba116222c9d557f2fa44d418beb919aa185db9_populate_sysroot.tar.zst.siginfo;downloadfilename=universal/bf/03/sstate:libpcre2-native:x86_64-linux:10.39:r0:x86_64:7:bf035286ff06470377fe9c9298ba116222c9d557f2fa44d418beb919aa185db9_populate_sysroot.tar.zst.siginfo,
+> attempting MIRRORS if available
+> ERROR: libpcre2-native-10.39-r0 do_populate_sysroot_setscene: Fetcher
+> failure: Unable to find file
+> file://universal/bf/03/sstate:libpcre2-native:x86_64-linux:10.39:r0:x86_64:7:bf035286ff06470377fe9c9298ba116222c9d557f2fa44d418beb919aa185db9_populate_sysroot.tar.zst.siginfo;downloadfilename=universal/bf/03/sstate:libpcre2-native:x86_64-linux:10.39:r0:x86_64:7:bf035286ff06470377fe9c9298ba116222c9d557f2fa44d418beb919aa185db9_populate_sysroot.tar.zst.siginfo
+> anywhere. The paths that were searched were:
+>     /media/mike/ssd/yocto/poky/build/sstate-cache
+>     /media/mike/ssd/yocto/poky/build/sstate-cache
+> ERROR: libpcre2-native-10.39-r0 do_populate_sysroot_setscene: No
+> suitable staging package found
+> ERROR: Logfile of failure stored in:
+> /media/mike/ssd/yocto/poky/build/tmp/work/x86_64-linux/libpcre2-native/10.39-r0/temp/log.do_populate_sysroot_setscene.315121
+> WARNING: Setscene task
+> (virtual:native:/media/mike/ssd/yocto/poky/meta/recipes-support/libpcre/libpcre2_10.39.bb:do_populate_sysroot_setscene)
+> failed with exit code '1' - real task will be run instead
+> Currently  4 running tasks (1838 of 1838/467 of 4630)  10%
+> |################
+>
+> As expected, the error messages are highlighted in red, but they are not
+> critical as BitBake can always build the corresponding recipes from sources.
+>
+> Two questions:
+>
+>   * Anything wrong with my local sstate cache? Should I erase it?
+
+This usually happens when there is a sstate archive (.tar.zst), but no
+corresponding siginfo file (.tar.zst.siginfo). The sstate code assumes
+the siginfo file is present if archive is present, and "errors" if
+not. In my experience, this usually happens when you try to clean out
+the sstate cache using a mechanism that is unaware of the relationship
+and deletes the siginfo and not the archive (e.g. some form of "find
+-delete ...")
+
+>   * Should these issues really be treated as errors, scaring users that
+>     something could be wrong while the resulting build looks correct anyway?
+
+As noted by the build, it will actually just execute the missing
+tasks; one annoyance (depending on context) is that bitbake will
+return a non-zero exit code if any ERROR occurs in the build, even
+though in this case it was recovered.
+
+This has been discussed at length before (I can't find a citation
+ATM), and I believe it was left this way because this particular case
+is considered an actual error that should never happen and needs
+investigation on the YP Autobuilder.
+
+>
+> Thanks in advance
+> Michael.
+>
+> --
+> Michael Opdenacker, Bootlin
+> Embedded Linux and Kernel engineering
+> https://bootlin.com
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#55838): https://lists.yoctoproject.org/g/yocto/message/55838
+> Mute This Topic: https://lists.yoctoproject.org/mt/88401713/3616693
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [JPEWhacker@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] Red alert but apparently harmless setscene errors
+       [not found]     ` <a7a99ebd18e88097a0967fe8ab40f08ad4c5b028.camel@linuxfoundation.org>
+@ 2022-01-13 23:38       ` Jose Quaresma
+       [not found]       ` <f2eec148-ea04-eeec-f765-f6448504a649@bootlin.com>
+  1 sibling, 0 replies; 4+ messages in thread
+From: Jose Quaresma @ 2022-01-13 23:38 UTC (permalink / raw)
+  To: Richard Purdie; +Cc: Michael Opdenacker, yocto, Michael Halstead
+
+[-- Attachment #1: Type: text/plain, Size: 2270 bytes --]
+
+Richard Purdie <richard.purdie@linuxfoundation.org> escreveu no dia quinta,
+13/01/2022 à(s) 21:53:
+
+> On Thu, 2022-01-13 at 19:37 +0100, Michael Opdenacker wrote:
+> > Hi Jose,
+> >
+> > Thanks for your advice!
+> >
+> > On 1/13/22 6:37 PM, Jose Quaresma wrote:
+> > > Hi,
+> > >
+> > > I've seen the same for some time now when building core-image-minimal
+> > > with yocto state mirror and hashequiv servers.
+> > >
+> > > After some investigation I think the root cause is some
+> > > bandwidth/connection limitation on the http yocto mirror.
+> > >
+> > > Reducing the BB_NUMBER_THREADS="1" to a single core solves many of the
+> > > fetch issues for me,
+> > > my config is the default one with:
+> > >
+> > >   BB_NUMBER_THREADS="1"
+> > >   SSTATE_MIRRORS = "file://.*
+> > > http://sstate.yoctoproject.org/dev/PATH;downloadfilename=PATH
+> > > <http://sstate.yoctoproject.org/dev/PATH;downloadfilename=PATH>"
+> > >   BB_HASHSERVE_UPSTREAM = "typhoon.yocto.io:8687
+> > > <http://typhoon.yocto.io:8687>"
+> >
+> >
+> > Oops, it seems you're right. I have the same SSTATE_MIRRORS and
+> > BB_HASHSERVE_UPSTREAM settings as you do, and adding
+> > BB_NUMBER_THREADS="1" makes the errors disappear.
+> >
+> > It seems I should file a bug about that. The error messages just mention
+> > local paths, not remote ones, so it sounds like a local issue while it's
+> > apparently not.
+>
+> That is useful to debug it but suggests there is an issue with concurrent
+> connections to the YP server.
+>
+> I think we should have an open bug and get Michael Halstead's input on
+> this.
+>
+> Cheers,
+>
+> Richard
+>
+>
+During the last yocto project summit 2021.11 I have submitted a patch
+to reduce the time needed for handling the sstate mirrors on startup,
+that without my realizing it actually launches a DoS attack to the mirror.
+This patch was rejected as expected.
+
+After that patch, maybe by coincidence I got the idea that some measures
+had been taken to mitigate this problem but if it wasn't the case then
+there is
+a bug in concurrent connections to the YP server.
+
+When the patch was sent there was no problem with the concurrent connections
+to the YP server.
+https://lists.openembedded.org/g/openembedded-core/topic/87464090#159111
+
+Jose
+
+[-- Attachment #2: Type: text/html, Size: 3746 bytes --]
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] Red alert but apparently harmless setscene errors
+       [not found]       ` <f2eec148-ea04-eeec-f765-f6448504a649@bootlin.com>
+@ 2022-01-19 23:29         ` Jose Quaresma
+  0 siblings, 0 replies; 4+ messages in thread
+From: Jose Quaresma @ 2022-01-19 23:29 UTC (permalink / raw)
+  To: Michael Opdenacker; +Cc: Richard Purdie, yocto, Michael Halstead
+
+[-- Attachment #1: Type: text/plain, Size: 2184 bytes --]
+
+Hi,
+
+I have tested the state mirror locally with my own http mirror and it works
+perfectly.
+There are no problems with the concurrent connections.
+I'm more sure that the root cause is some bandwidth/connection limitation
+on the http YP mirror.
+
+Jose
+
+Michael Opdenacker <michael.opdenacker@bootlin.com> escreveu no dia sexta,
+14/01/2022 à(s) 19:16:
+
+>
+> On 1/13/22 10:53 PM, Richard Purdie wrote:
+> > On Thu, 2022-01-13 at 19:37 +0100, Michael Opdenacker wrote:
+> >> Hi Jose,
+> >>
+> >> Thanks for your advice!
+> >>
+> >> On 1/13/22 6:37 PM, Jose Quaresma wrote:
+> >>> Hi,
+> >>>
+> >>> I've seen the same for some time now when building core-image-minimal
+> >>> with yocto state mirror and hashequiv servers.
+> >>>
+> >>> After some investigation I think the root cause is some
+> >>> bandwidth/connection limitation on the http yocto mirror.
+> >>>
+> >>> Reducing the BB_NUMBER_THREADS="1" to a single core solves many of the
+> >>> fetch issues for me,
+> >>> my config is the default one with:
+> >>>
+> >>>   BB_NUMBER_THREADS="1"
+> >>>   SSTATE_MIRRORS = "file://.*
+> >>> http://sstate.yoctoproject.org/dev/PATH;downloadfilename=PATH
+> >>> <http://sstate.yoctoproject.org/dev/PATH;downloadfilename=PATH>"
+> >>>   BB_HASHSERVE_UPSTREAM = "typhoon.yocto.io:8687
+> >>> <http://typhoon.yocto.io:8687>"
+> >>
+> >> Oops, it seems you're right. I have the same SSTATE_MIRRORS and
+> >> BB_HASHSERVE_UPSTREAM settings as you do, and adding
+> >> BB_NUMBER_THREADS="1" makes the errors disappear.
+> >>
+> >> It seems I should file a bug about that. The error messages just mention
+> >> local paths, not remote ones, so it sounds like a local issue while it's
+> >> apparently not.
+> > That is useful to debug it but suggests there is an issue with concurrent
+> > connections to the YP server.
+> >
+> > I think we should have an open bug and get Michael Halstead's input on
+> this.
+>
+>
+> Done: https://bugzilla.yoctoproject.org/show_bug.cgi?id=14690
+> Thanks for your advice.
+> Cheers
+> Michael.
+>
+> --
+> Michael Opdenacker, Bootlin
+> Embedded Linux and Kernel engineering
+> https://bootlin.com
+>
+>
+
+-- 
+Best regards,
+
+José Quaresma
+
+[-- Attachment #2: Type: text/html, Size: 3741 bytes --]
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+end of thread, other threads:[~2022-01-19 23:30 UTC | newest]
+
+Thread overview: 4+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+     [not found] <b4336117-2693-c1f4-30fb-08b92a5e5e1a@bootlin.com>
+2022-01-13 17:37 ` [yocto] Red alert but apparently harmless setscene errors Jose Quaresma
+     [not found]   ` <9963686e-1acb-2cf0-a33b-74713ab99b51@bootlin.com>
+     [not found]     ` <a7a99ebd18e88097a0967fe8ab40f08ad4c5b028.camel@linuxfoundation.org>
+2022-01-13 23:38       ` Jose Quaresma
+     [not found]       ` <f2eec148-ea04-eeec-f765-f6448504a649@bootlin.com>
+2022-01-19 23:29         ` Jose Quaresma
+2022-01-13 17:49 ` Joshua Watt
+

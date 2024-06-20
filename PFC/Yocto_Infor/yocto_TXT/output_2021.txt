@@ -1,0 +1,275 @@
+* SCM usage in source urls and bandwidth
+@ 2022-03-30 10:42 Richard Purdie
+  2022-03-30 13:53 ` [yocto] " Alexandre Belloni
+  0 siblings, 1 reply; 4+ messages in thread
+From: Richard Purdie @ 2022-03-30 10:42 UTC (permalink / raw)
+  To: <yocto@lists.yoctoproject.org>, Khem Raj, Michael Halstead
+
+[list address fixed, sorry]
+
+We've been having bandwidth trouble with downloads.yoctoproject.org so we did
+some quick analysis to see what the issue is. Basically in speeding up the
+server which was the rate limit, we hit the limits of the hosting pipe. I'd note
+a few things:
+
+a) it isn't the sstate mirroring, it is nearly all being used by downloads.
+
+b) 25% of all our bandwidth is going on "git2_sourceware.org.git.binutils-
+gdb.git.tar.gz" - i.e. downloading the source mirror binutils tarball
+
+c) 15% is on git2_sourceware.org.git.glibc.git.tar.gz i.e. glibc
+
+d) OE-Core has downloads.yoctoproject.org as a MIRROR
+
+e) poky has it as a PREMIRROR
+
+What are our options? As far as I can see we could:
+
+a) increase the pipe from downloads.yoctoproject.org but that does come at a
+non-trivial cost to the project.
+
+b) Seek help with hosting some of the larger mirror tarballs from people better
+able to host them and have that as a first premirror?
+
+c) Switch the binutils and glibc recipes to tarballs and patches. I know Khem
+finds this less convenient and they keep moving back and forward but we keep
+running into this issue and having to switch back from git.
+
+d) To soften the blow of c) we could add devupstream support to the recipes? We
+could script updating the recipe to add the patches?
+
+e) We could drop the PREMIRRORS from poky. This would stop the SCM targets from
+hitting our mirrors first. That does transfer load to the upstream project SCMs
+though and I'm not sure that will be appreciated. I did sent that patch, I'm not
+sure about it though.
+
+We are going to need to do *something* though as the current situation can't
+continue. I'm open to other ideas...
+
+Cheers,
+
+Richard
+
+
+
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] SCM usage in source urls and bandwidth
+  2022-03-30 10:42 SCM usage in source urls and bandwidth Richard Purdie
+@ 2022-03-30 13:53 ` Alexandre Belloni
+  2022-03-30 14:05   ` Claude Bing
+  0 siblings, 1 reply; 4+ messages in thread
+From: Alexandre Belloni @ 2022-03-30 13:53 UTC (permalink / raw)
+  To: Richard Purdie
+  Cc: <yocto@lists.yoctoproject.org>, Khem Raj, Michael Halstead
+
+On 30/03/2022 11:42:46+0100, Richard Purdie wrote:
+> [list address fixed, sorry]
+> 
+> We've been having bandwidth trouble with downloads.yoctoproject.org so we did
+> some quick analysis to see what the issue is. Basically in speeding up the
+> server which was the rate limit, we hit the limits of the hosting pipe. I'd note
+> a few things:
+> 
+> a) it isn't the sstate mirroring, it is nearly all being used by downloads.
+> 
+> b) 25% of all our bandwidth is going on "git2_sourceware.org.git.binutils-
+> gdb.git.tar.gz" - i.e. downloading the source mirror binutils tarball
+> 
+> c) 15% is on git2_sourceware.org.git.glibc.git.tar.gz i.e. glibc
+> 
+> d) OE-Core has downloads.yoctoproject.org as a MIRROR
+> 
+> e) poky has it as a PREMIRROR
+> 
+> What are our options? As far as I can see we could:
+> 
+> a) increase the pipe from downloads.yoctoproject.org but that does come at a
+> non-trivial cost to the project.
+> 
+> b) Seek help with hosting some of the larger mirror tarballs from people better
+> able to host them and have that as a first premirror?
+> 
+> c) Switch the binutils and glibc recipes to tarballs and patches. I know Khem
+> finds this less convenient and they keep moving back and forward but we keep
+> running into this issue and having to switch back from git.
+> 
+> d) To soften the blow of c) we could add devupstream support to the recipes? We
+> could script updating the recipe to add the patches?
+> 
+> e) We could drop the PREMIRRORS from poky. This would stop the SCM targets from
+> hitting our mirrors first. That does transfer load to the upstream project SCMs
+> though and I'm not sure that will be appreciated. I did sent that patch, I'm not
+> sure about it though.
+
+I would simply drop PREMIRRORS, this is actually a privacy concern for
+some of our customers that didn't realize they are leaking the names of
+their internal git repositories to downloads.yoctoproject.org.
+
+
+
+-- 
+Alexandre Belloni, co-owner and COO, Bootlin
+Embedded Linux and Kernel engineering
+https://bootlin.com
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] SCM usage in source urls and bandwidth
+  2022-03-30 13:53 ` [yocto] " Alexandre Belloni
+@ 2022-03-30 14:05   ` Claude Bing
+  2022-03-30 14:51     ` Richard Purdie
+  0 siblings, 1 reply; 4+ messages in thread
+From: Claude Bing @ 2022-03-30 14:05 UTC (permalink / raw)
+  To: yocto
+
+On 3/30/22 09:53, Alexandre Belloni via lists.yoctoproject.org wrote:
+> On 30/03/2022 11:42:46+0100, Richard Purdie wrote:
+>> [list address fixed, sorry]
+>>
+>> We've been having bandwidth trouble with downloads.yoctoproject.org so we did
+>> some quick analysis to see what the issue is. Basically in speeding up the
+>> server which was the rate limit, we hit the limits of the hosting pipe. I'd note
+>> a few things:
+>>
+>> a) it isn't the sstate mirroring, it is nearly all being used by downloads.
+>>
+>> b) 25% of all our bandwidth is going on "git2_sourceware.org.git.binutils-
+>> gdb.git.tar.gz" - i.e. downloading the source mirror binutils tarball
+>>
+>> c) 15% is on git2_sourceware.org.git.glibc.git.tar.gz i.e. glibc
+>>
+>> d) OE-Core has downloads.yoctoproject.org as a MIRROR
+>>
+>> e) poky has it as a PREMIRROR
+>>
+>> What are our options? As far as I can see we could:
+>>
+>> a) increase the pipe from downloads.yoctoproject.org but that does come at a
+>> non-trivial cost to the project.
+>>
+>> b) Seek help with hosting some of the larger mirror tarballs from people better
+>> able to host them and have that as a first premirror?
+>>
+>> c) Switch the binutils and glibc recipes to tarballs and patches. I know Khem
+>> finds this less convenient and they keep moving back and forward but we keep
+>> running into this issue and having to switch back from git.
+>>
+>> d) To soften the blow of c) we could add devupstream support to the recipes? We
+>> could script updating the recipe to add the patches?
+>>
+>> e) We could drop the PREMIRRORS from poky. This would stop the SCM targets from
+>> hitting our mirrors first. That does transfer load to the upstream project SCMs
+>> though and I'm not sure that will be appreciated. I did sent that patch, I'm not
+>> sure about it though.
+> 
+> I would simply drop PREMIRRORS, this is actually a privacy concern for
+> some of our customers that didn't realize they are leaking the names of
+> their internal git repositories to downloads.yoctoproject.org.
+
+Indeed, that would be concerning for us as well. Would it be possible to
+ignore PREMIRRORS based on the recipe layer? Alternatively, we could
+create blocklists for heavy packages that need to fetch from upstream
+first rather than drop PREMIRRORS completely. Sometimes, having a
+secondary source could save valuable time when the upstream is not
+responsive.
+
+> 
+> 
+> 
+> 
+> 
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#56599): https://lists.yoctoproject.org/g/yocto/message/56599
+> Mute This Topic: https://lists.yoctoproject.org/mt/90128469/4618432
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [cbing@cybernetics.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+> 
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] SCM usage in source urls and bandwidth
+  2022-03-30 14:05   ` Claude Bing
+@ 2022-03-30 14:51     ` Richard Purdie
+  0 siblings, 0 replies; 4+ messages in thread
+From: Richard Purdie @ 2022-03-30 14:51 UTC (permalink / raw)
+  To: Claude Bing, yocto
+
+On Wed, 2022-03-30 at 10:05 -0400, Claude Bing wrote:
+> On 3/30/22 09:53, Alexandre Belloni via lists.yoctoproject.org wrote:
+> > On 30/03/2022 11:42:46+0100, Richard Purdie wrote:
+> > > [list address fixed, sorry]
+> > > 
+> > > We've been having bandwidth trouble with downloads.yoctoproject.org so we did
+> > > some quick analysis to see what the issue is. Basically in speeding up the
+> > > server which was the rate limit, we hit the limits of the hosting pipe. I'd note
+> > > a few things:
+> > > 
+> > > a) it isn't the sstate mirroring, it is nearly all being used by downloads.
+> > > 
+> > > b) 25% of all our bandwidth is going on "git2_sourceware.org.git.binutils-
+> > > gdb.git.tar.gz" - i.e. downloading the source mirror binutils tarball
+> > > 
+> > > c) 15% is on git2_sourceware.org.git.glibc.git.tar.gz i.e. glibc
+> > > 
+> > > d) OE-Core has downloads.yoctoproject.org as a MIRROR
+> > > 
+> > > e) poky has it as a PREMIRROR
+> > > 
+> > > What are our options? As far as I can see we could:
+> > > 
+> > > a) increase the pipe from downloads.yoctoproject.org but that does come at a
+> > > non-trivial cost to the project.
+> > > 
+> > > b) Seek help with hosting some of the larger mirror tarballs from people better
+> > > able to host them and have that as a first premirror?
+> > > 
+> > > c) Switch the binutils and glibc recipes to tarballs and patches. I know Khem
+> > > finds this less convenient and they keep moving back and forward but we keep
+> > > running into this issue and having to switch back from git.
+> > > 
+> > > d) To soften the blow of c) we could add devupstream support to the recipes? We
+> > > could script updating the recipe to add the patches?
+> > > 
+> > > e) We could drop the PREMIRRORS from poky. This would stop the SCM targets from
+> > > hitting our mirrors first. That does transfer load to the upstream project SCMs
+> > > though and I'm not sure that will be appreciated. I did sent that patch, I'm not
+> > > sure about it though.
+> > 
+> > I would simply drop PREMIRRORS, this is actually a privacy concern for
+> > some of our customers that didn't realize they are leaking the names of
+> > their internal git repositories to downloads.yoctoproject.org.
+> 
+> Indeed, that would be concerning for us as well. Would it be possible to
+> ignore PREMIRRORS based on the recipe layer? Alternatively, we could
+> create blocklists for heavy packages that need to fetch from upstream
+> first rather than drop PREMIRRORS completely. Sometimes, having a
+> secondary source could save valuable time when the upstream is not
+> responsive.
+
+We don't have any support for "per-layer" overrides at this time which would be
+the way to do that. It is something I think we probably do want to consider
+adding but I haven't had the bandwidth to look at it.
+
+I'd note that these mirrors in PREMIRRORS are also in MIRRORS already in OE-Core
+so there is a fallback, it just controls the order they're tried in.
+
+Cheers,
+
+Richard
+
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+end of thread, other threads:[~2022-03-30 14:51 UTC | newest]
+
+Thread overview: 4+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-03-30 10:42 SCM usage in source urls and bandwidth Richard Purdie
+2022-03-30 13:53 ` [yocto] " Alexandre Belloni
+2022-03-30 14:05   ` Claude Bing
+2022-03-30 14:51     ` Richard Purdie
+

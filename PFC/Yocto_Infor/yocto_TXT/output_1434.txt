@@ -1,0 +1,141 @@
+* [meta-security][V2][PATCH] cryptmount: fix systemd service install
+@ 2022-09-06 13:55 Armin Kuster
+  0 siblings, 0 replies; only message in thread
+From: Armin Kuster @ 2022-09-06 13:55 UTC (permalink / raw)
+  To: yocto
+
+Default is to install the service in /usr/lib
+
+Signed-off-by: Armin Kuster <akuster808@gmail.com>
+
+--
+[V2]
+Fix typo in subject
+---
+ .../sssd/{sssd_2.7.3.bb => sssd_2.7.4.bb}     |  2 +-
+ .../{chipsec_1.8.7.bb => chipsec_1.8.8.bb}    |  2 +-
+ .../cryptmount/cryptmount_5.3.3.bb            | 10 +++++++++
+ .../krill/files/panic_workaround.patch        | 21 +++++++++++++------
+ .../krill/{krill_0.9.6.bb => krill_0.10.0.bb} |  2 +-
+ 5 files changed, 28 insertions(+), 9 deletions(-)
+ rename dynamic-layers/networking-layer/recipes-security/sssd/{sssd_2.7.3.bb => sssd_2.7.4.bb} (98%)
+ rename recipes-security/chipsec/{chipsec_1.8.7.bb => chipsec_1.8.8.bb} (94%)
+ rename recipes-security/krill/{krill_0.9.6.bb => krill_0.10.0.bb} (95%)
+
+diff --git a/dynamic-layers/networking-layer/recipes-security/sssd/sssd_2.7.3.bb b/dynamic-layers/networking-layer/recipes-security/sssd/sssd_2.7.4.bb
+similarity index 98%
+rename from dynamic-layers/networking-layer/recipes-security/sssd/sssd_2.7.3.bb
+rename to dynamic-layers/networking-layer/recipes-security/sssd/sssd_2.7.4.bb
+index 95065b3..78d29c3 100644
+--- a/dynamic-layers/networking-layer/recipes-security/sssd/sssd_2.7.3.bb
++++ b/dynamic-layers/networking-layer/recipes-security/sssd/sssd_2.7.4.bb
+@@ -26,7 +26,7 @@ SRC_URI = "https://github.com/SSSD/sssd/releases/download/${PV}/sssd-${PV}.tar.g
+            file://musl_fixup.patch \
+            "
+ 
+-SRC_URI[sha256sum] = "ab3c3fe2a69cc7b2557715a11000aaf358c0afd65f2828ca47a2d3b2651d871b"
++SRC_URI[sha256sum] = "10ef90c63fdbfda905145077679035bd5ad16b24daad13160de8d0ff82ea9950"
+ 
+ UPSTREAM_CHECK_URI = "https://github.com/SSSD/${BPN}/releases"
+ 
+diff --git a/recipes-security/chipsec/chipsec_1.8.7.bb b/recipes-security/chipsec/chipsec_1.8.8.bb
+similarity index 94%
+rename from recipes-security/chipsec/chipsec_1.8.7.bb
+rename to recipes-security/chipsec/chipsec_1.8.8.bb
+index 60272be..858ece5 100644
+--- a/recipes-security/chipsec/chipsec_1.8.7.bb
++++ b/recipes-security/chipsec/chipsec_1.8.8.bb
+@@ -10,7 +10,7 @@ LIC_FILES_CHKSUM = "file://COPYING;md5=bc2d1f9b427be5fb63f6af9da56f7c5d"
+ DEPENDS = "virtual/kernel nasm-native"
+ 
+ SRC_URI = "git://github.com/chipsec/chipsec.git;branch=main;protocol=https"
+-SRCREV = "7b9cc5cd449f2e1e4b5dad46c0eb14348e54e3f0"
++SRCREV = "fd1a98688978fd4b8ca77b512a72eae49c3beffa"
+ 
+ S = "${WORKDIR}/git"
+ 
+diff --git a/recipes-security/cryptmount/cryptmount_5.3.3.bb b/recipes-security/cryptmount/cryptmount_5.3.3.bb
+index fb522cb..6741a5f 100644
+--- a/recipes-security/cryptmount/cryptmount_5.3.3.bb
++++ b/recipes-security/cryptmount/cryptmount_5.3.3.bb
+@@ -22,6 +22,16 @@ PACKAGECONFIG[gcrypt] = "--with-libgcrypt, --without-libgcrypt, libgcrypt"
+ PACKAGECONFIG[luks] = "--enable-luks, --disable-luks, cryptsetup"
+ PACKAGECONFIG[nls] = "--enable-nls, --disable-nls, "
+ 
++SYSTEMD_PACKAGES = "${PN}"
+ SYSTEMD_SERVICE:${PN} = "cryptmount.service"
+ 
++do_install:append () {
++    if ${@bb.utils.contains('DISTRO_FEATURES','systemd','true','false',d)}; then
++        install -D -m 0644 ${S}/sysinit/cryptmount.service ${D}${systemd_system_unitdir}/cryptmount.service
++        rm -fr ${D}/usr/lib
++    fi
++}
++
++FILES:${PN} += "${systemd_system_unitdir}"
++
+ RDEPENDS:${PN} = "libdevmapper"
+diff --git a/recipes-security/krill/files/panic_workaround.patch b/recipes-security/krill/files/panic_workaround.patch
+index 9b08cb5..605c075 100644
+--- a/recipes-security/krill/files/panic_workaround.patch
++++ b/recipes-security/krill/files/panic_workaround.patch
+@@ -1,11 +1,20 @@
++From 488ed2267937b55e9ef4bd2ded06484cbbf66360 Mon Sep 17 00:00:00 2001
++From: Armin Kuster <akuster808@gmail.com>
++Date: Tue, 27 Jul 2021 08:06:43 -0700
++Subject: [PATCH] krill: Add new pkg
++
+ Upstream-Status: OE specific
+ Signed-off-by: Armin Kuster <akuster808@gmail.com>
+ 
+-Index: git/Cargo.toml
+-===================================================================
+---- git.orig/Cargo.toml
+-+++ git/Cargo.toml
+-@@ -71,7 +71,7 @@ static-openssl = [ "openssl/vendored" ]
++---
++ Cargo.toml | 2 +-
++ 1 file changed, 1 insertion(+), 1 deletion(-)
++
++diff --git a/Cargo.toml b/Cargo.toml
++index 2190213e..89c52d27 100644
++--- a/Cargo.toml
+++++ b/Cargo.toml
++@@ -92,7 +92,7 @@ hsm-tests-pkcs11 = [ "hsm" ]
+  # Make sure that Krill crashes on panics, rather than losing threads and
+  # limping on in a bad state.
+  [profile.release]
+@@ -13,4 +22,4 @@ Index: git/Cargo.toml
+ +#panic = "abort"
+  
+  [dev-dependencies]
+- # for user management
++ # For user management
+diff --git a/recipes-security/krill/krill_0.9.6.bb b/recipes-security/krill/krill_0.10.0.bb
+similarity index 95%
+rename from recipes-security/krill/krill_0.9.6.bb
+rename to recipes-security/krill/krill_0.10.0.bb
+index fd86c4b..af8ecac 100644
+--- a/recipes-security/krill/krill_0.9.6.bb
++++ b/recipes-security/krill/krill_0.10.0.bb
+@@ -7,7 +7,7 @@ DEPENDS = "openssl"
+ 
+ # SRC_URI += "crate://crates.io/krill/0.9.1"
+ SRC_URI = "git://github.com/NLnetLabs/krill.git;protocol=https;branch=main"
+-SRCREV = "95e6681d5b4024cac7a1892d47fb76abc68f34fb"
++SRCREV = "2c00aa05e2299ca8a0994f7d054231e3a5cd8d25"
+ SRC_URI += "file://panic_workaround.patch"
+ 
+ include krill.inc
+-- 
+2.25.1
+
+
+
+^ permalink raw reply related	[flat|nested] only message in thread
+only message in thread, other threads:[~2022-09-06 13:55 UTC | newest]
+
+Thread overview: (only message) (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-09-06 13:55 [meta-security][V2][PATCH] cryptmount: fix systemd service install Armin Kuster
+

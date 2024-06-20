@@ -1,0 +1,358 @@
+* make journal logs persistent
+@ 2023-05-04  5:29 Belisko Marek
+  2023-05-04  5:33 ` [yocto] " Khem Raj
+  0 siblings, 1 reply; 4+ messages in thread
+From: Belisko Marek @ 2023-05-04  5:29 UTC (permalink / raw)
+  To: Yocto
+
+Hi,
+
+I'm building an image using a kirkstone release for a banana pi m2
+board. I've created wic file with 2 partitions one for rootfs and
+second for storage. Storage partition if mounted to /opt/storage and
+resized to then end of the SD card.
+wks snippet:
+part /opt/storage --source rootfs
+--rootfs-dir=${IMAGE_ROOTFS}/opt/storage --ondisk mmcblk0
+--fstype=ext4 --fsoptions="defaults,x-systemd.growfs" --align 2048
+--fixed-size=10M
+
+This works fine. I've also added custom systemd-conf file for
+journal.conf which set logs to persistent like:
+[Journal]
+Storage=persistent
+ForwardToSyslog=yes
+RuntimeMaxUse=100M
+
+In local.conf I've added: VOLATILE_LOG_DIR = "no" which makes /var/log
+non volatile.
+
+When image is build I've added following:
+
+persist_logs() {
+        mkdir -p ${IMAGE_ROOTFS}/opt/storage/journal
+        mv ${IMAGE_ROOTFS}/var/log ${IMAGE_ROOTFS}/opt/storage/journal
+        ln -sf /opt//storage/journal ${IMAGE_ROOTFS}/var/log
+}
+
+# Create persistent logs
+ROOTFS_POSTPROCESS_COMMAND += "persist_logs; "
+
+But even after all those changes, the journal is saved in /run/var ...
+
+Any ideas what I'm doing wrong?
+
+Thanks and BR,
+
+marek
+
+-- 
+as simple and primitive as possible
+-------------------------------------------------
+Marek Belisko - OPEN-NANDRA
+Freelance Developer
+
+Ruska Nova Ves 219 | Presov, 08005 Slovak Republic
+Tel: +421 915 052 184
+skype: marekwhite
+twitter: #opennandra
+web: http://open-nandra.com
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] make journal logs persistent
+  2023-05-04  5:29 make journal logs persistent Belisko Marek
+@ 2023-05-04  5:33 ` Khem Raj
+  2023-05-04  7:20   ` Belisko Marek
+  2023-05-05  9:14   ` Belisko Marek
+  0 siblings, 2 replies; 4+ messages in thread
+From: Khem Raj @ 2023-05-04  5:33 UTC (permalink / raw)
+  To: Marek Belisko; +Cc: Yocto
+
+On Wed, May 3, 2023 at 10:29 PM Marek Belisko <marek.belisko@gmail.com> wrote:
+>
+> Hi,
+>
+> I'm building an image using a kirkstone release for a banana pi m2
+> board. I've created wic file with 2 partitions one for rootfs and
+> second for storage. Storage partition if mounted to /opt/storage and
+> resized to then end of the SD card.
+> wks snippet:
+> part /opt/storage --source rootfs
+> --rootfs-dir=${IMAGE_ROOTFS}/opt/storage --ondisk mmcblk0
+> --fstype=ext4 --fsoptions="defaults,x-systemd.growfs" --align 2048
+> --fixed-size=10M
+>
+> This works fine. I've also added custom systemd-conf file for
+> journal.conf which set logs to persistent like:
+> [Journal]
+> Storage=persistent
+> ForwardToSyslog=yes
+> RuntimeMaxUse=100M
+>
+> In local.conf I've added: VOLATILE_LOG_DIR = "no" which makes /var/log
+> non volatile.
+>
+> When image is build I've added following:
+>
+> persist_logs() {
+>         mkdir -p ${IMAGE_ROOTFS}/opt/storage/journal
+>         mv ${IMAGE_ROOTFS}/var/log ${IMAGE_ROOTFS}/opt/storage/journal
+>         ln -sf /opt//storage/journal ${IMAGE_ROOTFS}/var/log
+> }
+>
+> # Create persistent logs
+> ROOTFS_POSTPROCESS_COMMAND += "persist_logs; "
+>
+> But even after all those changes, the journal is saved in /run/var ...
+>
+> Any ideas what I'm doing wrong?
+>
+
+Perhaps its not mounted yet when systemd journal needs it. So it falls
+back to /run to store it.
+usually I have always done mounting in a pre-init step via something
+like initramfs before passing
+control to systemd. That worked reliably well.
+
+> Thanks and BR,
+>
+> marek
+>
+> --
+> as simple and primitive as possible
+> -------------------------------------------------
+> Marek Belisko - OPEN-NANDRA
+> Freelance Developer
+>
+> Ruska Nova Ves 219 | Presov, 08005 Slovak Republic
+> Tel: +421 915 052 184
+> skype: marekwhite
+> twitter: #opennandra
+> web: http://open-nandra.com
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> You automatically follow any topics you start or reply to.
+> View/Reply Online (#59863): https://lists.yoctoproject.org/g/yocto/message/59863
+> Mute This Topic: https://lists.yoctoproject.org/mt/98678435/1997914
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [raj.khem@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] make journal logs persistent
+  2023-05-04  5:33 ` [yocto] " Khem Raj
+@ 2023-05-04  7:20   ` Belisko Marek
+  2023-05-05  9:14   ` Belisko Marek
+  1 sibling, 0 replies; 4+ messages in thread
+From: Belisko Marek @ 2023-05-04  7:20 UTC (permalink / raw)
+  To: Khem Raj; +Cc: Yocto
+
+On Thu, May 4, 2023 at 7:33 AM Khem Raj <raj.khem@gmail.com> wrote:
+>
+> On Wed, May 3, 2023 at 10:29 PM Marek Belisko <marek.belisko@gmail.com> wrote:
+> >
+> > Hi,
+> >
+> > I'm building an image using a kirkstone release for a banana pi m2
+> > board. I've created wic file with 2 partitions one for rootfs and
+> > second for storage. Storage partition if mounted to /opt/storage and
+> > resized to then end of the SD card.
+> > wks snippet:
+> > part /opt/storage --source rootfs
+> > --rootfs-dir=${IMAGE_ROOTFS}/opt/storage --ondisk mmcblk0
+> > --fstype=ext4 --fsoptions="defaults,x-systemd.growfs" --align 2048
+> > --fixed-size=10M
+> >
+> > This works fine. I've also added custom systemd-conf file for
+> > journal.conf which set logs to persistent like:
+> > [Journal]
+> > Storage=persistent
+> > ForwardToSyslog=yes
+> > RuntimeMaxUse=100M
+> >
+> > In local.conf I've added: VOLATILE_LOG_DIR = "no" which makes /var/log
+> > non volatile.
+> >
+> > When image is build I've added following:
+> >
+> > persist_logs() {
+> >         mkdir -p ${IMAGE_ROOTFS}/opt/storage/journal
+> >         mv ${IMAGE_ROOTFS}/var/log ${IMAGE_ROOTFS}/opt/storage/journal
+> >         ln -sf /opt//storage/journal ${IMAGE_ROOTFS}/var/log
+> > }
+> >
+> > # Create persistent logs
+> > ROOTFS_POSTPROCESS_COMMAND += "persist_logs; "
+> >
+> > But even after all those changes, the journal is saved in /run/var ...
+> >
+> > Any ideas what I'm doing wrong?
+> >
+>
+> Perhaps its not mounted yet when systemd journal needs it. So it falls
+> back to /run to store it.
+> usually I have always done mounting in a pre-init step via something
+> like initramfs before passing
+> control to systemd. That worked reliably well.
+Ok thanks I'll give a try.
+>
+> > Thanks and BR,
+> >
+> > marek
+> >
+> > --
+> > as simple and primitive as possible
+> > -------------------------------------------------
+> > Marek Belisko - OPEN-NANDRA
+> > Freelance Developer
+> >
+> > Ruska Nova Ves 219 | Presov, 08005 Slovak Republic
+> > Tel: +421 915 052 184
+> > skype: marekwhite
+> > twitter: #opennandra
+> > web: http://open-nandra.com
+> >
+> > -=-=-=-=-=-=-=-=-=-=-=-
+> > Links: You receive all messages sent to this group.
+> > You automatically follow any topics you start or reply to.
+> > View/Reply Online (#59863): https://lists.yoctoproject.org/g/yocto/message/59863
+> > Mute This Topic: https://lists.yoctoproject.org/mt/98678435/1997914
+> > Group Owner: yocto+owner@lists.yoctoproject.org
+> > Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [raj.khem@gmail.com]
+> > -=-=-=-=-=-=-=-=-=-=-=-
+> >
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] make journal logs persistent
+  2023-05-04  5:33 ` [yocto] " Khem Raj
+  2023-05-04  7:20   ` Belisko Marek
+@ 2023-05-05  9:14   ` Belisko Marek
+  1 sibling, 0 replies; 4+ messages in thread
+From: Belisko Marek @ 2023-05-05  9:14 UTC (permalink / raw)
+  To: Khem Raj; +Cc: Yocto
+
+On Thu, May 4, 2023 at 7:33 AM Khem Raj <raj.khem@gmail.com> wrote:
+>
+> On Wed, May 3, 2023 at 10:29 PM Marek Belisko <marek.belisko@gmail.com> wrote:
+> >
+> > Hi,
+> >
+> > I'm building an image using a kirkstone release for a banana pi m2
+> > board. I've created wic file with 2 partitions one for rootfs and
+> > second for storage. Storage partition if mounted to /opt/storage and
+> > resized to then end of the SD card.
+> > wks snippet:
+> > part /opt/storage --source rootfs
+> > --rootfs-dir=${IMAGE_ROOTFS}/opt/storage --ondisk mmcblk0
+> > --fstype=ext4 --fsoptions="defaults,x-systemd.growfs" --align 2048
+> > --fixed-size=10M
+> >
+> > This works fine. I've also added custom systemd-conf file for
+> > journal.conf which set logs to persistent like:
+> > [Journal]
+> > Storage=persistent
+> > ForwardToSyslog=yes
+> > RuntimeMaxUse=100M
+> >
+> > In local.conf I've added: VOLATILE_LOG_DIR = "no" which makes /var/log
+> > non volatile.
+> >
+> > When image is build I've added following:
+> >
+> > persist_logs() {
+> >         mkdir -p ${IMAGE_ROOTFS}/opt/storage/journal
+> >         mv ${IMAGE_ROOTFS}/var/log ${IMAGE_ROOTFS}/opt/storage/journal
+> >         ln -sf /opt//storage/journal ${IMAGE_ROOTFS}/var/log
+> > }
+> >
+> > # Create persistent logs
+> > ROOTFS_POSTPROCESS_COMMAND += "persist_logs; "
+> >
+> > But even after all those changes, the journal is saved in /run/var ...
+> >
+> > Any ideas what I'm doing wrong?
+> >
+>
+> Perhaps its not mounted yet when systemd journal needs it. So it falls
+> back to /run to store it.
+> usually I have always done mounting in a pre-init step via something
+> like initramfs before passing
+> control to systemd. That worked reliably well.
+I've tried to mount my partition before systemd is started but I'm still seeing:
+journalctl -b -u systemd-journald
+Apr 28 17:42:27 bananapi-m2-zero systemd-journald[133]: Journal started
+Apr 28 17:42:27 bananapi-m2-zero systemd-journald[133]: Runtime
+Journal (/run/log/journal/d41d8cd98f00b204e9800998ecf8.
+Apr 28 17:42:27 bananapi-m2-zero systemd-journald[133]: Runtime
+Journal (/run/log/journal/d41d8cd98f00b204e9800998ecf8.
+Apr 28 17:42:27 bananapi-m2-zero systemd-journald[133]: Received
+client request to flush runtime journal.
+Apr 28 17:51:03 bananapi-m2-zero systemd-journald[133]: Forwarding to
+syslog missed 1 messages.
+Apr 28 17:51:33 bananapi-m2-zero systemd-journald[133]: Forwarding to
+syslog missed 49 messages.
+
+and :
+ls -la /var/log
+lrwxrwxrwx    1 root     root            26 Mar  9  2018 /var/log ->
+/opt/storage/log
+
+Seems OK to me. Any other ideas pls? Thanks.
+
+>
+> > Thanks and BR,
+> >
+> > marek
+> >
+> > --
+> > as simple and primitive as possible
+> > -------------------------------------------------
+> > Marek Belisko - OPEN-NANDRA
+> > Freelance Developer
+> >
+> > Ruska Nova Ves 219 | Presov, 08005 Slovak Republic
+> > Tel: +421 915 052 184
+> > skype: marekwhite
+> > twitter: #opennandra
+> > web: http://open-nandra.com
+> >
+> > -=-=-=-=-=-=-=-=-=-=-=-
+> > Links: You receive all messages sent to this group.
+> > You automatically follow any topics you start or reply to.
+> > View/Reply Online (#59863): https://lists.yoctoproject.org/g/yocto/message/59863
+> > Mute This Topic: https://lists.yoctoproject.org/mt/98678435/1997914
+> > Group Owner: yocto+owner@lists.yoctoproject.org
+> > Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [raj.khem@gmail.com]
+> > -=-=-=-=-=-=-=-=-=-=-=-
+> >
+
+
+
+--
+as simple and primitive as possible
+-------------------------------------------------
+Marek Belisko - OPEN-NANDRA
+Freelance Developer
+
+Ruska Nova Ves 219 | Presov, 08005 Slovak Republic
+Tel: +421 915 052 184
+skype: marekwhite
+twitter: #opennandra
+web: http://open-nandra.com
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+end of thread, other threads:[~2023-05-05  9:15 UTC | newest]
+
+Thread overview: 4+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2023-05-04  5:29 make journal logs persistent Belisko Marek
+2023-05-04  5:33 ` [yocto] " Khem Raj
+2023-05-04  7:20   ` Belisko Marek
+2023-05-05  9:14   ` Belisko Marek
+

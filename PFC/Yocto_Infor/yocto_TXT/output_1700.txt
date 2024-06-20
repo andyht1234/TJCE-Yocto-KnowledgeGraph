@@ -1,0 +1,555 @@
+* [PATCH yocto-autobuilder-helper] run-docs-build: allow build warnings again
+@ 2022-06-22 15:32 michael.opdenacker
+  2022-07-04 13:24 ` [yocto] " Quentin Schulz
+  0 siblings, 1 reply; 6+ messages in thread
+From: michael.opdenacker @ 2022-06-22 15:32 UTC (permalink / raw)
+  To: yocto; +Cc: Michael Opdenacker
+
+From: Michael Opdenacker <michael.opdenacker@bootlin.com>
+
+This allows to switch to a more recent of Sphinx
+which will generate warnings with old versions of docs.
+
+This way, it's not immediately necessary to patch
+all such versions.
+
+This commit reverts
+https://git.yoctoproject.org/yocto-autobuilder-helper/commit/?id=8273124feb9da2ffe93fcee7c4529d5597e1684a
+which originally reverted
+https://git.yoctoproject.org/yocto-autobuilder-helper/commit/?id=931d409b255a85f2217ca093d8391a678ce00ddb
+
+Signed-off-by: Michael Opdenacker <michael.opdenacker@bootlin.com>
+---
+ scripts/run-docs-build | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/scripts/run-docs-build b/scripts/run-docs-build
+index 648a29d..0f74520 100755
+--- a/scripts/run-docs-build
++++ b/scripts/run-docs-build
+@@ -63,7 +63,7 @@ for branch in 1.46 $(git branch --remote --contains "$first_sphinx_commit" --for
+     git checkout $branch
+     git checkout master releases.rst
+     make clean
+-    make publish
++    SPHINXOPTS="-j auto" make publish
+ 
+     if [ "$branch" = "master-next" ]; then
+         branch="next"
+@@ -136,7 +136,7 @@ for branch in dunfell $(git branch --remote --contains "$first_sphinx_commit" --
+     fi
+ 
+     make clean
+-    make publish
++    SPHINXOPTS="-j auto" make publish
+ 
+     # Strip yocto- from tag names
+     branch=$(echo "$branch" | sed 's/yocto-//')
+-- 
+2.34.1
+
+
+
+^ permalink raw reply related	[flat|nested] 6+ messages in thread
+* Re: [yocto] [PATCH yocto-autobuilder-helper] run-docs-build: allow build warnings again
+  2022-06-22 15:32 [PATCH yocto-autobuilder-helper] run-docs-build: allow build warnings again michael.opdenacker
+@ 2022-07-04 13:24 ` Quentin Schulz
+  2022-07-04 14:23   ` Richard Purdie
+  0 siblings, 1 reply; 6+ messages in thread
+From: Quentin Schulz @ 2022-07-04 13:24 UTC (permalink / raw)
+  To: michael.opdenacker, yocto
+
+Hi Michael,
+
+On 6/22/22 17:32, Michael Opdenacker via lists.yoctoproject.org wrote:
+> From: Michael Opdenacker <michael.opdenacker@bootlin.com>
+> 
+> This allows to switch to a more recent of Sphinx
+> which will generate warnings with old versions of docs.
+> 
+> This way, it's not immediately necessary to patch
+> all such versions.
+> 
+> This commit reverts
+> https://urldefense.proofpoint.com/v2/url?u=https-3A__git.yoctoproject.org_yocto-2Dautobuilder-2Dhelper_commit_-3Fid-3D8273124feb9da2ffe93fcee7c4529d5597e1684a&d=DwIDAg&c=_sEr5x9kUWhuk4_nFwjJtA&r=LYjLexDn7rXIzVmkNPvw5ymA1XTSqHGq8yBP6m6qZZ4njZguQhZhkI_-172IIy1t&m=je4C362aUVxZ2rdozdrQVTgzhi9iRYrxNfYtH5LHkXdlsay9SEphJ_ekBm4830_n&s=9u5-2R_NLEQy5w0pFgklKIUQnAvVLuHX1ASaeEBBJJ4&e=
+> which originally reverted
+> https://urldefense.proofpoint.com/v2/url?u=https-3A__git.yoctoproject.org_yocto-2Dautobuilder-2Dhelper_commit_-3Fid-3D931d409b255a85f2217ca093d8391a678ce00ddb&d=DwIDAg&c=_sEr5x9kUWhuk4_nFwjJtA&r=LYjLexDn7rXIzVmkNPvw5ymA1XTSqHGq8yBP6m6qZZ4njZguQhZhkI_-172IIy1t&m=je4C362aUVxZ2rdozdrQVTgzhi9iRYrxNfYtH5LHkXdlsay9SEphJ_ekBm4830_n&s=bTED2gTptfT6bSvLayy3fEpQJyUdbo5gLlt7ZGKkD1c&e=
+> 
+> Signed-off-by: Michael Opdenacker <michael.opdenacker@bootlin.com>
+> ---
+>   scripts/run-docs-build | 4 ++--
+>   1 file changed, 2 insertions(+), 2 deletions(-)
+> 
+> diff --git a/scripts/run-docs-build b/scripts/run-docs-build
+> index 648a29d..0f74520 100755
+> --- a/scripts/run-docs-build
+> +++ b/scripts/run-docs-build
+> @@ -63,7 +63,7 @@ for branch in 1.46 $(git branch --remote --contains "$first_sphinx_commit" --for
+>       git checkout $branch
+>       git checkout master releases.rst
+>       make clean
+> -    make publish
+> +    SPHINXOPTS="-j auto" make publish
+>   
+>       if [ "$branch" = "master-next" ]; then
+>           branch="next"
+> @@ -136,7 +136,7 @@ for branch in dunfell $(git branch --remote --contains "$first_sphinx_commit" --
+>       fi
+>   
+>       make clean
+> -    make publish
+> +    SPHINXOPTS="-j auto" make publish
+>   
+
+What about doing this for all branches except master? To have at least 
+some checks and not completely disable the warnings.
+
+I'm a bit afraid we'll just not care about warnings anymore since they 
+won't fail the autobuilder anymore. I also understand it's not really 
+sustainable to leave them on for old docs since they won't be maintained 
+at one point in time but we still very mnuch would like to be able to 
+build them.
+
+Not sure what's the best solution here right now unfortunately :/
+
+Cheers,
+Quentin
+
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] [PATCH yocto-autobuilder-helper] run-docs-build: allow build warnings again
+  2022-07-04 13:24 ` [yocto] " Quentin Schulz
+@ 2022-07-04 14:23   ` Richard Purdie
+  2022-07-05 11:21     ` Quentin Schulz
+  0 siblings, 1 reply; 6+ messages in thread
+From: Richard Purdie @ 2022-07-04 14:23 UTC (permalink / raw)
+  To: Quentin Schulz, michael.opdenacker, yocto
+
+On Mon, 2022-07-04 at 15:24 +0200, Quentin Schulz wrote:
+> Hi Michael,
+> 
+> On 6/22/22 17:32, Michael Opdenacker via lists.yoctoproject.org wrote:
+> > From: Michael Opdenacker <michael.opdenacker@bootlin.com>
+> > 
+> > This allows to switch to a more recent of Sphinx
+> > which will generate warnings with old versions of docs.
+> > 
+> > This way, it's not immediately necessary to patch
+> > all such versions.
+> > 
+> > This commit reverts
+> > https://urldefense.proofpoint.com/v2/url?u=https-3A__git.yoctoproject.org_yocto-2Dautobuilder-2Dhelper_commit_-3Fid-3D8273124feb9da2ffe93fcee7c4529d5597e1684a&d=DwIDAg&c=_sEr5x9kUWhuk4_nFwjJtA&r=LYjLexDn7rXIzVmkNPvw5ymA1XTSqHGq8yBP6m6qZZ4njZguQhZhkI_-172IIy1t&m=je4C362aUVxZ2rdozdrQVTgzhi9iRYrxNfYtH5LHkXdlsay9SEphJ_ekBm4830_n&s=9u5-2R_NLEQy5w0pFgklKIUQnAvVLuHX1ASaeEBBJJ4&e=
+> > which originally reverted
+> > https://urldefense.proofpoint.com/v2/url?u=https-3A__git.yoctoproject.org_yocto-2Dautobuilder-2Dhelper_commit_-3Fid-3D931d409b255a85f2217ca093d8391a678ce00ddb&d=DwIDAg&c=_sEr5x9kUWhuk4_nFwjJtA&r=LYjLexDn7rXIzVmkNPvw5ymA1XTSqHGq8yBP6m6qZZ4njZguQhZhkI_-172IIy1t&m=je4C362aUVxZ2rdozdrQVTgzhi9iRYrxNfYtH5LHkXdlsay9SEphJ_ekBm4830_n&s=bTED2gTptfT6bSvLayy3fEpQJyUdbo5gLlt7ZGKkD1c&e=
+> > 
+> > Signed-off-by: Michael Opdenacker <michael.opdenacker@bootlin.com>
+> > ---
+> >   scripts/run-docs-build | 4 ++--
+> >   1 file changed, 2 insertions(+), 2 deletions(-)
+> > 
+> > diff --git a/scripts/run-docs-build b/scripts/run-docs-build
+> > index 648a29d..0f74520 100755
+> > --- a/scripts/run-docs-build
+> > +++ b/scripts/run-docs-build
+> > @@ -63,7 +63,7 @@ for branch in 1.46 $(git branch --remote --contains "$first_sphinx_commit" --for
+> >       git checkout $branch
+> >       git checkout master releases.rst
+> >       make clean
+> > -    make publish
+> > +    SPHINXOPTS="-j auto" make publish
+> >   
+> >       if [ "$branch" = "master-next" ]; then
+> >           branch="next"
+> > @@ -136,7 +136,7 @@ for branch in dunfell $(git branch --remote --contains "$first_sphinx_commit" --
+> >       fi
+> >   
+> >       make clean
+> > -    make publish
+> > +    SPHINXOPTS="-j auto" make publish
+> >   
+> 
+> What about doing this for all branches except master? To have at least 
+> some checks and not completely disable the warnings.
+> 
+> I'm a bit afraid we'll just not care about warnings anymore since they 
+> won't fail the autobuilder anymore. I also understand it's not really 
+> sustainable to leave them on for old docs since they won't be maintained 
+> at one point in time but we still very mnuch would like to be able to 
+> build them.
+> 
+> Not sure what's the best solution here right now unfortunately :/
+
+Enabling them for master could be a compromise, I'd take such a patch
+(Michael is away for a while).
+
+Cheers,
+
+Richard
+
+
+
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] [PATCH yocto-autobuilder-helper] run-docs-build: allow build warnings again
+  2022-07-04 14:23   ` Richard Purdie
+@ 2022-07-05 11:21     ` Quentin Schulz
+  2022-07-05 11:58       ` Richard Purdie
+  0 siblings, 1 reply; 6+ messages in thread
+From: Quentin Schulz @ 2022-07-05 11:21 UTC (permalink / raw)
+  To: Richard Purdie, michael.opdenacker, yocto
+
+Hi Richard, Michael,
+
+On 7/4/22 16:23, Richard Purdie wrote:
+> On Mon, 2022-07-04 at 15:24 +0200, Quentin Schulz wrote:
+>> Hi Michael,
+>>
+>> On 6/22/22 17:32, Michael Opdenacker via lists.yoctoproject.org wrote:
+>>> From: Michael Opdenacker <michael.opdenacker@bootlin.com>
+>>>
+>>> This allows to switch to a more recent of Sphinx
+>>> which will generate warnings with old versions of docs.
+>>>
+>>> This way, it's not immediately necessary to patch
+>>> all such versions.
+>>>
+>>> This commit reverts
+>>> https://urldefense.proofpoint.com/v2/url?u=https-3A__git.yoctoproject.org_yocto-2Dautobuilder-2Dhelper_commit_-3Fid-3D8273124feb9da2ffe93fcee7c4529d5597e1684a&d=DwIDAg&c=_sEr5x9kUWhuk4_nFwjJtA&r=LYjLexDn7rXIzVmkNPvw5ymA1XTSqHGq8yBP6m6qZZ4njZguQhZhkI_-172IIy1t&m=je4C362aUVxZ2rdozdrQVTgzhi9iRYrxNfYtH5LHkXdlsay9SEphJ_ekBm4830_n&s=9u5-2R_NLEQy5w0pFgklKIUQnAvVLuHX1ASaeEBBJJ4&e=
+>>> which originally reverted
+>>> https://urldefense.proofpoint.com/v2/url?u=https-3A__git.yoctoproject.org_yocto-2Dautobuilder-2Dhelper_commit_-3Fid-3D931d409b255a85f2217ca093d8391a678ce00ddb&d=DwIDAg&c=_sEr5x9kUWhuk4_nFwjJtA&r=LYjLexDn7rXIzVmkNPvw5ymA1XTSqHGq8yBP6m6qZZ4njZguQhZhkI_-172IIy1t&m=je4C362aUVxZ2rdozdrQVTgzhi9iRYrxNfYtH5LHkXdlsay9SEphJ_ekBm4830_n&s=bTED2gTptfT6bSvLayy3fEpQJyUdbo5gLlt7ZGKkD1c&e=
+>>>
+>>> Signed-off-by: Michael Opdenacker <michael.opdenacker@bootlin.com>
+>>> ---
+>>>    scripts/run-docs-build | 4 ++--
+>>>    1 file changed, 2 insertions(+), 2 deletions(-)
+>>>
+>>> diff --git a/scripts/run-docs-build b/scripts/run-docs-build
+>>> index 648a29d..0f74520 100755
+>>> --- a/scripts/run-docs-build
+>>> +++ b/scripts/run-docs-build
+>>> @@ -63,7 +63,7 @@ for branch in 1.46 $(git branch --remote --contains "$first_sphinx_commit" --for
+>>>        git checkout $branch
+>>>        git checkout master releases.rst
+>>>        make clean
+>>> -    make publish
+>>> +    SPHINXOPTS="-j auto" make publish
+>>>    
+>>>        if [ "$branch" = "master-next" ]; then
+>>>            branch="next"
+>>> @@ -136,7 +136,7 @@ for branch in dunfell $(git branch --remote --contains "$first_sphinx_commit" --
+>>>        fi
+>>>    
+>>>        make clean
+>>> -    make publish
+>>> +    SPHINXOPTS="-j auto" make publish
+>>>    
+>>
+>> What about doing this for all branches except master? To have at least
+>> some checks and not completely disable the warnings.
+>>
+>> I'm a bit afraid we'll just not care about warnings anymore since they
+>> won't fail the autobuilder anymore. I also understand it's not really
+>> sustainable to leave them on for old docs since they won't be maintained
+>> at one point in time but we still very mnuch would like to be able to
+>> build them.
+>>
+>> Not sure what's the best solution here right now unfortunately :/
+> 
+> Enabling them for master could be a compromise, I'd take such a patch
+> (Michael is away for a while).
+> 
+
+Some warnings are actually valid. Such is the case for the one that 
+warranted 
+https://git.yoctoproject.org/yocto-docs/commit/?id=9a797dedf6708da3e7ce789c5c8735e5d891cde4. 
+The issue is that we build the docs from old versions with the same 
+version of sphinx. Therefore, this patch fixes the issue in master but 
+should also be backported to all other impacted versions, even the 
+unmaintained ones. See 
+https://docs.yoctoproject.org/dunfell/dev-manual/dev-manual-common-tasks.html#recipe-syntax, 
+instead of a link we now have a path between quotes.
+
+There are two ways to fix that one warning:
+  - add intersphinx_disabled_reftypes=[] in conf.py manually from the 
+run-docs-build script, c.f. 
+https://www.sphinx-doc.org/en/master/usage/extensions/intersphinx.html#confval-intersphinx_disabled_reftypes
+  - patch all (tagged and branch) releases from 3.2 to current master in 
+scripts/docs-build-patches,
+
+I prefer the second option because it feels less hacky, but that means 
+MANY times the same file added to docs-build-patches directory.
+
+The same could be done for the patch I just sent for yocto-docs to use 
+the %s substitution characters for the cve extlinks to fix a warning. We 
+could just apply this patch to affected releases (kirkstone-4.0.1 tag + 
+kirkstone branch). I could technically request a backport to yocto-docs 
+kirkstone branch, the only thing I don't like is bumping the min version 
+requirement for sphinx for a release that was already released, but if 
+that's okay with you, we could avoid having to add patches in the 
+autobuilder for every new tagged release of kirkstone.
+
+I'm honestly not sure there's a lot of benefit in disabling the warnings 
+for now, or enabling them only for select releases. I understand that 
+this increases the maintenance burden on unmaintained branches every 
+time we update the sphinx binary in the docs buildtools. However, we 
+missed this new broken link for almost a month now, which shows we don't 
+look at successful docs build logs from the autobuilder.
+
+Cheers,
+Quentin
+
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] [PATCH yocto-autobuilder-helper] run-docs-build: allow build warnings again
+  2022-07-05 11:21     ` Quentin Schulz
+@ 2022-07-05 11:58       ` Richard Purdie
+  2022-07-19 17:35         ` Michael Opdenacker
+  0 siblings, 1 reply; 6+ messages in thread
+From: Richard Purdie @ 2022-07-05 11:58 UTC (permalink / raw)
+  To: Quentin Schulz, michael.opdenacker, yocto
+
+On Tue, 2022-07-05 at 13:21 +0200, Quentin Schulz wrote:
+> Hi Richard, Michael,
+> 
+> On 7/4/22 16:23, Richard Purdie wrote:
+> > On Mon, 2022-07-04 at 15:24 +0200, Quentin Schulz wrote:
+> > > Hi Michael,
+> > > 
+> > > On 6/22/22 17:32, Michael Opdenacker via lists.yoctoproject.org wrote:
+> > > > From: Michael Opdenacker <michael.opdenacker@bootlin.com>
+> > > > 
+> > > > This allows to switch to a more recent of Sphinx
+> > > > which will generate warnings with old versions of docs.
+> > > > 
+> > > > This way, it's not immediately necessary to patch
+> > > > all such versions.
+> > > > 
+> > > > This commit reverts
+> > > > https://urldefense.proofpoint.com/v2/url?u=https-3A__git.yoctoproject.org_yocto-2Dautobuilder-2Dhelper_commit_-3Fid-3D8273124feb9da2ffe93fcee7c4529d5597e1684a&d=DwIDAg&c=_sEr5x9kUWhuk4_nFwjJtA&r=LYjLexDn7rXIzVmkNPvw5ymA1XTSqHGq8yBP6m6qZZ4njZguQhZhkI_-172IIy1t&m=je4C362aUVxZ2rdozdrQVTgzhi9iRYrxNfYtH5LHkXdlsay9SEphJ_ekBm4830_n&s=9u5-2R_NLEQy5w0pFgklKIUQnAvVLuHX1ASaeEBBJJ4&e=
+> > > > which originally reverted
+> > > > https://urldefense.proofpoint.com/v2/url?u=https-3A__git.yoctoproject.org_yocto-2Dautobuilder-2Dhelper_commit_-3Fid-3D931d409b255a85f2217ca093d8391a678ce00ddb&d=DwIDAg&c=_sEr5x9kUWhuk4_nFwjJtA&r=LYjLexDn7rXIzVmkNPvw5ymA1XTSqHGq8yBP6m6qZZ4njZguQhZhkI_-172IIy1t&m=je4C362aUVxZ2rdozdrQVTgzhi9iRYrxNfYtH5LHkXdlsay9SEphJ_ekBm4830_n&s=bTED2gTptfT6bSvLayy3fEpQJyUdbo5gLlt7ZGKkD1c&e=
+> > > > 
+> > > > Signed-off-by: Michael Opdenacker <michael.opdenacker@bootlin.com>
+> > > > ---
+> > > >    scripts/run-docs-build | 4 ++--
+> > > >    1 file changed, 2 insertions(+), 2 deletions(-)
+> > > > 
+> > > > diff --git a/scripts/run-docs-build b/scripts/run-docs-build
+> > > > index 648a29d..0f74520 100755
+> > > > --- a/scripts/run-docs-build
+> > > > +++ b/scripts/run-docs-build
+> > > > @@ -63,7 +63,7 @@ for branch in 1.46 $(git branch --remote --contains "$first_sphinx_commit" --for
+> > > >        git checkout $branch
+> > > >        git checkout master releases.rst
+> > > >        make clean
+> > > > -    make publish
+> > > > +    SPHINXOPTS="-j auto" make publish
+> > > >    
+> > > >        if [ "$branch" = "master-next" ]; then
+> > > >            branch="next"
+> > > > @@ -136,7 +136,7 @@ for branch in dunfell $(git branch --remote --contains "$first_sphinx_commit" --
+> > > >        fi
+> > > >    
+> > > >        make clean
+> > > > -    make publish
+> > > > +    SPHINXOPTS="-j auto" make publish
+> > > >    
+> > > 
+> > > What about doing this for all branches except master? To have at least
+> > > some checks and not completely disable the warnings.
+> > > 
+> > > I'm a bit afraid we'll just not care about warnings anymore since they
+> > > won't fail the autobuilder anymore. I also understand it's not really
+> > > sustainable to leave them on for old docs since they won't be maintained
+> > > at one point in time but we still very mnuch would like to be able to
+> > > build them.
+> > > 
+> > > Not sure what's the best solution here right now unfortunately :/
+> > 
+> > Enabling them for master could be a compromise, I'd take such a patch
+> > (Michael is away for a while).
+> > 
+> 
+> Some warnings are actually valid. Such is the case for the one that 
+> warranted 
+> https://git.yoctoproject.org/yocto-docs/commit/?id=9a797dedf6708da3e7ce789c5c8735e5d891cde4. 
+> The issue is that we build the docs from old versions with the same 
+> version of sphinx. Therefore, this patch fixes the issue in master but 
+> should also be backported to all other impacted versions, even the 
+> unmaintained ones. See 
+> https://docs.yoctoproject.org/dunfell/dev-manual/dev-manual-common-tasks.html#recipe-syntax, 
+> instead of a link we now have a path between quotes.
+> 
+> There are two ways to fix that one warning:
+>   - add intersphinx_disabled_reftypes=[] in conf.py manually from the 
+> run-docs-build script, c.f. 
+> https://www.sphinx-doc.org/en/master/usage/extensions/intersphinx.html#confval-intersphinx_disabled_reftypes
+>   - patch all (tagged and branch) releases from 3.2 to current master in 
+> scripts/docs-build-patches,
+> 
+> I prefer the second option because it feels less hacky, but that means 
+> MANY times the same file added to docs-build-patches directory.
+> 
+> The same could be done for the patch I just sent for yocto-docs to use 
+> the %s substitution characters for the cve extlinks to fix a warning. We 
+> could just apply this patch to affected releases (kirkstone-4.0.1 tag + 
+> kirkstone branch). I could technically request a backport to yocto-docs 
+> kirkstone branch, the only thing I don't like is bumping the min version 
+> requirement for sphinx for a release that was already released, but if 
+> that's okay with you, we could avoid having to add patches in the 
+> autobuilder for every new tagged release of kirkstone.
+> 
+> I'm honestly not sure there's a lot of benefit in disabling the warnings 
+> for now, or enabling them only for select releases. I understand that 
+> this increases the maintenance burden on unmaintained branches every 
+> time we update the sphinx binary in the docs buildtools. However, we 
+> missed this new broken link for almost a month now, which shows we don't 
+> look at successful docs build logs from the autobuilder.
+
+Perhaps it is time we split the master build from the stable releases
+and used different buildtools tarballs for them?
+
+That has it's own set of challenges of course too.
+
+Cheers,
+
+Richard
+
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+* Re: [yocto] [PATCH yocto-autobuilder-helper] run-docs-build: allow build warnings again
+  2022-07-05 11:58       ` Richard Purdie
+@ 2022-07-19 17:35         ` Michael Opdenacker
+  0 siblings, 0 replies; 6+ messages in thread
+From: Michael Opdenacker @ 2022-07-19 17:35 UTC (permalink / raw)
+  To: Richard Purdie, Quentin Schulz, yocto
+
+Richard, Quentin,
+
+On 7/5/22 13:58, Richard Purdie wrote:
+> On Tue, 2022-07-05 at 13:21 +0200, Quentin Schulz wrote:
+>> Hi Richard, Michael,
+>>
+>> On 7/4/22 16:23, Richard Purdie wrote:
+>>> On Mon, 2022-07-04 at 15:24 +0200, Quentin Schulz wrote:
+>>>> Hi Michael,
+>>>>
+>>>> On 6/22/22 17:32, Michael Opdenacker via lists.yoctoproject.org wrote:
+>>>>> From: Michael Opdenacker <michael.opdenacker@bootlin.com>
+>>>>>
+>>>>> This allows to switch to a more recent of Sphinx
+>>>>> which will generate warnings with old versions of docs.
+>>>>>
+>>>>> This way, it's not immediately necessary to patch
+>>>>> all such versions.
+>>>>>
+>>>>> This commit reverts
+>>>>> https://urldefense.proofpoint.com/v2/url?u=https-3A__git.yoctoproject.org_yocto-2Dautobuilder-2Dhelper_commit_-3Fid-3D8273124feb9da2ffe93fcee7c4529d5597e1684a&d=DwIDAg&c=_sEr5x9kUWhuk4_nFwjJtA&r=LYjLexDn7rXIzVmkNPvw5ymA1XTSqHGq8yBP6m6qZZ4njZguQhZhkI_-172IIy1t&m=je4C362aUVxZ2rdozdrQVTgzhi9iRYrxNfYtH5LHkXdlsay9SEphJ_ekBm4830_n&s=9u5-2R_NLEQy5w0pFgklKIUQnAvVLuHX1ASaeEBBJJ4&e=
+>>>>> which originally reverted
+>>>>> https://urldefense.proofpoint.com/v2/url?u=https-3A__git.yoctoproject.org_yocto-2Dautobuilder-2Dhelper_commit_-3Fid-3D931d409b255a85f2217ca093d8391a678ce00ddb&d=DwIDAg&c=_sEr5x9kUWhuk4_nFwjJtA&r=LYjLexDn7rXIzVmkNPvw5ymA1XTSqHGq8yBP6m6qZZ4njZguQhZhkI_-172IIy1t&m=je4C362aUVxZ2rdozdrQVTgzhi9iRYrxNfYtH5LHkXdlsay9SEphJ_ekBm4830_n&s=bTED2gTptfT6bSvLayy3fEpQJyUdbo5gLlt7ZGKkD1c&e=
+>>>>>
+>>>>> Signed-off-by: Michael Opdenacker <michael.opdenacker@bootlin.com>
+>>>>> ---
+>>>>>     scripts/run-docs-build | 4 ++--
+>>>>>     1 file changed, 2 insertions(+), 2 deletions(-)
+>>>>>
+>>>>> diff --git a/scripts/run-docs-build b/scripts/run-docs-build
+>>>>> index 648a29d..0f74520 100755
+>>>>> --- a/scripts/run-docs-build
+>>>>> +++ b/scripts/run-docs-build
+>>>>> @@ -63,7 +63,7 @@ for branch in 1.46 $(git branch --remote --contains "$first_sphinx_commit" --for
+>>>>>         git checkout $branch
+>>>>>         git checkout master releases.rst
+>>>>>         make clean
+>>>>> -    make publish
+>>>>> +    SPHINXOPTS="-j auto" make publish
+>>>>>     
+>>>>>         if [ "$branch" = "master-next" ]; then
+>>>>>             branch="next"
+>>>>> @@ -136,7 +136,7 @@ for branch in dunfell $(git branch --remote --contains "$first_sphinx_commit" --
+>>>>>         fi
+>>>>>     
+>>>>>         make clean
+>>>>> -    make publish
+>>>>> +    SPHINXOPTS="-j auto" make publish
+>>>>>     
+>>>> What about doing this for all branches except master? To have at least
+>>>> some checks and not completely disable the warnings.
+>>>>
+>>>> I'm a bit afraid we'll just not care about warnings anymore since they
+>>>> won't fail the autobuilder anymore. I also understand it's not really
+>>>> sustainable to leave them on for old docs since they won't be maintained
+>>>> at one point in time but we still very mnuch would like to be able to
+>>>> build them.
+>>>>
+>>>> Not sure what's the best solution here right now unfortunately :/
+>>> Enabling them for master could be a compromise, I'd take such a patch
+>>> (Michael is away for a while).
+>>>
+>> Some warnings are actually valid. Such is the case for the one that
+>> warranted
+>> https://git.yoctoproject.org/yocto-docs/commit/?id=9a797dedf6708da3e7ce789c5c8735e5d891cde4.
+>> The issue is that we build the docs from old versions with the same
+>> version of sphinx. Therefore, this patch fixes the issue in master but
+>> should also be backported to all other impacted versions, even the
+>> unmaintained ones. See
+>> https://docs.yoctoproject.org/dunfell/dev-manual/dev-manual-common-tasks.html#recipe-syntax,
+>> instead of a link we now have a path between quotes.
+>>
+>> There are two ways to fix that one warning:
+>>    - add intersphinx_disabled_reftypes=[] in conf.py manually from the
+>> run-docs-build script, c.f.
+>> https://www.sphinx-doc.org/en/master/usage/extensions/intersphinx.html#confval-intersphinx_disabled_reftypes
+>>    - patch all (tagged and branch) releases from 3.2 to current master in
+>> scripts/docs-build-patches,
+>>
+>> I prefer the second option because it feels less hacky, but that means
+>> MANY times the same file added to docs-build-patches directory.
+>>
+>> The same could be done for the patch I just sent for yocto-docs to use
+>> the %s substitution characters for the cve extlinks to fix a warning. We
+>> could just apply this patch to affected releases (kirkstone-4.0.1 tag +
+>> kirkstone branch). I could technically request a backport to yocto-docs
+>> kirkstone branch, the only thing I don't like is bumping the min version
+>> requirement for sphinx for a release that was already released, but if
+>> that's okay with you, we could avoid having to add patches in the
+>> autobuilder for every new tagged release of kirkstone.
+>>
+>> I'm honestly not sure there's a lot of benefit in disabling the warnings
+>> for now, or enabling them only for select releases. I understand that
+>> this increases the maintenance burden on unmaintained branches every
+>> time we update the sphinx binary in the docs buildtools. However, we
+>> missed this new broken link for almost a month now, which shows we don't
+>> look at successful docs build logs from the autobuilder.
+> Perhaps it is time we split the master build from the stable releases
+> and used different buildtools tarballs for them?
+>
+> That has it's own set of challenges of course too.
+
+
+I'd vote for such a solution, as it would allow to move on to newer 
+versions of Sphinx without breaking existing documentation, causing a 
+lot of extra work that's distracting us from working on the current docs.
+
+Cheers
+Michael.
+
+-- 
+Michael Opdenacker, Bootlin
+Embedded Linux and Kernel engineering
+https://bootlin.com
+
+
+
+^ permalink raw reply	[flat|nested] 6+ messages in thread
+end of thread, other threads:[~2022-07-19 17:35 UTC | newest]
+
+Thread overview: 6+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2022-06-22 15:32 [PATCH yocto-autobuilder-helper] run-docs-build: allow build warnings again michael.opdenacker
+2022-07-04 13:24 ` [yocto] " Quentin Schulz
+2022-07-04 14:23   ` Richard Purdie
+2022-07-05 11:21     ` Quentin Schulz
+2022-07-05 11:58       ` Richard Purdie
+2022-07-19 17:35         ` Michael Opdenacker
+

@@ -1,0 +1,260 @@
+* what's the state of things with pushing the bounds on ASSUME_PROVIDED?
+@ 2021-06-24 11:50 Robert P. J. Day
+  2021-06-25  1:30 ` [yocto] " Randy MacLeod
+  2021-06-25 11:43 ` Richard Purdie
+  0 siblings, 2 replies; 4+ messages in thread
+From: Robert P. J. Day @ 2021-06-24 11:50 UTC (permalink / raw)
+  To: Yocto discussion list
+
+
+  i asked about this once upon a time, so i thought i'd follow up ...
+given the fairly stable state of recent linux distros, is there any
+standard for taking advantage of what *should* be robust native tools
+rather than building them? (i'm ignoring taking advantage of sstate
+and building SDKs and other clever speedups for now.)
+
+  from scratch, i did a wind river (LINCD) build of
+wrlinux-image-small (and i assume it would be much the same under
+current oe-core), and i notice that numerous native tools were
+compiled, including such standards as cmake, curl, elfutils ... the
+list goes on and on.
+
+  so other than the tools that are *required* to be installed, if i
+mention that i am currently running ubuntu 20.04, is there any
+indication as to which tools i'm relatively safe to take advantage
+using ASSUME_PROVIDED and HOSTTOOLS? i realize that the versions built
+will probably differ from the host versions, but it seems that if
+there is an incompatibility, that would be fairly obvious in short
+order.
+
+  thoughts?
+
+rday
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] what's the state of things with pushing the bounds on ASSUME_PROVIDED?
+  2021-06-24 11:50 what's the state of things with pushing the bounds on ASSUME_PROVIDED? Robert P. J. Day
+@ 2021-06-25  1:30 ` Randy MacLeod
+  2021-06-25 11:43 ` Richard Purdie
+  1 sibling, 0 replies; 4+ messages in thread
+From: Randy MacLeod @ 2021-06-25  1:30 UTC (permalink / raw)
+  To: Robert P. J. Day, Yocto discussion list
+
+[-- Attachment #1: Type: text/plain, Size: 3668 bytes --]
+
+On 2021-06-24 7:50 a.m., Robert P. J. Day wrote:
+>    i asked about this once upon a time, so i thought i'd follow up ...
+> given the fairly stable state of recent linux distros, is there any
+> standard for taking advantage of what *should* be robust native tools
+> rather than building them? (i'm ignoring taking advantage of sstate
+> and building SDKs and other clever speedups for now.)
+>
+>    from scratch, i did a wind river (LINCD) build of
+> wrlinux-image-small (and i assume it would be much the same under
+> current oe-core), and i notice that numerous native tools were
+> compiled, including such standards as cmake, curl, elfutils ... the
+> list goes on and on.
+>
+>    so other than the tools that are *required* to be installed, if i
+> mention that i am currently running ubuntu 20.04, is there any
+> indication as to which tools i'm relatively safe to take advantage
+> using ASSUME_PROVIDED and HOSTTOOLS? i realize that the versions built
+> will probably differ from the host versions, but it seems that if
+> there is an incompatibility, that would be fairly obvious in short
+> order.
+>
+>    thoughts?
+
+Hi Robert,
+
+I didn't remember where this was defined so I took a look:
+
+$ git blame meta/conf/bitbake.conf | grep -A 24 ASSUME_PROVIDED | cut 
+-c1-12,74-
+34927dfa61c         2007-12-18 15:04:06 +0000 175) ASSUME_PROVIDED = "\
+da52dce440a         2021-05-16 14:16:56 -0400 176)     bash-native \
+34927dfa61c         2007-12-18 15:04:06 +0000 177) bzip2-native \
+40a3cf008f2         2012-10-02 14:12:21 +0100 178) chrpath-native \
+da52dce440a         2021-05-16 14:16:56 -0400 179) diffstat-native \
+43c46e9c837         2015-10-16 22:49:26 +0100 180)     file-native \
+2980ac001f7         2016-02-22 16:23:49 +0000 181) findutils-native \
+b51b4f5ae26         2017-09-10 22:59:08 +1000 182)     gawk-native \
+617835990ed         2012-07-10 13:26:18 +0000 183)     git-native \
+34927dfa61c         2007-12-18 15:04:06 +0000 184)     grep-native \
+675ff42c603         2016-01-07 13:39:39 +0200 185) hostperl-runtime-native \
+b248e55c0c3         2016-01-13 10:03:04 +0200 186) 
+hostpython-runtime-native \
+da52dce440a         2021-05-16 14:16:56 -0400 187) libgcc-native \
+da52dce440a         2021-05-16 14:16:56 -0400 188) patch-native \
+da52dce440a         2021-05-16 14:16:56 -0400 189)     sed-native \
+cb1897b8bee         2008-04-11 13:19:21 +0000 190)     tar-native \
+7d3d6a35fdb         2014-08-17 23:24:02 -0700 191) texinfo-native \
+da52dce440a         2021-05-16 14:16:56 -0400 192) virtual/crypt-native \
+da52dce440a         2021-05-16 14:16:56 -0400 193) virtual/libiconv-native \
+da52dce440a         2021-05-16 14:16:56 -0400 194) virtual/libintl-native \
+0c0b07286f2         2016-01-25 13:38:00 +0000 195)     wget-native \
+34927dfa61c         2007-12-18 15:04:06 +0000 196)     "
+40a3cf008f2         2012-10-02 14:12:21 +0100 197) # gzip-native should 
+be listed above?
+dd1b4430b5d         2006-02-10 11:45:39 +0000 198)
+^4b46c1f6e8         2005-08-31 10:45:47 +0000 199) 
+##################################################################
+
+
+Your sort commit is one of the most recent ones:
+    da52dce440 bitbake.conf: alphabetize contents of ASSUME_PROVIDED
+
+I don't see the value in trimming the list too much especially since
+you typically only have to build them once.
+
+Of the tools you listed:
+     cmake, curl, elfutils
+curl is the only one that I'd want to add to the list but
+it's not a default install across all distros I assume so
+why bother. I prefer to use our own cmake and elfutils.
+
+../Randy
+
+
+>
+> 
+>
+
+-- 
+# Randy MacLeod
+# Wind River Linux
+
+
+[-- Attachment #2: Type: text/html, Size: 6381 bytes --]
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] what's the state of things with pushing the bounds on ASSUME_PROVIDED?
+  2021-06-24 11:50 what's the state of things with pushing the bounds on ASSUME_PROVIDED? Robert P. J. Day
+  2021-06-25  1:30 ` [yocto] " Randy MacLeod
+@ 2021-06-25 11:43 ` Richard Purdie
+  2021-06-26 22:46   ` Chuck Wolber
+  1 sibling, 1 reply; 4+ messages in thread
+From: Richard Purdie @ 2021-06-25 11:43 UTC (permalink / raw)
+  To: Robert P. J. Day, Yocto discussion list
+
+On Thu, 2021-06-24 at 07:50 -0400, Robert P. J. Day wrote:
+>   i asked about this once upon a time, so i thought i'd follow up ...
+> given the fairly stable state of recent linux distros, is there any
+> standard for taking advantage of what *should* be robust native tools
+> rather than building them? (i'm ignoring taking advantage of sstate
+> and building SDKs and other clever speedups for now.)
+> 
+>   from scratch, i did a wind river (LINCD) build of
+> wrlinux-image-small (and i assume it would be much the same under
+> current oe-core), and i notice that numerous native tools were
+> compiled, including such standards as cmake, curl, elfutils ... the
+> list goes on and on.
+> 
+>   so other than the tools that are *required* to be installed, if i
+> mention that i am currently running ubuntu 20.04, is there any
+> indication as to which tools i'm relatively safe to take advantage
+> using ASSUME_PROVIDED and HOSTTOOLS? i realize that the versions built
+> will probably differ from the host versions, but it seems that if
+> there is an incompatibility, that would be fairly obvious in short
+> order.
+> 
+>   thoughts?
+
+Quite often things aren't as simple as they first seem:
+
+Elfutils has a history of interesting changes between versions so having 
+our builds use a consistent version is good.
+
+Some recipes build libs as well as binaries, e.g. the compression tools.
+Its relatively easy to check a binary is present, it is harder to check
+the right -devel headers are present. That is a solvable problem but again, 
+version consistency is good. If you require a HOSTTOOLS bin but our own
+lib, you can get version mismatches.
+
+We do patch some utilities for 'reasons' and having those patches missing
+can be a pain and cause weird errors.
+
+Reproducibility is also a concern, particularly if different versions of 
+tools like flex/bison generated different code.
+
+I also wonder who is going to support testing all these different options
+and handle the resulting build failures and bugs being raised?
+
+This list isn't definitive.
+
+
+In summary, I see a lot of problems for what amounts to not much speed
+gain. Particularly when we have a mechanism like sstate available
+which allows binary reuse.
+
+Cheers,
+
+Richard
+
+
+
+
+
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [yocto] what's the state of things with pushing the bounds on ASSUME_PROVIDED?
+  2021-06-25 11:43 ` Richard Purdie
+@ 2021-06-26 22:46   ` Chuck Wolber
+  0 siblings, 0 replies; 4+ messages in thread
+From: Chuck Wolber @ 2021-06-26 22:46 UTC (permalink / raw)
+  To: Richard Purdie; +Cc: Robert P. J. Day, Yocto discussion list
+
+[-- Attachment #1: Type: text/plain, Size: 1311 bytes --]
+
+On Fri, Jun 25, 2021 at 4:43 AM Richard Purdie <
+richard.purdie@linuxfoundation.org> wrote:
+
+>
+> In summary, I see a lot of problems for what amounts to not much speed
+> gain. Particularly when we have a mechanism like sstate available
+> which allows binary reuse.
+>
+
+Very strong agreement here. My 2c is that Yocto/OE should be going in that
+direction even
+further. One of the significant benefits of the OE build method is
+eliminating, to the greatest
+extent possible, the (usually) undetectable influence of variations in the
+host platforms.
+
+Any given distro is probably stable enough, but that does not guarantee a
+consistent result if
+we attempted to build the same image on all available stable distros. We
+might get lucky and
+actually achieve that, but I would not bet my life on it, particularly if
+we started using even more
+native tooling.
+
+"Stability is a local construct, not a global one."
+
+For our own project, we have taken this as far as practical. We eliminated
+the third party
+distro host platform (Ubuntu) about five years ago and built our host
+platform from Yocto/OE
+sources. Each new version of our host platform is built from the previous
+one.
+
+..Ch:W..
+
+-- 
+*"Perfection must be reached by degrees; she requires the slow hand of
+time." - Voltaire*
+
+[-- Attachment #2: Type: text/html, Size: 1909 bytes --]
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+end of thread, other threads:[~2021-06-26 22:46 UTC | newest]
+
+Thread overview: 4+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-06-24 11:50 what's the state of things with pushing the bounds on ASSUME_PROVIDED? Robert P. J. Day
+2021-06-25  1:30 ` [yocto] " Randy MacLeod
+2021-06-25 11:43 ` Richard Purdie
+2021-06-26 22:46   ` Chuck Wolber
+

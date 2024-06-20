@@ -1,0 +1,4365 @@
+* bitbake controlling memory use
+@ 2021-04-11 15:23 Gmane Admin
+  2021-04-11 15:27 ` [yocto] " Alexander Kanavin
+                   ` (3 more replies)
+  0 siblings, 4 replies; 53+ messages in thread
+From: Gmane Admin @ 2021-04-11 15:23 UTC (permalink / raw)
+  To: yocto
+
+My build machine has 8 cores + HT so bitbake enthusiastically assumes 
+16. However I have (only?) 16GB of RAM (+24GB swap space).
+
+16GB of RAM has always been more then enough with 4 core + HT, but now 
+building certain recipes (nodejs, but rust will probably do it as well) 
+eats up more memory then there actually is RAM causing excessive swapping.
+
+In fact the swapping is so excessive that just this single recipe 
+determines largely the total image build time. However restricting 
+bitbake (or actually parallel make) to use only 4 cores + HT sounds also 
+like a waste.
+
+I know this has been looked at in the past, but I think it needs 
+fundamental resolving (other then, hé, why not add just another stick of 
+memory).
+
+What I do manually when I run into swapping so bad my desktop becomes 
+unresponsive is ssh from another machine and then stop (not kill) the 
+processes that use the most memory.
+
+These then get swapped out, but not back in, allowing the remaining 
+tasks to complete without swapping. Then when sufficient memory becomes 
+free again I continue the stopped processes.
+
+Isn't this something that could be added to bitbake to automate using 
+memory efficiently?
+
+
+^ permalink raw reply	[flat|nested] 53+ messages in thread
+* Re: [yocto] bitbake controlling memory use
+  2021-04-11 15:23 bitbake controlling memory use Gmane Admin
+@ 2021-04-11 15:27 ` Alexander Kanavin
+  2021-04-11 15:49   ` Gmane Admin
+  2021-04-12  2:25 ` Chen Qi
+                   ` (2 subsequent siblings)
+  3 siblings, 1 reply; 53+ messages in thread
+From: Alexander Kanavin @ 2021-04-11 15:27 UTC (permalink / raw)
+  To: gley-yocto; +Cc: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1660 bytes --]
+
+This has been discussed several times in the past - the conclusion usually
+is that first this needs to be addresses upstream in make and ninja, e.g.
+that they support throttling new compiler instances when memory gets tight.
+Once that is available, bitbake can follow by throttling its own tasks as
+well.
+
+Alex
+
+On Sun, 11 Apr 2021 at 17:23, Gmane Admin <gley-yocto@m.gmane-mx.org> wrote:
+
+> My build machine has 8 cores + HT so bitbake enthusiastically assumes
+> 16. However I have (only?) 16GB of RAM (+24GB swap space).
+>
+> 16GB of RAM has always been more then enough with 4 core + HT, but now
+> building certain recipes (nodejs, but rust will probably do it as well)
+> eats up more memory then there actually is RAM causing excessive swapping.
+>
+> In fact the swapping is so excessive that just this single recipe
+> determines largely the total image build time. However restricting
+> bitbake (or actually parallel make) to use only 4 cores + HT sounds also
+> like a waste.
+>
+> I know this has been looked at in the past, but I think it needs
+> fundamental resolving (other then, hé, why not add just another stick of
+> memory).
+>
+> What I do manually when I run into swapping so bad my desktop becomes
+> unresponsive is ssh from another machine and then stop (not kill) the
+> processes that use the most memory.
+>
+> These then get swapped out, but not back in, allowing the remaining
+> tasks to complete without swapping. Then when sufficient memory becomes
+> free again I continue the stopped processes.
+>
+> Isn't this something that could be added to bitbake to automate using
+> memory efficiently?
+>
+>
+> 
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 2057 bytes --]
+
+^ permalink raw reply	[flat|nested] 53+ messages in thread
+* Re: bitbake controlling memory use
+  2021-04-11 15:27 ` [yocto] " Alexander Kanavin
+@ 2021-04-11 15:49   ` Gmane Admin
+  2021-04-11 15:55     ` [yocto] " Alexander Kanavin
+  0 siblings, 1 reply; 53+ messages in thread
+From: Gmane Admin @ 2021-04-11 15:49 UTC (permalink / raw)
+  To: yocto; +Cc: yocto-gJxINTE1zeQw8ufyyF7U+SST3g8Odh+X, Ferry Toth
+
+Op 11-04-2021 om 17:27 schreef Alexander Kanavin:
+> This has been discussed several times in the past - the conclusion 
+> usually is that first this needs to be addresses upstream in make and 
+> ninja, e.g. that they support throttling new compiler instances when 
+> memory gets tight. Once that is available, bitbake can follow by 
+> throttling its own tasks as well.
+> 
+> Alex
+
+Yes, and make project doesn't care, because make is called with -j 16 so 
+that is what it does.
+
+So here's my pitch: bitbake can stop processes spawned by make, because 
+it knows that it started make on 4 recipies, each with -j 16. The 
+individual makes don't know about each other.
+
+And normally it's not an issue (compiling c), but sometimes compiling 
+c++ it explodes (I saw 4GB ram in use for 1 g++ and there were 4 of them).
+
+> On Sun, 11 Apr 2021 at 17:23, Gmane Admin <gley-yocto@m.gmane-mx.org 
+> <mailto:gley-yocto@m.gmane-mx.org>> wrote:
+> 
+>     My build machine has 8 cores + HT so bitbake enthusiastically assumes
+>     16. However I have (only?) 16GB of RAM (+24GB swap space).
+> 
+>     16GB of RAM has always been more then enough with 4 core + HT, but now
+>     building certain recipes (nodejs, but rust will probably do it as well)
+>     eats up more memory then there actually is RAM causing excessive
+>     swapping.
+> 
+>     In fact the swapping is so excessive that just this single recipe
+>     determines largely the total image build time. However restricting
+>     bitbake (or actually parallel make) to use only 4 cores + HT sounds
+>     also
+>     like a waste.
+> 
+>     I know this has been looked at in the past, but I think it needs
+>     fundamental resolving (other then, hé, why not add just another
+>     stick of
+>     memory).
+> 
+>     What I do manually when I run into swapping so bad my desktop becomes
+>     unresponsive is ssh from another machine and then stop (not kill) the
+>     processes that use the most memory.
+> 
+>     These then get swapped out, but not back in, allowing the remaining
+>     tasks to complete without swapping. Then when sufficient memory becomes
+>     free again I continue the stopped processes.
+> 
+>     Isn't this something that could be added to bitbake to automate using
+>     memory efficiently?
+> 
+> 
+>     
+> 
+
+
+
+^ permalink raw reply	[flat|nested] 53+ messages in thread
+* Re: [yocto] bitbake controlling memory use
+  2021-04-11 15:49   ` Gmane Admin
+@ 2021-04-11 15:55     ` Alexander Kanavin
+  2021-04-11 16:08       ` Gmane Admin
+  0 siblings, 1 reply; 53+ messages in thread
+From: Alexander Kanavin @ 2021-04-11 15:55 UTC (permalink / raw)
+  To: Gmane Admin; +Cc: yocto, yocto-gJxINTE1zeQw8ufyyF7U+SST3g8Odh+X, Ferry Toth
+
+[-- Attachment #1: Type: text/plain, Size: 576 bytes --]
+
+On Sun, 11 Apr 2021 at 17:49, Gmane Admin <gley-yocto@m.gmane-mx.org> wrote:
+
+> Yes, and make project doesn't care, because make is called with -j 16 so
+> that is what it does.
+>
+> So here's my pitch: bitbake can stop processes spawned by make, because
+> it knows that it started make on 4 recipies, each with -j 16. The
+> individual makes don't know about each other.
+>
+
+And neither they should. They can simply abstain from spawning new
+compilers if used RAM is, say, at 90% total. Then bitbake does not have to
+get involved in babysitting those makes.
+
+Alex
+
+[-- Attachment #2: Type: text/html, Size: 930 bytes --]
+
+^ permalink raw reply	[flat|nested] 53+ messages in thread
+* Re: bitbake controlling memory use
+  2021-04-11 15:55     ` [yocto] " Alexander Kanavin
+@ 2021-04-11 16:08       ` Gmane Admin
+  2021-04-11 16:19         ` [yocto] " Alexander Kanavin
+  0 siblings, 1 reply; 53+ messages in thread
+From: Gmane Admin @ 2021-04-11 16:08 UTC (permalink / raw)
+  To: yocto
+  Cc: yocto-gJxINTE1zeQw8ufyyF7U+SST3g8Odh+X-XMD5yJDbdMReXY1tMh2IBg,
+	yocto-gJxINTE1zeQw8ufyyF7U+SST3g8Odh+X, Ferry Toth
+
+Op 11-04-2021 om 17:55 schreef Alexander Kanavin:
+> On Sun, 11 Apr 2021 at 17:49, Gmane Admin <gley-yocto@m.gmane-mx.org 
+> <mailto:gley-yocto@m.gmane-mx.org>> wrote:
+> 
+>     Yes, and make project doesn't care, because make is called with -j
+>     16 so
+>     that is what it does.
+> 
+>     So here's my pitch: bitbake can stop processes spawned by make, because
+>     it knows that it started make on 4 recipies, each with -j 16. The
+>     individual makes don't know about each other.
+> 
+> 
+> And neither they should. They can simply abstain from spawning new 
+> compilers if used RAM is, say, at 90% total. Then bitbake does not have 
+> to get involved in babysitting those makes.
+> 
+> Alex
+Bitbake does a lot of babysitting anyway :-) And is pretty good at it too.
+
+To me, fixing make et al. is more work and less effective then adding a 
+feature to bitbake. The only way to know how much memory the compiler 
+will use for each spawned compiler is to let it run. And then it's too late.
+
+This memory issue is all over our eco system and nobody cares (kernel, 
+make etc.) The only thing moving is systemd's oom killer will arrive and 
+start killing processes. So that will just stop our builds from completing.
+
+Yeah, I prefer a babysitter over a child murderer :-)
+
+Ferry
+
+
+^ permalink raw reply	[flat|nested] 53+ messages in thread
+* Re: [yocto] bitbake controlling memory use
+  2021-04-11 16:08       ` Gmane Admin
+@ 2021-04-11 16:19         ` Alexander Kanavin
+  2021-04-14  1:14           ` Randy MacLeod
+  0 siblings, 1 reply; 53+ messages in thread
+From: Alexander Kanavin @ 2021-04-11 16:19 UTC (permalink / raw)
+  To: Gmane Admin
+  Cc: yocto,
+	yocto-gJxINTE1zeQw8ufyyF7U+SST3g8Odh+X-XMD5yJDbdMReXY1tMh2IBg,
+	yocto-gJxINTE1zeQw8ufyyF7U+SST3g8Odh+X, Ferry Toth
+
+[-- Attachment #1: Type: text/plain, Size: 1763 bytes --]
+
+make already has -l option for limiting new instances if load average is
+too high, so it's only natural to add a RAM limiter too.
+
+  -l [N], --load-average[=N], --max-load[=N]
+                              Don't start multiple jobs unless load is
+below N.
+
+In any case, patches welcome :)
+
+Alex
+
+On Sun, 11 Apr 2021 at 18:08, Gmane Admin <gley-yocto@m.gmane-mx.org> wrote:
+
+> Op 11-04-2021 om 17:55 schreef Alexander Kanavin:
+> > On Sun, 11 Apr 2021 at 17:49, Gmane Admin <gley-yocto@m.gmane-mx.org
+> > <mailto:gley-yocto@m.gmane-mx.org>> wrote:
+> >
+> >     Yes, and make project doesn't care, because make is called with -j
+> >     16 so
+> >     that is what it does.
+> >
+> >     So here's my pitch: bitbake can stop processes spawned by make,
+> because
+> >     it knows that it started make on 4 recipies, each with -j 16. The
+> >     individual makes don't know about each other.
+> >
+> >
+> > And neither they should. They can simply abstain from spawning new
+> > compilers if used RAM is, say, at 90% total. Then bitbake does not have
+> > to get involved in babysitting those makes.
+> >
+> > Alex
+> Bitbake does a lot of babysitting anyway :-) And is pretty good at it too.
+>
+> To me, fixing make et al. is more work and less effective then adding a
+> feature to bitbake. The only way to know how much memory the compiler
+> will use for each spawned compiler is to let it run. And then it's too
+> late.
+>
+> This memory issue is all over our eco system and nobody cares (kernel,
+> make etc.) The only thing moving is systemd's oom killer will arrive and
+> start killing processes. So that will just stop our builds from completing.
+>
+> Yeah, I prefer a babysitter over a child murderer :-)
+>
+> Ferry
+>
+>
+> 
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 2464 bytes --]
+
+^ permalink raw reply	[flat|nested] 53+ messages in thread
+* Re: [yocto] bitbake controlling memory use
+  2021-04-11 15:23 bitbake controlling memory use Gmane Admin
+  2021-04-11 15:27 ` [yocto] " Alexander Kanavin
+@ 2021-04-12  2:25 ` Chen Qi
+  2021-04-12 18:45   ` Gmane Admin
+  2021-04-12  8:13 ` [yocto] " Robert Berger
+       [not found] ` <1b153bce-a66a-45ee-a5c6-963ea6fb1c82.949ef384-8293-46b8-903f-40a477c056ae.12d167de-8268-4441-bd03-b78a3e04713e@emailsignatures365.codetwo.com>
+  3 siblings, 1 reply; 53+ messages in thread
+From: Chen Qi @ 2021-04-12  2:25 UTC (permalink / raw)
+  To: Gmane Admin, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 2428 bytes --]
+
+I think you write a script to do all the WATCH-STOP-CONTINUE stuff.
+e.g.
+memwatch bitbake core-image-minimal
+Options could be added.
+e.g.
+memwatch --interval 5 --logfile test.log bitbake core-image-minimal
+
+This script first becomes a session leader, then forks to start the 
+'bitbake' command as its child process.
+Then, every several seconds (say 10s by default), it checks the current 
+memory usage, and according to its policy, determines whether to 
+stop/continue some process or not.
+
+For stopping the process, you can first get all its child process by 
+simply using the 'ps' command.
+e.g.
+$ ps o vsize,comm,pid -s 28303 | sort -n -r
+317284 emacs           12883
+  28912 ps              36302
+  26248 sort            36303
+  21432 man             24797
+  17992 bash            28303
+   9852 pager           24807
+    VSZ COMMAND           PID
+
+Then skip the bitbake processes, stop the first one that uses the 
+largest memory, record its PID.
+
+For continuing processes, just start it according to the records. Maybe 
+using FILO by default?
+
+Best Regards,
+Chen Qi
+
+On 04/11/2021 11:23 PM, Gmane Admin wrote:
+> My build machine has 8 cores + HT so bitbake enthusiastically assumes 
+> 16. However I have (only?) 16GB of RAM (+24GB swap space).
+>
+> 16GB of RAM has always been more then enough with 4 core + HT, but now 
+> building certain recipes (nodejs, but rust will probably do it as 
+> well) eats up more memory then there actually is RAM causing excessive 
+> swapping.
+>
+> In fact the swapping is so excessive that just this single recipe 
+> determines largely the total image build time. However restricting 
+> bitbake (or actually parallel make) to use only 4 cores + HT sounds 
+> also like a waste.
+>
+> I know this has been looked at in the past, but I think it needs 
+> fundamental resolving (other then, hé, why not add just another stick 
+> of memory).
+>
+> What I do manually when I run into swapping so bad my desktop becomes 
+> unresponsive is ssh from another machine and then stop (not kill) the 
+> processes that use the most memory.
+>
+> These then get swapped out, but not back in, allowing the remaining 
+> tasks to complete without swapping. Then when sufficient memory 
+> becomes free again I continue the stopped processes.
+>
+> Isn't this something that could be added to bitbake to automate using 
+> memory efficiently?
+>
+>
+>
+> 
+>
+
+
+[-- Attachment #2: Type: text/html, Size: 3798 bytes --]
+
+^ permalink raw reply	[flat|nested] 53+ messages in thread
+* Re: [yocto] bitbake controlling memory use
+  2021-04-11 15:23 bitbake controlling memory use Gmane Admin
+  2021-04-11 15:27 ` [yocto] " Alexander Kanavin
+  2021-04-12  2:25 ` Chen Qi
+@ 2021-04-12  8:13 ` Robert Berger
+  2021-04-12 18:47   ` Gmane Admin
+       [not found] ` <1b153bce-a66a-45ee-a5c6-963ea6fb1c82.949ef384-8293-46b8-903f-40a477c056ae.12d167de-8268-4441-bd03-b78a3e04713e@emailsignatures365.codetwo.com>
+  3 siblings, 1 reply; 53+ messages in thread
+From: Robert Berger @ 2021-04-12  8:13 UTC (permalink / raw)
+  To: Gmane Admin, yocto; +Cc: alex.kanavin
+
+Hi,
+
+My comments are in-line.
+
+On 11/04/2021 18:23, Gmane Admin wrote:
+> My build machine has 8 cores + HT so bitbake enthusiastically assumes 
+> 16. However I have (only?) 16GB of RAM (+24GB swap space).
+> 
+> 16GB of RAM has always been more then enough with 4 core + HT, but now 
+> building certain recipes (nodejs, but rust will probably do it as well) 
+> eats up more memory then there actually is RAM causing excessive swapping.
+
+The RAM usage depends heavily on what you are building ;) - It could be 
+some crazy C++ stuff ;)
+
+Is Linux your build host?
+
+Then you can use cgroups to limit resources like memory.
+
+Do you use a build container? It uses cgroups underneath.
+
+e.g. docker:
+
+https://docs.docker.com/config/containers/resource_constraints/
+
+Regards,
+
+Robert
+
+^ permalink raw reply	[flat|nested] 53+ messages in thread
+* Re: [yocto] bitbake controlling memory use
+       [not found]   ` <1b153bce-a66a-45ee-a5c6-963ea6fb1c82.0d2bd5fa-15cc-4b27-b94e-83614f9e5b38.a8aa18ca-4a64-4525-851c-c6d34f355f1f@emailsignatures365.codetwo.com>
+@ 2021-04-12  8:28     ` Mike Looijmans
+  0 siblings, 0 replies; 53+ messages in thread
+From: Mike Looijmans @ 2021-04-12  8:28 UTC (permalink / raw)
+  To: gley-yocto, yocto
+
+
+Met vriendelijke groet / kind regards,
+
+Mike Looijmans
+System Expert
+
+
+TOPIC Embedded Products B.V.
+Materiaalweg 4, 5681 RJ Best
+The Netherlands
+
+T: +31 (0) 499 33 69 69
+E: mike.looijmans@topicproducts.com
+W: www.topic.nl
+
+Please consider the environment before printing this e-mail
+On 11-04-2021 17:23, Gmane Admin via lists.yoctoproject.org wrote:
+> My build machine has 8 cores + HT so bitbake enthusiastically assumes 
+> 16. However I have (only?) 16GB of RAM (+24GB swap space).
+
+Been there, done that (8/16 cores with 8GB RAM).
+
+The major cause is that bitbake will not just spawn 16 compiler threads, 
+it will actually spawn up to 16 "do_compile" tasks which may spawn 16 
+compiler processes each, thus you'll be running a whopping 256 
+compilers. Bitbake may spawn a total of n^2 threads by default with "n" 
+the detected number of cores.
+
+The workaround I used was to limit the number of bitbake threads but 
+leave the make threads at 16. Since most software these days is using 
+parallel make, the impact on the build time of reducing the bb threads 
+to 8 or 4 is negligible.
+
+As for translating this into a bitbake feature, an implementation that 
+comes to mind is to add a "weight" to each task. Most tasks would get a 
+weight of just "1", but a (multithreaded) compile would be weighted "8" 
+(some formula involving the number of CPUs) or so. This would stop 
+bitbake spawning more processes early so that you don't get into the n^2 
+threads problem, and the number of processed that bitbake will spawn 
+will be close to linear agin instead of quadratic as is is now.
+
+Recipes that have excessive memory loads (usually C++ template 
+meta-programming) can then just increase the weighting for the compile task.
+
+
+-- 
+Mike Looijmans
+
+
+^ permalink raw reply	[flat|nested] 53+ messages in thread
+* Re: bitbake controlling memory use
+  2021-04-12  2:25 ` Chen Qi
+@ 2021-04-12 18:45   ` Gmane Admin
+  0 siblings, 0 replies; 53+ messages in thread
+From: Gmane Admin @ 2021-04-12 18:45 UTC (permalink / raw)
+  To: yocto
+
+Hi,
+
+Op 12-04-2021 om 04:25 schreef ChenQi:
+> I think you write a script to do all the WATCH-STOP-CONTINUE stuff.
+> e.g.
+> memwatch bitbake core-image-minimal
+> Options could be added.
+> e.g.
+> memwatch --interval 5 --logfile test.log bitbake core-image-minimal
+> 
+> This script first becomes a session leader, then forks to start the 
+> 'bitbake' command as its child process.
+> Then, every several seconds (say 10s by default), it checks the current 
+> memory usage, and according to its policy, determines whether to 
+> stop/continue some process or not.
+> 
+> For stopping the process, you can first get all its child process by 
+> simply using the 'ps' command.
+> e.g.
+> $ ps o vsize,comm,pid -s 28303 | sort -n -r
+> 317284 emacs           12883
+>   28912 ps              36302
+>   26248 sort            36303
+>   21432 man             24797
+>   17992 bash            28303
+>    9852 pager           24807
+>     VSZ COMMAND           PID
+> 
+> Then skip the bitbake processes, stop the first one that uses the 
+> largest memory, record its PID.
+> 
+> For continuing processes, just start it according to the records. Maybe 
+> using FILO by default?
+> 
+> Best Regards,
+> Chen Qi
+
+Yeah, so we would be having memwatch as a baby sitter.
+
+I would be nicer to have it built into bitbake, but this would work too.
+
+> On 04/11/2021 11:23 PM, Gmane Admin wrote:
+>> My build machine has 8 cores + HT so bitbake enthusiastically assumes 
+>> 16. However I have (only?) 16GB of RAM (+24GB swap space).
+>>
+>> 16GB of RAM has always been more then enough with 4 core + HT, but now 
+>> building certain recipes (nodejs, but rust will probably do it as 
+>> well) eats up more memory then there actually is RAM causing excessive 
+>> swapping.
+>>
+>> In fact the swapping is so excessive that just this single recipe 
+>> determines largely the total image build time. However restricting 
+>> bitbake (or actually parallel make) to use only 4 cores + HT sounds 
+>> also like a waste.
+>>
+>> I know this has been looked at in the past, but I think it needs 
+>> fundamental resolving (other then, hé, why not add just another stick 
+>> of memory).
+>>
+>> What I do manually when I run into swapping so bad my desktop becomes 
+>> unresponsive is ssh from another machine and then stop (not kill) the 
+>> processes that use the most memory.
+>>
+>> These then get swapped out, but not back in, allowing the remaining 
+>> tasks to complete without swapping. Then when sufficient memory 
+>> becomes free again I continue the stopped processes.
+>>
+>> Isn't this something that could be added to bitbake to automate using 
+>> memory efficiently?
+>>
+>>
+>>
+>> 
+>>
+> 
+
+
+
+^ permalink raw reply	[flat|nested] 53+ messages in thread
+* Re: bitbake controlling memory use
+  2021-04-12  8:13 ` [yocto] " Robert Berger
+@ 2021-04-12 18:47   ` Gmane Admin
+  0 siblings, 0 replies; 53+ messages in thread
+From: Gmane Admin @ 2021-04-12 18:47 UTC (permalink / raw)
+  To: yocto; +Cc: alex.kanavin-Re5JQEeQqe8AvxtiuMwx3w, Ferry Toth
+
+Op 12-04-2021 om 10:13 schreef Robert 
+Berger@yocto.user:
+> Hi,
+> 
+> My comments are in-line.
+> 
+> On 11/04/2021 18:23, Gmane Admin wrote:
+>> My build machine has 8 cores + HT so bitbake enthusiastically assumes 
+>> 16. However I have (only?) 16GB of RAM (+24GB swap space).
+>>
+>> 16GB of RAM has always been more then enough with 4 core + HT, but now 
+>> building certain recipes (nodejs, but rust will probably do it as 
+>> well) eats up more memory then there actually is RAM causing excessive 
+>> swapping.
+> 
+> The RAM usage depends heavily on what you are building ;) - It could be 
+> some crazy C++ stuff ;)
+
+Yeah, C++. But apearently it's during the LTO phase where it eat my memory.
+
+> Is Linux your build host?
+
+Yup.
+
+> Then you can use cgroups to limit resources like memory.
+
+So then it would just fail the build?
+
+> Do you use a build container? It uses cgroups underneath.
+
+Nope.
+
+> e.g. docker:
+> 
+> https://docs.docker.com/config/containers/resource_constraints/
+> 
+> Regards,
+> 
+> Robert
+> 
+
+
+
+^ permalink raw reply	[flat|nested] 53+ messages in thread
+* Re: [yocto] bitbake controlling memory use
+  2021-04-11 16:19         ` [yocto] " Alexander Kanavin
+@ 2021-04-14  1:14           ` Randy MacLeod
+  2021-04-14  3:14             ` Khem Raj
+  2021-04-14  4:59             ` Richard Purdie
+  0 siblings, 2 replies; 53+ messages in thread
+From: Randy MacLeod @ 2021-04-14  1:14 UTC (permalink / raw)
+  To: Alexander Kanavin, Gmane Admin, Li, Changqing, Richard Purdie,
+	Ross Burton, Joshua Watt, Trevor Woerner
+  Cc: yocto,
+	yocto-gJxINTE1zeQw8ufyyF7U+SST3g8Odh+X-XMD5yJDbdMReXY1tMh2IBg,
+	yocto-gJxINTE1zeQw8ufyyF7U+SST3g8Odh+X, Ferry Toth
+
+On 2021-04-11 12:19 p.m., Alexander Kanavin wrote:
+> make already has -l option for limiting new instances if load average is 
+> too high, so it's only natural to add a RAM limiter too.
+> 
+>    -l [N], --load-average[=N], --max-load[=N]
+>                                Don't start multiple jobs unless load is 
+> below N.
+> 
+> In any case, patches welcome :)
+
+During today's Yocto technical call (1),
+we talked about approaches to limiting the system load and avoiding
+swap and/or OOM events. Here's what (little!) i recall from the
+discussion, 9 busy hours later.
+
+In the short run, instead of independently maintaining changes to
+configurations to limit parallelism or xz memory usage, etc, we
+could develop an optional common include file where such limits
+are shared across the community.
+
+In the longer run, changes to how bitbake schedules work may be needed.
+
+Richard says that there was a make/build server idea and maybe even a
+patch from a while ago. It may be in one of his poky-contrib branches.
+I took a few minutes to look but nothing popped up. A set of keywords to
+search for might help me find it.
+
+Someone mentioned that while ninja has not been open to accepting any
+patches that would complicate and potentially slow down builds, there
+is a fork of ninja calls 'samurai' that does seem to be open to some
+improvements that we could benefit from.
+
+It was also suggested that  there were existing defects in the YP BZ (2)
+but I didn't find any earlier and it's too late in my day to start
+looking now! If no one replies with a relevant BZ ID, I'll create one.
+
+I'm sure I missed some things that were mentioned but Trevor Woerner
+sometimes takes notes so I'll check on them once / if they are sent out.
+
+../Randy
+
+
+1) https://www.yoctoproject.org/public-virtual-meetings/
+
+2) https://bugzilla.yoctoproject.org/
+
+> 
+> Alex
+> 
+> On Sun, 11 Apr 2021 at 18:08, Gmane Admin <gley-yocto@m.gmane-mx.org 
+> <mailto:gley-yocto@m.gmane-mx.org>> wrote:
+> 
+>     Op 11-04-2021 om 17:55 schreef Alexander Kanavin:
+>      > On Sun, 11 Apr 2021 at 17:49, Gmane Admin
+>     <gley-yocto@m.gmane-mx.org <mailto:gley-yocto@m.gmane-mx.org>
+>      > <mailto:gley-yocto@m.gmane-mx.org
+>     <mailto:gley-yocto@m.gmane-mx.org>>> wrote:
+>      >
+>      >     Yes, and make project doesn't care, because make is called
+>     with -j
+>      >     16 so
+>      >     that is what it does.
+>      >
+>      >     So here's my pitch: bitbake can stop processes spawned by
+>     make, because
+>      >     it knows that it started make on 4 recipies, each with -j 16. The
+>      >     individual makes don't know about each other.
+>      >
+>      >
+>      > And neither they should. They can simply abstain from spawning new
+>      > compilers if used RAM is, say, at 90% total. Then bitbake does
+>     not have
+>      > to get involved in babysitting those makes.
+>      >
+>      > Alex
+>     Bitbake does a lot of babysitting anyway :-) And is pretty good at
+>     it too.
+> 
+>     To me, fixing make et al. is more work and less effective then adding a
+>     feature to bitbake. The only way to know how much memory the compiler
+>     will use for each spawned compiler is to let it run. And then it's
+>     too late.
+> 
+>     This memory issue is all over our eco system and nobody cares (kernel,
+>     make etc.) The only thing moving is systemd's oom killer will arrive
+>     and
+>     start killing processes. So that will just stop our builds from
+>     completing.
+> 
+>     Yeah, I prefer a babysitter over a child murderer :-)
+> 
+>     Ferry
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+
+
+-- 
+# Randy MacLeod
+# Wind River Linux
+
+^ permalink raw reply	[flat|nested] 53+ messages in thread
+* Re: [yocto] bitbake controlling memory use
+  2021-04-14  1:14           ` Randy MacLeod
+@ 2021-04-14  3:14             ` Khem Raj
+  2021-04-14  4:59             ` Richard Purdie
+  1 sibling, 0 replies; 53+ messages in thread
+From: Khem Raj @ 2021-04-14  3:14 UTC (permalink / raw)
+  To: Randy MacLeod
+  Cc: Alexander Kanavin, Gmane Admin, Li, Changqing, Richard Purdie,
+	Ross Burton, Joshua Watt, Trevor Woerner, yocto,
+	yocto-gJxINTE1zeQw8ufyyF7U+SST3g8Odh+X-XMD5yJDbdMReXY1tMh2IBg,
+	yocto-gJxINTE1zeQw8ufyyF7U+SST3g8Odh+X, Ferry Toth
+
+I use
+
+BUILDHISTORY_COMMIT_forcevariable = "1"
+PARALLEL_MAKE = "-j 11"
+BB_NUMBER_THREADS = "11"
+INHERIT += "rm_work"
+XZ_DEFAULTS = "--threads=8"
+
+On Tue, Apr 13, 2021 at 6:15 PM Randy MacLeod
+<randy.macleod@windriver.com> wrote:
+>
+> On 2021-04-11 12:19 p.m., Alexander Kanavin wrote:
+> > make already has -l option for limiting new instances if load average is
+> > too high, so it's only natural to add a RAM limiter too.
+> >
+> >    -l [N], --load-average[=N], --max-load[=N]
+> >                                Don't start multiple jobs unless load is
+> > below N.
+> >
+> > In any case, patches welcome :)
+>
+> During today's Yocto technical call (1),
+> we talked about approaches to limiting the system load and avoiding
+> swap and/or OOM events. Here's what (little!) i recall from the
+> discussion, 9 busy hours later.
+>
+> In the short run, instead of independently maintaining changes to
+> configurations to limit parallelism or xz memory usage, etc, we
+> could develop an optional common include file where such limits
+> are shared across the community.
+>
+> In the longer run, changes to how bitbake schedules work may be needed.
+>
+> Richard says that there was a make/build server idea and maybe even a
+> patch from a while ago. It may be in one of his poky-contrib branches.
+> I took a few minutes to look but nothing popped up. A set of keywords to
+> search for might help me find it.
+>
+> Someone mentioned that while ninja has not been open to accepting any
+> patches that would complicate and potentially slow down builds, there
+> is a fork of ninja calls 'samurai' that does seem to be open to some
+> improvements that we could benefit from.
+>
+> It was also suggested that  there were existing defects in the YP BZ (2)
+> but I didn't find any earlier and it's too late in my day to start
+> looking now! If no one replies with a relevant BZ ID, I'll create one.
+>
+> I'm sure I missed some things that were mentioned but Trevor Woerner
+> sometimes takes notes so I'll check on them once / if they are sent out.
+>
+> ../Randy
+>
+>
+> 1) https://www.yoctoproject.org/public-virtual-meetings/
+>
+> 2) https://bugzilla.yoctoproject.org/
+>
+> >
+> > Alex
+> >
+> > On Sun, 11 Apr 2021 at 18:08, Gmane Admin <gley-yocto@m.gmane-mx.org
+> > <mailto:gley-yocto@m.gmane-mx.org>> wrote:
+> >
+> >     Op 11-04-2021 om 17:55 schreef Alexander Kanavin:
+> >      > On Sun, 11 Apr 2021 at 17:49, Gmane Admin
+> >     <gley-yocto@m.gmane-mx.org <mailto:gley-yocto@m.gmane-mx.org>
+> >      > <mailto:gley-yocto@m.gmane-mx.org
+> >     <mailto:gley-yocto@m.gmane-mx.org>>> wrote:
+> >      >
+> >      >     Yes, and make project doesn't care, because make is called
+> >     with -j
+> >      >     16 so
+> >      >     that is what it does.
+> >      >
+> >      >     So here's my pitch: bitbake can stop processes spawned by
+> >     make, because
+> >      >     it knows that it started make on 4 recipies, each with -j 16. The
+> >      >     individual makes don't know about each other.
+> >      >
+> >      >
+> >      > And neither they should. They can simply abstain from spawning new
+> >      > compilers if used RAM is, say, at 90% total. Then bitbake does
+> >     not have
+> >      > to get involved in babysitting those makes.
+> >      >
+> >      > Alex
+> >     Bitbake does a lot of babysitting anyway :-) And is pretty good at
+> >     it too.
+> >
+> >     To me, fixing make et al. is more work and less effective then adding a
+> >     feature to bitbake. The only way to know how much memory the compiler
+> >     will use for each spawned compiler is to let it run. And then it's
+> >     too late.
+> >
+> >     This memory issue is all over our eco system and nobody cares (kernel,
+> >     make etc.) The only thing moving is systemd's oom killer will arrive
+> >     and
+> >     start killing processes. So that will just stop our builds from
+> >     completing.
+> >
+> >     Yeah, I prefer a babysitter over a child murderer :-)
+> >
+> >     Ferry
+> >
+> >
+> >
+> >
+> >
+> >
+> >
+> >
+>
+>
+> --
+> # Randy MacLeod
+> # Wind River Linux
+>
+> 
+>
+
+^ permalink raw reply	[flat|nested] 53+ messages in thread
+* Re: [yocto] bitbake controlling memory use
+  2021-04-14  1:14           ` Randy MacLeod
+  2021-04-14  3:14             ` Khem Raj
+@ 2021-04-14  4:59             ` Richard Purdie
+  2021-04-17 22:17               ` Gmane Admin
+                                 ` (2 more replies)
+  1 sibling, 3 replies; 53+ messages in thread
+From: Richard Purdie @ 2021-04-14  4:59 UTC (permalink / raw)
+  To: Randy MacLeod, Alexander Kanavin, Gmane Admin, Li, Changqing,
+	Ross Burton, Joshua Watt, Trevor Woerner
+  Cc: <yocto@lists.yoctoproject.org>
+
+On Tue, 2021-04-13 at 21:14 -0400, Randy MacLeod wrote:
+> On 2021-04-11 12:19 p.m., Alexander Kanavin wrote:
+> > make already has -l option for limiting new instances if load average is 
+> > too high, so it's only natural to add a RAM limiter too.
+> > 
+> >    -l [N], --load-average[=N], --max-load[=N]
+> >                                Don't start multiple jobs unless load is 
+> > below N.
+> > 
+> > In any case, patches welcome :)
+> 
+> During today's Yocto technical call (1),
+> we talked about approaches to limiting the system load and avoiding
+> swap and/or OOM events. Here's what (little!) i recall from the
+> discussion, 9 busy hours later.
+> 
+> In the short run, instead of independently maintaining changes to
+> configurations to limit parallelism or xz memory usage, etc, we
+> could develop an optional common include file where such limits
+> are shared across the community.
+> 
+> In the longer run, changes to how bitbake schedules work may be needed.
+> 
+> Richard says that there was a make/build server idea and maybe even a
+> patch from a while ago. It may be in one of his poky-contrib branches.
+> I took a few minutes to look but nothing popped up. A set of keywords to
+> search for might help me find it.
+
+http://git.yoctoproject.org/cgit.cgi/poky-contrib/commit/?h=rpurdie/wipqueue4&id=d66a327fb6189db5de8bc489859235dcba306237
+
+Cheers,
+
+Richard
+
+
+^ permalink raw reply	[flat|nested] 53+ messages in thread
+* Re: bitbake controlling memory use
+  2021-04-14  4:59             ` Richard Purdie
+@ 2021-04-17 22:17               ` Gmane Admin
+  2021-04-18  9:59                 ` [yocto] " Richard Purdie
+  2021-06-05 13:35               ` Gmane Admin
+       [not found]               ` <1685B30F5819A655.13459@lists.yoctoproject.org>
+  2 siblings, 1 reply; 53+ messages in thread
+From: Gmane Admin @ 2021-04-17 22:17 UTC (permalink / raw)
+  To: yocto; +Cc: yocto-gJxINTE1zeQw8ufyyF7U+SST3g8Odh+X
+
+Hi,
+Op 14-04-2021 om 06:59 schreef Richard Purdie:
+> On Tue, 2021-04-13 at 21:14 -0400, Randy MacLeod wrote:
+>> On 2021-04-11 12:19 p.m., Alexander Kanavin wrote:
+>>> make already has -l option for limiting new instances if load average is
+>>> too high, so it's only natural to add a RAM limiter too.
+>>>
+>>>     -l [N], --load-average[=N], --max-load[=N]
+>>>                                 Don't start multiple jobs unless load is
+>>> below N.
+>>>
+>>> In any case, patches welcome :)
+>>
+>> During today's Yocto technical call (1),
+>> we talked about approaches to limiting the system load and avoiding
+>> swap and/or OOM events. Here's what (little!) i recall from the
+>> discussion, 9 busy hours later.
+>>
+>> In the short run, instead of independently maintaining changes to
+>> configurations to limit parallelism or xz memory usage, etc, we
+>> could develop an optional common include file where such limits
+>> are shared across the community.
+
+I tried PARALLEL_MAKE_nodejs = "-j 1" from local.conf but that didn't work.
+
+So I watched it run for a while. It compiles with g++ and as at about 
+0.5GB per thread, which is OK. In the end it does ld taking 4GB and it 
+tries to do 4 in parallel. And then swapping becomes so heavy the 
+desktop becomes unresponsive. Like I mentioned before ssh from another 
+machine allows me to STOP one of them, allowing the remaining to 
+complete. And then CONT the last one.
+
+I worked around it now, by creating a bbappend for nodejs with only
+PARALLEL_MAKE = "-j 2"
+
+>> In the longer run, changes to how bitbake schedules work may be needed.
+>>
+>> Richard says that there was a make/build server idea and maybe even a
+>> patch from a while ago. It may be in one of his poky-contrib branches.
+>> I took a few minutes to look but nothing popped up. A set of keywords to
+>> search for might help me find it.
+> 
+> http://git.yoctoproject.org/cgit.cgi/poky-contrib/commit/?h=rpurdie/wipqueue4&id=d66a327fb6189db5de8bc489859235dcba306237
+> 
+> Cheers,
+> 
+> Richard
+> 
+> 
+
+
+
+^ permalink raw reply	[flat|nested] 53+ messages in thread
+* Re: [yocto] bitbake controlling memory use
+  2021-04-17 22:17               ` Gmane Admin
+@ 2021-04-18  9:59                 ` Richard Purdie
+  2021-04-18 19:34                   ` Gmane Admin
+       [not found]                   ` <16770AD5E94DEAE5.1089@lists.yoctoproject.org>
+  0 siblings, 2 replies; 53+ messages in thread
+From: Richard Purdie @ 2021-04-18  9:59 UTC (permalink / raw)
+  To: Gmane Admin, yocto; +Cc: yocto-gJxINTE1zeQw8ufyyF7U+SST3g8Odh+X
+
+On Sun, 2021-04-18 at 00:17 +0200, Gmane Admin wrote:
+> Hi,
+> Op 14-04-2021 om 06:59 schreef Richard Purdie:
+> > On Tue, 2021-04-13 at 21:14 -0400, Randy MacLeod wrote:
+> > > On 2021-04-11 12:19 p.m., Alexander Kanavin wrote:
+> > > > make already has -l option for limiting new instances if load average is
+> > > > too high, so it's only natural to add a RAM limiter too.
+> > > > 
+> > > >     -l [N], --load-average[=N], --max-load[=N]
+> > > >                                 Don't start multiple jobs unless load is
+> > > > below N.
+> > > > 
+> > > > In any case, patches welcome :)
+> > > 
+> > > During today's Yocto technical call (1),
+> > > we talked about approaches to limiting the system load and avoiding
+> > > swap and/or OOM events. Here's what (little!) i recall from the
+> > > discussion, 9 busy hours later.
+> > > 
+> > > In the short run, instead of independently maintaining changes to
+> > > configurations to limit parallelism or xz memory usage, etc, we
+> > > could develop an optional common include file where such limits
+> > > are shared across the community.
+> 
+> I tried PARALLEL_MAKE_nodejs = "-j 1" from local.conf but that didn't work.
+
+It would need to be:
+
+PARALLEL_MAKE_pn-nodejs = "-j 1"
+
+> So I watched it run for a while. It compiles with g++ and as at about 
+> 0.5GB per thread, which is OK. In the end it does ld taking 4GB and it 
+> tries to do 4 in parallel. And then swapping becomes so heavy the 
+> desktop becomes unresponsive. Like I mentioned before ssh from another 
+> machine allows me to STOP one of them, allowing the remaining to 
+> complete. And then CONT the last one.
+> 
+> I worked around it now, by creating a bbappend for nodejs with only
+> PARALLEL_MAKE = "-j 2"
+> > 
+
+If that works, the override above should also work. You do need the "pn-" 
+prefix to the recipe name though.
+
+Cheers,
+
+Richard
+
+
+^ permalink raw reply	[flat|nested] 53+ messages in thread
+* Re: bitbake controlling memory use
+  2021-04-18  9:59                 ` [yocto] " Richard Purdie
+@ 2021-04-18 19:34                   ` Gmane Admin
+       [not found]                   ` <16770AD5E94DEAE5.1089@lists.yoctoproject.org>
+  1 sibling, 0 replies; 53+ messages in thread
+From: Gmane Admin @ 2021-04-18 19:34 UTC (permalink / raw)
+  To: yocto; +Cc: yocto-gJxINTE1zeQw8ufyyF7U+SST3g8Odh+X-XMD5yJDbdMReXY1tMh2IBg
+
+Hi,
+Op 18-04-2021 om 11:59 schreef Richard Purdie:
+> On Sun, 2021-04-18 at 00:17 +0200, Gmane Admin wrote:
+>> Hi,
+>> Op 14-04-2021 om 06:59 schreef Richard Purdie:
+>>> On Tue, 2021-04-13 at 21:14 -0400, Randy MacLeod wrote:
+>>>> On 2021-04-11 12:19 p.m., Alexander Kanavin wrote:
+>>>>> make already has -l option for limiting new instances if load average is
+>>>>> too high, so it's only natural to add a RAM limiter too.
+>>>>>
+>>>>>      -l [N], --load-average[=N], --max-load[=N]
+>>>>>                                  Don't start multiple jobs unless load is
+>>>>> below N.
+>>>>>
+>>>>> In any case, patches welcome :)
+>>>>
+>>>> During today's Yocto technical call (1),
+>>>> we talked about approaches to limiting the system load and avoiding
+>>>> swap and/or OOM events. Here's what (little!) i recall from the
+>>>> discussion, 9 busy hours later.
+>>>>
+>>>> In the short run, instead of independently maintaining changes to
+>>>> configurations to limit parallelism or xz memory usage, etc, we
+>>>> could develop an optional common include file where such limits
+>>>> are shared across the community.
+>>
+>> I tried PARALLEL_MAKE_nodejs = "-j 1" from local.conf but that didn't work.
+> 
+> It would need to be:
+> 
+> PARALLEL_MAKE_pn-nodejs = "-j 1"
+> 
+>> So I watched it run for a while. It compiles with g++ and as at about
+>> 0.5GB per thread, which is OK. In the end it does ld taking 4GB and it
+>> tries to do 4 in parallel. And then swapping becomes so heavy the
+>> desktop becomes unresponsive. Like I mentioned before ssh from another
+>> machine allows me to STOP one of them, allowing the remaining to
+>> complete. And then CONT the last one.
+>>
+>> I worked around it now, by creating a bbappend for nodejs with only
+>> PARALLEL_MAKE = "-j 2"
+>>>
+> 
+> If that works, the override above should also work. You do need the "pn-"
+> prefix to the recipe name though.
+
+And indeed it does, thanks so much for the tip.
+
+Ferry
+
+> Cheers,
+> 
+> Richard
+> 
+> 
+
+
+
+^ permalink raw reply	[flat|nested] 53+ messages in thread
+* Re: bitbake controlling memory use
+  2021-04-14  4:59             ` Richard Purdie
+  2021-04-17 22:17               ` Gmane Admin
+@ 2021-06-05 13:35               ` Gmane Admin
+  2021-06-08 19:08                 ` [yocto] " Trevor Gamblin
+       [not found]               ` <1685B30F5819A655.13459@lists.yoctoproject.org>
+  2 siblings, 1 reply; 53+ messages in thread
+From: Gmane Admin @ 2021-06-05 13:35 UTC (permalink / raw)
+  To: yocto; +Cc: yocto-gJxINTE1zeQw8ufyyF7U+SST3g8Odh+X
+
+Op 14-04-2021 om 06:59 schreef Richard Purdie:
+> On Tue, 2021-04-13 at 21:14 -0400, Randy MacLeod wrote:
+>> On 2021-04-11 12:19 p.m., Alexander Kanavin wrote:
+>>> make already has -l option for limiting new instances if load average is
+>>> too high, so it's only natural to add a RAM limiter too.
+>>>
+>>>     -l [N], --load-average[=N], --max-load[=N]
+>>>                                 Don't start multiple jobs unless load is
+>>> below N.
+>>>
+>>> In any case, patches welcome :)
+>>
+>> During today's Yocto technical call (1),
+>> we talked about approaches to limiting the system load and avoiding
+>> swap and/or OOM events. Here's what (little!) i recall from the
+>> discussion, 9 busy hours later.
+>>
+>> In the short run, instead of independently maintaining changes to
+>> configurations to limit parallelism or xz memory usage, etc, we
+>> could develop an optional common include file where such limits
+>> are shared across the community.
+>>
+>> In the longer run, changes to how bitbake schedules work may be needed.
+>>
+>> Richard says that there was a make/build server idea and maybe even a
+>> patch from a while ago. It may be in one of his poky-contrib branches.
+>> I took a few minutes to look but nothing popped up. A set of keywords to
+>> search for might help me find it.
+> 
+> http://git.yoctoproject.org/cgit.cgi/poky-contrib/commit/?h=rpurdie/wipqueue4&id=d66a327fb6189db5de8bc489859235dcba306237
+> 
+> Cheers,
+> 
+> Richard
+> 
+> 
+I like the idea. Unfortunately the patch doesn't apply to Gatesgarth, so 
+I couldn't test it. Any chance you would be doing a refresh?
+
+
+^ permalink raw reply	[flat|nested] 53+ messages in thread
+* Re: bitbake controlling memory use
+       [not found]               ` <1685B30F5819A655.13459@lists.yoctoproject.org>
+@ 2021-06-07 19:27                 ` Gmane Admin
+  2021-06-08 19:12                   ` [yocto] " Trevor Gamblin
+  2021-06-10  9:22                   ` Ferry Toth
+  0 siblings, 2 replies; 53+ messages in thread
+From: Gmane Admin @ 2021-06-07 19:27 UTC (permalink / raw)
+  To: yocto; +Cc: yocto-gJxINTE1zeQw8ufyyF7U+SST3g8Odh+X-XMD5yJDbdMReXY1tMh2IBg
+
+Op 05-06-2021 om 15:35 schreef Gmane Admin:
+> Op 14-04-2021 om 06:59 schreef Richard Purdie:
+>> On Tue, 2021-04-13 at 21:14 -0400, Randy MacLeod wrote:
+>>> On 2021-04-11 12:19 p.m., Alexander Kanavin wrote:
+>>>> make already has -l option for limiting new instances if load 
+>>>> average is
+>>>> too high, so it's only natural to add a RAM limiter too.
+>>>>
+>>>>     -l [N], --load-average[=N], --max-load[=N]
+>>>>                                 Don't start multiple jobs unless 
+>>>> load is
+>>>> below N.
+>>>>
+>>>> In any case, patches welcome :)
+>>>
+>>> During today's Yocto technical call (1),
+>>> we talked about approaches to limiting the system load and avoiding
+>>> swap and/or OOM events. Here's what (little!) i recall from the
+>>> discussion, 9 busy hours later.
+>>>
+>>> In the short run, instead of independently maintaining changes to
+>>> configurations to limit parallelism or xz memory usage, etc, we
+>>> could develop an optional common include file where such limits
+>>> are shared across the community.
+>>>
+>>> In the longer run, changes to how bitbake schedules work may be needed.
+>>>
+>>> Richard says that there was a make/build server idea and maybe even a
+>>> patch from a while ago. It may be in one of his poky-contrib branches.
+>>> I took a few minutes to look but nothing popped up. A set of keywords to
+>>> search for might help me find it.
+>>
+>> http://git.yoctoproject.org/cgit.cgi/poky-contrib/commit/?h=rpurdie/wipqueue4&id=d66a327fb6189db5de8bc489859235dcba306237 
+
+This patch resolves a starvation of a particular resource (execution 
+cores), which is good.
+However, the problem I am facing is starvation of another resource (memory).
+
+>> Cheers,
+>>
+>> Richard
+>>
+>>
+> I like the idea. Unfortunately the patch doesn't apply to Gatesgarth, so 
+> I couldn't test it. Any chance you would be doing a refresh?
+
+Ok so I refreshed this patch my self and it seems to be working nicely 
+(3000 out of 4000 tasks complete), except for one thing: do_configure 
+for cmake-native fails and I don't see why. From the log:
+
+loading initial cache file 
+xxxxxx/out/linux64/build/tmp/work/x86_64-linux/cmake-native/3.18.2-r0/build/Bootstrap.cmk/InitialCacheFlags.cmake
+-- The C compiler identification is GNU 10.3.0
+-- The CXX compiler identification is GNU 10.3.0
+-- Detecting C compiler ABI info
+CMake Error: Generator: execution of make failed. Make command was: 
+xxxxxx/out/linux64/poky/scripts/make-intercept/make cmTC_68352/fast &&
+-- Detecting C compiler ABI info - failed
+-- Check for working C compiler: xxxxxx/out/linux64/build/tmp/hosttools/gcc
+CMake Error: Generator: execution of make failed. Make command was: 
+xxxxxx/out/linux64/poky/scripts/make-intercept/make cmTC_f23a0/fast &&
+-- Check for working C compiler: 
+xxxxxx/out/linux64/build/tmp/hosttools/gcc - broken
+CMake Error at Modules/CMakeTestCCompiler.cmake:66 (message):
+   The C compiler
+
+     "xxxxxx/out/linux64/build/tmp/hosttools/gcc"
+
+   is not able to compile a simple test program.
+
+   It fails with the following output:
+
+     Change Dir: 
+xxxxxx/tmp/work/x86_64-linux/cmake-native/3.18.2-r0/build/CMakeFiles/CMakeTmp
+
+     Run Build 
+Command(s):xxxxxx/out/linux64/poky/scripts/make-intercept/make 
+cmTC_f23a0/fast && Permission denied
+     Generator: execution of make failed. Make command was: 
+xxxxxx/out/linux64/poky/scripts/make-intercept/make cmTC_f23a0/fast &&
+
+   CMake will not be able to correctly generate this project.
+Call Stack (most recent call first):
+   CMakeLists.txt:7 (project)
+
+Crazy. I don't see why making a complete recipe works fine, while making 
+a test program during configure fails. Ideas?
+
+
+^ permalink raw reply	[flat|nested] 53+ messages in thread
+* Re: [yocto] bitbake controlling memory use
+  2021-06-05 13:35               ` Gmane Admin
+@ 2021-06-08 19:08                 ` Trevor Gamblin
+  2021-06-10  7:09                   ` Gmane Admin
+  0 siblings, 1 reply; 53+ messages in thread
+From: Trevor Gamblin @ 2021-06-08 19:08 UTC (permalink / raw)
+  To: Gmane Admin, yocto; +Cc: yocto-gJxINTE1zeQw8ufyyF7U+SST3g8Odh+X
+
+[-- Attachment #1: Type: text/plain, Size: 2107 bytes --]
+
+
+On 2021-06-05 9:35 a.m., Gmane Admin wrote:
+> [Please note: This e-mail is from an EXTERNAL e-mail address]
+>
+> Op 14-04-2021 om 06:59 schreef Richard Purdie:
+>> On Tue, 2021-04-13 at 21:14 -0400, Randy MacLeod wrote:
+>>> On 2021-04-11 12:19 p.m., Alexander Kanavin wrote:
+>>>> make already has -l option for limiting new instances if load 
+>>>> average is
+>>>> too high, so it's only natural to add a RAM limiter too.
+>>>>
+>>>>     -l [N], --load-average[=N], --max-load[=N]
+>>>>                                 Don't start multiple jobs unless 
+>>>> load is
+>>>> below N.
+>>>>
+>>>> In any case, patches welcome :)
+>>>
+>>> During today's Yocto technical call (1),
+>>> we talked about approaches to limiting the system load and avoiding
+>>> swap and/or OOM events. Here's what (little!) i recall from the
+>>> discussion, 9 busy hours later.
+>>>
+>>> In the short run, instead of independently maintaining changes to
+>>> configurations to limit parallelism or xz memory usage, etc, we
+>>> could develop an optional common include file where such limits
+>>> are shared across the community.
+>>>
+>>> In the longer run, changes to how bitbake schedules work may be needed.
+>>>
+>>> Richard says that there was a make/build server idea and maybe even a
+>>> patch from a while ago. It may be in one of his poky-contrib branches.
+>>> I took a few minutes to look but nothing popped up. A set of 
+>>> keywords to
+>>> search for might help me find it.
+>>
+>> http://git.yoctoproject.org/cgit.cgi/poky-contrib/commit/?h=rpurdie/wipqueue4&id=d66a327fb6189db5de8bc489859235dcba306237 
+>>
+>>
+>> Cheers,
+>>
+>> Richard
+>>
+>>
+> I like the idea. Unfortunately the patch doesn't apply to Gatesgarth, so
+> I couldn't test it. Any chance you would be doing a refresh?
+
+I have reworked the patch and I'm doing some testing with it right now. 
+Once I have collected some data (and possibly reworked it further, 
+depending on results), perhaps I can have you test it out as well? That 
+should be in the next day or two.
+
+- Trevor
+
+>
+>
+> 
+>
+
+[-- Attachment #2: Type: text/html, Size: 3985 bytes --]
+
+^ permalink raw reply	[flat|nested] 53+ messages in thread
+* Re: [yocto] bitbake controlling memory use
+  2021-06-07 19:27                 ` Gmane Admin
+@ 2021-06-08 19:12                   ` Trevor Gamblin
+  2021-06-10  9:22                   ` Ferry Toth
+  1 sibling, 0 replies; 53+ messages in thread
+From: Trevor Gamblin @ 2021-06-08 19:12 UTC (permalink / raw)
+  To: Gmane Admin, yocto
+  Cc: yocto-gJxINTE1zeQw8ufyyF7U+SST3g8Odh+X-XMD5yJDbdMReXY1tMh2IBg
+
+[-- Attachment #1: Type: text/plain, Size: 4488 bytes --]
+
+
+On 2021-06-07 3:27 p.m., Gmane Admin wrote:
+> [Please note: This e-mail is from an EXTERNAL e-mail address]
+>
+> Op 05-06-2021 om 15:35 schreef Gmane Admin:
+>> Op 14-04-2021 om 06:59 schreef Richard Purdie:
+>>> On Tue, 2021-04-13 at 21:14 -0400, Randy MacLeod wrote:
+>>>> On 2021-04-11 12:19 p.m., Alexander Kanavin wrote:
+>>>>> make already has -l option for limiting new instances if load
+>>>>> average is
+>>>>> too high, so it's only natural to add a RAM limiter too.
+>>>>>
+>>>>>     -l [N], --load-average[=N], --max-load[=N]
+>>>>>                                 Don't start multiple jobs unless
+>>>>> load is
+>>>>> below N.
+>>>>>
+>>>>> In any case, patches welcome :)
+>>>>
+>>>> During today's Yocto technical call (1),
+>>>> we talked about approaches to limiting the system load and avoiding
+>>>> swap and/or OOM events. Here's what (little!) i recall from the
+>>>> discussion, 9 busy hours later.
+>>>>
+>>>> In the short run, instead of independently maintaining changes to
+>>>> configurations to limit parallelism or xz memory usage, etc, we
+>>>> could develop an optional common include file where such limits
+>>>> are shared across the community.
+>>>>
+>>>> In the longer run, changes to how bitbake schedules work may be 
+>>>> needed.
+>>>>
+>>>> Richard says that there was a make/build server idea and maybe even a
+>>>> patch from a while ago. It may be in one of his poky-contrib branches.
+>>>> I took a few minutes to look but nothing popped up. A set of 
+>>>> keywords to
+>>>> search for might help me find it.
+>>>
+>>> http://git.yoctoproject.org/cgit.cgi/poky-contrib/commit/?h=rpurdie/wipqueue4&id=d66a327fb6189db5de8bc489859235dcba306237 
+>>>
+>
+> This patch resolves a starvation of a particular resource (execution
+> cores), which is good.
+> However, the problem I am facing is starvation of another resource 
+> (memory).
+>
+>>> Cheers,
+>>>
+>>> Richard
+>>>
+>>>
+>> I like the idea. Unfortunately the patch doesn't apply to Gatesgarth, so
+>> I couldn't test it. Any chance you would be doing a refresh?
+>
+> Ok so I refreshed this patch my self and it seems to be working nicely
+> (3000 out of 4000 tasks complete), except for one thing: do_configure
+> for cmake-native fails and I don't see why. From the log:
+>
+> loading initial cache file
+> xxxxxx/out/linux64/build/tmp/work/x86_64-linux/cmake-native/3.18.2-r0/build/Bootstrap.cmk/InitialCacheFlags.cmake 
+>
+> -- The C compiler identification is GNU 10.3.0
+> -- The CXX compiler identification is GNU 10.3.0
+> -- Detecting C compiler ABI info
+> CMake Error: Generator: execution of make failed. Make command was:
+> xxxxxx/out/linux64/poky/scripts/make-intercept/make cmTC_68352/fast &&
+> -- Detecting C compiler ABI info - failed
+> -- Check for working C compiler: 
+> xxxxxx/out/linux64/build/tmp/hosttools/gcc
+> CMake Error: Generator: execution of make failed. Make command was:
+> xxxxxx/out/linux64/poky/scripts/make-intercept/make cmTC_f23a0/fast &&
+> -- Check for working C compiler:
+> xxxxxx/out/linux64/build/tmp/hosttools/gcc - broken
+> CMake Error at Modules/CMakeTestCCompiler.cmake:66 (message):
+>   The C compiler
+>
+>     "xxxxxx/out/linux64/build/tmp/hosttools/gcc"
+>
+>   is not able to compile a simple test program.
+>
+>   It fails with the following output:
+>
+>     Change Dir:
+> xxxxxx/tmp/work/x86_64-linux/cmake-native/3.18.2-r0/build/CMakeFiles/CMakeTmp 
+>
+>
+>     Run Build
+> Command(s):xxxxxx/out/linux64/poky/scripts/make-intercept/make
+> cmTC_f23a0/fast && Permission denied
+>     Generator: execution of make failed. Make command was:
+> xxxxxx/out/linux64/poky/scripts/make-intercept/make cmTC_f23a0/fast &&
+>
+>   CMake will not be able to correctly generate this project.
+> Call Stack (most recent call first):
+>   CMakeLists.txt:7 (project)
+>
+> Crazy. I don't see why making a complete recipe works fine, while making
+> a test program during configure fails. Ideas?
+
+When I encountered this failure with the patch, it was because the 
+scripts/make-intercept/make script was not marked as executable. 
+However, there was another failure even after that was changed, claiming 
+that an appropriate Makefile parser was not found on the system, which 
+(strangely) seems to be fixed by correcting the script's hashbang to use 
+python3 instead of python. Please see my other response in this thread 
+for further action.
+
+- Trevor
+
+>
+>
+> 
+>
+
+[-- Attachment #2: Type: text/html, Size: 7545 bytes --]
+
+^ permalink raw reply	[flat|nested] 53+ messages in thread
+* Re: bitbake controlling memory use
+  2021-06-08 19:08                 ` [yocto] " Trevor Gamblin
+@ 2021-06-10  7:09                   ` Gmane Admin
+  0 siblings, 0 replies; 53+ messages in thread
+From: Gmane Admin @ 2021-06-10  7:09 UTC (permalink / raw)
+  To: yocto; +Cc: yocto-gJxINTE1zeQw8ufyyF7U+SST3g8Odh+X-XMD5yJDbdMReXY1tMh2IBg
+
+Op 08-06-2021 om 21:08 schreef Trevor Gamblin:
+> 
+> On 2021-06-05 9:35 a.m., Gmane Admin wrote:
+>> [Please note: This e-mail is from an EXTERNAL e-mail address]
+>>
+>> Op 14-04-2021 om 06:59 schreef Richard Purdie:
+>>> On Tue, 2021-04-13 at 21:14 -0400, Randy MacLeod wrote:
+>>>> On 2021-04-11 12:19 p.m., Alexander Kanavin wrote:
+>>>>> make already has -l option for limiting new instances if load 
+>>>>> average is
+>>>>> too high, so it's only natural to add a RAM limiter too.
+>>>>>
+>>>>>     -l [N], --load-average[=N], --max-load[=N]
+>>>>>                                 Don't start multiple jobs unless 
+>>>>> load is
+>>>>> below N.
+>>>>>
+>>>>> In any case, patches welcome :)
+>>>>
+>>>> During today's Yocto technical call (1),
+>>>> we talked about approaches to limiting the system load and avoiding
+>>>> swap and/or OOM events. Here's what (little!) i recall from the
+>>>> discussion, 9 busy hours later.
+>>>>
+>>>> In the short run, instead of independently maintaining changes to
+>>>> configurations to limit parallelism or xz memory usage, etc, we
+>>>> could develop an optional common include file where such limits
+>>>> are shared across the community.
+>>>>
+>>>> In the longer run, changes to how bitbake schedules work may be needed.
+>>>>
+>>>> Richard says that there was a make/build server idea and maybe even a
+>>>> patch from a while ago. It may be in one of his poky-contrib branches.
+>>>> I took a few minutes to look but nothing popped up. A set of 
+>>>> keywords to
+>>>> search for might help me find it.
+>>>
+>>> http://git.yoctoproject.org/cgit.cgi/poky-contrib/commit/?h=rpurdie/wipqueue4&id=d66a327fb6189db5de8bc489859235dcba306237 
+>>>
+>>>
+>>> Cheers,
+>>>
+>>> Richard
+>>>
+>>>
+>> I like the idea. Unfortunately the patch doesn't apply to Gatesgarth, so
+>> I couldn't test it. Any chance you would be doing a refresh?
+> 
+> I have reworked the patch and I'm doing some testing with it right now. 
+> Once I have collected some data (and possibly reworked it further, 
+> depending on results), perhaps I can have you test it out as well? That 
+> should be in the next day or two.
+
+Sure. But note, I reworked it too (but maybe wrongly). I builds like 90% 
+of my image, but fails building cmake.
+
+
+> - Trevor
+> 
+>>
+>>
+>> 
+>>
+
+
+
+^ permalink raw reply	[flat|nested] 53+ messages in thread
+* Re: bitbake controlling memory use
+  2021-06-07 19:27                 ` Gmane Admin
+  2021-06-08 19:12                   ` [yocto] " Trevor Gamblin
+@ 2021-06-10  9:22                   ` Ferry Toth
+  2021-06-10 19:06                     ` [yocto] " Trevor Gamblin
+  1 sibling, 1 reply; 53+ messages in thread
+From: Ferry Toth @ 2021-06-10  9:22 UTC (permalink / raw)
+  To: yocto
+
+[-- Attachment #1: Type: text/plain, Size: 361 bytes --]
+
+Hi Trevor,
+
+Gmane is really messing things up here, sorry about that. I need to create a new thread I'm afraid.
+
+I'd like to your reworked patch.
+
+But note, I reworked it too (but maybe wrongly). I builds like 90% of my image, but fails building cmake-native. Or more accurately it fails do_configure while trying to build a small test program.
+
+Ferry
+
+[-- Attachment #2: Type: text/html, Size: 393 bytes --]
+
+^ permalink raw reply	[flat|nested] 53+ messages in thread
+* Re: [yocto] bitbake controlling memory use
+  2021-06-10  9:22                   ` Ferry Toth
+@ 2021-06-10 19:06                     ` Trevor Gamblin
+  2021-06-10 20:35                       ` Ferry Toth
+  0 siblings, 1 reply; 53+ messages in thread
+From: Trevor Gamblin @ 2021-06-10 19:06 UTC (permalink / raw)
+  To: Ferry Toth, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 824 bytes --]
+
+
+On 2021-06-10 5:22 a.m., Ferry Toth wrote:
+>
+> **[Please note: This e-mail is from an EXTERNAL e-mail address]
+>
+> Hi Trevor,
+>
+> Gmane is really messing things up here, sorry about that. I need to 
+> create a new thread I'm afraid.
+>
+> I'd like to your reworked patch.
+>
+> But note, I reworked it too (but maybe wrongly). I builds like 90% of 
+> my image, but fails building cmake-native. Or more accurately it fails 
+> do_configure while trying to build a small test program.
+
+Hi,
+
+I've pushed the patch onto my fork of the poky repo at 
+https://github.com/threexc/poky
+
+Let me know how your testing turns out - I am still running tests as 
+well, but it would be good to know how others' attempts turn out, and 
+more changes could still end up being necessary.
+
+- Trevor
+
+>
+> Ferry
+>
+> 
+>
+
+[-- Attachment #2: Type: text/html, Size: 1955 bytes --]
+
+^ permalink raw reply	[flat|nested] 53+ messages in thread
+* Re: [yocto] bitbake controlling memory use
+  2021-06-10 19:06                     ` [yocto] " Trevor Gamblin
+@ 2021-06-10 20:35                       ` Ferry Toth
+  2021-06-12 16:31                         ` Ferry Toth
+  0 siblings, 1 reply; 53+ messages in thread
+From: Ferry Toth @ 2021-06-10 20:35 UTC (permalink / raw)
+  To: Trevor Gamblin, yocto
+
+Hi,
+
+Op 10-06-2021 om 21:06 schreef Trevor Gamblin:
+>
+>
+> On 2021-06-10 5:22 a.m., Ferry Toth wrote:
+>>
+>> **[Please note: This e-mail is from an EXTERNAL e-mail address]
+>>
+>> Hi Trevor,
+>>
+>> Gmane is really messing things up here, sorry about that. I need to 
+>> create a new thread I'm afraid.
+>>
+>> I'd like to your reworked patch.
+>>
+>> But note, I reworked it too (but maybe wrongly). I builds like 90% of 
+>> my image, but fails building cmake-native. Or more accurately it 
+>> fails do_configure while trying to build a small test program.
+>
+> Hi,
+>
+> I've pushed the patch onto my fork of the poky repo at 
+> https://github.com/threexc/poky
+>
+> Let me know how your testing turns out - I am still running tests as 
+> well, but it would be good to know how others' attempts turn out, and 
+> more changes could still end up being necessary.
+>
+Your patch didn't apply clean on Gatesgarth, but fix seemd trivial. With 
+this it builds cmake-native fine, thanks!
+
+You can find it here: 
+https://github.com/htot/meta-intel-edison/commit/8abce2f6f752407c7b2831dabf37cc358ce55bc7
+
+I will check if any other build errors occurs, and if not will try to 
+time image build with and without the patch to compare performance and 
+see if it worth the effort.
+
+> - Trevor
+>
+>>
+>> Ferry
+>>
+>> 
+>>
+
+^ permalink raw reply	[flat|nested] 53+ messages in thread
+* Re: [yocto] bitbake controlling memory use
+  2021-06-10 20:35                       ` Ferry Toth
+@ 2021-06-12 16:31                         ` Ferry Toth
+  2021-06-13  0:38                           ` Randy MacLeod
+  0 siblings, 1 reply; 53+ messages in thread
+From: Ferry Toth @ 2021-06-12 16:31 UTC (permalink / raw)
+  To: Trevor Gamblin, yocto
+
+Hi
+
+Op 10-06-2021 om 22:35 schreef Ferry Toth:
+> Hi,
+>
+> Op 10-06-2021 om 21:06 schreef Trevor Gamblin:
+>>
+>>
+>> On 2021-06-10 5:22 a.m., Ferry Toth wrote:
+>>>
+>>> **[Please note: This e-mail is from an EXTERNAL e-mail address]
+>>>
+>>> Hi Trevor,
+>>>
+>>> Gmane is really messing things up here, sorry about that. I need to 
+>>> create a new thread I'm afraid.
+>>>
+>>> I'd like to your reworked patch.
+>>>
+>>> But note, I reworked it too (but maybe wrongly). I builds like 90% 
+>>> of my image, but fails building cmake-native. Or more accurately it 
+>>> fails do_configure while trying to build a small test program.
+>>
+>> Hi,
+>>
+>> I've pushed the patch onto my fork of the poky repo at 
+>> https://github.com/threexc/poky
+>>
+>> Let me know how your testing turns out - I am still running tests as 
+>> well, but it would be good to know how others' attempts turn out, and 
+>> more changes could still end up being necessary.
+>>
+> Your patch didn't apply clean on Gatesgarth, but fix seemd trivial. 
+> With this it builds cmake-native fine, thanks!
+>
+> You can find it here: 
+> https://github.com/htot/meta-intel-edison/commit/8abce2f6f752407c7b2831dabf37cc358ce55bc7
+>
+> I will check if any other build errors occurs, and if not will try to 
+> time image build with and without the patch to compare performance and 
+> see if it worth the effort.
+
+It works fine. To measure time I first built 
+https://github.com/htot/meta-intel-edison (gatesgarth), so everything 
+needed is downloaded and cached. Then prior to each run I `rm -rf out` 
+and `rm -rf bbcache/sstate-cache/*` to force everything to rebuild. And 
+then `time bitbake -k edison-image`
+
+With patch:
+real    218m12,686s
+user    0m24,058s
+sys     0m4,379s
+
+Without:
+real    219m36,944s
+user    0m24,770s
+sys     0m4,266s
+
+Strange, I expected more.
+
+This is on 4 core/8ht i7-3770 CPU @ 3.40GHz with 16Gb RAM and nodejs 
+restricted to -j 2 (so that alone takes ~ 60min to build).
+
+>> - Trevor
+>>
+>>>
+>>> Ferry
+>>>
+>>> 
+>>>
+
+^ permalink raw reply	[flat|nested] 53+ messages in thread
+* Re: [yocto] bitbake controlling memory use
+  2021-06-12 16:31                         ` Ferry Toth
+@ 2021-06-13  0:38                           ` Randy MacLeod
+  2021-06-13 10:58                             ` Ferry Toth
+  2023-01-03 14:15                             ` Ferry Toth
+  0 siblings, 2 replies; 53+ messages in thread
+From: Randy MacLeod @ 2021-06-13  0:38 UTC (permalink / raw)
+  To: Ferry Toth, Trevor Gamblin, yocto
+
+On 2021-06-12 12:31 p.m., Ferry Toth wrote:
+> Hi
+> 
+> Op 10-06-2021 om 22:35 schreef Ferry Toth:
+>> Hi,
+>>
+>> Op 10-06-2021 om 21:06 schreef Trevor Gamblin:
+>>>
+>>>
+>>> On 2021-06-10 5:22 a.m., Ferry Toth wrote:
+>>>>
+>>>> **[Please note: This e-mail is from an EXTERNAL e-mail address]
+>>>>
+>>>> Hi Trevor,
+>>>>
+>>>> Gmane is really messing things up here, sorry about that. I need to 
+>>>> create a new thread I'm afraid.
+>>>>
+>>>> I'd like to your reworked patch.
+>>>>
+>>>> But note, I reworked it too (but maybe wrongly). I builds like 90% 
+>>>> of my image, but fails building cmake-native. Or more accurately it 
+>>>> fails do_configure while trying to build a small test program.
+>>>
+>>> Hi,
+>>>
+>>> I've pushed the patch onto my fork of the poky repo at 
+>>> https://github.com/threexc/poky
+>>>
+>>> Let me know how your testing turns out - I am still running tests as 
+>>> well, but it would be good to know how others' attempts turn out, and 
+>>> more changes could still end up being necessary.
+>>>
+>> Your patch didn't apply clean on Gatesgarth, but fix seemd trivial. 
+>> With this it builds cmake-native fine, thanks!
+>>
+>> You can find it here: 
+>> https://github.com/htot/meta-intel-edison/commit/8abce2f6f752407c7b2831dabf37cc358ce55bc7 
+>>
+>>
+>> I will check if any other build errors occurs, and if not will try to 
+>> time image build with and without the patch to compare performance and 
+>> see if it worth the effort.
+> 
+> It works fine. To measure time I first built 
+> https://github.com/htot/meta-intel-edison (gatesgarth), so everything 
+> needed is downloaded and cached. Then prior to each run I `rm -rf out` 
+> and `rm -rf bbcache/sstate-cache/*` to force everything to rebuild. And 
+> then `time bitbake -k edison-image`
+> 
+> With patch:
+> real    218m12,686s
+> user    0m24,058s
+> sys     0m4,379s
+> 
+> Without:
+> real    219m36,944s
+> user    0m24,770s
+> sys     0m4,266s
+> 
+> Strange, I expected more.
+
+Hi Ferry,
+
+Thanks for the update.
+
+Trevor and I saw similar (lack of ) results.
+
+Trevor even trying getting kea, which uses 'make' to be done the
+'configure' stage, for two builds in differect dirs. Then to run the two
+    'bitbake -c compile kea'
+with and with out the patch with the expectation that with the
+job server patch and the right number of jobs, the two builds would
+take longer. I don't know the exact timing but there was no
+noticeable difference.
+
+We did strace things to confirm that the make wrapper was being called
+and the actual make was being called by the wrapper. I suspect that
+the next thing we try will be to patch 'make' to log when the jobserver
+kicks in or to play with some make jobserver demo such as:
+    https://github.com/olsner/jobclient
+to get some experience with how things are supposed to work and
+to be able to strace a successful use of the job server feature.
+
+A little RTFM / UTSL may also be required.
+
+../Randy
+
+
+> 
+> This is on 4 core/8ht i7-3770 CPU @ 3.40GHz with 16Gb RAM and nodejs 
+> restricted to -j 2 (so that alone takes ~ 60min to build).
+> 
+>>> - Trevor
+>>>
+>>>>
+>>>> Ferry
+>>>>
+>>>>
+>>>>
+> 
+> 
+> 
+> 
+
+
+-- 
+# Randy MacLeod
+# Wind River Linux
+
+^ permalink raw reply	[flat|nested] 53+ messages in thread
+* Re: [yocto] bitbake controlling memory use
+  2021-06-13  0:38                           ` Randy MacLeod
+@ 2021-06-13 10:58                             ` Ferry Toth
+  2023-01-03 14:15                             ` Ferry Toth
+  1 sibling, 0 replies; 53+ messages in thread
+From: Ferry Toth @ 2021-06-13 10:58 UTC (permalink / raw)
+  To: Randy MacLeod, Trevor Gamblin, yocto
+
+Hi
+
+Op 13-06-2021 om 02:38 schreef Randy MacLeod:
+> On 2021-06-12 12:31 p.m., Ferry Toth wrote:
+>> Hi
+>>
+>> Op 10-06-2021 om 22:35 schreef Ferry Toth:
+>>> Hi,
+>>>
+>>> Op 10-06-2021 om 21:06 schreef Trevor Gamblin:
+>>>>
+>>>>
+>>>> On 2021-06-10 5:22 a.m., Ferry Toth wrote:
+>>>>>
+>>>>> **[Please note: This e-mail is from an EXTERNAL e-mail address]
+>>>>>
+>>>>> Hi Trevor,
+>>>>>
+>>>>> Gmane is really messing things up here, sorry about that. I need 
+>>>>> to create a new thread I'm afraid.
+>>>>>
+>>>>> I'd like to your reworked patch.
+>>>>>
+>>>>> But note, I reworked it too (but maybe wrongly). I builds like 90% 
+>>>>> of my image, but fails building cmake-native. Or more accurately 
+>>>>> it fails do_configure while trying to build a small test program.
+>>>>
+>>>> Hi,
+>>>>
+>>>> I've pushed the patch onto my fork of the poky repo at 
+>>>> https://github.com/threexc/poky
+>>>>
+>>>> Let me know how your testing turns out - I am still running tests 
+>>>> as well, but it would be good to know how others' attempts turn 
+>>>> out, and more changes could still end up being necessary.
+>>>>
+>>> Your patch didn't apply clean on Gatesgarth, but fix seemd trivial. 
+>>> With this it builds cmake-native fine, thanks!
+>>>
+>>> You can find it here: 
+>>> https://github.com/htot/meta-intel-edison/commit/8abce2f6f752407c7b2831dabf37cc358ce55bc7 
+>>>
+>>>
+>>> I will check if any other build errors occurs, and if not will try 
+>>> to time image build with and without the patch to compare 
+>>> performance and see if it worth the effort.
+>>
+>> It works fine. To measure time I first built 
+>> https://github.com/htot/meta-intel-edison (gatesgarth), so everything 
+>> needed is downloaded and cached. Then prior to each run I `rm -rf 
+>> out` and `rm -rf bbcache/sstate-cache/*` to force everything to 
+>> rebuild. And then `time bitbake -k edison-image`
+>>
+>> With patch:
+>> real    218m12,686s
+>> user    0m24,058s
+>> sys     0m4,379s
+>>
+>> Without:
+>> real    219m36,944s
+>> user    0m24,770s
+>> sys     0m4,266s
+>>
+>> Strange, I expected more.
+>
+> Hi Ferry,
+>
+> Thanks for the update.
+>
+> Trevor and I saw similar (lack of ) results.
+>
+> Trevor even trying getting kea, which uses 'make' to be done the
+> 'configure' stage, for two builds in differect dirs. Then to run the two
+>    'bitbake -c compile kea'
+> with and with out the patch with the expectation that with the
+> job server patch and the right number of jobs, the two builds would
+> take longer. I don't know the exact timing but there was no
+> noticeable difference.
+>
+> We did strace things to confirm that the make wrapper was being called
+> and the actual make was being called by the wrapper. I suspect that
+I watched running processes from KDE ksysguard and I believe the number 
+of compilers was actually restricted with the patch. On the other hand 
+the server I tried was running munin which logs #processes over time and 
+there I didn't see a difference. Confused..
+> the next thing we try will be to patch 'make' to log when the jobserver
+> kicks in or to play with some make jobserver demo such as:
+>    https://github.com/olsner/jobclient
+> to get some experience with how things are supposed to work and
+> to be able to strace a successful use of the job server feature.
+>
+I'm available for testing.
+> A little RTFM / UTSL may also be required.
+>
+> ../Randy
+>
+>
+>>
+>> This is on 4 core/8ht i7-3770 CPU @ 3.40GHz with 16Gb RAM and nodejs 
+>> restricted to -j 2 (so that alone takes ~ 60min to build).
+I do like the jobserver idea a lot. Especially if it would take memory 
+restrictions into account as well. The problem with building nodejs (and 
+probably rust as well), there is lots to compile so you really want -j 
+16. But then during linking ld uses 4GB per instance, and there are 5 
+started. So on my machine I wouldn't want to start more then 3.
+>>
+>>>> - Trevor
+>>>>
+>>>>>
+>>>>> Ferry
+>>>>>
+>>>>>
+>>>>>
+>>
+>>
+>> 
+>>
+>
+>
+
+^ permalink raw reply	[flat|nested] 53+ messages in thread
+* Re: bitbake controlling memory use
+       [not found]                   ` <16770AD5E94DEAE5.1089@lists.yoctoproject.org>
+@ 2022-12-24 18:58                     ` Ferry Toth
+  2022-12-26  2:11                       ` [yocto] " Randy MacLeod
+  0 siblings, 1 reply; 53+ messages in thread
+From: Ferry Toth @ 2022-12-24 18:58 UTC (permalink / raw)
+  To: yocto
+  Cc: yocto-gJxINTE1zeQw8ufyyF7U+SST3g8Odh+X-XMD5yJDbdMReXY1tMh2IBg-XMD5yJDbdMReXY1tMh2IBg
+
+Op 18-04-2021 om 21:34 schreef Gmane Admin:
+> Hi,
+> Op 18-04-2021 om 11:59 schreef Richard Purdie:
+>> On Sun, 2021-04-18 at 00:17 +0200, Gmane Admin wrote:
+>>> Hi,
+>>> Op 14-04-2021 om 06:59 schreef Richard Purdie:
+>>>> On Tue, 2021-04-13 at 21:14 -0400, Randy MacLeod wrote:
+>>>>> On 2021-04-11 12:19 p.m., Alexander Kanavin wrote:
+>>>>>> make already has -l option for limiting new instances if load 
+>>>>>> average is
+>>>>>> too high, so it's only natural to add a RAM limiter too.
+>>>>>>
+>>>>>>      -l [N], --load-average[=N], --max-load[=N]
+>>>>>>                                  Don't start multiple jobs unless 
+>>>>>> load is
+>>>>>> below N.
+>>>>>>
+>>>>>> In any case, patches welcome :)
+>>>>>
+>>>>> During today's Yocto technical call (1),
+>>>>> we talked about approaches to limiting the system load and avoiding
+>>>>> swap and/or OOM events. Here's what (little!) i recall from the
+>>>>> discussion, 9 busy hours later.
+>>>>>
+>>>>> In the short run, instead of independently maintaining changes to
+>>>>> configurations to limit parallelism or xz memory usage, etc, we
+>>>>> could develop an optional common include file where such limits
+>>>>> are shared across the community.
+>>>
+>>> I tried PARALLEL_MAKE_nodejs = "-j 1" from local.conf but that didn't 
+>>> work.
+>>
+>> It would need to be:
+>>
+>> PARALLEL_MAKE_pn-nodejs = "-j 1"
+>>
+>>> So I watched it run for a while. It compiles with g++ and as at about
+>>> 0.5GB per thread, which is OK. In the end it does ld taking 4GB and it
+>>> tries to do 4 in parallel. And then swapping becomes so heavy the
+>>> desktop becomes unresponsive. Like I mentioned before ssh from another
+>>> machine allows me to STOP one of them, allowing the remaining to
+>>> complete. And then CONT the last one.
+>>>
+>>> I worked around it now, by creating a bbappend for nodejs with only
+>>> PARALLEL_MAKE = "-j 2"
+>>>>
+>>
+>> If that works, the override above should also work. You do need the "pn-"
+>> prefix to the recipe name though.
+> 
+> And indeed it does, thanks so much for the tip.
+
+This discussion is very old, but I just wanted to share an update. With 
+my image (meta-intel-edison) building nodejs is the dominant time 
+consumer. With "-j 2" the nodejs build takes multiple hours (I have 8 
+core + HT), all the rest is then long completed. Without "-j 2" building 
+  nodejs_16.14.2 linking in the final stage 5 processes are started, 
+each 4 - 5GB RAM. With my meager 16GB disk thrashing starts and it still 
+would take hours to complete.
+
+While I still believe we need bitbake to SIGSTOP processes that trigger 
+thrashing, for nodejs I found a solution at the recipe level:
+
+The yocto recipe already has:
+
+EXTRA_OEMAKE = "\
+     CC.host='${CC}' \
+     CFLAGS.host='${CPPFLAGS} ${CFLAGS}' \
+     CXX.host='${CXX}' \
+     CXXFLAGS.host='${CPPFLAGS} ${CXXFLAGS}' \
+     LDFLAGS.host='${LDFLAGS}' \
+     AR.host='${AR}' \
+     \
+     builddir_name=./ \
+"
+
+I inserted `    LINK.host='flock /tmp ${CXX}' \` as that seemed most 
+logical, but that didn't help a bit (the 4 calls in my log to flock were 
+never simultaneous). However after changing it to `    LINK='flock /tmp 
+${CXX}' \` the linker is serialized.
+
+This makes an enormous difference in my Yocto image build time (nodejs 
+was the dominant factor). Now compile stage ~25min + 5min for link.
+
+> Ferry
+> 
+>> Cheers,
+>>
+>> Richard
+>>
+>>
+> 
+> 
+> 
+> 
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#53161): https://lists.yoctoproject.org/g/yocto/message/53161
+> Mute This Topic: https://lists.yoctoproject.org/mt/82015730/4382963
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [gley-yocto@m.gmane-mx.org]
+> -=-=-=-=-=-=-=-=-=-=-=-
+> 
+
+
+
+
+^ permalink raw reply	[flat|nested] 53+ messages in thread
+* Re: [yocto] bitbake controlling memory use
+  2022-12-24 18:58                     ` Ferry Toth
+@ 2022-12-26  2:11                       ` Randy MacLeod
+  2022-12-27 16:56                         ` Ferry Toth
+  0 siblings, 1 reply; 53+ messages in thread
+From: Randy MacLeod @ 2022-12-26  2:11 UTC (permalink / raw)
+  To: fntoth, yocto
+  Cc: contrib,
+	yocto-gJxINTE1zeQw8ufyyF7U+SST3g8Odh+X-XMD5yJDbdMReXY1tMh2IBg-XMD5yJDbdMReXY1tMh2IBg
+
+On 2022-12-24 13:58, Ferry Toth via lists.yoctoproject.org wrote:
+> Op 18-04-2021 om 21:34 schreef Gmane Admin:
+>> Hi,
+>> Op 18-04-2021 om 11:59 schreef Richard Purdie:
+>>> On Sun, 2021-04-18 at 00:17 +0200, Gmane Admin wrote:
+>>>> Hi,
+>>>> Op 14-04-2021 om 06:59 schreef Richard Purdie:
+>>>>> On Tue, 2021-04-13 at 21:14 -0400, Randy MacLeod wrote:
+>>>>>> On 2021-04-11 12:19 p.m., Alexander Kanavin wrote:
+>>>>>>> make already has -l option for limiting new instances if load 
+>>>>>>> average is
+>>>>>>> too high, so it's only natural to add a RAM limiter too.
+>>>>>>>
+>>>>>>>      -l [N], --load-average[=N], --max-load[=N]
+>>>>>>>                                  Don't start multiple jobs 
+>>>>>>> unless load is
+>>>>>>> below N.
+>>>>>>>
+>>>>>>> In any case, patches welcome :)
+>>>>>>
+>>>>>> During today's Yocto technical call (1),
+>>>>>> we talked about approaches to limiting the system load and avoiding
+>>>>>> swap and/or OOM events. Here's what (little!) i recall from the
+>>>>>> discussion, 9 busy hours later.
+>>>>>>
+>>>>>> In the short run, instead of independently maintaining changes to
+>>>>>> configurations to limit parallelism or xz memory usage, etc, we
+>>>>>> could develop an optional common include file where such limits
+>>>>>> are shared across the community.
+>>>>
+>>>> I tried PARALLEL_MAKE_nodejs = "-j 1" from local.conf but that 
+>>>> didn't work.
+>>>
+>>> It would need to be:
+>>>
+>>> PARALLEL_MAKE_pn-nodejs = "-j 1"
+>>>
+>>>> So I watched it run for a while. It compiles with g++ and as at about
+>>>> 0.5GB per thread, which is OK. In the end it does ld taking 4GB and it
+>>>> tries to do 4 in parallel. And then swapping becomes so heavy the
+>>>> desktop becomes unresponsive. Like I mentioned before ssh from another
+>>>> machine allows me to STOP one of them, allowing the remaining to
+>>>> complete. And then CONT the last one.
+>>>>
+>>>> I worked around it now, by creating a bbappend for nodejs with only
+>>>> PARALLEL_MAKE = "-j 2"
+>>>>>
+>>>
+>>> If that works, the override above should also work. You do need the 
+>>> "pn-"
+>>> prefix to the recipe name though.
+>>
+>> And indeed it does, thanks so much for the tip.
+>
+> This discussion is very old, but I just wanted to share an update. 
+> With my image (meta-intel-edison) building nodejs is the dominant time 
+> consumer. With "-j 2" the nodejs build takes multiple hours (I have 8 
+> core + HT), all the rest is then long completed. Without "-j 2" 
+> building  nodejs_16.14.2 linking in the final stage 5 processes are 
+> started, each 4 - 5GB RAM. With my meager 16GB disk thrashing starts 
+> and it still would take hours to complete.
+>
+> While I still believe we need bitbake to SIGSTOP processes that 
+> trigger thrashing, for nodejs I found a solution at the recipe level:
+>
+> The yocto recipe already has:
+>
+> EXTRA_OEMAKE = "\
+>     CC.host='${CC}' \
+>     CFLAGS.host='${CPPFLAGS} ${CFLAGS}' \
+>     CXX.host='${CXX}' \
+>     CXXFLAGS.host='${CPPFLAGS} ${CXXFLAGS}' \
+>     LDFLAGS.host='${LDFLAGS}' \
+>     AR.host='${AR}' \
+>     \
+>     builddir_name=./ \
+> "
+>
+> I inserted `    LINK.host='flock /tmp ${CXX}' \` as that seemed most 
+> logical, but that didn't help a bit (the 4 calls in my log to flock 
+> were never simultaneous). However after changing it to ` LINK='flock 
+> /tmp ${CXX}' \` the linker is serialized.
+>
+> This makes an enormous difference in my Yocto image build time (nodejs 
+> was the dominant factor). Now compile stage ~25min + 5min for link.
+
+Terry,
+
+It's nice to hear that you have an approach to make building nodejs 
+feasible for you on your hardware.
+
+I have been wondering if we should be trying to serialize linking across 
+recipes (nodejs, webkitgtk, llvm, and other larger packages)
+but I hadn't noticed that nodejs itself was in need of umm, *guidance*.  ;-)
+
+Are you aware of the recently added: BB_PRESSURE_MAX_[CPU|IO|MEMORY] 
+variables?
+
+https://docs.yoctoproject.org/bitbake/2.2/bitbake-user-manual/bitbake-user-manual-ref-variables.html#term-BB_PRESSURE_MAX_CPU
+
+That might help you a bit as well.
+
+Zheng and I also have a brand new, unpolished patch, to 'make' to limit 
+builds based on PSI (the *some* line from /proc/pressure/cpu ).
+If you're interested, you could give that a try by either applying a 
+patch to the make recipe and having nodejs depend on make-native
+or if you just want to try it out on a private system, build make from:
+
+    https://github.com/ZhengQ2/make/tree/cpu-pressure-to-commit
+
+save your old version of make and install the new one in in /usr/bin
+
+and set:
+
+PARALLEL_MAKE = " -j -z 5"
+
+This will prevent make from starting new tasks when the CPU pressure,
+based on our very simple calculation, is > 5%
+
+We've seen that it can speed up the openssl build on a 24 core system from:
+
+89.030 s ±  0.485 s <-- -j 24
+
+81.727 s ±  1.139 s <-- -j -z 11
+
+for native builds of openssl outside of bitbake.
+Early times but it's an interesting data point.
+
+Builds of the kernel didn't show any speed-up and were in fact a bit slower:
+
+$ hyperfine --runs 10 --prepare 'make clean; make defconfig' 'make -j 
+24' --export-json make-j-24--linux-kernel.json
+Benchmark 1: make -j 24
+   Time (mean ± σ):     181.770 s ±  0.290 s    [User: 3416.715 s, 
+System: 354.282 s]
+   Range (min … max):   181.266 s … 182.231 s    10 runs
+
+
+# Try -j -z 11
+
+  hyperfine --runs 10 --prepare 'make clean; make defconfig' 'make -j -z 
+11 ' --export-json make-j-z-11--linux-kernel.json
+Benchmark 1: make -j -z 11
+   Time (mean ± σ):     185.915 s ±  1.988 s    [User: 3447.606 s, 
+System: 343.528 s]
+   Range (min … max):   184.046 s … 189.901 s    10 runs
+
+but presumably not needing to specify the number of cores to use, could 
+be a benefit.
+
+PSI also has /proc/pressure/memory but we've found that for bitbake at 
+least,
+if you limit CPU usage, you can limit overall memory usage. Package 
+builds and linking
+may be a different kettle of fish and your explicit serialization would 
+always be better
+at preventing the system from swapping than PSI memory, which only 
+provides a signal
+when things have gotten out of hand already.
+
+../Randy
+
+
+>
+>> Ferry
+>>
+>>> Cheers,
+>>>
+>>> Richard
+>>>
+>>>
+>>
+>>
+>>
+>>
+>>
+>>
+>
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#58861): https://lists.yoctoproject.org/g/yocto/message/58861
+> Mute This Topic: https://lists.yoctoproject.org/mt/82015730/3616765
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [randy.macleod@windriver.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+-- 
+# Randy MacLeod
+# Wind River Linux
+
+
+
+^ permalink raw reply	[flat|nested] 53+ messages in thread
+* Re: bitbake controlling memory use
+  2022-12-26  2:11                       ` [yocto] " Randy MacLeod
+@ 2022-12-27 16:56                         ` Ferry Toth
+  0 siblings, 0 replies; 53+ messages in thread
+From: Ferry Toth @ 2022-12-27 16:56 UTC (permalink / raw)
+  To: yocto
+  Cc: contrib-wZ7dTMvimpPk1uMJSBkQmQ,
+	yocto-gJxINTE1zeQw8ufyyF7U+SST3g8Odh+X-XMD5yJDbdMReXY1tMh2IBg-XMD5yJDbdMReXY1tMh2IBg-XMD5yJDbdMReXY1tMh2IBg
+
+Hi,
+Op 26-12-2022 om 03:11 schreef Randy MacLeod:
+> On 2022-12-24 13:58, Ferry Toth via lists.yoctoproject.org wrote:
+>> Op 18-04-2021 om 21:34 schreef Gmane Admin:
+>>> Hi,
+>>> Op 18-04-2021 om 11:59 schreef Richard Purdie:
+>>>> On Sun, 2021-04-18 at 00:17 +0200, Gmane Admin wrote:
+>>>>> Hi,
+>>>>> Op 14-04-2021 om 06:59 schreef Richard Purdie:
+>>>>>> On Tue, 2021-04-13 at 21:14 -0400, Randy MacLeod wrote:
+>>>>>>> On 2021-04-11 12:19 p.m., Alexander Kanavin wrote:
+>>>>>>>> make already has -l option for limiting new instances if load 
+>>>>>>>> average is
+>>>>>>>> too high, so it's only natural to add a RAM limiter too.
+>>>>>>>>
+>>>>>>>>      -l [N], --load-average[=N], --max-load[=N]
+>>>>>>>>                                  Don't start multiple jobs 
+>>>>>>>> unless load is
+>>>>>>>> below N.
+>>>>>>>>
+>>>>>>>> In any case, patches welcome :)
+>>>>>>>
+>>>>>>> During today's Yocto technical call (1),
+>>>>>>> we talked about approaches to limiting the system load and avoiding
+>>>>>>> swap and/or OOM events. Here's what (little!) i recall from the
+>>>>>>> discussion, 9 busy hours later.
+>>>>>>>
+>>>>>>> In the short run, instead of independently maintaining changes to
+>>>>>>> configurations to limit parallelism or xz memory usage, etc, we
+>>>>>>> could develop an optional common include file where such limits
+>>>>>>> are shared across the community.
+>>>>>
+>>>>> I tried PARALLEL_MAKE_nodejs = "-j 1" from local.conf but that 
+>>>>> didn't work.
+>>>>
+>>>> It would need to be:
+>>>>
+>>>> PARALLEL_MAKE_pn-nodejs = "-j 1"
+>>>>
+>>>>> So I watched it run for a while. It compiles with g++ and as at about
+>>>>> 0.5GB per thread, which is OK. In the end it does ld taking 4GB and it
+>>>>> tries to do 4 in parallel. And then swapping becomes so heavy the
+>>>>> desktop becomes unresponsive. Like I mentioned before ssh from another
+>>>>> machine allows me to STOP one of them, allowing the remaining to
+>>>>> complete. And then CONT the last one.
+>>>>>
+>>>>> I worked around it now, by creating a bbappend for nodejs with only
+>>>>> PARALLEL_MAKE = "-j 2"
+>>>>>>
+>>>>
+>>>> If that works, the override above should also work. You do need the 
+>>>> "pn-"
+>>>> prefix to the recipe name though.
+>>>
+>>> And indeed it does, thanks so much for the tip.
+>>
+>> This discussion is very old, but I just wanted to share an update. 
+>> With my image (meta-intel-edison) building nodejs is the dominant time 
+>> consumer. With "-j 2" the nodejs build takes multiple hours (I have 8 
+>> core + HT), all the rest is then long completed. Without "-j 2" 
+>> building  nodejs_16.14.2 linking in the final stage 5 processes are 
+>> started, each 4 - 5GB RAM. With my meager 16GB disk thrashing starts 
+>> and it still would take hours to complete.
+>>
+>> While I still believe we need bitbake to SIGSTOP processes that 
+>> trigger thrashing, for nodejs I found a solution at the recipe level:
+>>
+>> The yocto recipe already has:
+>>
+>> EXTRA_OEMAKE = "\
+>>     CC.host='${CC}' \
+>>     CFLAGS.host='${CPPFLAGS} ${CFLAGS}' \
+>>     CXX.host='${CXX}' \
+>>     CXXFLAGS.host='${CPPFLAGS} ${CXXFLAGS}' \
+>>     LDFLAGS.host='${LDFLAGS}' \
+>>     AR.host='${AR}' \
+>>     \
+>>     builddir_name=./ \
+>> "
+>>
+>> I inserted `    LINK.host='flock /tmp ${CXX}' \` as that seemed most 
+>> logical, but that didn't help a bit (the 4 calls in my log to flock 
+>> were never simultaneous). However after changing it to ` LINK='flock 
+>> /tmp ${CXX}' \` the linker is serialized.
+>>
+>> This makes an enormous difference in my Yocto image build time (nodejs 
+>> was the dominant factor). Now compile stage ~25min + 5min for link.
+> 
+> Terry,
+> 
+> It's nice to hear that you have an approach to make building nodejs 
+> feasible for you on your hardware.
+> 
+> I have been wondering if we should be trying to serialize linking across 
+> recipes (nodejs, webkitgtk, llvm, and other larger packages)
+> but I hadn't noticed that nodejs itself was in need of umm, *guidance*.  
+> ;-)
+> 
+> Are you aware of the recently added: BB_PRESSURE_MAX_[CPU|IO|MEMORY] 
+> variables?
+> 
+> https://docs.yoctoproject.org/bitbake/2.2/bitbake-user-manual/bitbake-user-manual-ref-variables.html#term-BB_PRESSURE_MAX_CPU
+> 
+> That might help you a bit as well.
+
+Nope I hadn't seen that. I immediately tried it, but of course it didn't 
+work.
+
+Reason is, it regulates starting tasks. But the problem with nodejs is 
+(if I don't intervene) the task do_compile takes so long, there are not 
+other tasks running.
+
+Also looking at the documentation: "At this point in time, experiments 
+show that IO pressure tends to be short-lived and regulating just the 
+CPU can help to reduce it."
+
+This is not true. I have just taken some measurements with htop for my 
+case 16 threads + 16GB RAM:
+- the do_compile task roughly falls appart into 2 phases, compiling 
+(many files) and linking (1 + 5 + 5 files).
+
+During compiling I measure PSI CPU=4%, IO = 0%, MEM = 0%, memory use 
+10G, swap 1.5G
+During linking PSI CPU=0.1%, IO = 90%, MEM = 66%, memory use 14G, swap 8G
+
+You can easily see CPU pressure is not the issue, all CPU time is spend 
+on swapping (IO pressure).
+
+This is also the reason I can get my system responding again by SIGSTOP 
+on some of the ld processes, once they are stopped (not killed) they are 
+swapped out, and stay out.
+
+Basically this is proof that when I manually schedule processes I do a 
+better job then the kernel.
+
+> Zheng and I also have a brand new, unpolished patch, to 'make' to limit 
+> builds based on PSI (the *some* line from /proc/pressure/cpu ).
+> If you're interested, you could give that a try by either applying a 
+> patch to the make recipe and having nodejs depend on make-native
+> or if you just want to try it out on a private system, build make from:
+
+I am, but I already know this will not work, see above. CPU pressure is 
+not the issue.
+
+If you would be limiting IO pressure it might help, although I expect 
+once you get an IO over-pressure it's already too late, the processes 
+have already been started. The only way I know to resolve, is to stop 
+them temporarily.
+
+>     https://github.com/ZhengQ2/make/tree/cpu-pressure-to-commit
+> 
+> save your old version of make and install the new one in in /usr/bin
+> 
+> and set:
+> 
+> PARALLEL_MAKE = " -j -z 5"
+> 
+> This will prevent make from starting new tasks when the CPU pressure,
+> based on our very simple calculation, is > 5%
+> 
+> We've seen that it can speed up the openssl build on a 24 core system from:
+> 
+> 89.030 s ±  0.485 s <-- -j 24
+> 
+> 81.727 s ±  1.139 s <-- -j -z 11
+> 
+> for native builds of openssl outside of bitbake.
+> Early times but it's an interesting data point.
+> 
+> Builds of the kernel didn't show any speed-up and were in fact a bit 
+> slower:
+> 
+> $ hyperfine --runs 10 --prepare 'make clean; make defconfig' 'make -j 
+> 24' --export-json make-j-24--linux-kernel.json
+> Benchmark 1: make -j 24
+>    Time (mean ± σ):     181.770 s ±  0.290 s    [User: 3416.715 s, 
+> System: 354.282 s]
+>    Range (min … max):   181.266 s … 182.231 s    10 runs
+> 
+> 
+> # Try -j -z 11
+> 
+>   hyperfine --runs 10 --prepare 'make clean; make defconfig' 'make -j -z 
+> 11 ' --export-json make-j-z-11--linux-kernel.json
+> Benchmark 1: make -j -z 11
+>    Time (mean ± σ):     185.915 s ±  1.988 s    [User: 3447.606 s, 
+> System: 343.528 s]
+>    Range (min … max):   184.046 s … 189.901 s    10 runs
+> 
+> but presumably not needing to specify the number of cores to use, could 
+> be a benefit.
+> 
+> PSI also has /proc/pressure/memory but we've found that for bitbake at 
+> least,
+> if you limit CPU usage, you can limit overall memory usage. Package 
+> builds and linking
+> may be a different kettle of fish and your explicit serialization would 
+> always be better
+> at preventing the system from swapping than PSI memory, which only 
+> provides a signal
+> when things have gotten out of hand already.
+> 
+> ../Randy
+> 
+> 
+>>
+>>> Ferry
+>>>
+>>>> Cheers,
+>>>>
+>>>> Richard
+>>>>
+>>>>
+>>>
+>>>
+>>>
+>>>
+>>>
+>>>
+>>
+>>
+>>
+>>
+>>
+> 
+> 
+> 
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#58863): https://lists.yoctoproject.org/g/yocto/message/58863
+> Mute This Topic: https://lists.yoctoproject.org/mt/82015730/4382963
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [gley-yocto@m.gmane-mx.org]
+> -=-=-=-=-=-=-=-=-=-=-=-
+> 
+
+
+
+
+^ permalink raw reply	[flat|nested] 53+ messages in thread
+* Re: bitbake controlling memory use
+  2021-06-13  0:38                           ` Randy MacLeod
+  2021-06-13 10:58                             ` Ferry Toth
+@ 2023-01-03 14:15                             ` Ferry Toth
+  2023-01-03 14:18                               ` [yocto] " Alexander Kanavin
+  1 sibling, 1 reply; 53+ messages in thread
+From: Ferry Toth @ 2023-01-03 14:15 UTC (permalink / raw)
+  To: yocto
+
+Op 13-06-2021 om 02:38 schreef Randy MacLeod:
+> On 2021-06-12 12:31 p.m., Ferry Toth wrote:
+>> Hi
+>>
+>> Op 10-06-2021 om 22:35 schreef Ferry Toth:
+>>> Hi,
+>>>
+>>> Op 10-06-2021 om 21:06 schreef Trevor Gamblin:
+>>>>
+>>>>
+>>>> On 2021-06-10 5:22 a.m., Ferry Toth wrote:
+>>>>>
+>>>>> **[Please note: This e-mail is from an EXTERNAL e-mail address]
+>>>>>
+>>>>> Hi Trevor,
+>>>>>
+>>>>> Gmane is really messing things up here, sorry about that. I need to 
+>>>>> create a new thread I'm afraid.
+>>>>>
+>>>>> I'd like to your reworked patch.
+>>>>>
+>>>>> But note, I reworked it too (but maybe wrongly). I builds like 90% 
+>>>>> of my image, but fails building cmake-native. Or more accurately it 
+>>>>> fails do_configure while trying to build a small test program.
+>>>>
+>>>> Hi,
+>>>>
+>>>> I've pushed the patch onto my fork of the poky repo at 
+>>>> https://github.com/threexc/poky
+>>>>
+>>>> Let me know how your testing turns out - I am still running tests as 
+>>>> well, but it would be good to know how others' attempts turn out, 
+>>>> and more changes could still end up being necessary.
+>>>>
+>>> Your patch didn't apply clean on Gatesgarth, but fix seemd trivial. 
+>>> With this it builds cmake-native fine, thanks!
+>>>
+>>> You can find it here: 
+>>> https://github.com/htot/meta-intel-edison/commit/8abce2f6f752407c7b2831dabf37cc358ce55bc7
+>>>
+>>> I will check if any other build errors occurs, and if not will try to 
+>>> time image build with and without the patch to compare performance 
+>>> and see if it worth the effort.
+>>
+>> It works fine. To measure time I first built 
+>> https://github.com/htot/meta-intel-edison (gatesgarth), so everything 
+>> needed is downloaded and cached. Then prior to each run I `rm -rf out` 
+>> and `rm -rf bbcache/sstate-cache/*` to force everything to rebuild. 
+>> And then `time bitbake -k edison-image`
+>>
+>> With patch:
+>> real    218m12,686s
+>> user    0m24,058s
+>> sys     0m4,379s
+>>
+>> Without:
+>> real    219m36,944s
+>> user    0m24,770s
+>> sys     0m4,266s
+>>
+>> Strange, I expected more.
+
+I have a new machine now. I has 16 HT, but only 16GB RAM. So memory 
+starvation has now become a serious issue, especially when building 
+nodejs in parallel to nodejs-native.
+
+There are 2 issues:
+1 - nodejs tries to link 5 executables in parallel, each requires 4GB 
+RAM. This I solved by serializing the linker using `flock` for the 
+nodejs recipe.
+2 - nodejs starts 16 compile submakes and so does nodejs-native. Each is 
+between 0.5GB - 1GB RAM.
+
+For the 2nd problem the "Add shared make jobserver support" patch would 
+likely be effective. I've fixed it up for Kirkstone, but it is not working.
+
+I noted: since make v4.2 we need to use `--jobserver-auth=fifo:" + fifoname`
+
+But the real problem seems to be `if "BB_MAKEFIFO" in os.environ:` in 
+make-intercept fails, even though `self.cfgData.setVar("BB_MAKEFIFO", 
+fifoname)` succeeds in `def setup_make_fifo(self):`.
+
+So, either BB_MAKEFIFO is not yet created at make time, or no longer 
+exists.
+
+Confused again.
+
+> Hi Ferry,
+> 
+> Thanks for the update.
+> 
+> Trevor and I saw similar (lack of ) results.
+> 
+> Trevor even trying getting kea, which uses 'make' to be done the
+> 'configure' stage, for two builds in differect dirs. Then to run the two
+>     'bitbake -c compile kea'
+> with and with out the patch with the expectation that with the
+> job server patch and the right number of jobs, the two builds would
+> take longer. I don't know the exact timing but there was no
+> noticeable difference.
+> 
+> We did strace things to confirm that the make wrapper was being called
+> and the actual make was being called by the wrapper. I suspect that
+> the next thing we try will be to patch 'make' to log when the jobserver
+> kicks in or to play with some make jobserver demo such as:
+>     https://github.com/olsner/jobclient
+> to get some experience with how things are supposed to work and
+> to be able to strace a successful use of the job server feature.
+> 
+> A little RTFM / UTSL may also be required.
+> 
+> ../Randy
+> 
+> 
+>>
+>> This is on 4 core/8ht i7-3770 CPU @ 3.40GHz with 16Gb RAM and nodejs 
+>> restricted to -j 2 (so that alone takes ~ 60min to build).
+>>
+>>>> - Trevor
+>>>>
+>>>>>
+>>>>> Ferry
+>>>>>
+>>>>>
+>>>>>
+>>
+>>
+>>
+>>
+> 
+> 
+> 
+> 
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#53849): https://lists.yoctoproject.org/g/yocto/message/53849
+> Mute This Topic: https://lists.yoctoproject.org/mt/82015730/4382963
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [gley-yocto@m.gmane-mx.org]
+> -=-=-=-=-=-=-=-=-=-=-=-
+> 
+
+
+
+
+^ permalink raw reply	[flat|nested] 53+ messages in thread
+* Re: [yocto] bitbake controlling memory use
+  2023-01-03 14:15                             ` Ferry Toth
+@ 2023-01-03 14:18                               ` Alexander Kanavin
+  2023-01-03 14:29                                 ` Ferry Toth
+  0 siblings, 1 reply; 53+ messages in thread
+From: Alexander Kanavin @ 2023-01-03 14:18 UTC (permalink / raw)
+  To: Ferry Toth; +Cc: yocto
+
+I have to note that even the most expensive 16 Gb RAM module is less
+than 100 Euro, and can be obtained for half that much. Surely you
+value your time more than that?
+
+Alex
+
+On Tue, 3 Jan 2023 at 15:15, Ferry Toth <fntoth@gmail.com> wrote:
+>
+> Op 13-06-2021 om 02:38 schreef Randy MacLeod:
+> > On 2021-06-12 12:31 p.m., Ferry Toth wrote:
+> >> Hi
+> >>
+> >> Op 10-06-2021 om 22:35 schreef Ferry Toth:
+> >>> Hi,
+> >>>
+> >>> Op 10-06-2021 om 21:06 schreef Trevor Gamblin:
+> >>>>
+> >>>>
+> >>>> On 2021-06-10 5:22 a.m., Ferry Toth wrote:
+> >>>>>
+> >>>>> **[Please note: This e-mail is from an EXTERNAL e-mail address]
+> >>>>>
+> >>>>> Hi Trevor,
+> >>>>>
+> >>>>> Gmane is really messing things up here, sorry about that. I need to
+> >>>>> create a new thread I'm afraid.
+> >>>>>
+> >>>>> I'd like to your reworked patch.
+> >>>>>
+> >>>>> But note, I reworked it too (but maybe wrongly). I builds like 90%
+> >>>>> of my image, but fails building cmake-native. Or more accurately it
+> >>>>> fails do_configure while trying to build a small test program.
+> >>>>
+> >>>> Hi,
+> >>>>
+> >>>> I've pushed the patch onto my fork of the poky repo at
+> >>>> https://github.com/threexc/poky
+> >>>>
+> >>>> Let me know how your testing turns out - I am still running tests as
+> >>>> well, but it would be good to know how others' attempts turn out,
+> >>>> and more changes could still end up being necessary.
+> >>>>
+> >>> Your patch didn't apply clean on Gatesgarth, but fix seemd trivial.
+> >>> With this it builds cmake-native fine, thanks!
+> >>>
+> >>> You can find it here:
+> >>> https://github.com/htot/meta-intel-edison/commit/8abce2f6f752407c7b2831dabf37cc358ce55bc7
+> >>>
+> >>> I will check if any other build errors occurs, and if not will try to
+> >>> time image build with and without the patch to compare performance
+> >>> and see if it worth the effort.
+> >>
+> >> It works fine. To measure time I first built
+> >> https://github.com/htot/meta-intel-edison (gatesgarth), so everything
+> >> needed is downloaded and cached. Then prior to each run I `rm -rf out`
+> >> and `rm -rf bbcache/sstate-cache/*` to force everything to rebuild.
+> >> And then `time bitbake -k edison-image`
+> >>
+> >> With patch:
+> >> real    218m12,686s
+> >> user    0m24,058s
+> >> sys     0m4,379s
+> >>
+> >> Without:
+> >> real    219m36,944s
+> >> user    0m24,770s
+> >> sys     0m4,266s
+> >>
+> >> Strange, I expected more.
+>
+> I have a new machine now. I has 16 HT, but only 16GB RAM. So memory
+> starvation has now become a serious issue, especially when building
+> nodejs in parallel to nodejs-native.
+>
+> There are 2 issues:
+> 1 - nodejs tries to link 5 executables in parallel, each requires 4GB
+> RAM. This I solved by serializing the linker using `flock` for the
+> nodejs recipe.
+> 2 - nodejs starts 16 compile submakes and so does nodejs-native. Each is
+> between 0.5GB - 1GB RAM.
+>
+> For the 2nd problem the "Add shared make jobserver support" patch would
+> likely be effective. I've fixed it up for Kirkstone, but it is not working.
+>
+> I noted: since make v4.2 we need to use `--jobserver-auth=fifo:" + fifoname`
+>
+> But the real problem seems to be `if "BB_MAKEFIFO" in os.environ:` in
+> make-intercept fails, even though `self.cfgData.setVar("BB_MAKEFIFO",
+> fifoname)` succeeds in `def setup_make_fifo(self):`.
+>
+> So, either BB_MAKEFIFO is not yet created at make time, or no longer
+> exists.
+>
+> Confused again.
+>
+> > Hi Ferry,
+> >
+> > Thanks for the update.
+> >
+> > Trevor and I saw similar (lack of ) results.
+> >
+> > Trevor even trying getting kea, which uses 'make' to be done the
+> > 'configure' stage, for two builds in differect dirs. Then to run the two
+> >     'bitbake -c compile kea'
+> > with and with out the patch with the expectation that with the
+> > job server patch and the right number of jobs, the two builds would
+> > take longer. I don't know the exact timing but there was no
+> > noticeable difference.
+> >
+> > We did strace things to confirm that the make wrapper was being called
+> > and the actual make was being called by the wrapper. I suspect that
+> > the next thing we try will be to patch 'make' to log when the jobserver
+> > kicks in or to play with some make jobserver demo such as:
+> >     https://github.com/olsner/jobclient
+> > to get some experience with how things are supposed to work and
+> > to be able to strace a successful use of the job server feature.
+> >
+> > A little RTFM / UTSL may also be required.
+> >
+> > ../Randy
+> >
+> >
+> >>
+> >> This is on 4 core/8ht i7-3770 CPU @ 3.40GHz with 16Gb RAM and nodejs
+> >> restricted to -j 2 (so that alone takes ~ 60min to build).
+> >>
+> >>>> - Trevor
+> >>>>
+> >>>>>
+> >>>>> Ferry
+> >>>>>
+> >>>>>
+> >>>>>
+> >>
+> >>
+> >>
+> >>
+> >
+> >
+> >
+> >
+> >
+> >
+>
+>
+>
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#58896): https://lists.yoctoproject.org/g/yocto/message/58896
+> Mute This Topic: https://lists.yoctoproject.org/mt/82015730/1686489
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+>
+
+
+^ permalink raw reply	[flat|nested] 53+ messages in thread
+* Re: [yocto] bitbake controlling memory use
+  2023-01-03 14:18                               ` [yocto] " Alexander Kanavin
+@ 2023-01-03 14:29                                 ` Ferry Toth
+  2023-01-03 14:36                                   ` Quentin Schulz
+  2023-01-03 15:44                                   ` Martin Jansa
+  0 siblings, 2 replies; 53+ messages in thread
+From: Ferry Toth @ 2023-01-03 14:29 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: yocto
+
+Hi Alex,
+
+Op 03-01-2023 om 15:18 schreef Alexander Kanavin:
+> I have to note that even the most expensive 16 Gb RAM module is less
+> than 100 Euro, and can be obtained for half that much. Surely you
+> value your time more than that?
+
+Of course. And if I didn't I could reduce the number of `PARALLEL_MAKE`.
+
+But I have also seen bitbake attempting to build nodejs, nodejs-native 
+and binutils in parallel.
+
+I think by default there are 4 tasks, with 16 threads, each could 
+require 1GB RAM. Would you say, in such a case Yocto requires 64GB RAM?
+
+And with increasing #cores it gets worse.
+
+Not that it is too expensive to throw hardware at it, but it seems to be 
+a fundamental problem that I would like to resolve. In my spare time of 
+course.
+
+> Alex
+>
+> On Tue, 3 Jan 2023 at 15:15, Ferry Toth <fntoth@gmail.com> wrote:
+>> Op 13-06-2021 om 02:38 schreef Randy MacLeod:
+>>> On 2021-06-12 12:31 p.m., Ferry Toth wrote:
+>>>> Hi
+>>>>
+>>>> Op 10-06-2021 om 22:35 schreef Ferry Toth:
+>>>>> Hi,
+>>>>>
+>>>>> Op 10-06-2021 om 21:06 schreef Trevor Gamblin:
+>>>>>>
+>>>>>> On 2021-06-10 5:22 a.m., Ferry Toth wrote:
+>>>>>>> **[Please note: This e-mail is from an EXTERNAL e-mail address]
+>>>>>>>
+>>>>>>> Hi Trevor,
+>>>>>>>
+>>>>>>> Gmane is really messing things up here, sorry about that. I need to
+>>>>>>> create a new thread I'm afraid.
+>>>>>>>
+>>>>>>> I'd like to your reworked patch.
+>>>>>>>
+>>>>>>> But note, I reworked it too (but maybe wrongly). I builds like 90%
+>>>>>>> of my image, but fails building cmake-native. Or more accurately it
+>>>>>>> fails do_configure while trying to build a small test program.
+>>>>>> Hi,
+>>>>>>
+>>>>>> I've pushed the patch onto my fork of the poky repo at
+>>>>>> https://github.com/threexc/poky
+>>>>>>
+>>>>>> Let me know how your testing turns out - I am still running tests as
+>>>>>> well, but it would be good to know how others' attempts turn out,
+>>>>>> and more changes could still end up being necessary.
+>>>>>>
+>>>>> Your patch didn't apply clean on Gatesgarth, but fix seemd trivial.
+>>>>> With this it builds cmake-native fine, thanks!
+>>>>>
+>>>>> You can find it here:
+>>>>> https://github.com/htot/meta-intel-edison/commit/8abce2f6f752407c7b2831dabf37cc358ce55bc7
+>>>>>
+>>>>> I will check if any other build errors occurs, and if not will try to
+>>>>> time image build with and without the patch to compare performance
+>>>>> and see if it worth the effort.
+>>>> It works fine. To measure time I first built
+>>>> https://github.com/htot/meta-intel-edison (gatesgarth), so everything
+>>>> needed is downloaded and cached. Then prior to each run I `rm -rf out`
+>>>> and `rm -rf bbcache/sstate-cache/*` to force everything to rebuild.
+>>>> And then `time bitbake -k edison-image`
+>>>>
+>>>> With patch:
+>>>> real    218m12,686s
+>>>> user    0m24,058s
+>>>> sys     0m4,379s
+>>>>
+>>>> Without:
+>>>> real    219m36,944s
+>>>> user    0m24,770s
+>>>> sys     0m4,266s
+>>>>
+>>>> Strange, I expected more.
+>> I have a new machine now. I has 16 HT, but only 16GB RAM. So memory
+>> starvation has now become a serious issue, especially when building
+>> nodejs in parallel to nodejs-native.
+>>
+>> There are 2 issues:
+>> 1 - nodejs tries to link 5 executables in parallel, each requires 4GB
+>> RAM. This I solved by serializing the linker using `flock` for the
+>> nodejs recipe.
+>> 2 - nodejs starts 16 compile submakes and so does nodejs-native. Each is
+>> between 0.5GB - 1GB RAM.
+>>
+>> For the 2nd problem the "Add shared make jobserver support" patch would
+>> likely be effective. I've fixed it up for Kirkstone, but it is not working.
+>>
+>> I noted: since make v4.2 we need to use `--jobserver-auth=fifo:" + fifoname`
+>>
+>> But the real problem seems to be `if "BB_MAKEFIFO" in os.environ:` in
+>> make-intercept fails, even though `self.cfgData.setVar("BB_MAKEFIFO",
+>> fifoname)` succeeds in `def setup_make_fifo(self):`.
+>>
+>> So, either BB_MAKEFIFO is not yet created at make time, or no longer
+>> exists.
+>>
+>> Confused again.
+>>
+>>> Hi Ferry,
+>>>
+>>> Thanks for the update.
+>>>
+>>> Trevor and I saw similar (lack of ) results.
+>>>
+>>> Trevor even trying getting kea, which uses 'make' to be done the
+>>> 'configure' stage, for two builds in differect dirs. Then to run the two
+>>>      'bitbake -c compile kea'
+>>> with and with out the patch with the expectation that with the
+>>> job server patch and the right number of jobs, the two builds would
+>>> take longer. I don't know the exact timing but there was no
+>>> noticeable difference.
+>>>
+>>> We did strace things to confirm that the make wrapper was being called
+>>> and the actual make was being called by the wrapper. I suspect that
+>>> the next thing we try will be to patch 'make' to log when the jobserver
+>>> kicks in or to play with some make jobserver demo such as:
+>>>      https://github.com/olsner/jobclient
+>>> to get some experience with how things are supposed to work and
+>>> to be able to strace a successful use of the job server feature.
+>>>
+>>> A little RTFM / UTSL may also be required.
+>>>
+>>> ../Randy
+>>>
+>>>
+>>>> This is on 4 core/8ht i7-3770 CPU @ 3.40GHz with 16Gb RAM and nodejs
+>>>> restricted to -j 2 (so that alone takes ~ 60min to build).
+>>>>
+>>>>>> - Trevor
+>>>>>>
+>>>>>>> Ferry
+>>>>>>>
+>>>>>>>
+>>>>>>>
+>>>>
+>>>>
+>>>>
+>>>
+>>>
+>>>
+>>>
+>>>
+>>
+>>
+>> -=-=-=-=-=-=-=-=-=-=-=-
+>> Links: You receive all messages sent to this group.
+>> View/Reply Online (#58896): https://lists.yoctoproject.org/g/yocto/message/58896
+>> Mute This Topic: https://lists.yoctoproject.org/mt/82015730/1686489
+>> Group Owner: yocto+owner@lists.yoctoproject.org
+>> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [alex.kanavin@gmail.com]
+>> -=-=-=-=-=-=-=-=-=-=-=-
+>>
+
+
+^ permalink raw reply	[flat|nested] 53+ messages in thread
+* Re: [yocto] bitbake controlling memory use
+  2023-01-03 14:29                                 ` Ferry Toth
+@ 2023-01-03 14:36                                   ` Quentin Schulz
+  2023-01-03 14:41                                     ` Ferry Toth
+  2023-01-03 15:44                                   ` Martin Jansa
+  1 sibling, 1 reply; 53+ messages in thread
+From: Quentin Schulz @ 2023-01-03 14:36 UTC (permalink / raw)
+  To: Ferry Toth, Alexander Kanavin; +Cc: yocto
+
+Hi Ferry,
+
+On 1/3/23 15:29, Ferry Toth wrote:
+> Hi Alex,
+> 
+> Op 03-01-2023 om 15:18 schreef Alexander Kanavin:
+>> I have to note that even the most expensive 16 Gb RAM module is less
+>> than 100 Euro, and can be obtained for half that much. Surely you
+>> value your time more than that?
+> 
+> Of course. And if I didn't I could reduce the number of `PARALLEL_MAKE`.
+> 
+> But I have also seen bitbake attempting to build nodejs, nodejs-native 
+> and binutils in parallel.
+> 
+> I think by default there are 4 tasks, with 16 threads, each could 
+> require 1GB RAM. Would you say, in such a case Yocto requires 64GB RAM?
+> 
+> And with increasing #cores it gets worse.
+> 
+> Not that it is too expensive to throw hardware at it, but it seems to be 
+> a fundamental problem that I would like to resolve. In my spare time of 
+> course.
+> 
+
+Just to add that bitbake now supports pressure thresholds (since 
+Kirkstone release I believe): 
+https://docs.yoctoproject.org/bitbake/bitbake-user-manual/bitbake-user-manual-ref-variables.html#term-BB_PRESSURE_MAX_MEMORY
+
+If your recipes put enough pressure on RAM before one or two of nodejs, 
+nodejs-native and binutils gets scheduled, it would prevent that. 
+However I believe if the timing is just right (unfortunate) and there's 
+not enough pressure when all three recipes do_compile start, they would 
+all start and you would have the same issue.
+
+Cheers,
+Quentin
+
+
+^ permalink raw reply	[flat|nested] 53+ messages in thread
+* Re: [yocto] bitbake controlling memory use
+  2023-01-03 14:36                                   ` Quentin Schulz
+@ 2023-01-03 14:41                                     ` Ferry Toth
+  2023-01-03 15:03                                       ` Janne Kiiskila
+  0 siblings, 1 reply; 53+ messages in thread
+From: Ferry Toth @ 2023-01-03 14:41 UTC (permalink / raw)
+  To: Quentin Schulz, Alexander Kanavin; +Cc: yocto
+
+Hi Quentin,
+
+Op 03-01-2023 om 15:36 schreef Quentin Schulz:
+> Hi Ferry,
+>
+> On 1/3/23 15:29, Ferry Toth wrote:
+>> Hi Alex,
+>>
+>> Op 03-01-2023 om 15:18 schreef Alexander Kanavin:
+>>> I have to note that even the most expensive 16 Gb RAM module is less
+>>> than 100 Euro, and can be obtained for half that much. Surely you
+>>> value your time more than that?
+>>
+>> Of course. And if I didn't I could reduce the number of `PARALLEL_MAKE`.
+>>
+>> But I have also seen bitbake attempting to build nodejs, 
+>> nodejs-native and binutils in parallel.
+>>
+>> I think by default there are 4 tasks, with 16 threads, each could 
+>> require 1GB RAM. Would you say, in such a case Yocto requires 64GB RAM?
+>>
+>> And with increasing #cores it gets worse.
+>>
+>> Not that it is too expensive to throw hardware at it, but it seems to 
+>> be a fundamental problem that I would like to resolve. In my spare 
+>> time of course.
+>>
+>
+> Just to add that bitbake now supports pressure thresholds (since 
+> Kirkstone release I believe): 
+> https://docs.yoctoproject.org/bitbake/bitbake-user-manual/bitbake-user-manual-ref-variables.html#term-BB_PRESSURE_MAX_MEMORY
+>
+> If your recipes put enough pressure on RAM before one or two of 
+> nodejs, nodejs-native and binutils gets scheduled, it would prevent 
+> that. However I believe if the timing is just right (unfortunate) and 
+> there's not enough pressure when all three recipes do_compile start, 
+> they would all start and you would have the same issue.
+>
+Exactly
+> Cheers,
+> Quentin
+
+
+^ permalink raw reply	[flat|nested] 53+ messages in thread
+* RE: [yocto] bitbake controlling memory use
+  2023-01-03 14:41                                     ` Ferry Toth
+@ 2023-01-03 15:03                                       ` Janne Kiiskila
+  2023-01-03 15:12                                         ` Ferry Toth
+  0 siblings, 1 reply; 53+ messages in thread
+From: Janne Kiiskila @ 2023-01-03 15:03 UTC (permalink / raw)
+  To: fntoth, Quentin Schulz, Alexander Kanavin; +Cc: yocto
+
+Hei,
+
+Is not the easiest solution to build the actual full build in steps, rather than build the whole thing?
+So, instead of doing a 
+
+full bitbake <image> 
+
+Do
+
+bitbake nodejs
+bitbake binutils
+bitbake rust (if you happen to need it)
+
+and only after that do
+
+bitbake <image>
+
+That way you can control the memory load and build it piecemeal to avoid out-of-memory situations.
+
+For cheapness of memory - it's not always that straight forward,
+a) some cloud build machines might go insanely up in price, if you add memory (it usually then adds also cores) OR
+b) some laptops etc. might simply not have any memory slots available, so you can't expand even if you want.
+
+Best Regards,
+
+
+Janne Kiiskilä
+
+
+-----Original Message-----
+From: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org> On Behalf Of Ferry Toth via lists.yoctoproject.org
+Sent: tiistai 3. tammikuuta 2023 16.41
+To: Quentin Schulz <quentin.schulz@theobroma-systems.com>; Alexander Kanavin <alex.kanavin@gmail.com>
+Cc: yocto@lists.yoctoproject.org
+Subject: Re: [yocto] bitbake controlling memory use
+
+Hi Quentin,
+
+Op 03-01-2023 om 15:36 schreef Quentin Schulz:
+> Hi Ferry,
+>
+> On 1/3/23 15:29, Ferry Toth wrote:
+>> Hi Alex,
+>>
+>> Op 03-01-2023 om 15:18 schreef Alexander Kanavin:
+>>> I have to note that even the most expensive 16 Gb RAM module is less 
+>>> than 100 Euro, and can be obtained for half that much. Surely you 
+>>> value your time more than that?
+>>
+>> Of course. And if I didn't I could reduce the number of `PARALLEL_MAKE`.
+>>
+>> But I have also seen bitbake attempting to build nodejs, 
+>> nodejs-native and binutils in parallel.
+>>
+>> I think by default there are 4 tasks, with 16 threads, each could 
+>> require 1GB RAM. Would you say, in such a case Yocto requires 64GB RAM?
+>>
+>> And with increasing #cores it gets worse.
+>>
+>> Not that it is too expensive to throw hardware at it, but it seems to 
+>> be a fundamental problem that I would like to resolve. In my spare 
+>> time of course.
+>>
+>
+> Just to add that bitbake now supports pressure thresholds (since 
+> Kirkstone release I believe):
+> https://docs.yoctoproject.org/bitbake/bitbake-user-manual/bitbake-user
+> -manual-ref-variables.html#term-BB_PRESSURE_MAX_MEMORY
+>
+> If your recipes put enough pressure on RAM before one or two of 
+> nodejs, nodejs-native and binutils gets scheduled, it would prevent 
+> that. However I believe if the timing is just right (unfortunate) and 
+> there's not enough pressure when all three recipes do_compile start, 
+> they would all start and you would have the same issue.
+>
+Exactly
+> Cheers,
+> Quentin
+
+^ permalink raw reply	[flat|nested] 53+ messages in thread
+* Re: [yocto] bitbake controlling memory use
+  2023-01-03 15:03                                       ` Janne Kiiskila
+@ 2023-01-03 15:12                                         ` Ferry Toth
+  2023-01-03 15:24                                           ` Alexander Kanavin
+       [not found]                                           ` <1736D5DCC66BC3DE.4716@lists.yoctoproject.org>
+  0 siblings, 2 replies; 53+ messages in thread
+From: Ferry Toth @ 2023-01-03 15:12 UTC (permalink / raw)
+  To: Janne Kiiskila, Quentin Schulz, Alexander Kanavin; +Cc: yocto
+
+Hi Janne,
+
+Op 03-01-2023 om 16:03 schreef Janne Kiiskila:
+> Hei,
+>
+> Is not the easiest solution to build the actual full build in steps, rather than build the whole thing?
+> So, instead of doing a
+
+Sure, that is easy enough. Setting PARALLEL_MAKE is easy enough too.
+
+I was hoping to find a fundamental solution.
+
+> full bitbake <image>
+>
+> Do
+>
+> bitbake nodejs
+> bitbake binutils
+> bitbake rust (if you happen to need it)
+Yeah, building rust is a resource hog too. I didn't build that for a 
+long time.
+> and only after that do
+>
+> bitbake <image>
+>
+> That way you can control the memory load and build it piecemeal to avoid out-of-memory situations.
+>
+> For cheapness of memory - it's not always that straight forward,
+> a) some cloud build machines might go insanely up in price, if you add memory (it usually then adds also cores) OR
+> b) some laptops etc. might simply not have any memory slots available, so you can't expand even if you want.
+
+Yes, and I note that many people trying to build my image 
+(meta-intel-edison) do so from a virtual machine as they only have a 
+windows host.
+
+And then there are even more limitations.
+
+> Best Regards,
+>
+>
+> Janne Kiiskilä
+>
+>
+> -----Original Message-----
+> From: yocto@lists.yoctoproject.org <yocto@lists.yoctoproject.org> On Behalf Of Ferry Toth via lists.yoctoproject.org
+> Sent: tiistai 3. tammikuuta 2023 16.41
+> To: Quentin Schulz <quentin.schulz@theobroma-systems.com>; Alexander Kanavin <alex.kanavin@gmail.com>
+> Cc: yocto@lists.yoctoproject.org
+> Subject: Re: [yocto] bitbake controlling memory use
+>
+> Hi Quentin,
+>
+> Op 03-01-2023 om 15:36 schreef Quentin Schulz:
+>> Hi Ferry,
+>>
+>> On 1/3/23 15:29, Ferry Toth wrote:
+>>> Hi Alex,
+>>>
+>>> Op 03-01-2023 om 15:18 schreef Alexander Kanavin:
+>>>> I have to note that even the most expensive 16 Gb RAM module is less
+>>>> than 100 Euro, and can be obtained for half that much. Surely you
+>>>> value your time more than that?
+>>> Of course. And if I didn't I could reduce the number of `PARALLEL_MAKE`.
+>>>
+>>> But I have also seen bitbake attempting to build nodejs,
+>>> nodejs-native and binutils in parallel.
+>>>
+>>> I think by default there are 4 tasks, with 16 threads, each could
+>>> require 1GB RAM. Would you say, in such a case Yocto requires 64GB RAM?
+>>>
+>>> And with increasing #cores it gets worse.
+>>>
+>>> Not that it is too expensive to throw hardware at it, but it seems to
+>>> be a fundamental problem that I would like to resolve. In my spare
+>>> time of course.
+>>>
+>> Just to add that bitbake now supports pressure thresholds (since
+>> Kirkstone release I believe):
+>> https://docs.yoctoproject.org/bitbake/bitbake-user-manual/bitbake-user
+>> -manual-ref-variables.html#term-BB_PRESSURE_MAX_MEMORY
+>>
+>> If your recipes put enough pressure on RAM before one or two of
+>> nodejs, nodejs-native and binutils gets scheduled, it would prevent
+>> that. However I believe if the timing is just right (unfortunate) and
+>> there's not enough pressure when all three recipes do_compile start,
+>> they would all start and you would have the same issue.
+>>
+> Exactly
+>> Cheers,
+>> Quentin
+
+
+^ permalink raw reply	[flat|nested] 53+ messages in thread
+* Re: [yocto] bitbake controlling memory use
+  2023-01-03 15:12                                         ` Ferry Toth
+@ 2023-01-03 15:24                                           ` Alexander Kanavin
+       [not found]                                           ` <1736D5DCC66BC3DE.4716@lists.yoctoproject.org>
+  1 sibling, 0 replies; 53+ messages in thread
+From: Alexander Kanavin @ 2023-01-03 15:24 UTC (permalink / raw)
+  To: Ferry Toth; +Cc: Janne Kiiskila, Quentin Schulz, yocto
+
+On Tue, 3 Jan 2023 at 16:12, Ferry Toth <fntoth@gmail.com> wrote:
+> Yes, and I note that many people trying to build my image
+> (meta-intel-edison) do so from a virtual machine as they only have a
+> windows host.
+
+Sorry guys, but this is venturing into the ridiculous. If you embark
+on building a whole Linux distribution, you need to start with the
+correct tools for it.
+
+Alex
+
+
+^ permalink raw reply	[flat|nested] 53+ messages in thread
+* Re: [yocto] bitbake controlling memory use
+       [not found]                                           ` <1736D5DCC66BC3DE.4716@lists.yoctoproject.org>
+@ 2023-01-03 15:37                                             ` Alexander Kanavin
+  2023-01-03 15:58                                               ` Ferry Toth
+  0 siblings, 1 reply; 53+ messages in thread
+From: Alexander Kanavin @ 2023-01-03 15:37 UTC (permalink / raw)
+  To: alex.kanavin; +Cc: Ferry Toth, Janne Kiiskila, Quentin Schulz, yocto
+
+On Tue, 3 Jan 2023 at 16:24, Alexander Kanavin via
+lists.yoctoproject.org <alex.kanavin=gmail.com@lists.yoctoproject.org>
+wrote:
+> Sorry guys, but this is venturing into the ridiculous. If you embark
+> on building a whole Linux distribution, you need to start with the
+> correct tools for it.
+
+I mean, one can use a virtual machine inside a windows laptop if
+that's all they got. But then you should provide them with a sstate
+cache server, which fulfils the same role as binary package feeds on
+traditional Linux distros in that case.
+
+Alex
+
+
+^ permalink raw reply	[flat|nested] 53+ messages in thread
+* Re: [yocto] bitbake controlling memory use
+  2023-01-03 14:29                                 ` Ferry Toth
+  2023-01-03 14:36                                   ` Quentin Schulz
+@ 2023-01-03 15:44                                   ` Martin Jansa
+  1 sibling, 0 replies; 53+ messages in thread
+From: Martin Jansa @ 2023-01-03 15:44 UTC (permalink / raw)
+  To: Ferry Toth; +Cc: Alexander Kanavin, yocto
+
+[-- Attachment #1: Type: text/plain, Size: 1923 bytes --]
+
+On Tue, Jan 3, 2023 at 3:29 PM Ferry Toth <fntoth@gmail.com> wrote:
+
+> Op 03-01-2023 om 15:18 schreef Alexander Kanavin:
+> > I have to note that even the most expensive 16 Gb RAM module is less
+> > than 100 Euro, and can be obtained for half that much. Surely you
+> > value your time more than that?
+>
+> Of course. And if I didn't I could reduce the number of `PARALLEL_MAKE`.
+>
+> But I have also seen bitbake attempting to build nodejs, nodejs-native
+> and binutils in parallel.
+>
+> I think by default there are 4 tasks, with 16 threads, each could
+> require 1GB RAM. Would you say, in such a case Yocto requires 64GB RAM?
+>
+> And with increasing #cores it gets worse.
+>
+> Not that it is too expensive to throw hardware at it, but it seems to be
+> a fundamental problem that I would like to resolve. In my spare time of
+> course.
+>
+
+Hi Ferry,
+
+don't get discouraged from working on jobserver related issues by some
+remarks. Yes your HW configuration is a bit extreme, but similar issues are
+easily reproducible on beefier HW as well (seeing it often enough on 32c
+64t AMD 3970X with 128G ram).
+
+bitbake pressure regulation helps a bit, but it's often triggered too late
+and also a bit too coarse grained, when single chromium do_compile task can
+take over an hour.
+
+I agree that make job server (or there is similar solution proposed for
+ninja from Andrei
+https://gitlab.eclipse.org/eclipse/oniro-core/oniro/-/merge_requests/196/commits
+) should be more efficient solution (as it will hold off additional
+"shorter" jobs only during the "critical" time when some other jobs take
+all resources - while bitbake pressure cannot know that triggering
+nodejs+nodejs-native+chromium do_compile task might end badly, because the
+pressure was still low when these 3 were queued for execution).
+
+Also check this thread about pressure regulation in bitbake-devel:
+https://lists.openembedded.org/g/bitbake-devel/message/14178
+
+Cheers,
+
+[-- Attachment #2: Type: text/html, Size: 2639 bytes --]
+
+^ permalink raw reply	[flat|nested] 53+ messages in thread
+* Re: [yocto] bitbake controlling memory use
+  2023-01-03 15:37                                             ` Alexander Kanavin
+@ 2023-01-03 15:58                                               ` Ferry Toth
+  2023-01-03 17:33                                                 ` Alexander Kanavin
+  0 siblings, 1 reply; 53+ messages in thread
+From: Ferry Toth @ 2023-01-03 15:58 UTC (permalink / raw)
+  To: Alexander Kanavin; +Cc: Janne Kiiskila, Quentin Schulz, yocto
+
+Hi Alex,
+
+Op 03-01-2023 om 16:37 schreef Alexander Kanavin:
+> On Tue, 3 Jan 2023 at 16:24, Alexander Kanavin via
+> lists.yoctoproject.org <alex.kanavin=gmail.com@lists.yoctoproject.org>
+> wrote:
+>> Sorry guys, but this is venturing into the ridiculous. If you embark
+>> on building a whole Linux distribution, you need to start with the
+>> correct tools for it.
+> I mean, one can use a virtual machine inside a windows laptop if
+> that's all they got. But then you should provide them with a sstate
+> cache server, which fulfils the same role as binary package feeds on
+> traditional Linux distros in that case.
+
+You are completely right for professional use cases. Another way would 
+be to give ssh access to a sufficiently large build server.
+
+But the Yocto project (to me) is also the correct tool for smaller 
+(hobbyist?) projects. These smaller projects don't build the world of 
+packages and are typically built on a private laptop (bwugh) or desktop. 
+Some of these packages do require a lot of resources> nodejs is one, 
+rust another. That's not the fault of Yocto of course.
+
+What these projects show is that bitbake is a bit enthusiastic in some 
+cases and tries to build multiple packages simultaneously that are 
+already hard to do by themselves. I think it's a fundamental, but not 
+necessarily a high priority problem.
+
+I know you don't want to spend time on this. So don't. Others may have 
+an interest or a tip to improve Yocto in this area.
+
+I'm just trying to get an old patch from Richard Purdie to work 
+(http://git.yoctoproject.org/cgit.cgi/poky-contrib/commit/?h=rpurdie/wipqueue4&id=d66a327fb6189db5de8bc489859235dcba306237) 
+with later fixes by Trevor Gamblin.
+
+Or alternatively something based on https://github.com/olsner/jobclient.
+
+> Alex
+
+
+^ permalink raw reply	[flat|nested] 53+ messages in thread
+* Re: [yocto] bitbake controlling memory use
+  2023-01-03 15:58                                               ` Ferry Toth
+@ 2023-01-03 17:33                                                 ` Alexander Kanavin
+  2023-01-08 22:13                                                   ` Ferry Toth
+  0 siblings, 1 reply; 53+ messages in thread
+From: Alexander Kanavin @ 2023-01-03 17:33 UTC (permalink / raw)
+  To: Ferry Toth; +Cc: Janne Kiiskila, Quentin Schulz, yocto
+
+On Tue, 3 Jan 2023 at 16:58, Ferry Toth <fntoth@gmail.com> wrote:
+
+> I know you don't want to spend time on this. So don't. Others may have
+> an interest or a tip to improve Yocto in this area.
+>
+> I'm just trying to get an old patch from Richard Purdie to work
+> (http://git.yoctoproject.org/cgit.cgi/poky-contrib/commit/?h=rpurdie/wipqueue4&id=d66a327fb6189db5de8bc489859235dcba306237)
+> with later fixes by Trevor Gamblin.
+>
+> Or alternatively something based on https://github.com/olsner/jobclient.
+
+By all means please do. Everyone will benefit from teaching make to
+abstain from starting new processes if RAM is tight, even people with
+xeon/epyc grade hardware. It's not that I don't want to spend time on
+this, it's simply that I do not have the time.
+
+Alex
+
+
+^ permalink raw reply	[flat|nested] 53+ messages in thread
+* Re: [yocto] bitbake controlling memory use
+  2023-01-03 17:33                                                 ` Alexander Kanavin
+@ 2023-01-08 22:13                                                   ` Ferry Toth
+  2023-01-09 10:39                                                     ` Alexander Kanavin
+  0 siblings, 1 reply; 53+ messages in thread
+From: Ferry Toth @ 2023-01-08 22:13 UTC (permalink / raw)
+  To: Alexander Kanavin
+  Cc: Janne Kiiskila, Quentin Schulz, yocto, trevor.gamblin,
+	richard.purdie, martin.jansa
+
+Hi,
+
+Just in case you are interested in the result.
+
+Op 03-01-2023 om 18:33 schreef Alexander Kanavin:
+> On Tue, 3 Jan 2023 at 16:58, Ferry Toth <fntoth@gmail.com> wrote:
+>
+>> I know you don't want to spend time on this. So don't. Others may have
+>> an interest or a tip to improve Yocto in this area.
+>>
+>> I'm just trying to get an old patch from Richard Purdie to work
+>> (http://git.yoctoproject.org/cgit.cgi/poky-contrib/commit/?h=rpurdie/wipqueue4&id=d66a327fb6189db5de8bc489859235dcba306237)
+>> with later fixes by Trevor Gamblin.
+
+I got Richards patch "Add shared make jobserver support 
+<https://github.com/htot/poky/commit/28fd4b9e6e60bdd07352827ec713510ae86a39c6>" 
+working again. It was a bit more work then last time, it was broken in 3 
+places (poky, make and python). Find it here: 
+https://github.com/htot/poky/commits/kirkstone
+
+It works by making each make believe it is a submake, while the named 
+pipe holding the execution tokens is created by bitbake.
+
+Of course as is it only limits number of threads started by make, not 
+ninja. On my machine (16 threads) while compiling (linux, nodejs, 
+nodejs-native etc.) simultaneously this limits memory consumption to 
+~14GB RAM. A little less then 1GB/thread.
+
+Linking nodejs is another story. Each thread uses 4-5GB, and the recipe 
+allows 5 threads simultaneously. With a nodejs_%.bbappend:
+
+EXTRA_OEMAKE:prepend = "\
+LINK='flock /tmp ${CXX}' \
+"
+only one thread will be linked simultaneously.
+
+This brought my image build time from 3h > 1u47m (that is after removing 
+out and sstate, not bbcache so excluding download time for sources).
+
+>> Or alternatively something based on https://github.com/olsner/jobclient.
+
+In principle we could use jobclient to start other programs then make, 
+but for meta-intel-edison I didn't see any that would benefit from this.
+
+It would be nice if ninja could use the same named pipe for the 
+execution tokens as make, that might be for another holiday.
+
+> By all means please do. Everyone will benefit from teaching make to
+> abstain from starting new processes if RAM is tight, even people with
+> xeon/epyc grade hardware. It's not that I don't want to spend time on
+> this, it's simply that I do not have the time.
+
+Ah, yes, that is a known problem. Like I said, this was for me just a 
+little holiday project.
+
+Now it works I'm not sure what to do. Richard marked the original patch 
+as WIP. Maybe it's not appropriate for including into poky? If so I 
+wouldn't mind carrying it in meta-intel-edison.
+
+Or may be with a little work (from me) and a run on the CI servers we 
+could make it go in?
+
+> Alex
+
+
+^ permalink raw reply	[flat|nested] 53+ messages in thread
+* Re: [yocto] bitbake controlling memory use
+  2023-01-08 22:13                                                   ` Ferry Toth
+@ 2023-01-09 10:39                                                     ` Alexander Kanavin
+  2023-01-09 10:43                                                       ` Richard Purdie
+  2023-01-09 10:49                                                       ` Ferry Toth
+  0 siblings, 2 replies; 53+ messages in thread
+From: Alexander Kanavin @ 2023-01-09 10:39 UTC (permalink / raw)
+  To: Ferry Toth
+  Cc: Janne Kiiskila, Quentin Schulz, yocto, trevor.gamblin,
+	richard.purdie, martin.jansa
+
+On Sun, 8 Jan 2023 at 23:13, Ferry Toth <fntoth@gmail.com> wrote:
+
+> Now it works I'm not sure what to do. Richard marked the original patch
+> as WIP. Maybe it's not appropriate for including into poky? If so I
+> wouldn't mind carrying it in meta-intel-edison.
+>
+> Or may be with a little work (from me) and a run on the CI servers we
+> could make it go in?
+
+I'd rather teach make/ninja upstream to watch memory consumption
+and/or host pressure directly (e.g. similar to how it handles -l). And
+offer any resulting patches to upstream first.
+
+Alex
+
+
+^ permalink raw reply	[flat|nested] 53+ messages in thread
+* Re: [yocto] bitbake controlling memory use
+  2023-01-09 10:39                                                     ` Alexander Kanavin
+@ 2023-01-09 10:43                                                       ` Richard Purdie
+  2023-01-09 10:54                                                         ` Ferry Toth
+  2023-01-09 10:49                                                       ` Ferry Toth
+  1 sibling, 1 reply; 53+ messages in thread
+From: Richard Purdie @ 2023-01-09 10:43 UTC (permalink / raw)
+  To: Alexander Kanavin, Ferry Toth
+  Cc: Janne Kiiskila, Quentin Schulz, yocto, trevor.gamblin, martin.jansa
+
+On Mon, 2023-01-09 at 11:39 +0100, Alexander Kanavin wrote:
+> On Sun, 8 Jan 2023 at 23:13, Ferry Toth <fntoth@gmail.com> wrote:
+> 
+> > Now it works I'm not sure what to do. Richard marked the original patch
+> > as WIP. Maybe it's not appropriate for including into poky? If so I
+> > wouldn't mind carrying it in meta-intel-edison.
+> > 
+> > Or may be with a little work (from me) and a run on the CI servers we
+> > could make it go in?
+> 
+> I'd rather teach make/ninja upstream to watch memory consumption
+> and/or host pressure directly (e.g. similar to how it handles -l). And
+> offer any resulting patches to upstream first.
+
+Whilst teaching make/ninja about pressure is probably a nice idea, I
+think there is a use case for sharing the job pool between bitbake
+tasks rather than having a job pool per task since that scales badly.
+
+One issue that comes to mind with the patch is that it is currently
+writing into /tmp/ and we likely need to work out a better location for
+the job server fifo. Currently that would break things on the
+autobuilder as there are multiple builds on a given host.
+
+Cheers,
+
+Richard
+
+
+
+
+^ permalink raw reply	[flat|nested] 53+ messages in thread
+* Re: [yocto] bitbake controlling memory use
+  2023-01-09 10:39                                                     ` Alexander Kanavin
+  2023-01-09 10:43                                                       ` Richard Purdie
+@ 2023-01-09 10:49                                                       ` Ferry Toth
+  2023-01-10  1:57                                                         ` Randy MacLeod
+  1 sibling, 1 reply; 53+ messages in thread
+From: Ferry Toth @ 2023-01-09 10:49 UTC (permalink / raw)
+  To: Alexander Kanavin
+  Cc: Janne Kiiskila, Quentin Schulz, yocto, trevor.gamblin,
+	richard.purdie, martin.jansa
+
+Hi
+
+On 09-01-2023 11:39, Alexander Kanavin wrote:
+> On Sun, 8 Jan 2023 at 23:13, Ferry Toth <fntoth@gmail.com> wrote:
+>
+>> Now it works I'm not sure what to do. Richard marked the original patch
+>> as WIP. Maybe it's not appropriate for including into poky? If so I
+>> wouldn't mind carrying it in meta-intel-edison.
+>>
+>> Or may be with a little work (from me) and a run on the CI servers we
+>> could make it go in?
+> I'd rather teach make/ninja upstream to watch memory consumption
+> and/or host pressure directly (e.g. similar to how it handles -l). And
+> offer any resulting patches to upstream first.
+>
+> Alex
+
+Yeah, I'd rather teach the kernel to consider thrashing when scheduling 
+jobs. As is now any user process can slow down any other users process 
+and even the kernel itself to a standstill.
+
+But kernel developers consider those issues "orthogonal" (i.e. they 
+don't want to make the scheduler aware of io).
+
+
+
+^ permalink raw reply	[flat|nested] 53+ messages in thread
+* Re: [yocto] bitbake controlling memory use
+  2023-01-09 10:43                                                       ` Richard Purdie
+@ 2023-01-09 10:54                                                         ` Ferry Toth
+  2023-01-19 19:59                                                           ` Ferry Toth
+  0 siblings, 1 reply; 53+ messages in thread
+From: Ferry Toth @ 2023-01-09 10:54 UTC (permalink / raw)
+  To: Richard Purdie, Alexander Kanavin
+  Cc: Janne Kiiskila, Quentin Schulz, yocto, trevor.gamblin, martin.jansa
+
+[-- Attachment #1: Type: text/plain, Size: 1350 bytes --]
+
+Hi
+
+On 09-01-2023 11:43, Richard Purdie wrote:
+> On Mon, 2023-01-09 at 11:39 +0100, Alexander Kanavin wrote:
+>> On Sun, 8 Jan 2023 at 23:13, Ferry Toth<fntoth@gmail.com>  wrote:
+>>
+>>> Now it works I'm not sure what to do. Richard marked the original patch
+>>> as WIP. Maybe it's not appropriate for including into poky? If so I
+>>> wouldn't mind carrying it in meta-intel-edison.
+>>>
+>>> Or may be with a little work (from me) and a run on the CI servers we
+>>> could make it go in?
+>> I'd rather teach make/ninja upstream to watch memory consumption
+>> and/or host pressure directly (e.g. similar to how it handles -l). And
+>> offer any resulting patches to upstream first.
+> Whilst teaching make/ninja about pressure is probably a nice idea, I
+> think there is a use case for sharing the job pool between bitbake
+> tasks rather than having a job pool per task since that scales badly.
+>
+> One issue that comes to mind with the patch is that it is currently
+> writing into /tmp/ and we likely need to work out a better location for
+> the job server fifo. Currently that would break things on the
+> autobuilder as there are multiple builds on a given host.
+
+Ha, I didn't consider multiple bitbakes running simultaneously.
+
+Maybe the location /tmp is fine but we would need a unique (random?) 
+filename instead of makefifo?
+
+> Cheers,
+>
+> Richard
+>
+>
+
+[-- Attachment #2: Type: text/html, Size: 2280 bytes --]
+
+^ permalink raw reply	[flat|nested] 53+ messages in thread
+* Re: [yocto] bitbake controlling memory use
+  2023-01-09 10:49                                                       ` Ferry Toth
+@ 2023-01-10  1:57                                                         ` Randy MacLeod
+  2023-01-10  9:24                                                           ` Ferry Toth
+  0 siblings, 1 reply; 53+ messages in thread
+From: Randy MacLeod @ 2023-01-10  1:57 UTC (permalink / raw)
+  To: fntoth, Alexander Kanavin, contrib
+  Cc: Janne Kiiskila, Quentin Schulz, yocto, richard.purdie,
+	martin.jansa, Trevor Gamblin
+
+Add Zheng.
+Switch to Trevor's gmail since he might still be interested in this.
+
+On 2023-01-09 05:49, Ferry Toth via lists.yoctoproject.org wrote:
+> Hi
+> 
+> On 09-01-2023 11:39, Alexander Kanavin wrote:
+>> On Sun, 8 Jan 2023 at 23:13, Ferry Toth <fntoth@gmail.com> wrote:
+>>
+>>> Now it works I'm not sure what to do. Richard marked the original patch
+>>> as WIP. Maybe it's not appropriate for including into poky? If so I
+>>> wouldn't mind carrying it in meta-intel-edison.
+>>>
+>>> Or may be with a little work (from me) and a run on the CI servers we
+>>> could make it go in?
+>> I'd rather teach make/ninja upstream to watch memory consumption
+>> and/or host pressure directly (e.g. similar to how it handles -l). And
+>> offer any resulting patches to upstream first.
+
+Zheng and I *started* on that for make over the Xmas holiday.
+See the (poorly formatted) thread:
+   Add support for limiting CPU pressure, contrib, 2022/12/20
+in:
+    https://lists.gnu.org/archive/html/bug-make/2022-12/threads.html
+
+There were mixed reviews upstream with the maintainer, Paul Smith,
+seeming to prefer that we investigate the job server approach and the 
+current
+load averaging. I'll happily try to find time to play with Ferry's job 
+server work.
+
+I've been thinking about the various workflows and as Richard said, it seems
+that for many people who only do one build at a time, the job server and 
+maybe
+a little linker restraint, would be all that's needed. For activities such
+as YP AB, we could teach the main job server to also look at /proc/pressure
+as a way to limit the pool size we could make a meta-jobserver for those 
+who don't
+want/need to worry about non-compile tasks such as tests and build clean-up.
+
+
+Note that cargo has the notion of a job server:
+    https://github.com/rust-lang/cargo/issues/1744
+    https://github.com/rust-lang/cargo/pull/4110
+
+
+and ninja has an open issue:
+    https://github.com/ninja-build/ninja/issues/1139
+and an initial implementation:
+    https://github.com/stefanb2/ninja/tree/topic-jobserver-fifo
+
+What other build tools are in need of regulation and/or job server patches?
+
+../Randy
+
+
+>>
+>> Alex
+> 
+> Yeah, I'd rather teach the kernel to consider thrashing when scheduling 
+> jobs. As is now any user process can slow down any other users process 
+> and even the kernel itself to a standstill.
+> 
+> But kernel developers consider those issues "orthogonal" (i.e. they 
+> don't want to make the scheduler aware of io).
+> 
+> 
+> 
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#58943): https://lists.yoctoproject.org/g/yocto/message/58943
+> Mute This Topic: https://lists.yoctoproject.org/mt/82015730/3616765
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub [randy.macleod@windriver.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+> 
+
+-- 
+# Randy MacLeod
+# Wind River Linux
+
+
+
+^ permalink raw reply	[flat|nested] 53+ messages in thread
+* Re: [yocto] bitbake controlling memory use
+  2023-01-10  1:57                                                         ` Randy MacLeod
+@ 2023-01-10  9:24                                                           ` Ferry Toth
+  2023-01-14 22:33                                                             ` Ferry Toth
+  0 siblings, 1 reply; 53+ messages in thread
+From: Ferry Toth @ 2023-01-10  9:24 UTC (permalink / raw)
+  To: Randy MacLeod, Alexander Kanavin, contrib
+  Cc: Janne Kiiskila, Quentin Schulz, yocto, richard.purdie,
+	martin.jansa, Trevor Gamblin
+
+Hi,
+
+On 10-01-2023 02:57, Randy MacLeod wrote:
+> Add Zheng.
+> Switch to Trevor's gmail since he might still be interested in this.
+>
+> On 2023-01-09 05:49, Ferry Toth via lists.yoctoproject.org wrote:
+>> Hi
+>>
+>> On 09-01-2023 11:39, Alexander Kanavin wrote:
+>>> On Sun, 8 Jan 2023 at 23:13, Ferry Toth <fntoth@gmail.com> wrote:
+>>>
+>>>> Now it works I'm not sure what to do. Richard marked the original 
+>>>> patch
+>>>> as WIP. Maybe it's not appropriate for including into poky? If so I
+>>>> wouldn't mind carrying it in meta-intel-edison.
+>>>>
+>>>> Or may be with a little work (from me) and a run on the CI servers we
+>>>> could make it go in?
+>>> I'd rather teach make/ninja upstream to watch memory consumption
+>>> and/or host pressure directly (e.g. similar to how it handles -l). And
+>>> offer any resulting patches to upstream first.
+>
+> Zheng and I *started* on that for make over the Xmas holiday.
+> See the (poorly formatted) thread:
+>   Add support for limiting CPU pressure, contrib, 2022/12/20
+> in:
+> https://lists.gnu.org/archive/html/bug-make/2022-12/threads.html
+>
+> There were mixed reviews upstream with the maintainer, Paul Smith,
+> seeming to prefer that we investigate the job server approach and the 
+> current
+> load averaging. I'll happily try to find time to play with Ferry's job 
+> server work.
+>
+The work is actually Richard's. I only fixed what broke over time.
+> I've been thinking about the various workflows and as Richard said, it 
+> seems
+> that for many people who only do one build at a time, the job server 
+> and maybe
+> a little linker restraint, would be all that's needed. For activities 
+> such
+> as YP AB, we could teach the main job server to also look at 
+> /proc/pressure
+> as a way to limit the pool size we could make a meta-jobserver for 
+> those who don't
+> want/need to worry about non-compile tasks such as tests and build 
+> clean-up.
+>
+>
+> Note that cargo has the notion of a job server:
+>    https://github.com/rust-lang/cargo/issues/1744
+>    https://github.com/rust-lang/cargo/pull/4110
+>
+>
+> and ninja has an open issue:
+>    https://github.com/ninja-build/ninja/issues/1139
+> and an initial implementation:
+>    https://github.com/stefanb2/ninja/tree/topic-jobserver-fifo
+>
+> What other build tools are in need of regulation and/or job server 
+> patches?
+>
+What I read, gcc has already -flto=jobserver.
+
+Other (single threaded CPU intensive) might just be started from jobclient?
+
+> ../Randy
+>
+>
+>>>
+>>> Alex
+>>
+>> Yeah, I'd rather teach the kernel to consider thrashing when 
+>> scheduling jobs. As is now any user process can slow down any other 
+>> users process and even the kernel itself to a standstill.
+>>
+>> But kernel developers consider those issues "orthogonal" (i.e. they 
+>> don't want to make the scheduler aware of io).
+>>
+>>
+>>
+>> -=-=-=-=-=-=-=-=-=-=-=-
+>> Links: You receive all messages sent to this group.
+>> View/Reply Online (#58943): 
+>> https://lists.yoctoproject.org/g/yocto/message/58943
+>> Mute This Topic: https://lists.yoctoproject.org/mt/82015730/3616765
+>> Group Owner: yocto+owner@lists.yoctoproject.org
+>> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub 
+>> [randy.macleod@windriver.com]
+>> -=-=-=-=-=-=-=-=-=-=-=-
+>>
+>
+
+
+^ permalink raw reply	[flat|nested] 53+ messages in thread
+* Re: [yocto] bitbake controlling memory use
+  2023-01-10  9:24                                                           ` Ferry Toth
+@ 2023-01-14 22:33                                                             ` Ferry Toth
+  2023-08-28 12:56                                                               ` Martin Hundebøll
+  0 siblings, 1 reply; 53+ messages in thread
+From: Ferry Toth @ 2023-01-14 22:33 UTC (permalink / raw)
+  To: Randy MacLeod, Alexander Kanavin, contrib
+  Cc: Janne Kiiskila, Quentin Schulz, yocto, richard.purdie,
+	martin.jansa, Trevor Gamblin
+
+Hi,
+
+Op 10-01-2023 om 10:24 schreef Ferry Toth:
+> Hi,
+>
+> On 10-01-2023 02:57, Randy MacLeod wrote:
+>> Add Zheng.
+>> Switch to Trevor's gmail since he might still be interested in this.
+>>
+>> On 2023-01-09 05:49, Ferry Toth via lists.yoctoproject.org wrote:
+>>> Hi
+>>>
+>>> On 09-01-2023 11:39, Alexander Kanavin wrote:
+>>>> On Sun, 8 Jan 2023 at 23:13, Ferry Toth <fntoth@gmail.com> wrote:
+>>>>
+>>>>> Now it works I'm not sure what to do. Richard marked the original 
+>>>>> patch
+>>>>> as WIP. Maybe it's not appropriate for including into poky? If so I
+>>>>> wouldn't mind carrying it in meta-intel-edison.
+>>>>>
+>>>>> Or may be with a little work (from me) and a run on the CI servers we
+>>>>> could make it go in?
+>>>> I'd rather teach make/ninja upstream to watch memory consumption
+>>>> and/or host pressure directly (e.g. similar to how it handles -l). And
+>>>> offer any resulting patches to upstream first.
+>>
+As there is already a clone of ninja available with jobserver support 
+available I added another patch to update to that version and make an 
+intercept to actually pass the named pipe to ninja.
+
+Find it here: https://github.com/htot/poky/commits/kirkstone
+
+This makes both make and ninja threads running from a shared thread 
+pool. As cmake relies on ninja recipies are covered as well.
+
+I guess this takes care of the majority of recipes.
+
+In my case this new patch shaves no more then 1 minutes from my image 
+build time (1h46) as the recipes built using ninja are not consuming 
+that much memory (like nodejs). I hope others will benefit more.
+
+Todo: location of the pipe as mentioned by Richard
+
+>> Zheng and I *started* on that for make over the Xmas holiday.
+>> See the (poorly formatted) thread:
+>>   Add support for limiting CPU pressure, contrib, 2022/12/20
+>> in:
+>> https://lists.gnu.org/archive/html/bug-make/2022-12/threads.html
+>>
+>> There were mixed reviews upstream with the maintainer, Paul Smith,
+>> seeming to prefer that we investigate the job server approach and the 
+>> current
+>> load averaging. I'll happily try to find time to play with Ferry's 
+>> job server work.
+>>
+> The work is actually Richard's. I only fixed what broke over time.
+>> I've been thinking about the various workflows and as Richard said, 
+>> it seems
+>> that for many people who only do one build at a time, the job server 
+>> and maybe
+>> a little linker restraint, would be all that's needed. For activities 
+>> such
+>> as YP AB, we could teach the main job server to also look at 
+>> /proc/pressure
+>> as a way to limit the pool size we could make a meta-jobserver for 
+>> those who don't
+>> want/need to worry about non-compile tasks such as tests and build 
+>> clean-up.
+>>
+>>
+>> Note that cargo has the notion of a job server:
+>>    https://github.com/rust-lang/cargo/issues/1744
+>>    https://github.com/rust-lang/cargo/pull/4110
+>>
+>>
+>> and ninja has an open issue:
+>>    https://github.com/ninja-build/ninja/issues/1139
+>> and an initial implementation:
+>>    https://github.com/stefanb2/ninja/tree/topic-jobserver-fifo
+>>
+>> What other build tools are in need of regulation and/or job server 
+>> patches?
+>>
+> What I read, gcc has already -flto=jobserver.
+>
+> Other (single threaded CPU intensive) might just be started from 
+> jobclient?
+>
+>> ../Randy
+>>
+>>
+>>>>
+>>>> Alex
+>>>
+>>> Yeah, I'd rather teach the kernel to consider thrashing when 
+>>> scheduling jobs. As is now any user process can slow down any other 
+>>> users process and even the kernel itself to a standstill.
+>>>
+>>> But kernel developers consider those issues "orthogonal" (i.e. they 
+>>> don't want to make the scheduler aware of io).
+>>>
+>>>
+>>>
+>>> -=-=-=-=-=-=-=-=-=-=-=-
+>>> Links: You receive all messages sent to this group.
+>>> View/Reply Online (#58943): 
+>>> https://lists.yoctoproject.org/g/yocto/message/58943
+>>> Mute This Topic: https://lists.yoctoproject.org/mt/82015730/3616765
+>>> Group Owner: yocto+owner@lists.yoctoproject.org
+>>> Unsubscribe: https://lists.yoctoproject.org/g/yocto/unsub 
+>>> [randy.macleod@windriver.com]
+>>> -=-=-=-=-=-=-=-=-=-=-=-
+>>>
+>>
+
+
+^ permalink raw reply	[flat|nested] 53+ messages in thread
+* Re: [yocto] bitbake controlling memory use
+  2023-01-09 10:54                                                         ` Ferry Toth
+@ 2023-01-19 19:59                                                           ` Ferry Toth
+  0 siblings, 0 replies; 53+ messages in thread
+From: Ferry Toth @ 2023-01-19 19:59 UTC (permalink / raw)
+  To: Richard Purdie, Alexander Kanavin
+  Cc: Janne Kiiskila, Quentin Schulz, yocto, trevor.gamblin, martin.jansa
+
+Hi
+
+Op 09-01-2023 om 11:54 schreef Ferry Toth:
+>
+> Hi
+>
+> On 09-01-2023 11:43, Richard Purdie wrote:
+>> On Mon, 2023-01-09 at 11:39 +0100, Alexander Kanavin wrote:
+>>> On Sun, 8 Jan 2023 at 23:13, Ferry Toth<fntoth@gmail.com>  wrote:
+>>>
+>>>> Now it works I'm not sure what to do. Richard marked the original patch
+>>>> as WIP. Maybe it's not appropriate for including into poky? If so I
+>>>> wouldn't mind carrying it in meta-intel-edison.
+>>>>
+>>>> Or may be with a little work (from me) and a run on the CI servers we
+>>>> could make it go in?
+>>> I'd rather teach make/ninja upstream to watch memory consumption
+>>> and/or host pressure directly (e.g. similar to how it handles -l). And
+>>> offer any resulting patches to upstream first.
+>> Whilst teaching make/ninja about pressure is probably a nice idea, I
+>> think there is a use case for sharing the job pool between bitbake
+>> tasks rather than having a job pool per task since that scales badly.
+>>
+>> One issue that comes to mind with the patch is that it is currently
+>> writing into /tmp/ and we likely need to work out a better location for
+>> the job server fifo. Currently that would break things on the
+>> autobuilder as there are multiple builds on a given host.
+>
+> Ha, I didn't consider multiple bitbakes running simultaneously.
+>
+> Maybe the location /tmp is fine but we would need a unique (random?) 
+> filename instead of makefifo?
+>
+2nd thought, this would be wrong as we can't cleanup automatically after 
+abnormal termination. What would be a good location?
+
+TMPDIR?
+
+>> Cheers,
+>>
+>> Richard
+>>
+>>
+
+
+^ permalink raw reply	[flat|nested] 53+ messages in thread
+* Re: [yocto] bitbake controlling memory use
+  2023-01-14 22:33                                                             ` Ferry Toth
+@ 2023-08-28 12:56                                                               ` Martin Hundebøll
+  0 siblings, 0 replies; 53+ messages in thread
+From: Martin Hundebøll @ 2023-08-28 12:56 UTC (permalink / raw)
+  To: Ferry Toth, Randy MacLeod, Alexander Kanavin, contrib
+  Cc: Janne Kiiskila, Quentin Schulz, yocto, richard.purdie,
+	martin.jansa, Trevor Gamblin
+
+On Sat, 2023-01-14 at 23:33 +0100, Ferry Toth wrote:
+> Hi,
+> 
+> Op 10-01-2023 om 10:24 schreef Ferry Toth:
+> > Hi,
+> > 
+> > On 10-01-2023 02:57, Randy MacLeod wrote:
+> > > Add Zheng.
+> > > Switch to Trevor's gmail since he might still be interested in
+> > > this.
+> > > 
+> > > On 2023-01-09 05:49, Ferry Toth via lists.yoctoproject.org wrote:
+> > > > Hi
+> > > > 
+> > > > On 09-01-2023 11:39, Alexander Kanavin wrote:
+> > > > > On Sun, 8 Jan 2023 at 23:13, Ferry Toth <fntoth@gmail.com>
+> > > > > wrote:
+> > > > > 
+> > > > > > Now it works I'm not sure what to do. Richard marked the
+> > > > > > original 
+> > > > > > patch
+> > > > > > as WIP. Maybe it's not appropriate for including into poky?
+> > > > > > If so I
+> > > > > > wouldn't mind carrying it in meta-intel-edison.
+> > > > > > 
+> > > > > > Or may be with a little work (from me) and a run on the CI
+> > > > > > servers we
+> > > > > > could make it go in?
+> > > > > I'd rather teach make/ninja upstream to watch memory
+> > > > > consumption
+> > > > > and/or host pressure directly (e.g. similar to how it handles
+> > > > > -l). And
+> > > > > offer any resulting patches to upstream first.
+> > > 
+> As there is already a clone of ninja available with jobserver support
+> available I added another patch to update to that version and make an
+> intercept to actually pass the named pipe to ninja.
+> 
+> Find it here: https://github.com/htot/poky/commits/kirkstone
+> 
+> This makes both make and ninja threads running from a shared thread 
+> pool. As cmake relies on ninja recipies are covered as well.
+> 
+> I guess this takes care of the majority of recipes.
+> 
+> In my case this new patch shaves no more then 1 minutes from my image
+> build time (1h46) as the recipes built using ninja are not consuming 
+> that much memory (like nodejs). I hope others will benefit more.
+> 
+> Todo: location of the pipe as mentioned by Richard
+
+Hi Ferry et al.,
+
+I've reworked the patches (once again...) into a global class that sets
+up the jobserver configuration:
+https://lore.kernel.org/openembedded-core/20230828124834.376779-1-martin@geanix.com/T/#t
+
+Since it's "just" a class, it can be carried in custom meta layers.
+Also, it supports an external jobserver, which can be handy when
+building multiple yocto confifgurations on i.e. a CI server...
+
+// Martin
+
+> > > Zheng and I *started* on that for make over the Xmas holiday.
+> > > See the (poorly formatted) thread:
+> > >   Add support for limiting CPU pressure, contrib, 2022/12/20
+> > > in:
+> > > https://lists.gnu.org/archive/html/bug-make/2022-12/threads.html
+> > > 
+> > > There were mixed reviews upstream with the maintainer, Paul
+> > > Smith,
+> > > seeming to prefer that we investigate the job server approach and
+> > > the 
+> > > current
+> > > load averaging. I'll happily try to find time to play with
+> > > Ferry's 
+> > > job server work.
+> > > 
+> > The work is actually Richard's. I only fixed what broke over time.
+> > > I've been thinking about the various workflows and as Richard
+> > > said, 
+> > > it seems
+> > > that for many people who only do one build at a time, the job
+> > > server 
+> > > and maybe
+> > > a little linker restraint, would be all that's needed. For
+> > > activities 
+> > > such
+> > > as YP AB, we could teach the main job server to also look at 
+> > > /proc/pressure
+> > > as a way to limit the pool size we could make a meta-jobserver
+> > > for 
+> > > those who don't
+> > > want/need to worry about non-compile tasks such as tests and
+> > > build 
+> > > clean-up.
+> > > 
+> > > 
+> > > Note that cargo has the notion of a job server:
+> > >    https://github.com/rust-lang/cargo/issues/1744
+> > >    https://github.com/rust-lang/cargo/pull/4110
+> > > 
+> > > 
+> > > and ninja has an open issue:
+> > >    https://github.com/ninja-build/ninja/issues/1139
+> > > and an initial implementation:
+> > >    https://github.com/stefanb2/ninja/tree/topic-jobserver-fifo
+> > > 
+> > > What other build tools are in need of regulation and/or job
+> > > server 
+> > > patches?
+> > > 
+> > What I read, gcc has already -flto=jobserver.
+> > 
+> > Other (single threaded CPU intensive) might just be started from 
+> > jobclient?
+> > 
+> > > ../Randy
+> > > 
+> > > 
+> > > > > 
+> > > > > Alex
+> > > > 
+> > > > Yeah, I'd rather teach the kernel to consider thrashing when 
+> > > > scheduling jobs. As is now any user process can slow down any
+> > > > other 
+> > > > users process and even the kernel itself to a standstill.
+> > > > 
+> > > > But kernel developers consider those issues "orthogonal" (i.e.
+> > > > they 
+> > > > don't want to make the scheduler aware of io).
+> > > > 
+> > > > 
+> > > > 
+> > > > 
+> > > > 
+> > > 
+> 
+> -=-=-=-=-=-=-=-=-=-=-=-
+> Links: You receive all messages sent to this group.
+> View/Reply Online (#58988):
+> https://lists.yoctoproject.org/g/yocto/message/58988
+> Mute This Topic: https://lists.yoctoproject.org/mt/82015730/3618414
+> Group Owner: yocto+owner@lists.yoctoproject.org
+> Unsubscribe:
+> https://lists.yoctoproject.org/g/yocto/unsub [martin@geanix.com]
+> -=-=-=-=-=-=-=-=-=-=-=-
+> 
+
+
+
+^ permalink raw reply	[flat|nested] 53+ messages in thread
+end of thread, other threads:[~2023-08-28 12:56 UTC | newest]
+
+Thread overview: 53+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-04-11 15:23 bitbake controlling memory use Gmane Admin
+2021-04-11 15:27 ` [yocto] " Alexander Kanavin
+2021-04-11 15:49   ` Gmane Admin
+2021-04-11 15:55     ` [yocto] " Alexander Kanavin
+2021-04-11 16:08       ` Gmane Admin
+2021-04-11 16:19         ` [yocto] " Alexander Kanavin
+2021-04-14  1:14           ` Randy MacLeod
+2021-04-14  3:14             ` Khem Raj
+2021-04-14  4:59             ` Richard Purdie
+2021-04-17 22:17               ` Gmane Admin
+2021-04-18  9:59                 ` [yocto] " Richard Purdie
+2021-04-18 19:34                   ` Gmane Admin
+     [not found]                   ` <16770AD5E94DEAE5.1089@lists.yoctoproject.org>
+2022-12-24 18:58                     ` Ferry Toth
+2022-12-26  2:11                       ` [yocto] " Randy MacLeod
+2022-12-27 16:56                         ` Ferry Toth
+2021-06-05 13:35               ` Gmane Admin
+2021-06-08 19:08                 ` [yocto] " Trevor Gamblin
+2021-06-10  7:09                   ` Gmane Admin
+     [not found]               ` <1685B30F5819A655.13459@lists.yoctoproject.org>
+2021-06-07 19:27                 ` Gmane Admin
+2021-06-08 19:12                   ` [yocto] " Trevor Gamblin
+2021-06-10  9:22                   ` Ferry Toth
+2021-06-10 19:06                     ` [yocto] " Trevor Gamblin
+2021-06-10 20:35                       ` Ferry Toth
+2021-06-12 16:31                         ` Ferry Toth
+2021-06-13  0:38                           ` Randy MacLeod
+2021-06-13 10:58                             ` Ferry Toth
+2023-01-03 14:15                             ` Ferry Toth
+2023-01-03 14:18                               ` [yocto] " Alexander Kanavin
+2023-01-03 14:29                                 ` Ferry Toth
+2023-01-03 14:36                                   ` Quentin Schulz
+2023-01-03 14:41                                     ` Ferry Toth
+2023-01-03 15:03                                       ` Janne Kiiskila
+2023-01-03 15:12                                         ` Ferry Toth
+2023-01-03 15:24                                           ` Alexander Kanavin
+     [not found]                                           ` <1736D5DCC66BC3DE.4716@lists.yoctoproject.org>
+2023-01-03 15:37                                             ` Alexander Kanavin
+2023-01-03 15:58                                               ` Ferry Toth
+2023-01-03 17:33                                                 ` Alexander Kanavin
+2023-01-08 22:13                                                   ` Ferry Toth
+2023-01-09 10:39                                                     ` Alexander Kanavin
+2023-01-09 10:43                                                       ` Richard Purdie
+2023-01-09 10:54                                                         ` Ferry Toth
+2023-01-19 19:59                                                           ` Ferry Toth
+2023-01-09 10:49                                                       ` Ferry Toth
+2023-01-10  1:57                                                         ` Randy MacLeod
+2023-01-10  9:24                                                           ` Ferry Toth
+2023-01-14 22:33                                                             ` Ferry Toth
+2023-08-28 12:56                                                               ` Martin Hundebøll
+2023-01-03 15:44                                   ` Martin Jansa
+2021-04-12  2:25 ` Chen Qi
+2021-04-12 18:45   ` Gmane Admin
+2021-04-12  8:13 ` [yocto] " Robert Berger
+2021-04-12 18:47   ` Gmane Admin
+     [not found] ` <1b153bce-a66a-45ee-a5c6-963ea6fb1c82.949ef384-8293-46b8-903f-40a477c056ae.12d167de-8268-4441-bd03-b78a3e04713e@emailsignatures365.codetwo.com>
+     [not found]   ` <1b153bce-a66a-45ee-a5c6-963ea6fb1c82.0d2bd5fa-15cc-4b27-b94e-83614f9e5b38.a8aa18ca-4a64-4525-851c-c6d34f355f1f@emailsignatures365.codetwo.com>
+2021-04-12  8:28     ` [yocto] " Mike Looijmans
+

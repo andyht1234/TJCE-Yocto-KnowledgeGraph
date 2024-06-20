@@ -1,0 +1,244 @@
+* [yocto-autobuilder-helper] [PATCH 1/4] scripts/prepare-shared-repos: Use tmpfs for speed
+@ 2021-10-31 13:09 Richard Purdie
+  2021-10-31 13:09 ` [yocto-autobuilder-helper] [PATCH 2/4] prepare-shared-repos: Make it clear when rsync starts in logs Richard Purdie
+                   ` (2 more replies)
+  0 siblings, 3 replies; 4+ messages in thread
+From: Richard Purdie @ 2021-10-31 13:09 UTC (permalink / raw)
+  To: yocto
+
+Signed-off-by: Richard Purdie <richard.purdie@linuxfoundation.org>
+---
+ scripts/prepare-shared-repos | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/scripts/prepare-shared-repos b/scripts/prepare-shared-repos
+index 8400d09..1573f85 100755
+--- a/scripts/prepare-shared-repos
++++ b/scripts/prepare-shared-repos
+@@ -32,7 +32,7 @@ with open(args.repojson) as f:
+ 
+ stashdir = utils.getconfig("REPO_STASH_DIR", ourconfig)
+ 
+-with tempfile.TemporaryDirectory(prefix="shared-repo-temp-", dir="/tmp") as tempdir:
++with tempfile.TemporaryDirectory(prefix="shared-repo-temp-", dir="/home/pokybuild/tmp") as tempdir:
+     for repo in sorted(repos.keys()):
+         utils.printheader("Intially fetching repo %s" % repo)
+         utils.fetchgitrepo(tempdir, repo, repos[repo], stashdir)
+-- 
+2.32.0
+
+
+
+^ permalink raw reply related	[flat|nested] 4+ messages in thread
+* [yocto-autobuilder-helper] [PATCH 2/4] prepare-shared-repos: Make it clear when rsync starts in logs
+  2021-10-31 13:09 [yocto-autobuilder-helper] [PATCH 1/4] scripts/prepare-shared-repos: Use tmpfs for speed Richard Purdie
+@ 2021-10-31 13:09 ` Richard Purdie
+  2021-10-31 13:09 ` [yocto-autobuilder-helper] [PATCH 3/4] prepare-shared-repo/utils: Limit HEAD clones to shallow depth to save time/space Richard Purdie
+  2021-10-31 13:09 ` [yocto-autobuilder-helper] [PATCH 4/4] shared-repos: Use tar instead of rsync for speed Richard Purdie
+  2 siblings, 0 replies; 4+ messages in thread
+From: Richard Purdie @ 2021-10-31 13:09 UTC (permalink / raw)
+  To: yocto
+
+Signed-off-by: Richard Purdie <richard.purdie@linuxfoundation.org>
+---
+ scripts/prepare-shared-repos | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/scripts/prepare-shared-repos b/scripts/prepare-shared-repos
+index 1573f85..c221e69 100755
+--- a/scripts/prepare-shared-repos
++++ b/scripts/prepare-shared-repos
+@@ -39,4 +39,5 @@ with tempfile.TemporaryDirectory(prefix="shared-repo-temp-", dir="/home/pokybuil
+         if args.publish_dir:
+             utils.publishrepo(tempdir, repo, args.publish_dir)
+ 
++    utils.printheader("Running rsync")
+     subprocess.check_call("rsync -a " + tempdir + "/* " + args.sharedsrcdir, shell=True)
+-- 
+2.32.0
+
+
+
+^ permalink raw reply related	[flat|nested] 4+ messages in thread
+* [yocto-autobuilder-helper] [PATCH 3/4] prepare-shared-repo/utils: Limit HEAD clones to shallow depth to save time/space
+  2021-10-31 13:09 [yocto-autobuilder-helper] [PATCH 1/4] scripts/prepare-shared-repos: Use tmpfs for speed Richard Purdie
+  2021-10-31 13:09 ` [yocto-autobuilder-helper] [PATCH 2/4] prepare-shared-repos: Make it clear when rsync starts in logs Richard Purdie
+@ 2021-10-31 13:09 ` Richard Purdie
+  2021-10-31 13:09 ` [yocto-autobuilder-helper] [PATCH 4/4] shared-repos: Use tar instead of rsync for speed Richard Purdie
+  2 siblings, 0 replies; 4+ messages in thread
+From: Richard Purdie @ 2021-10-31 13:09 UTC (permalink / raw)
+  To: yocto
+
+By not syncing all the history is is possible to save some time/space
+in the checkout process since we never use this data. This reduces data
+from 650MB to 400MB or with the tarball, 416MB to 55MB.
+
+The logic for the commands needs to be tweaked to handle this and as
+written it can't work in non-HEAD revision case but that isn't a commonly
+used situation.
+
+Signed-off-by: Richard Purdie <richard.purdie@linuxfoundation.org>
+---
+ scripts/prepare-shared-repos |  2 +-
+ scripts/utils.py             | 18 +++++++++++++-----
+ 2 files changed, 14 insertions(+), 6 deletions(-)
+
+diff --git a/scripts/prepare-shared-repos b/scripts/prepare-shared-repos
+index c221e69..f34ba99 100755
+--- a/scripts/prepare-shared-repos
++++ b/scripts/prepare-shared-repos
+@@ -35,7 +35,7 @@ stashdir = utils.getconfig("REPO_STASH_DIR", ourconfig)
+ with tempfile.TemporaryDirectory(prefix="shared-repo-temp-", dir="/home/pokybuild/tmp") as tempdir:
+     for repo in sorted(repos.keys()):
+         utils.printheader("Intially fetching repo %s" % repo)
+-        utils.fetchgitrepo(tempdir, repo, repos[repo], stashdir)
++        utils.fetchgitrepo(tempdir, repo, repos[repo], stashdir, depth=1)
+         if args.publish_dir:
+             utils.publishrepo(tempdir, repo, args.publish_dir)
+ 
+diff --git a/scripts/utils.py b/scripts/utils.py
+index 4c73f81..3c2622f 100644
+--- a/scripts/utils.py
++++ b/scripts/utils.py
+@@ -228,26 +228,34 @@ def runcmd(cmd):
+     return subprocess.check_output(cmd, stderr=subprocess.STDOUT)
+ 
+ 
+-def fetchgitrepo(clonedir, repo, params, stashdir):
++def fetchgitrepo(clonedir, repo, params, stashdir, depth=None):
+     sharedrepo = "%s/%s" % (clonedir, repo)
+     branch = params["branch"]
+     revision = params["revision"]
++    if revision != "HEAD":
++        depth = None
++    fetchopt = []
++    depthopt = []
++    if depth:
++        fetchopt = ["--depth", str(depth), branch + ":origin/" + branch]
++        depthopt = ["--depth", str(depth), "--branch", branch]
+     print("Checking for stash at: " + stashdir + "/" + repo)
+     flush()
+     if os.path.exists(stashdir + "/" + repo):
+         print("Cloning from stash to %s..." % sharedrepo)
+         flush()
+-        subprocess.check_call(["git", "clone", "file://%s/%s" % (stashdir, repo), "%s/%s" % (clonedir, repo)])
++        subprocess.check_call(["git", "clone", "file://%s/%s" % (stashdir, repo), "%s/%s" % (clonedir, repo)] + depthopt)
+         subprocess.check_call(["git", "remote", "rm", "origin"], cwd=sharedrepo)
+         subprocess.check_call(["git", "remote", "add", "origin", params["url"]], cwd=sharedrepo)
+         print("Updating from origin...")
+         flush()
+-        subprocess.check_call(["git", "fetch", "origin"], cwd=sharedrepo)
+-        subprocess.check_call(["git", "fetch", "origin", "-t"], cwd=sharedrepo)
++        subprocess.check_call(["git", "fetch", "origin"] + fetchopt, cwd=sharedrepo)
++        if not depth:
++            subprocess.check_call(["git", "fetch", "origin", "-t"], cwd=sharedrepo)
+     else:
+         print("Cloning from origin to %s..." % sharedrepo)
+         flush()
+-        subprocess.check_call(["git", "clone", params["url"], sharedrepo])
++        subprocess.check_call(["git", "clone", params["url"], sharedrepo] + depthopt)
+ 
+     print("Updating checkout...")
+     flush()
+-- 
+2.32.0
+
+
+
+^ permalink raw reply related	[flat|nested] 4+ messages in thread
+* [yocto-autobuilder-helper] [PATCH 4/4] shared-repos: Use tar instead of rsync for speed
+  2021-10-31 13:09 [yocto-autobuilder-helper] [PATCH 1/4] scripts/prepare-shared-repos: Use tmpfs for speed Richard Purdie
+  2021-10-31 13:09 ` [yocto-autobuilder-helper] [PATCH 2/4] prepare-shared-repos: Make it clear when rsync starts in logs Richard Purdie
+  2021-10-31 13:09 ` [yocto-autobuilder-helper] [PATCH 3/4] prepare-shared-repo/utils: Limit HEAD clones to shallow depth to save time/space Richard Purdie
+@ 2021-10-31 13:09 ` Richard Purdie
+  2 siblings, 0 replies; 4+ messages in thread
+From: Richard Purdie @ 2021-10-31 13:09 UTC (permalink / raw)
+  To: yocto
+
+The rysnc of 20,000 files (650MB) onto the nas is slow taking ~3 minutes
+at idle and worse at load. This is due to the number of files which
+is a pain point for NFS. This piece of the build is also a bottleneck
+since the rest of a build depends on it happening.
+
+If we switch to zstd compressed tar, it takes 2.49s. Other compression
+methods were much slower but zstd seems 'accptable' and speeds things
+up too.
+
+Signed-off-by: Richard Purdie <richard.purdie@linuxfoundation.org>
+---
+ scripts/prepare-shared-repos | 4 ++--
+ scripts/send-qa-email        | 6 ++++--
+ scripts/shared-repo-unpack   | 5 ++---
+ 3 files changed, 8 insertions(+), 7 deletions(-)
+
+diff --git a/scripts/prepare-shared-repos b/scripts/prepare-shared-repos
+index f34ba99..d60ad32 100755
+--- a/scripts/prepare-shared-repos
++++ b/scripts/prepare-shared-repos
+@@ -39,5 +39,5 @@ with tempfile.TemporaryDirectory(prefix="shared-repo-temp-", dir="/home/pokybuil
+         if args.publish_dir:
+             utils.publishrepo(tempdir, repo, args.publish_dir)
+ 
+-    utils.printheader("Running rsync")
+-    subprocess.check_call("rsync -a " + tempdir + "/* " + args.sharedsrcdir, shell=True)
++    utils.printheader("Creating shared src tarball")
++    subprocess.check_call("tar -I zstd -cf " + args.sharedsrcdir.rstrip("/") + ".tar.zst ./*", shell=True, cwd=tempdir)
+diff --git a/scripts/send-qa-email b/scripts/send-qa-email
+index 1b69307..fc34f7e 100755
+--- a/scripts/send-qa-email
++++ b/scripts/send-qa-email
+@@ -45,9 +45,11 @@ buildtoolsdir = os.path.dirname(args.repojson) + "/build/buildtools"
+ if os.path.exists(buildtoolsdir):
+     utils.enable_buildtools_tarball(buildtoolsdir)
+ 
++repodir = os.path.dirname(args.repojson) + "/repos"
++
+ if 'poky' in repos and os.path.exists(resulttool) and args.results_dir:
+     # Need the finalised revisions (not 'HEAD')
+-    targetrepodir = "%s/poky" % (args.sharedrepodir)
++    targetrepodir = "%s/poky" % (repodir)
+     revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=targetrepodir).decode('utf-8').strip()
+     branch = repos['poky']['branch']
+     repo = repos['poky']['url']
+@@ -116,7 +118,7 @@ if args.send.lower() != 'true' or not args.publish_dir or not args.release:
+ buildhashes = ""
+ for repo in sorted(repos.keys()):
+     # Need the finalised revisions (not 'HEAD')
+-    targetrepodir = "%s/%s" % (args.sharedrepodir, repo)
++    targetrepodir = "%s/%s" % (repodir, repo)
+     revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=targetrepodir).decode('utf-8').strip()
+     buildhashes += "%s: %s\n" % (repo, revision)
+ 
+diff --git a/scripts/shared-repo-unpack b/scripts/shared-repo-unpack
+index f08efa8..3dda5b3 100755
+--- a/scripts/shared-repo-unpack
++++ b/scripts/shared-repo-unpack
+@@ -50,11 +50,10 @@ needrepos_baseddirs = [r.split('/')[0] for r in needrepos]
+ for repo in sorted(repos.keys()):
+     if repo not in needrepos_baseddirs:
+         continue
+-    targetrepodir = "%s/%s" % (targetsubdir, repo)
+     if args.cache_dir:
+         utils.printheader("Copying in repo %s" % repo)
+-        utils.mkdir(targetrepodir)
+-        subprocess.check_call(["rsync", "-a", "%s/%s" % (args.cache_dir, repo), targetsubdir])
++        utils.mkdir(targetsubdir)
++        subprocess.check_call(["tar", "-I", "zstd", "-C", targetsubdir, "-xf", "%s.tar.zst" % args.cache_dir, "./" + repo])
+     else:
+         utils.printheader("Fetching repo %s" % repo)
+         utils.fetchgitrepo(targetsubdir, repo, repos[repo], stashdir)
+-- 
+2.32.0
+
+
+
+^ permalink raw reply related	[flat|nested] 4+ messages in thread
+end of thread, other threads:[~2021-10-31 13:09 UTC | newest]
+
+Thread overview: 4+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-10-31 13:09 [yocto-autobuilder-helper] [PATCH 1/4] scripts/prepare-shared-repos: Use tmpfs for speed Richard Purdie
+2021-10-31 13:09 ` [yocto-autobuilder-helper] [PATCH 2/4] prepare-shared-repos: Make it clear when rsync starts in logs Richard Purdie
+2021-10-31 13:09 ` [yocto-autobuilder-helper] [PATCH 3/4] prepare-shared-repo/utils: Limit HEAD clones to shallow depth to save time/space Richard Purdie
+2021-10-31 13:09 ` [yocto-autobuilder-helper] [PATCH 4/4] shared-repos: Use tar instead of rsync for speed Richard Purdie
+

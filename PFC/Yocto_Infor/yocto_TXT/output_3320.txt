@@ -1,0 +1,164 @@
+* [linux-yocto] [linux-yocto v5.10/standard/nxp-sdk-5.4/nxp-s32g2xx]: drivers: dspi: fsl: fix dspi transfer hang issue
+@ 2021-06-04  5:41 Zhantao Tang
+  2021-06-04  5:41 ` [PATCH] " Zhantao Tang
+  2021-06-07  3:06 ` [linux-yocto] [linux-yocto v5.10/standard/nxp-sdk-5.4/nxp-s32g2xx]: " Bruce Ashfield
+  0 siblings, 2 replies; 4+ messages in thread
+From: Zhantao Tang @ 2021-06-04  5:41 UTC (permalink / raw)
+  To: bruce.ashfield; +Cc: yocto
+
+
+Hi Bruce,
+
+
+There is an patch to fix dspi hang issue.
+
+Would you please help to merge this patch into linux-ycoto kernel, v5.10, branch is v5.10/standard/nxp-sdk-5.4/nxp-s32g2xx?
+
+
+Thanks,
+Zhantao
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* [PATCH] drivers: dspi: fsl: fix dspi transfer hang issue
+  2021-06-04  5:41 [linux-yocto] [linux-yocto v5.10/standard/nxp-sdk-5.4/nxp-s32g2xx]: drivers: dspi: fsl: fix dspi transfer hang issue Zhantao Tang
+@ 2021-06-04  5:41 ` Zhantao Tang
+  2021-06-07  3:06 ` [linux-yocto] [linux-yocto v5.10/standard/nxp-sdk-5.4/nxp-s32g2xx]: " Bruce Ashfield
+  1 sibling, 0 replies; 4+ messages in thread
+From: Zhantao Tang @ 2021-06-04  5:41 UTC (permalink / raw)
+  To: bruce.ashfield; +Cc: yocto
+
+On NXP S32G RDB2, there is an sja1110 switch, which can be accessed
+using dspi interface, but if users use the following commands to test
+the switch, the board will hang there.
+
+	$ echo 30 > /sys/class/gpio/export
+	$ echo out > /sys/class/gpio/gpio30/direction
+	$ echo 0 > /sys/class/gpio/gpio30/value
+	$ echo -n -e '\x02\x00\x00\x00\x00\x00\x00\x00' | spi-pipe -d /dev/spidev5.1 -b 4 | hexdump -C
+
+The reason is that, the dspi driver wrongly sets the HALT flag in
+the register, and the while loop will run forever, so the board hang
+there. This patch is to fix this issue.
+
+Signed-off-by: Zhantao Tang <zhantao.tang@windriver.com>
+---
+ drivers/spi/spi-fsl-dspi.c | 10 ++--------
+ 1 file changed, 2 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/spi/spi-fsl-dspi.c b/drivers/spi/spi-fsl-dspi.c
+index 063cf4a60ed3..c20cce466bf7 100644
+--- a/drivers/spi/spi-fsl-dspi.c
++++ b/drivers/spi/spi-fsl-dspi.c
+@@ -965,10 +965,8 @@ static int dspi_transfer_one_message(struct spi_controller *ctlr,
+ 		dspi->progress = 0;
+ 
+ 		regmap_update_bits(dspi->regmap, SPI_MCR,
+-				SPI_MCR_HALT, SPI_MCR_HALT);
+-		while (regmap_read(dspi->regmap, SPI_SR, &val) >= 0 &&
+-				val & SPI_SR_TXRXS)
+-			;
++				   SPI_MCR_CLR_TXF | SPI_MCR_CLR_RXF,
++				   SPI_MCR_CLR_TXF | SPI_MCR_CLR_RXF);
+ 
+ 		spi_take_timestamp_pre(dspi->ctlr, dspi->cur_transfer,
+ 				       dspi->progress, !dspi->irq);
+@@ -987,10 +985,6 @@ static int dspi_transfer_one_message(struct spi_controller *ctlr,
+ 				} while (status == -EINPROGRESS);
+ 			}
+ 		}
+-		regmap_update_bits(dspi->regmap, SPI_MCR,
+-				SPI_MCR_CLR_TXF | SPI_MCR_CLR_RXF |
+-				SPI_MCR_HALT,
+-				SPI_MCR_CLR_TXF | SPI_MCR_CLR_RXF);
+ 		if (status)
+ 			break;
+ 
+-- 
+2.25.1
+
+
+^ permalink raw reply related	[flat|nested] 4+ messages in thread
+* Re: [linux-yocto] [linux-yocto v5.10/standard/nxp-sdk-5.4/nxp-s32g2xx]: drivers: dspi: fsl: fix dspi transfer hang issue
+  2021-06-04  5:41 [linux-yocto] [linux-yocto v5.10/standard/nxp-sdk-5.4/nxp-s32g2xx]: drivers: dspi: fsl: fix dspi transfer hang issue Zhantao Tang
+  2021-06-04  5:41 ` [PATCH] " Zhantao Tang
+@ 2021-06-07  3:06 ` Bruce Ashfield
+  2021-06-08  2:20   ` Zhantao Tang
+  1 sibling, 1 reply; 4+ messages in thread
+From: Bruce Ashfield @ 2021-06-07  3:06 UTC (permalink / raw)
+  To: Zhantao Tang; +Cc: yocto
+
+
+In message: [linux-yocto] [linux-yocto v5.10/standard/nxp-sdk-5.4/nxp-s32g2xx]: drivers: dspi: fsl: fix dspi transfer hang issue
+on 04/06/2021 Zhantao Tang wrote:
+
+> 
+> Hi Bruce,
+> 
+> 
+> There is an patch to fix dspi hang issue.
+> 
+> Would you please help to merge this patch into linux-ycoto kernel, v5.10, branch is v5.10/standard/nxp-sdk-5.4/nxp-s32g2xx?
+
+This went to the wrong mailing list, but I did pick it up!
+
+merged.
+
+Bruce
+
+> 
+> 
+> Thanks,
+> Zhantao
+> 
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+* Re: [linux-yocto] [linux-yocto v5.10/standard/nxp-sdk-5.4/nxp-s32g2xx]: drivers: dspi: fsl: fix dspi transfer hang issue
+  2021-06-07  3:06 ` [linux-yocto] [linux-yocto v5.10/standard/nxp-sdk-5.4/nxp-s32g2xx]: " Bruce Ashfield
+@ 2021-06-08  2:20   ` Zhantao Tang
+  0 siblings, 0 replies; 4+ messages in thread
+From: Zhantao Tang @ 2021-06-08  2:20 UTC (permalink / raw)
+  To: Bruce Ashfield; +Cc: yocto
+
+On 2021/6/7 上午11:06, Bruce Ashfield wrote:
+> [Please note: This e-mail is from an EXTERNAL e-mail address]
+>
+> In message: [linux-yocto] [linux-yocto v5.10/standard/nxp-sdk-5.4/nxp-s32g2xx]: drivers: dspi: fsl: fix dspi transfer hang issue
+> on 04/06/2021 Zhantao Tang wrote:
+>
+>> Hi Bruce,
+>>
+>>
+>> There is an patch to fix dspi hang issue.
+>>
+>> Would you please help to merge this patch into linux-ycoto kernel, v5.10, branch is v5.10/standard/nxp-sdk-5.4/nxp-s32g2xx?
+> This went to the wrong mailing list, but I did pick it up!
+>
+> merged.
+
+Sorry for the wrong mailing list, I will be careful next time.
+
+
+Thanks,
+
+Zhantao
+
+>
+> Bruce
+>
+>>
+>> Thanks,
+>> Zhantao
+>>
+
+
+^ permalink raw reply	[flat|nested] 4+ messages in thread
+end of thread, other threads:[~2021-06-08  2:15 UTC | newest]
+
+Thread overview: 4+ messages (download: mbox.gz / follow: Atom feed)
+-- links below jump to the message on this page --
+2021-06-04  5:41 [linux-yocto] [linux-yocto v5.10/standard/nxp-sdk-5.4/nxp-s32g2xx]: drivers: dspi: fsl: fix dspi transfer hang issue Zhantao Tang
+2021-06-04  5:41 ` [PATCH] " Zhantao Tang
+2021-06-07  3:06 ` [linux-yocto] [linux-yocto v5.10/standard/nxp-sdk-5.4/nxp-s32g2xx]: " Bruce Ashfield
+2021-06-08  2:20   ` Zhantao Tang
+
